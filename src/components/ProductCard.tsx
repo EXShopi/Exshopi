@@ -1,0 +1,189 @@
+import React, { useState } from "react";
+import { ShoppingCart, Star, Check, Truck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useCartStore } from "../store/cart";
+import WishlistIcon from "./Premium/WishlistIcon";
+import { formatAEDPlain } from "../lib/currency";
+import LazyImage from "./ui/LazyImage";
+
+export interface ProductCardProps {
+  id?: string;
+  slug?: string;
+  title: string;
+  price: number;
+  oldPrice?: number;
+  rating: number;
+  reviews: number;
+  image: string;
+  badge?: string;
+  badges?: string[];
+  category: string;
+  stock: string | boolean;
+  seller: string;
+  freeDelivery?: boolean;
+}
+
+const ProductCard: React.FC<ProductCardProps> = ({
+  id,
+  slug,
+  title,
+  price,
+  oldPrice,
+  rating,
+  reviews,
+  image,
+  badge,
+  badges,
+  category,
+  stock,
+  seller,
+  freeDelivery,
+}) => {
+  const { addItem } = useCartStore();
+  const navigate = useNavigate();
+  const [isAdded, setIsAdded] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const productId = id ?? slug ?? title;
+  const productSlug = slug ?? id ?? title;
+  const resolvedBadge = badge ?? badges?.[0];
+  const stockLabel = typeof stock === "boolean" ? (stock ? "In Stock" : "Out of Stock") : stock;
+
+  const discount = oldPrice ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsSubmitting(true);
+    addItem({
+      id: productId,
+      title,
+      price,
+      image,
+      slug: productSlug,
+    });
+    setIsAdded(true);
+    window.setTimeout(() => setIsSubmitting(false), 420);
+    // Show success feedback
+    setTimeout(() => setIsAdded(false), 2000);
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(`/product/${productSlug}`);
+  };
+
+  return (
+    <div
+      onClick={handleCardClick}
+      className="block group cursor-pointer"
+    >
+      <div className="flex h-full flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_18px_40px_rgba(15,23,42,0.10)]">
+        {/* Image Container */}
+        <div className="relative m-3 overflow-hidden rounded-[22px] bg-[#f7f8fb] h-56">
+          <LazyImage
+            src={image}
+            alt={title}
+            wrapperClassName="h-full w-full"
+            className="h-full w-full object-contain p-4 transition-transform duration-500 group-hover:scale-105"
+          />
+          
+          {/* Badge */}
+          {resolvedBadge && (
+            <div className="absolute left-3 top-3 rounded-full bg-rose-500 px-3 py-1 text-[11px] font-bold text-white shadow-lg">
+              {resolvedBadge}
+            </div>
+          )}
+          
+          {/* Discount */}
+          {discount > 0 && (
+            <div className="absolute right-14 top-3 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-lg">
+              -{discount}%
+            </div>
+          )}
+          
+          {/* Wishlist Button */}
+          <div className="absolute right-3 top-3">
+            <WishlistIcon productId={productId} />
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex flex-1 flex-col px-4 pb-4">
+          {/* Category */}
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{category}</p>
+          
+          {/* Title */}
+          <h3 className="mb-2 line-clamp-2 min-h-[44px] text-[15px] font-bold leading-6 text-slate-900 transition-colors duration-300 group-hover:text-blue-600">
+            {title}
+          </h3>
+
+          {/* Rating */}
+          <div className="mb-3 flex items-center gap-1.5">
+            <div className="flex">
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  size={14}
+                  className={i < Math.floor(rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-slate-500">({reviews})</span>
+          </div>
+
+          {/* Price */}
+          <div className="mb-3">
+            <div className="flex items-baseline gap-2">
+              <span className="whitespace-nowrap text-[28px] font-black leading-none text-slate-900">{formatAEDPlain(price)}</span>
+              {oldPrice && (
+                <span className="whitespace-nowrap text-sm text-slate-400 line-through">{formatAEDPlain(oldPrice)}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Stock & Seller */}
+          <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <p className="font-semibold text-slate-800">{seller}</p>
+            <p className="mt-1">{stockLabel}</p>
+            {freeDelivery && (
+              <div className="mt-1 inline-flex items-center gap-1 text-emerald-600">
+                <Truck size={12} />
+                Free delivery
+              </div>
+            )}
+          </div>
+
+          {/* Add to Cart Button */}
+          <button
+            onClick={handleAddToCart}
+            onClickCapture={(e) => e.stopPropagation()}
+            className={`mt-auto flex items-center justify-center gap-2 rounded-2xl py-3 font-bold text-sm transition-all duration-300 ${
+              isAdded
+                ? "bg-green-100 text-green-700 shadow-lg shadow-green-200/50"
+                : "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:shadow-[0_8px_24px_rgba(37,99,235,0.3)] hover:-translate-y-0.5 hover:to-blue-600"
+            }`}
+          >
+            {isAdded ? (
+              <>
+                <Check size={16} />
+                Added!
+              </>
+            ) : isSubmitting ? (
+              <>
+                <span className="h-4 w-4 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
+                Adding...
+              </>
+            ) : (
+              <>
+                <ShoppingCart size={16} />
+                Add to Cart
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProductCard;

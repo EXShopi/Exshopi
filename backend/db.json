@@ -1,0 +1,1061 @@
+{
+  "users": [
+    {
+      "id": "user_super_admin",
+      "name": "ExShopi Admin",
+      "email": "ahsansajid295@gmail.com",
+      "password": "T7&fD!2q",
+      "phone": "+971522608063",
+      "role": "super_admin",
+      "status": "active",
+      "country": "AE",
+      "emailVerified": true,
+      "sellerApplicationStatus": null,
+      "createdAt": "2026-03-30T11:42:44.079Z",
+      "updatedAt": "2026-03-30T11:42:44.081Z"
+    },
+    {
+      "id": "user_exshopi_official",
+      "name": "ExShopi Official",
+      "email": "official@exshopi.com",
+      "password": "exshopi-official",
+      "phone": "+971522608063",
+      "role": "admin",
+      "status": "active",
+      "country": "AE",
+      "emailVerified": true,
+      "sellerApplicationStatus": null,
+      "createdAt": "2026-03-30T11:42:44.081Z",
+      "updatedAt": "2026-03-30T11:42:44.081Z"
+    },
+    {
+      "name": "Launch Check",
+      "email": "launchcheck.1774870991@example.com",
+      "password": "$2b$12$zf0imsyMxVH/mHRQLHEzYOtkqBeQTDByA6g2VSg9mYFNCiVKG8q2K",
+      "phone": "",
+      "role": "customer",
+      "status": "active",
+      "country": "AE",
+      "emailVerified": true,
+      "sellerApplicationStatus": null,
+      "id": "user_1774870991502",
+      "createdAt": "2026-03-30T11:43:11.502Z",
+      "updatedAt": "2026-03-30T11:43:11.502Z"
+    },
+    {
+      "name": "Launch Seller",
+      "email": "seller.launch.1774873502@example.com",
+      "password": "$2b$12$tPTEPZ8nCwhdCGvsX7J2m.w7s0.VyINgTvkW0rcQEgL486Ly69RS.",
+      "phone": "+971500000999",
+      "role": "seller",
+      "status": "pending",
+      "country": "AE",
+      "emailVerified": true,
+      "sellerApplicationStatus": "pending_review",
+      "id": "user_1774873502411",
+      "createdAt": "2026-03-30T12:25:02.411Z",
+      "updatedAt": "2026-03-30T12:25:02.419Z"
+    },
+    {
+      "name": "Launch Seller",
+      "email": "seller.launch.1774873540@example.com",
+      "password": "$2b$12$jtf8o5yCJL6qUDuH./3z7ewLlIit1BXg0H9RefJPqGA1Pyhi0qnCS",
+      "phone": "+971500000999",
+      "role": "seller",
+      "status": "pending",
+      "country": "AE",
+      "emailVerified": true,
+      "sellerApplicationStatus": "pending_review",
+      "id": "user_1774873540351",
+      "createdAt": "2026-03-30T12:25:40.351Z",
+      "updatedAt": "2026-03-30T12:25:40.356Z"
+    }
+  ],
+  "sellers": [
+    {
+      "userId": "user1",
+      "storeName": "Tech Hub Store",
+      "storeSlug": "tech-hub-store",
+      "description": "Electronics and tech products",
+      "email": "seller@techhub.com",
+      "commissionRate": 6,
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalSales": 0,
+      "status": "active",
+      "id": "seller_1774699862967",
+      "createdAt": "2026-03-28T12:11:02.967Z",
+      "updatedAt": "2026-03-28T12:11:02.967Z",
+      "monthlyFeeAed": 99,
+      "subscriptionStatus": "pending",
+      "isOfficial": false,
+      "website": "",
+      "warehouseAddress": "",
+      "vatTrn": "",
+      "supportInfo": "",
+      "policies": {},
+      "socialLinks": {},
+      "iban": ""
+    },
+    {
+      "userId": "v1",
+      "storeName": "Apple Official",
+      "storeSlug": "apple-official",
+      "description": "Apple Official",
+      "logo": "",
+      "banner": "",
+      "city": "Dubai",
+      "country": "UAE",
+      "phone": "",
+      "email": "apple@example.com",
+      "bankAccount": "",
+      "bankName": "",
+      "accountHolder": "",
+      "commissionRate": 6,
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalSales": 1200000,
+      "status": "active",
+      "id": "seller_1774839245791",
+      "createdAt": "2026-03-30T02:54:05.791Z",
+      "updatedAt": "2026-03-30T02:54:05.791Z",
+      "monthlyFeeAed": 99,
+      "subscriptionStatus": "pending",
+      "isOfficial": false,
+      "website": "",
+      "warehouseAddress": "",
+      "vatTrn": "",
+      "supportInfo": "",
+      "policies": {},
+      "socialLinks": {},
+      "iban": ""
+    },
+    {
+      "userId": "v2",
+      "storeName": "Samsung Gulf",
+      "storeSlug": "samsung-gulf",
+      "description": "Samsung Gulf",
+      "logo": "",
+      "banner": "",
+      "city": "Dubai",
+      "country": "UAE",
+      "phone": "",
+      "email": "samsung@example.com",
+      "bankAccount": "",
+      "bankName": "",
+      "accountHolder": "",
+      "commissionRate": 6,
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalSales": 850000,
+      "status": "active",
+      "id": "seller_1774839245792",
+      "createdAt": "2026-03-30T02:54:05.792Z",
+      "updatedAt": "2026-03-30T02:54:05.792Z",
+      "monthlyFeeAed": 99,
+      "subscriptionStatus": "pending",
+      "isOfficial": false,
+      "website": "",
+      "warehouseAddress": "",
+      "vatTrn": "",
+      "supportInfo": "",
+      "policies": {},
+      "socialLinks": {},
+      "iban": ""
+    },
+    {
+      "userId": "v3",
+      "storeName": "Sony Middle East",
+      "storeSlug": "sony-middle-east",
+      "description": "Sony Middle East",
+      "logo": "",
+      "banner": "",
+      "city": "Dubai",
+      "country": "UAE",
+      "phone": "",
+      "email": "sony@example.com",
+      "bankAccount": "",
+      "bankName": "",
+      "accountHolder": "",
+      "commissionRate": 6,
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalSales": 640000,
+      "status": "active",
+      "id": "seller_1774839245793",
+      "createdAt": "2026-03-30T02:54:05.793Z",
+      "updatedAt": "2026-03-30T02:54:05.793Z",
+      "monthlyFeeAed": 99,
+      "subscriptionStatus": "pending",
+      "isOfficial": false,
+      "website": "",
+      "warehouseAddress": "",
+      "vatTrn": "",
+      "supportInfo": "",
+      "policies": {},
+      "socialLinks": {},
+      "iban": ""
+    },
+    {
+      "id": "exshopi_official",
+      "userId": "user_exshopi_official",
+      "storeName": "ExShopi Official",
+      "storeSlug": "exshopi-official",
+      "description": "Official ExShopi storefront for first-party marketplace products and curated launches.",
+      "logo": "/logo.png",
+      "banner": "/hero/hero-1.png",
+      "city": "Dubai",
+      "country": "UAE",
+      "phone": "+971522608063",
+      "email": "exshopi@exshopi.com",
+      "bankAccount": "",
+      "bankName": "",
+      "accountHolder": "ExShopi Official",
+      "commissionRate": 0,
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalSales": 0,
+      "status": "active",
+      "isOfficial": true,
+      "monthlyFeeAed": 0,
+      "subscriptionStatus": "active",
+      "statusHistory": [],
+      "createdAt": "2026-03-30T11:42:44.081Z",
+      "updatedAt": "2026-03-30T11:42:44.081Z",
+      "website": "",
+      "warehouseAddress": "",
+      "vatTrn": "",
+      "supportInfo": "",
+      "policies": {},
+      "socialLinks": {},
+      "iban": ""
+    }
+  ],
+  "sellerApplications": [
+    {
+      "userId": "user_1774873502411",
+      "businessName": "Launch Devices LLC",
+      "ownerName": "Launch Seller",
+      "email": "seller.launch.1774873502@example.com",
+      "phone": "+971500000999",
+      "businessType": "llc",
+      "country": "UAE",
+      "city": "Dubai",
+      "warehouseAddress": "Dubai Investment Park Warehouse 4",
+      "vatTrn": "TRN123456789000",
+      "monthlyFeeAed": 99,
+      "commissionRate": 6,
+      "documents": [
+        "/uploads/test-doc.pdf"
+      ],
+      "logo": "/logo.png",
+      "banner": "/hero/hero-1.png",
+      "about": "Premium electronics and accessories seller for UAE marketplace operations.",
+      "policies": {
+        "returns": "7 days",
+        "warranty": "1 year"
+      },
+      "bankDetails": {
+        "iban": "AE070331234567890123456",
+        "bankName": "Emirates NBD",
+        "accountHolder": "Launch Devices LLC"
+      },
+      "status": "pending_review",
+      "id": "seller_app_1774873502419",
+      "createdAt": "2026-03-30T12:25:02.419Z",
+      "updatedAt": "2026-03-30T12:25:02.419Z"
+    },
+    {
+      "userId": "user_1774873540351",
+      "businessName": "Launch Devices LLC",
+      "ownerName": "Launch Seller",
+      "email": "seller.launch.1774873540@example.com",
+      "phone": "+971500000999",
+      "businessType": "llc",
+      "country": "UAE",
+      "city": "Dubai",
+      "warehouseAddress": "Dubai Investment Park Warehouse 4",
+      "vatTrn": "TRN123456789000",
+      "monthlyFeeAed": 99,
+      "commissionRate": 6,
+      "documents": [
+        "/uploads/test-doc.pdf"
+      ],
+      "logo": "/logo.png",
+      "banner": "/hero/hero-1.png",
+      "about": "Premium electronics and accessories seller for UAE marketplace operations.",
+      "policies": {
+        "returns": "7 days",
+        "warranty": "1 year"
+      },
+      "bankDetails": {
+        "iban": "AE070331234567890123456",
+        "bankName": "Emirates NBD",
+        "accountHolder": "Launch Devices LLC"
+      },
+      "status": "pending_review",
+      "id": "seller_app_1774873540356",
+      "createdAt": "2026-03-30T12:25:40.356Z",
+      "updatedAt": "2026-03-30T12:25:40.356Z"
+    }
+  ],
+  "products": [
+    {
+      "sellerId": "seller_1774699862967",
+      "title": "iPhone 15 Pro",
+      "description": "Latest iPhone model",
+      "price": 900,
+      "originalPrice": 1099,
+      "image": "/Product/macbook.jpg.webp",
+      "stock": 50,
+      "rating": 0,
+      "reviews": 0,
+      "sku": "IPHONE15PRO001",
+      "specs": {
+        "brand": "Apple",
+        "model": "iPhone 15 Pro",
+        "ram": "8GB",
+        "screen_size": "6.1",
+        "camera": "48MP",
+        "battery": "3582mAh",
+        "sim_type": "eSIM",
+        "color": "Space Black",
+        "version": "A2846"
+      },
+      "status": "live",
+      "id": "prod_1774699869707",
+      "createdAt": "2026-03-28T12:11:09.707Z",
+      "updatedAt": "2026-03-28T12:11:18.073Z",
+      "approvalNotes": "Product approved - good quality images and specifications",
+      "storeId": "seller_1774699862967",
+      "salePrice": 900,
+      "approvalStatus": "approved",
+      "productStatus": "live",
+      "visibilityStatus": "live",
+      "ownership": "seller",
+      "createdByRole": "seller",
+      "approvalRequestedAt": "2026-03-28T12:11:09.707Z",
+      "approvedAt": "",
+      "rejectedAt": "",
+      "views": 0,
+      "wishlistCount": 0,
+      "brand": ""
+    }
+  ],
+  "banners": [],
+  "reviews": [],
+  "orders": [
+    {
+      "customerId": "customer1",
+      "sellerId": "seller_1774699862967",
+      "productId": "prod_1774699869707",
+      "quantity": 2,
+      "subtotal": 0,
+      "commission": 0,
+      "sellerAmount": 0,
+      "shippingAddress": {
+        "address": "123 Main St",
+        "city": "Dubai",
+        "state": "Dubai",
+        "zip": "12345",
+        "country": "UAE"
+      },
+      "trackingCode": "46QOKP3H09MB",
+      "pickupQrCode": "QR_0F2KR79VSHW9",
+      "status": "placed",
+      "paymentStatus": "pending",
+      "payoutStatus": "pending",
+      "orderId": "ORD883862NJOF",
+      "id": "ord_1774699883862",
+      "createdAt": "2026-03-28T12:11:23.862Z",
+      "updatedAt": "2026-03-28T12:11:23.862Z",
+      "customerPhone": "",
+      "unitPrice": 0,
+      "totalAmount": 0,
+      "refundAmount": 0,
+      "refundStatus": "none",
+      "refundReason": "",
+      "dispatchSlotDate": "",
+      "dispatchSlotWindow": "",
+      "dispatchNotes": "",
+      "courierPartner": "",
+      "items": [
+        {
+          "id": "item_ord_1774699883862",
+          "productId": "prod_1774699869707",
+          "title": "prod_1774699869707",
+          "quantity": 2,
+          "unitPrice": 0,
+          "subtotal": 0,
+          "vatAmount": 0,
+          "commission": 0,
+          "sellerAmount": 0
+        }
+      ]
+    },
+    {
+      "customerId": "customer1",
+      "sellerId": "seller_1774699862967",
+      "productId": "prod_1774699869707",
+      "quantity": 2,
+      "unitPrice": 999,
+      "subtotal": 1998,
+      "commission": 120,
+      "sellerAmount": 1878,
+      "shippingCost": 50,
+      "shippingAddress": {
+        "address": "123 Main St",
+        "city": "Dubai",
+        "state": "Dubai",
+        "zip": "12345",
+        "country": "UAE"
+      },
+      "trackingCode": "N4WUJCH2C8NX",
+      "pickupQrCode": "QR_58C0WSFYOTXY",
+      "status": "placed",
+      "paymentStatus": "pending",
+      "payoutStatus": "pending",
+      "orderId": "ORD894835IUKV",
+      "id": "ord_1774699894835",
+      "createdAt": "2026-03-28T12:11:34.835Z",
+      "updatedAt": "2026-03-28T12:11:34.835Z",
+      "customerPhone": "",
+      "totalAmount": 0,
+      "refundAmount": 0,
+      "refundStatus": "none",
+      "refundReason": "",
+      "dispatchSlotDate": "",
+      "dispatchSlotWindow": "",
+      "dispatchNotes": "",
+      "courierPartner": "",
+      "items": [
+        {
+          "id": "item_ord_1774699894835",
+          "productId": "prod_1774699869707",
+          "title": "prod_1774699869707",
+          "quantity": 2,
+          "unitPrice": 999,
+          "subtotal": 1998,
+          "vatAmount": 0,
+          "commission": 120,
+          "sellerAmount": 1878
+        }
+      ]
+    }
+  ],
+  "payouts": [],
+  "payoutRequests": [],
+  "supportTickets": [],
+  "trackingEvents": [
+    {
+      "id": "track_1774699883862",
+      "orderId": "ord_1774699883862",
+      "status": "placed",
+      "timestamp": "2026-03-28T12:11:23.862Z",
+      "notes": "Order placed",
+      "location": ""
+    },
+    {
+      "id": "track_1774699894836",
+      "orderId": "ord_1774699894835",
+      "status": "placed",
+      "timestamp": "2026-03-28T12:11:34.836Z",
+      "notes": "Order placed",
+      "location": ""
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat1",
+      "name": "Electronics",
+      "arabicName": "إلكترونيات",
+      "slug": "electronics",
+      "icon": "Smartphone",
+      "specs": {
+        "Mobiles": [
+          "brand",
+          "model",
+          "storage",
+          "ram",
+          "screen_size",
+          "camera",
+          "battery",
+          "sim_type",
+          "color",
+          "version"
+        ],
+        "Laptops": [
+          "brand",
+          "model",
+          "processor",
+          "ram",
+          "storage",
+          "screen_size",
+          "graphics",
+          "os",
+          "condition",
+          "warranty"
+        ],
+        "Tablets": [
+          "brand",
+          "model",
+          "storage",
+          "ram",
+          "screen_size",
+          "processor",
+          "os"
+        ]
+      },
+      "subcategories": [
+        {
+          "name": "Mobiles",
+          "arabicName": "موبايلات",
+          "slug": "mobiles"
+        },
+        {
+          "name": "Laptops",
+          "arabicName": "لابتوبات",
+          "slug": "laptops"
+        },
+        {
+          "name": "Tablets",
+          "arabicName": "تابلت",
+          "slug": "tablets"
+        }
+      ]
+    },
+    {
+      "id": "cat2",
+      "name": "Fashion",
+      "arabicName": "الأزياء",
+      "slug": "fashion",
+      "icon": "ShoppingBag",
+      "specs": {
+        "Shirts": [
+          "brand",
+          "gender",
+          "size",
+          "color",
+          "fabric_type",
+          "sleeve_type",
+          "fit",
+          "pattern",
+          "care_instructions"
+        ],
+        "Pants": [
+          "brand",
+          "gender",
+          "size",
+          "color",
+          "fit",
+          "material",
+          "style"
+        ]
+      },
+      "subcategories": [
+        {
+          "name": "Shirts",
+          "arabicName": "قمصان",
+          "slug": "shirts"
+        },
+        {
+          "name": "Pants",
+          "arabicName": "بنطلونات",
+          "slug": "pants"
+        },
+        {
+          "name": "Dresses",
+          "arabicName": "فساتين",
+          "slug": "dresses"
+        }
+      ]
+    },
+    {
+      "id": "cat3",
+      "name": "Home & Kitchen",
+      "arabicName": "المنزل والمطبخ",
+      "slug": "home-kitchen",
+      "icon": "Home",
+      "specs": {
+        "Kitchen Appliances": [
+          "brand",
+          "type",
+          "capacity",
+          "material",
+          "color",
+          "warranty",
+          "energy_rating"
+        ],
+        "Furniture": [
+          "type",
+          "material",
+          "color",
+          "dimensions",
+          "style",
+          "assembly_required"
+        ]
+      },
+      "subcategories": [
+        {
+          "name": "Kitchen Appliances",
+          "arabicName": "أجهزة المطبخ",
+          "slug": "kitchen-appliances"
+        },
+        {
+          "name": "Furniture",
+          "arabicName": "أثاث",
+          "slug": "furniture"
+        }
+      ]
+    }
+  ],
+  "translations": [
+    {
+      "key": "nav.home",
+      "en": "Home",
+      "ar": "الرئيسية"
+    },
+    {
+      "key": "nav.products",
+      "en": "Products",
+      "ar": "المنتجات"
+    },
+    {
+      "key": "nav.sellers",
+      "en": "Sellers",
+      "ar": "البائعون"
+    },
+    {
+      "key": "nav.cart",
+      "en": "Cart",
+      "ar": "السلة"
+    },
+    {
+      "key": "nav.account",
+      "en": "Account",
+      "ar": "الحساب"
+    },
+    {
+      "key": "btn.add_to_cart",
+      "en": "Add to Cart",
+      "ar": "أضف إلى السلة"
+    },
+    {
+      "key": "btn.buy_now",
+      "en": "Buy Now",
+      "ar": "اشترِ الآن"
+    },
+    {
+      "key": "btn.approve",
+      "en": "Approve",
+      "ar": "وافق"
+    },
+    {
+      "key": "btn.reject",
+      "en": "Reject",
+      "ar": "رفض"
+    },
+    {
+      "key": "btn.edit",
+      "en": "Edit",
+      "ar": "تعديل"
+    },
+    {
+      "key": "btn.delete",
+      "en": "Delete",
+      "ar": "حذف"
+    },
+    {
+      "key": "btn.save",
+      "en": "Save",
+      "ar": "حفظ"
+    },
+    {
+      "key": "btn.cancel",
+      "en": "Cancel",
+      "ar": "إلغاء"
+    },
+    {
+      "key": "label.seller",
+      "en": "Seller",
+      "ar": "البائع"
+    },
+    {
+      "key": "label.price",
+      "en": "Price",
+      "ar": "السعر"
+    },
+    {
+      "key": "label.status",
+      "en": "Status",
+      "ar": "الحالة"
+    },
+    {
+      "key": "label.order_id",
+      "en": "Order ID",
+      "ar": "رقم الطلب"
+    },
+    {
+      "key": "label.tracking",
+      "en": "Tracking",
+      "ar": "التتبع"
+    },
+    {
+      "key": "label.commission",
+      "en": "Commission",
+      "ar": "العمولة"
+    },
+    {
+      "key": "label.payout",
+      "en": "Payout",
+      "ar": "الدفع"
+    }
+  ],
+  "activityLogs": [
+    {
+      "actorId": "user_1774873540351",
+      "actorRole": "seller",
+      "entityType": "seller_application",
+      "entityId": "seller_app_1774873540356",
+      "action": "submitted",
+      "summary": "Seller application submitted for Launch Devices LLC",
+      "id": "activity_1774873540356_379",
+      "createdAt": "2026-03-30T12:25:40.356Z"
+    },
+    {
+      "actorId": "user_1774873540351",
+      "actorRole": "seller",
+      "entityType": "user",
+      "entityId": "user_1774873540351",
+      "action": "created",
+      "summary": "User seller.launch.1774873540@example.com registered as seller",
+      "id": "activity_1774873540351_974",
+      "createdAt": "2026-03-30T12:25:40.351Z"
+    },
+    {
+      "actorId": "user_1774873502411",
+      "actorRole": "seller",
+      "entityType": "seller_application",
+      "entityId": "seller_app_1774873502419",
+      "action": "submitted",
+      "summary": "Seller application submitted for Launch Devices LLC",
+      "id": "activity_1774873502419_668",
+      "createdAt": "2026-03-30T12:25:02.419Z"
+    },
+    {
+      "actorId": "user_1774873502411",
+      "actorRole": "seller",
+      "entityType": "user",
+      "entityId": "user_1774873502411",
+      "action": "created",
+      "summary": "User seller.launch.1774873502@example.com registered as seller",
+      "id": "activity_1774873502411_268",
+      "createdAt": "2026-03-30T12:25:02.412Z"
+    },
+    {
+      "actorId": "user_1774870991502",
+      "actorRole": "customer",
+      "entityType": "user",
+      "entityId": "user_1774870991502",
+      "action": "created",
+      "summary": "User launchcheck.1774870991@example.com registered as customer",
+      "id": "activity_1774870991502_215",
+      "createdAt": "2026-03-30T11:43:11.502Z"
+    }
+  ],
+  "analyticsEvents": [
+    {
+      "role": "guest",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmne79duj000qc95sclaaqp7t",
+      "metadata": {
+        "title": "ok Laptop good very ",
+        "sellerId": "cmndlxt03000jc95snwgvinyq"
+      },
+      "id": "analytics_1774945271282_58",
+      "createdAt": "2026-03-31T08:21:11.283Z"
+    },
+    {
+      "role": "guest",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmne79duj000qc95sclaaqp7t",
+      "metadata": {
+        "title": "ok Laptop good very ",
+        "sellerId": "cmndlxt03000jc95snwgvinyq"
+      },
+      "id": "analytics_1774944099429_258",
+      "createdAt": "2026-03-31T08:01:39.429Z"
+    },
+    {
+      "userId": "cmnd5pkmf0001c9lrevl93p6c",
+      "role": "admin",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmne79duj000qc95sclaaqp7t",
+      "metadata": {
+        "title": "ok Laptop good very ",
+        "sellerId": "cmndlxt03000jc95snwgvinyq"
+      },
+      "id": "analytics_1774937017361_878",
+      "createdAt": "2026-03-31T06:03:37.361Z"
+    },
+    {
+      "role": "guest",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmnd6tuyt000fc91bgj49rhus",
+      "metadata": {
+        "title": "Ops Smoke Product",
+        "sellerId": "cmnd6tk0u000dc91bl0gdn8ds"
+      },
+      "id": "analytics_1774934769354_378",
+      "createdAt": "2026-03-31T05:26:09.355Z"
+    },
+    {
+      "role": "guest",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmnd6tuyt000fc91bgj49rhus",
+      "metadata": {
+        "title": "Ops Smoke Product",
+        "sellerId": "cmnd6tk0u000dc91bl0gdn8ds"
+      },
+      "id": "analytics_1774934651205_268",
+      "createdAt": "2026-03-31T05:24:11.207Z"
+    },
+    {
+      "role": "guest",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmnd6tuyt000fc91bgj49rhus",
+      "metadata": {
+        "title": "Ops Smoke Product",
+        "sellerId": "cmnd6tk0u000dc91bl0gdn8ds"
+      },
+      "id": "analytics_1774900042734_922",
+      "createdAt": "2026-03-30T19:47:22.734Z"
+    },
+    {
+      "role": "guest",
+      "eventType": "banner_click",
+      "entityType": "banner",
+      "entityId": "1",
+      "metadata": {
+        "title": "Premium Marketplace",
+        "link": "/products"
+      },
+      "id": "analytics_1774900033067_598",
+      "createdAt": "2026-03-30T19:47:13.067Z"
+    },
+    {
+      "role": "guest",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmnd68l1n0006c91bg7cusetj",
+      "metadata": {
+        "title": "Quick Flow Product",
+        "sellerId": "cmnd68ajt0004c91b5cv4azlk"
+      },
+      "id": "analytics_1774897389587_962",
+      "createdAt": "2026-03-30T19:03:09.587Z"
+    },
+    {
+      "role": "guest",
+      "eventType": "product_view",
+      "entityType": "product",
+      "entityId": "cmnd6tuyt000fc91bgj49rhus",
+      "metadata": {
+        "title": "Ops Smoke Product",
+        "sellerId": "cmnd6tk0u000dc91bl0gdn8ds"
+      },
+      "id": "analytics_1774895150719_867",
+      "createdAt": "2026-03-30T18:25:50.719Z"
+    }
+  ],
+  "marketplaceSettings": {
+    "sellerCommissionPercent": 6,
+    "monthlySellerFeeAed": 99,
+    "defaultCountry": "AE",
+    "lowStockThreshold": 5,
+    "maintenanceMode": false,
+    "countries": [
+      {
+        "code": "AE",
+        "name": "United Arab Emirates",
+        "currency": "AED",
+        "vatPercent": 5,
+        "deliveryBaseAed": 10,
+        "codEnabled": true
+      },
+      {
+        "code": "SA",
+        "name": "Saudi Arabia",
+        "currency": "SAR",
+        "vatPercent": 15,
+        "deliveryBaseAed": 100,
+        "codEnabled": true
+      },
+      {
+        "code": "KW",
+        "name": "Kuwait",
+        "currency": "KWD",
+        "vatPercent": 0,
+        "deliveryBaseAed": 100,
+        "codEnabled": true
+      },
+      {
+        "code": "QA",
+        "name": "Qatar",
+        "currency": "QAR",
+        "vatPercent": 0,
+        "deliveryBaseAed": 100,
+        "codEnabled": true
+      },
+      {
+        "code": "BH",
+        "name": "Bahrain",
+        "currency": "BHD",
+        "vatPercent": 10,
+        "deliveryBaseAed": 100,
+        "codEnabled": true
+      },
+      {
+        "code": "OM",
+        "name": "Oman",
+        "currency": "OMR",
+        "vatPercent": 5,
+        "deliveryBaseAed": 100,
+        "codEnabled": true
+      }
+    ]
+  },
+  "siteSettings": {
+    "general": {
+      "siteName": "ExShopi",
+      "tagline": "UAE's trusted marketplace",
+      "supportEmail": "exshopi@exshopi.com",
+      "supportPhone": "+971522608063",
+      "address": "Dubai, United Arab Emirates",
+      "defaultLanguage": "en",
+      "vatPercentage": 5
+    },
+    "branding": {
+      "siteName": "ExShopi",
+      "logoUrl": "/logo.png",
+      "faviconUrl": "/logo.png",
+      "primaryColor": "#0f172a",
+      "accentColor": "#2563eb"
+    },
+    "homepage": {
+      "hero": {
+        "title": "Premium Marketplace",
+        "subtitle": "Shop top electronics, gadgets, and more.",
+        "primaryCtaText": "Shop Now",
+        "primaryCtaLink": "/products",
+        "productImageUrl": "/hero/hero-1.png"
+      },
+      "sections": [
+        {
+          "id": "featured-products",
+          "title": "Featured Products",
+          "subtitle": "Curated marketplace picks",
+          "type": "products",
+          "show": true,
+          "order": 1
+        },
+        {
+          "id": "brands",
+          "title": "Popular Brands",
+          "subtitle": "Trusted marketplace names",
+          "type": "brands",
+          "show": true,
+          "order": 2
+        },
+        {
+          "id": "most-popular",
+          "title": "Most popular this month",
+          "subtitle": "Products with strong shopper momentum",
+          "type": "products",
+          "show": true,
+          "order": 3
+        },
+        {
+          "id": "flash-deals",
+          "title": "Eid Offers",
+          "subtitle": "Seasonal marketplace deals and campaign picks",
+          "type": "campaign",
+          "show": true,
+          "order": 4
+        },
+        {
+          "id": "promo",
+          "title": "Marketplace Offers",
+          "subtitle": "Curated promos and feature callouts",
+          "type": "promo",
+          "show": true,
+          "order": 5
+        }
+      ],
+      "videoSection": {
+        "show": true,
+        "badgeText": "Featured",
+        "title": "Discover the ExShopi Experience",
+        "description": "Fast delivery, premium products, and a modern shopping experience.",
+        "ctaText": "Watch Video",
+        "videoUrl": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+        "thumbnailUrl": "/Banners/banner1.jpg"
+      },
+      "trustBanner": {
+        "show": true,
+        "items": [
+          {
+            "icon": "truck",
+            "title": "Fast Delivery",
+            "desc": "Across UAE"
+          },
+          {
+            "icon": "shield",
+            "title": "Secure Shopping",
+            "desc": "Protected checkout"
+          },
+          {
+            "icon": "zap",
+            "title": "Great Deals",
+            "desc": "Best value"
+          },
+          {
+            "icon": "check",
+            "title": "Trusted Quality",
+            "desc": "Verified products"
+          }
+        ]
+      }
+    },
+    "header": {
+      "announcementBar": {
+        "show": true,
+        "text": "Delivering across UAE only",
+        "bgColor": "#0f172a",
+        "textColor": "#ffffff"
+      },
+      "deliveryMessage": "Fast Delivery · Trusted Sellers",
+      "searchPlaceholder": "Search for laptops, phones, accessories, sellers..."
+    },
+    "footer": {
+      "description": "Premium UAE marketplace for electronics, accessories, and daily use products.",
+      "email": "exshopi@exshopi.com",
+      "phone": "+971 52 260 8063",
+      "socialLinks": {
+        "instagram": "https://instagram.com/exshopi",
+        "facebook": "https://facebook.com/exshopi"
+      }
+    },
+    "seo": {
+      "metaTitle": "ExShopi | Premium UAE Marketplace",
+      "metaDescription": "Shop electronics, daily-use products, and trusted sellers across ExShopi in the UAE.",
+      "keywords": "ExShopi, UAE marketplace, electronics, mobiles, laptops, deals"
+    }
+  }
+}

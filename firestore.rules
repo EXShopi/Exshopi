@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Fields: uid, fullName, email, role (admin, seller, customer), createdAt, lastLogin
+    //
+    // Collection: vendors
+    // Fields: uid, storeName, businessEmail, status (pending, approved, rejected, suspended), commissionRate, createdAt
+    //
+    // Collection: products
+    // Fields: vendorId, title, price, status (draft, published, rejected), createdAt
+    //
+    // Collection: orders
+    // Fields: customerId, vendorIds (array), total, status, createdAt
+    //
+    // Collection: orderItems
+    // Fields: orderId, vendorId, productId, subtotal, commissionAmount, vendorEarning, status
+    //
+    // Collection: payoutRequests
+    // Fields: vendorId, amount, status (pending, approved, rejected, paid), createdAt
+    //
+    // Collection: banners
+    // Fields: title, subtitle, image, cta, link, color, badge, order, createdAt, updatedAt
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (
+          (request.auth.token.email == "ahsansajid295@gmail.com
+" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    function isSeller() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        getUserData().role == 'seller';
+    }
+
+    function isApprovedVendor() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+             data.uid == request.auth.uid &&
+             data.email is string &&
+             data.role in ['admin', 'seller', 'customer'];
+    }
+
+    function isValidVendor(data) {
+      return hasRequiredFields(['uid', 'storeName', 'status']) &&
+             data.uid == request.auth.uid &&
+             data.storeName is string && data.storeName.size() < 100 &&
+             data.status in ['pending', 'approved', 'rejected', 'suspended'];
+    }
+
+    function isValidProduct(data) {
+      return hasRequiredFields(['vendorId', 'title', 'price', 'status']) &&
+             (data.vendorId == request.auth.uid || isAdmin()) &&
+             data.title is string && data.title.size() < 200 &&
+             data.price is number && data.price >= 0 &&
+             data.status in ['draft', 'published', 'rejected', 'pending', 'archived'];
+    }
+
+    function isValidBanner(data) {
+      return hasRequiredFields(['title', 'image', 'order']) &&
+             data.title is string && data.title.size() < 100 &&
+             data.image is string && data.image.size() < 1000 &&
+             data.order is int;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isAuthenticated() && (isOwner(uid) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(uid) && isValidUser(request.resource.data) && (
+        request.resource.data.role == 'customer' || 
+        request.resource.data.role == 'seller' ||
+        (request.resource.data.role == 'admin' && isAdmin())
+      );
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (isOwner(uid) && isValidUser(request.resource.data) && (
+          request.resource.data.role == resource.data.role || 
+          (resource.data.role == 'customer' && request.resource.data.role == 'seller')
+        ))
+      );
+    }
+
+    match /vendors/{uid} {
+      allow read: if true; // Public can see store info
+      allow create: if isAuthenticated() && isOwner(uid) && isValidVendor(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAuthenticated() && (isAdmin() || (isOwner(uid) && isValidVendor(request.resource.data) && request.resource.data.status == resource.data.status));
+    }
+
+    match /products/{productId} {
+      allow read: if true; // Products are public catalog items
+      allow create: if isAuthenticated() && (isSeller() || isAdmin()) && isValidProduct(request.resource.data);
+      allow update: if isAuthenticated() && (isAdmin() || (isOwner(resource.data.vendorId) && isValidProduct(request.resource.data)));
+      allow delete: if isAuthenticated() && (isAdmin() || isOwner(resource.data.vendorId));
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.customerId) || isAdmin() || resource.data.vendorIds.hasAny([request.auth.uid]));
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isAdmin() || resource.data.vendorIds.hasAny([request.auth.uid]));
+    }
+
+    match /orderItems/{itemId} {
+      allow read: if isAuthenticated() && (isAdmin() || isOwner(resource.data.vendorId) || isOwner(get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.customerId));
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isAdmin() || isOwner(resource.data.vendorId));
+    }
+
+    match /payoutRequests/{requestId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.vendorId) || isAdmin());
+      allow create: if isAuthenticated() && isApprovedVendor();
+      allow update: if isAuthenticated() && isAdmin();
+    }
+    
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAdmin();
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidBanner(request.resource.data);
+      allow update: if isAdmin() && isValidBanner(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

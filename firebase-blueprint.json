@@ -1,0 +1,306 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "System users including customers, sellers, and admins.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "seller", "customer"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "vendors": {
+      "title": "Vendor",
+      "description": "Sellers on the marketplace with full KYC and business details.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "storeName": { "type": "string" },
+        "businessEmail": { "type": "string" },
+        "phone": { "type": "string" },
+        "businessType": { "type": "string", "enum": ["individual", "company"] },
+        "fullName": { "type": "string", "description": "For individual sellers" },
+        "dob": { "type": "string" },
+        "nationality": { "type": "string" },
+        "country": { "type": "string" },
+        "emiratesIdUrl": { "type": "string" },
+        "passportUrl": { "type": "string" },
+        "companyName": { "type": "string" },
+        "tradeLicenseNumber": { "type": "string" },
+        "tradeLicenseUrl": { "type": "string" },
+        "moaUrl": { "type": "string" },
+        "businessAddress": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerDob": { "type": "string" },
+        "ownerNationality": { "type": "string" },
+        "ownerEmiratesIdUrl": { "type": "string" },
+        "ownerPassportUrl": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountHolderName": { "type": "string" },
+        "ibanNumber": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "suspended"] },
+        "rejectionReason": { "type": "string" },
+        "commissionRate": { "type": "number", "description": "Percentage rate, e.g., 6" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "emailVerified": { "type": "boolean" },
+        "phoneVerified": { "type": "boolean" },
+        "trustScore": { "type": "number", "description": "0-100 score" },
+        "isVerifiedUAE": { "type": "boolean" },
+        "totalSales": { "type": "integer" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "integer" }
+      },
+      "required": ["uid", "storeName", "status", "businessType"]
+    },
+    "categories": {
+      "title": "Category",
+      "description": "Product categories with dynamic field schemas.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "parentId": { "type": "string" },
+        "icon": { "type": "string" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "customFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "label": { "type": "string" },
+              "type": { "type": "string", "enum": ["text", "number", "select", "boolean", "multiselect"] },
+              "options": { "type": "array", "items": { "type": "string" } },
+              "required": { "type": "boolean" }
+            }
+          }
+        },
+        "order": { "type": "integer" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["name", "slug"]
+    },
+    "products": {
+      "title": "Product",
+      "description": "Marketplace products with full inventory and SEO management.",
+      "type": "object",
+      "properties": {
+        "vendorId": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "sku": { "type": "string" },
+        "barcode": { "type": "string" },
+        "brand": { "type": "string" },
+        "category": { "type": "string" },
+        "subcategory": { "type": "string" },
+        "subSubcategory": { "type": "string" },
+        "productType": { "type": "string" },
+        "condition": { "type": "string", "enum": ["New", "Used", "Refurbished"] },
+        "shortDescription": { "type": "string" },
+        "fullDescription": { "type": "string" },
+        "keyFeatures": { "type": "array", "items": { "type": "string" } },
+        "specifications": { "type": "object" },
+        "whatsInBox": { "type": "string" },
+        "warrantyDetails": { "type": "string" },
+        "returnPolicy": { "type": "string" },
+        "deliveryNotes": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "price": { "type": "number" },
+        "salePrice": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "taxIncluded": { "type": "boolean" },
+        "discountAmount": { "type": "number" },
+        "discountType": { "type": "string", "enum": ["Percentage", "Fixed"] },
+        "offerStartDate": { "type": "string", "format": "date-time" },
+        "offerEndDate": { "type": "string", "format": "date-time" },
+        "stockQuantity": { "type": "integer" },
+        "lowStockAlert": { "type": "integer" },
+        "stockStatus": { "type": "string", "enum": ["In Stock", "Out of Stock", "Preorder"] },
+        "warehouseLocation": { "type": "string" },
+        "image": { "type": "string" },
+        "gallery": { "type": "array", "items": { "type": "string" } },
+        "videoUrl": { "type": "string" },
+        "video360Url": { "type": "string" },
+        "delivery": { "type": "string" },
+        "stock": { "type": "string" },
+        "isOffer": { "type": "boolean" },
+        "isWarrantyUAE": { "type": "boolean" },
+        "isSameDayDelivery": { "type": "boolean" },
+        "isCodAvailable": { "type": "boolean" },
+        "sellerLocationUAE": { "type": "string" },
+        "arabicName": { "type": "string" },
+        "arabicDescription": { "type": "string" },
+        "arabicKeyFeatures": { "type": "array", "items": { "type": "string" } },
+        "arabicSpecifications": { "type": "object" },
+        "variants": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "sku": { "type": "string" },
+              "price": { "type": "number" },
+              "salePrice": { "type": "number" },
+              "stock": { "type": "integer" },
+              "image": { "type": "string" },
+              "attributes": { "type": "object" }
+            }
+          } 
+        },
+        "status": { "type": "string", "enum": ["draft", "pending", "published", "archived", "rejected"] },
+        "isFeatured": { "type": "boolean" },
+        "isBestseller": { "type": "boolean" },
+        "isNewArrival": { "type": "boolean" },
+        "isFlashDeal": { "type": "boolean" },
+        "isHotDeal": { "type": "boolean" },
+        "isTrending": { "type": "boolean" },
+        "isRecommended": { "type": "boolean" },
+        "isOfferCampaign": { "type": "boolean" },
+        "isBundleOffer": { "type": "boolean" },
+        "isLimitedTime": { "type": "boolean" },
+        "isTodaysDeal": { "type": "boolean" },
+        "isMostPopular": { "type": "boolean" },
+        "isCategorySpotlight": { "type": "boolean" },
+        "isEditorsPick": { "type": "boolean" },
+        "isClearanceSale": { "type": "boolean" },
+        "metaTitle": { "type": "string" },
+        "metaDescription": { "type": "string" },
+        "metaKeywords": { "type": "string" },
+        "ogImage": { "type": "string" },
+        "canonicalUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vendorId", "title", "price", "status", "category", "condition"]
+    },
+    "orders": {
+      "title": "Order",
+      "description": "Customer orders.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "vendorIds": { "type": "array", "items": { "type": "string" } },
+        "subtotal": { "type": "number" },
+        "shipping": { "type": "number" },
+        "tax": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "shippingAddress": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "orderItems": {
+      "title": "OrderItem",
+      "description": "Individual items within an order, split by vendor.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "vendorId": { "type": "string" },
+        "productId": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "quantity": { "type": "integer" },
+        "subtotal": { "type": "number" },
+        "commissionAmount": { "type": "number" },
+        "vendorEarning": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "payoutRequests": {
+      "title": "PayoutRequest",
+      "description": "Vendor withdrawal requests.",
+      "type": "object",
+      "properties": {
+        "vendorId": { "type": "string" },
+        "amount": { "type": "number" },
+        "bankDetails": { "type": "object" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "paid"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Global site and homepage settings.",
+      "type": "object",
+      "properties": {
+        "general": { "type": "object" },
+        "branding": { "type": "object" },
+        "homepage": { "type": "object" },
+        "header": { "type": "object" },
+        "footer": { "type": "object" },
+        "seo": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "banners": {
+      "title": "Banner",
+      "description": "Homepage hero section banners.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "image": { "type": "string", "description": "URL of the banner image" },
+        "cta": { "type": "string", "description": "Call to action text" },
+        "link": { "type": "string", "description": "Destination URL" },
+        "color": { "type": "string", "description": "Tailwind gradient classes" },
+        "badge": { "type": "string", "description": "Small text badge" },
+        "order": { "type": "integer", "description": "Display order" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "image", "order"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "users",
+      "description": "User profiles."
+    },
+    "/vendors/{uid}": {
+      "schema": "vendors",
+      "description": "Vendor profiles and settings."
+    },
+    "/categories/{categoryId}": {
+      "schema": "categories",
+      "description": "Product categories."
+    },
+    "/products/{productId}": {
+      "schema": "products",
+      "description": "Marketplace products."
+    },
+    "/orders/{orderId}": {
+      "schema": "orders",
+      "description": "Customer orders."
+    },
+    "/orderItems/{itemId}": {
+      "schema": "orderItems",
+      "description": "Items within orders, linked to vendors."
+    },
+    "/payoutRequests/{requestId}": {
+      "schema": "payoutRequests",
+      "description": "Vendor payout requests."
+    },
+    "/settings/{settingId}": {
+      "schema": "settings",
+      "description": "Global site settings."
+    },
+    "/banners/{bannerId}": {
+      "schema": "banners",
+      "description": "Homepage hero banners."
+    }
+  }
+}
