@@ -2,8 +2,18 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
 import ProductCard from "../components/ProductCard";
-import { productAPI } from "../services/api";
+import { productAPI, categoryAPI } from "../services/api";
 import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
+import { OrbitLoader } from "../components/ui/OrbitLoader";
+import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
+
+const isVisibleMarketplaceProduct = (product: any) =>
+  ["live", "approved", "published", "active"].includes(
+    String(product?.status || "").toLowerCase(),
+  ) ||
+  String(product?.productStatus || "").toLowerCase() === "live" ||
+  (String(product?.approvalStatus || "").toLowerCase() === "approved" &&
+    String(product?.visibilityStatus || "").toLowerCase() === "live");
 
 export default function ProductListing() {
   const [searchParams] = useSearchParams();
@@ -18,10 +28,45 @@ export default function ProductListing() {
       try {
         setLoading(true);
         setError("");
+        const categoryParam = searchParams.get('category') || '';
+
+        if (categoryParam) {
+          // Try server-side lookup by slug -> category id
+          try {
+            const cats = await categoryAPI.getAll().catch(() => []);
+            const matched = (cats || []).find((c: any) => String(c.slug || '').toLowerCase() === String(categoryParam).toLowerCase());
+            if (matched && matched.id) {
+              const rows = await productAPI.getByCategory(matched.id).catch(() => []);
+              setProducts((rows || []).filter(isVisibleMarketplaceProduct));
+              return;
+            }
+
+            // fallback mapping from legacy slugs/keywords to category/subcategory
+            const mapped = mapLegacyCategory(categoryParam);
+            if (mapped && mapped.category) {
+              const byCat = (cats || []).find((c: any) => String(c.slug) === String(mapped.category));
+              if (byCat && byCat.id) {
+                const rows = await productAPI.getByCategory(byCat.id).catch(() => []);
+                // if subcategory present, do a client-side filter
+                const final = mapped.subcategory ? filterProductsByCategoryTree(rows || [], mapped.category, mapped.subcategory, cats) : rows || [];
+                setProducts((final || []).filter(isVisibleMarketplaceProduct));
+                return;
+              }
+            }
+
+            // last resort: fetch all and filter client-side
+            const data = await productAPI.getAll();
+            const filtered = filterProductsByCategoryTree((data || []), categoryParam, null, cats);
+            setProducts((filtered || []).filter(isVisibleMarketplaceProduct));
+            return;
+          } catch (err) {
+            // graceful fallback to all products
+            console.warn('Category filtering fallback', err);
+          }
+        }
+
         const data = await productAPI.getAll();
-        // Only show live products to customers
-        const liveProducts = data.filter((p: any) => p.status === 'live');
-        setProducts(liveProducts);
+        setProducts((data || []).filter(isVisibleMarketplaceProduct));
       } catch (error) {
         console.error('Error fetching products:', error);
         setError("We couldn't load the marketplace products right now.");
@@ -105,7 +150,12 @@ export default function ProductListing() {
       <section className="mt-10">
         <div className="grid grid-cols-2 gap-6 md:grid-cols-3 xl:grid-cols-5">
           {loading ? (
-            Array.from({ length: 10 }).map((_, index) => <ProductCardSkeleton key={index} />)
+            <>
+              <div className="col-span-full flex justify-center pb-2">
+                <OrbitLoader label="Loading products..." size={24} />
+              </div>
+              {Array.from({ length: 10 }).map((_, index) => <ProductCardSkeleton key={index} />)}
+            </>
           ) : error ? (
             <div className="col-span-full rounded-[28px] border border-rose-200 bg-white px-6 py-16 text-center shadow-sm">
               <p className="text-lg font-black text-slate-900">Unable to load products</p>
@@ -122,7 +172,7 @@ export default function ProductListing() {
               <ProductCard
                 key={product.id}
                 id={product.id}
-                slug={product.id}
+                slug={product.slug || product.id}
                 title={product.title}
                 price={product.price}
                 oldPrice={product.originalPrice}

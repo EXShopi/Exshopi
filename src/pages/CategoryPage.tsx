@@ -5,6 +5,7 @@ import ProductCard from "../components/ProductCard";
 import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
 import CategoryComingSoon from "./CategoryComingSoon";
 import { categoryData } from "../data/categoryStructure";
+import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
 import { categoryAPI, productAPI } from "../services/api";
 
 type CatalogProduct = {
@@ -82,11 +83,22 @@ export default function CategoryPage() {
     setLoading(true);
     setError("");
     setVisibleCount(PAGE_SIZE);
+    let fetchedCategories: any[] = [];
+    categoryAPI
+      .getAll()
+      .then((categoryRows) => {
+        if (!mounted) return Promise.reject(new Error('unmounted'));
+        fetchedCategories = Array.isArray(categoryRows) ? categoryRows : [];
+        setCategories(fetchedCategories);
 
-    Promise.all([categoryAPI.getAll(), productAPI.getAll()])
-      .then(([categoryRows, productRows]) => {
+        const liveCat = fetchedCategories.find((entry) => entry.slug === categoryKey);
+        if (liveCat && liveCat.id) {
+          return productAPI.getByCategory(liveCat.id);
+        }
+        return productAPI.getAll();
+      })
+      .then((productRows) => {
         if (!mounted) return;
-        setCategories(Array.isArray(categoryRows) ? categoryRows : []);
         const liveProducts = (productRows || [])
           .filter(
             (product: any) =>
@@ -116,7 +128,7 @@ export default function CategoryPage() {
         setCatalog(liveProducts);
       })
       .catch((err) => {
-        console.error("Error loading category page:", err);
+        if (err && err.message !== 'unmounted') console.error("Error loading category page:", err);
         if (mounted) setError("We couldn't load this category right now.");
       })
       .finally(() => {
@@ -129,26 +141,19 @@ export default function CategoryPage() {
   }, [categoryKey]);
 
   const filteredProducts = useMemo(() => {
-    if (categoryKey === "categories") {
-      return catalog;
+    if (categoryKey === "categories") return catalog;
+    // Use master category helpers to filter the catalog by category/subcategory
+    try {
+      return filterProductsByCategoryTree(catalog || [], categoryKey || null, subcategoryKey || null, categories || []);
+    } catch (err) {
+      // fallback to simple title/category text search
+      const searchTerms = [categoryKey, subcategoryKey].filter(Boolean).map((t) => String(t).toLowerCase());
+      return (catalog || []).filter((product) => {
+        const haystack = normalizeText(`${product.title} ${product.category} ${product.seller} ${product.badge || ''} ${product.slug}`);
+        return searchTerms.some((term) => haystack.includes(term));
+      });
     }
-
-    const searchTerms = [
-      categoryKey,
-      subcategoryKey,
-      ...(keywordMap[categoryKey] || []),
-      ...(subcategoryKey ? subcategoryKey.split("-") : []),
-    ]
-      .filter(Boolean)
-      .map((term) => term.toLowerCase());
-
-    const matches = catalog.filter((product) => {
-      const haystack = normalizeText(`${product.title} ${product.category} ${product.seller} ${product.badge || ""} ${product.slug}`);
-      return searchTerms.some((term) => haystack.includes(term));
-    });
-
-    return matches;
-  }, [catalog, categoryKey, subcategoryKey]);
+  }, [catalog, categoryKey, subcategoryKey, categories]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const relatedSubcategories = categoryInfo?.subcategories || [];
