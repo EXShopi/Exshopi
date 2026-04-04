@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -7,8 +8,10 @@ import path from 'path';
 import { z } from 'zod';
 import { db } from './database';
 import { prismaRuntime } from './prismaRuntime';
+import { supabaseRuntime } from './supabaseRuntime';
 import { ensureUploadDir, uploadDataUrl } from './uploadStorage';
 import { createStripeCheckoutSession, verifyStripeWebhookSignature } from './stripeService';
+import { sendTransactionalEmail } from './emailService';
 import {
   addBlacklistEntry,
   calculateCodRisk,
@@ -42,6 +45,7 @@ import {
 const app: Express = express();
 const PORT = Number(process.env.PORT || 3001);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
+const ADMIN_ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || '';
 const COD_MAX_DAILY_ORDERS = Number(process.env.COD_MAX_DAILY_ORDERS || 3);
 const ACTIVE_CATEGORY_SLUGS = new Set([
   'electronics',
@@ -180,6 +184,224 @@ const recordMarketplaceActivity = (input: {
   });
 };
 
+const getAdminAlertRecipients = async () => {
+  const configured = String(ADMIN_ALERT_EMAIL || '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (configured.length) {
+    return configured;
+  }
+
+  const users = prismaRuntime.enabled ? await prismaRuntime.getAllUsers() : db.getAllUsers();
+  return users
+    .filter((user) => ['admin', 'super_admin', 'finance_manager', 'support_agent'].includes(String(user.role)))
+    .map((user) => String(user.email || '').trim().toLowerCase())
+    .filter(Boolean);
+};
+
+const formatOperationalStatusLabel = (status?: string) =>
+  normalizeOperationalStatus(status)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const summarizeOrderItems = (order: any) =>
+  Array.isArray(order?.items) && order.items.length
+    ? order.items
+        .map((item: any) => `${item.title || item.productId || 'Product'} x${Number(item.quantity || 1)}`)
+        .join(', ')
+    : order?.productId
+    ? `${order.productId} x${Number(order.quantity || 1)}`
+    : 'Marketplace item';
+
+const toCurrency = (amount: number) => `AED ${Number(amount || 0).toFixed(2)}`;
+
+const buildOrderFacts = (order: any, sellerName?: string) => [
+  { label: 'Order ID', value: order.orderId || order.id || '-' },
+  { label: 'Seller', value: sellerName || order.sellerName || 'Marketplace Seller' },
+  { label: 'Items', value: summarizeOrderItems(order) },
+  { label: 'Amount', value: toCurrency(order.totalAmount || order.subtotal || 0) },
+  { label: 'Payment', value: String(order.paymentStatus || 'pending').replace(/_/g, ' ') },
+];
+
+const sendAdminAlert = async (subject: string, title: string, intro: string, facts: Array<{ label: string; value: string }> = []) => {
+  const recipients = await getAdminAlertRecipients();
+  if (!recipients.length) return;
+  await sendTransactionalEmail({
+    to: recipients,
+    subject,
+    title,
+    intro,
+    facts,
+    ctaLabel: 'Open Admin Panel',
+    ctaUrl: `${APP_URL}/admin`,
+    outro: 'This alert was generated automatically by ExShopi marketplace operations.',
+  });
+};
+
+const sendSellerNotice = async (
+  sellerEmail: string,
+  subject: string,
+  title: string,
+  intro: string,
+  facts: Array<{ label: string; value: string }> = []
+) => {
+  await sendTransactionalEmail({
+    to: sellerEmail,
+    subject,
+    title,
+    intro,
+    facts,
+    ctaLabel: 'Open Seller Center',
+    ctaUrl: `${APP_URL}/seller`,
+    outro: 'You can review the latest action inside your ExShopi Seller Center.',
+  });
+};
+
+const sendCustomerNotice = async (
+  customerEmail: string,
+  subject: string,
+  title: string,
+  intro: string,
+  facts: Array<{ label: string; value: string }> = []
+) => {
+  await sendTransactionalEmail({
+    to: customerEmail,
+    subject,
+    title,
+    intro,
+    facts,
+    ctaLabel: 'Track Order',
+    ctaUrl: `${APP_URL}/account?tab=orders`,
+    outro: 'Thank you for shopping with ExShopi.',
+  });
+};
+
+const flattenCategoryIds = (categories: Array<any>) => {
+  const ids = new Set<string>();
+  for (const category of categories || []) {
+    if (category?.id) ids.add(String(category.id));
+    for (const child of category?.subcategories || []) {
+      if (child?.id) ids.add(String(child.id));
+    }
+  }
+  return ids;
+};
+
+const resolveEffectiveProductStatus = (product: any) => {
+  const productStatus = String(product?.productStatus || '');
+  const approvalStatus = String(product?.approvalStatus || '');
+  const baseStatus = String(product?.status || '');
+
+  if (productStatus === 'draft' || baseStatus === 'draft') return 'draft';
+  if (productStatus === 'rejected' || approvalStatus === 'rejected' || baseStatus === 'rejected') return 'rejected';
+  if (productStatus === 'archived' || baseStatus === 'archived') return 'archived';
+  if (productStatus === 'live' || baseStatus === 'live') return 'live';
+  if (productStatus === 'approved' || approvalStatus === 'approved' || baseStatus === 'approved') return 'approved';
+  if (productStatus === 'pending_approval' || productStatus === 'pending' || approvalStatus === 'pending' || baseStatus === 'pending') return 'pending';
+  return baseStatus || 'pending';
+};
+
+const deriveAdminLifecycle = (payload: any) => {
+  const requestedStatus = String(payload?.status || payload?.productStatus || payload?.approvalStatus || 'live');
+  const normalizedStatus =
+    requestedStatus === 'pending_approval'
+      ? 'pending'
+      : ['draft', 'pending', 'approved', 'live', 'rejected', 'archived'].includes(requestedStatus)
+      ? requestedStatus
+      : 'live';
+
+  switch (normalizedStatus) {
+    case 'draft':
+      return {
+        status: 'draft',
+        approvalStatus: 'pending',
+        productStatus: 'draft',
+        visibilityStatus: 'hidden',
+      } as const;
+    case 'pending':
+      return {
+        status: 'pending',
+        approvalStatus: 'pending',
+        productStatus: 'pending_approval',
+        visibilityStatus: 'hidden',
+      } as const;
+    case 'approved':
+      return {
+        status: 'approved',
+        approvalStatus: 'approved',
+        productStatus: 'approved',
+        visibilityStatus: 'hidden',
+      } as const;
+    case 'rejected':
+      return {
+        status: 'rejected',
+        approvalStatus: 'rejected',
+        productStatus: 'rejected',
+        visibilityStatus: 'hidden',
+      } as const;
+    case 'archived':
+      return {
+        status: 'archived',
+        approvalStatus: payload?.approvalStatus === 'approved' ? 'approved' : 'pending',
+        productStatus: 'archived',
+        visibilityStatus: 'archived',
+      } as const;
+    case 'live':
+    default:
+      return {
+        status: 'live',
+        approvalStatus: 'approved',
+        productStatus: 'live',
+        visibilityStatus: 'live',
+      } as const;
+  }
+};
+
+const assertAdminProductRequirements = (payload: any, lifecycleStatus: string) => {
+  if (lifecycleStatus === 'draft') {
+    return;
+  }
+
+  if (!String(payload?.categoryId || '').trim()) {
+    throw new Error('Category is required.');
+  }
+  if (!String(payload?.title || '').trim()) {
+    throw new Error('Product title is required.');
+  }
+  if (!String(payload?.description || '').trim()) {
+    throw new Error('Product description is required.');
+  }
+  if (!Number.isFinite(Number(payload?.price)) || Number(payload?.price) < 0) {
+    throw new Error('A valid product price is required.');
+  }
+  const allImages = [payload?.image, ...(Array.isArray(payload?.images) ? payload.images : [])].filter(Boolean);
+  if (!allImages.length) {
+    throw new Error('At least one product image is required.');
+  }
+};
+
+const resolveAdminAssignedSeller = async (requestedSellerId?: string) => {
+  const desiredSellerId = requestedSellerId || 'exshopi_official';
+
+  if (prismaRuntime.enabled) {
+    const direct = await prismaRuntime.getSeller(desiredSellerId);
+    if (direct) return direct;
+
+    if (!requestedSellerId || requestedSellerId === 'exshopi_official') {
+      const slugMatch = await prismaRuntime.getSellerBySlug('exshopi-official');
+      if (slugMatch) return slugMatch;
+      const sellers = await prismaRuntime.getAllSellers();
+      const official = sellers.find((seller) => seller.isOfficial);
+      if (official) return official;
+    }
+    return null;
+  }
+
+  return db.getSeller(desiredSellerId) || db.getSeller('exshopi_official') || db.getAllSellers().find((seller) => seller.isOfficial) || null;
+};
+
 const decorateCategory = (category: any) => {
   const interestCount = db
     .getAnalyticsEvents()
@@ -208,11 +430,17 @@ app.use(
         .map((entry) => entry.trim())
         .filter(Boolean);
 
+      const privateLanAllowed =
+        !origin ||
+        /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):(5173|5174|5175|5176|5177|5178|5179)$/.test(
+          origin
+        );
+
       const localhostAllowed =
         !origin ||
         /^https?:\/\/localhost:(5173|5174|5175|5176|5177|5178|5179)$/.test(origin);
 
-      if (localhostAllowed || configured.includes(origin || '')) {
+      if (localhostAllowed || privateLanAllowed || configured.includes(origin || '')) {
         return callback(null, true);
       }
 
@@ -229,6 +457,18 @@ app.use(
     max: 400,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => {
+      const requestPath = String(req.path || '');
+      if (req.method !== 'GET') return false;
+
+      return (
+        requestPath === '/api/events/stream' ||
+        requestPath === '/api/products' ||
+        requestPath.startsWith('/api/products/') ||
+        requestPath === '/api/categories' ||
+        requestPath.startsWith('/api/categories/')
+      );
+    },
   })
 );
 app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
@@ -236,6 +476,46 @@ app.use(express.json({ limit: '80mb' }));
 app.use(express.urlencoded({ extended: true, limit: '80mb' }));
 void ensureUploadDir();
 app.use('/uploads', express.static(path.join(process.cwd(), 'backend', 'uploads')));
+
+// Simple SSE hub for broadcasting lightweight marketplace events (product updates/deletes)
+const sseClients = new Set<Response>();
+
+function sendSseEvent(eventName: string, data: any) {
+  const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of Array.from(sseClients)) {
+    try {
+      (client as any).write(payload);
+    } catch (err) {
+      try {
+        sseClients.delete(client);
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+}
+
+app.get('/api/events/stream', (req: Request, res: Response) => {
+  // Keep a very small, public, unauthenticated stream for UI updates (delete/update events)
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  try {
+    res.flushHeaders?.();
+  } catch (e) {
+    // ignore if not available
+  }
+  // initial heartbeat
+  (res as any).write(':ok\n\n');
+  sseClients.add(res);
+  req.on('close', () => {
+    try {
+      sseClients.delete(res);
+    } catch (e) {
+      /* ignore */
+    }
+  });
+});
 
 const sanitizeUser = (user: any) => {
   if (!user) return null;
@@ -270,6 +550,9 @@ const orderItemSchema = z.object({
   productId: z.string().min(1),
   quantity: z.coerce.number().int().positive().default(1),
   unitPrice: z.coerce.number().nonnegative(),
+  variantId: z.string().optional(),
+  sku: z.string().optional(),
+  image: z.string().optional(),
 });
 
 const createOrderSchema = z.object({
@@ -319,6 +602,9 @@ const stripeCheckoutSchema = z.object({
       productId: z.string().min(1),
       quantity: z.coerce.number().int().positive().default(1),
       unitPrice: z.coerce.number().nonnegative().optional(),
+      variantId: z.string().optional(),
+      sku: z.string().optional(),
+      image: z.string().optional(),
     })
   ).min(1),
   shippingAddress: z.object({
@@ -347,6 +633,50 @@ const productPayloadSchema = z.object({
   badges: z.array(z.string()).optional().default([]),
   brand: z.string().optional().default(''),
   status: z.enum(['draft', 'pending', 'pending_approval']).optional(),
+});
+
+const adminProductLifecycleStatusSchema = z.enum([
+  'draft',
+  'pending',
+  'approved',
+  'live',
+  'rejected',
+  'archived',
+]);
+
+const adminProductPayloadSchema = z.object({
+  sellerId: z.string().min(1).optional(),
+  categoryId: z.string().min(1).optional(),
+  category: z.string().min(1).optional(),
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(20000).optional().default(''),
+  price: z.coerce.number().nonnegative().optional(),
+  originalPrice: z.coerce.number().nonnegative().optional(),
+  salePrice: z.coerce.number().nonnegative().optional(),
+  image: z.string().optional().default(''),
+  images: z.array(z.string().min(1)).optional().default([]),
+  stock: z.coerce.number().int().nonnegative().optional().default(0),
+  rating: z.coerce.number().nonnegative().optional().default(0),
+  reviews: z.coerce.number().int().nonnegative().optional().default(0),
+  sku: z.string().max(120).optional().default(''),
+  specs: z.any().optional().default({}),
+  badges: z.array(z.string()).optional().default([]),
+  brand: z.string().optional().default(''),
+  status: adminProductLifecycleStatusSchema.optional(),
+  approvalStatus: z.enum(['pending', 'approved', 'rejected']).optional(),
+  productStatus: z
+    .enum(['draft', 'pending', 'pending_approval', 'approved', 'live', 'rejected', 'archived', 'out_of_stock'])
+    .optional(),
+  visibilityStatus: z.enum(['hidden', 'live', 'archived']).optional(),
+  ownership: z.enum(['seller', 'official']).optional(),
+  createdByRole: z.enum(['seller', 'admin']).optional(),
+  approvalNotes: z.string().max(2000).optional().default(''),
+  rejectionReason: z.string().max(2000).optional().default(''),
+  approvalRequestedAt: z.string().optional(),
+  approvedAt: z.string().optional(),
+  rejectedAt: z.string().optional(),
+  views: z.coerce.number().nonnegative().optional().default(0),
+  wishlistCount: z.coerce.number().nonnegative().optional().default(0),
 });
 
 const supportTicketSchema = z.object({
@@ -669,7 +999,7 @@ const buildOrderPayloadFromItems = async ({
 }: {
   customerId: string;
   sellerId: string;
-  normalizedItems: Array<{ productId: string; quantity: number; unitPrice: number }>;
+  normalizedItems: Array<{ productId: string; quantity: number; unitPrice: number; variantId?: string; sku?: string; image?: string }>; 
   shippingCost?: number;
   shippingAddress: any;
   customerName?: string;
@@ -704,22 +1034,44 @@ const buildOrderPayloadFromItems = async ({
         throw new Error(`Product ${item.productId} does not belong to this seller`);
       }
       const quantity = Number(item.quantity || 1);
-      const effectiveUnitPrice = Number(item.unitPrice || product.salePrice || product.price || 0);
+      // If a variantId is provided, prefer variant-specific values when available
+      let variant: any = null;
+      const specs: any = (product as any).specs || (product as any).specsJson || {};
+      if (item.variantId && Array.isArray(specs?.variants)) {
+        variant = specs.variants.find((v: any) => String(v.id) === String(item.variantId) || String(v.id) === String(item.variantId || '')) || null;
+        if (!variant) {
+          // try matching by color+storage composite id if variantId provided in that form
+          variant = specs.variants.find((v: any) => {
+            const composite = `${String(v.color || '').trim().toLowerCase()}::${String(v.storage || '').trim().toLowerCase()}`;
+            return composite === String(item.variantId || '').trim().toLowerCase();
+          }) || null;
+        }
+      }
+
+      const effectiveUnitPrice = Number(item.unitPrice ?? variant?.price ?? product.salePrice ?? product.price ?? 0);
       const lineSubtotal = effectiveUnitPrice * quantity;
       const lineCommission = Math.round(lineSubtotal * (settings.sellerCommissionPercent / 100));
       const lineVat = Math.round(lineSubtotal * vatRate);
+
+      const effectiveSku = String(item.sku || variant?.sku || product.sku || '');
+      const effectiveImage = String(item.image || variant?.image || product.image || '');
+      const effectiveTitle = variant
+        ? `${product.title}${[variant.color, variant.storage].filter(Boolean).length ? ' (' + [variant.color, variant.storage].filter(Boolean).join(' / ') + ')' : ''}`
+        : product.title;
+
       return {
         id: `item_${Date.now()}_${index}`,
         productId: product.id,
-        title: product.title,
+        variantId: variant?.id || item.variantId || undefined,
+        title: effectiveTitle,
         quantity,
         unitPrice: effectiveUnitPrice,
         subtotal: lineSubtotal,
         vatAmount: lineVat,
         commission: lineCommission,
         sellerAmount: lineSubtotal - lineCommission,
-        sku: product.sku || '',
-        image: product.image || '',
+        sku: effectiveSku,
+        image: effectiveImage,
       };
     })
   );
@@ -840,6 +1192,7 @@ const serializeMarketplaceProductAsync = async (product: any) => {
   const isOfficialStore = Boolean(seller?.isOfficial || seller?.storeSlug === 'exshopi-official');
   const sellerName = seller?.storeName || (isOfficialStore ? 'ExShopi Official' : 'Marketplace Seller');
   const sellerStoreSlug = seller?.storeSlug || (isOfficialStore ? 'exshopi-official' : 'marketplace-seller');
+  const effectiveStatus = resolveEffectiveProductStatus(product);
 
   return {
     ...product,
@@ -849,6 +1202,33 @@ const serializeMarketplaceProductAsync = async (product: any) => {
     sellerLogo: seller?.logo || '',
     soldByLabel: `Sold by ${sellerName}`,
     isOfficialStore,
+    status: effectiveStatus,
+    approvalStatus:
+      product.approvalStatus ||
+      (effectiveStatus === 'rejected' ? 'rejected' : effectiveStatus === 'approved' || effectiveStatus === 'live' ? 'approved' : 'pending'),
+    productStatus:
+      product.productStatus ||
+      (effectiveStatus === 'draft'
+        ? 'draft'
+        : effectiveStatus === 'rejected'
+        ? 'rejected'
+        : effectiveStatus === 'archived'
+        ? 'archived'
+        : effectiveStatus === 'approved'
+        ? 'approved'
+        : effectiveStatus === 'live'
+        ? 'live'
+        : Number(product?.stock || 0) <= 0
+        ? 'out_of_stock'
+        : 'pending_approval'),
+    visibilityStatus:
+      product.visibilityStatus ||
+      (effectiveStatus === 'live' ? 'live' : effectiveStatus === 'archived' ? 'archived' : 'hidden'),
+    ownership: product.ownership || (isOfficialStore ? 'official' : 'seller'),
+    createdByRole: product.createdByRole || (isOfficialStore ? 'admin' : 'seller'),
+    views: Number(product.views || 0),
+    wishlistCount: Number(product.wishlistCount || 0),
+    brand: product.brand || product.specs?.attributes?.brand || '',
   };
 };
 
@@ -910,6 +1290,28 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     });
 
     const session = await buildSessionPayloadAsync(user.id);
+    if (role === 'customer') {
+      pushNotification({
+        audience: 'customer',
+        audienceId: user.id,
+        title: 'Account created',
+        message: 'Your ExShopi customer account is ready.',
+        type: 'account_created',
+        entityType: 'user',
+        entityId: user.id,
+      });
+      await sendCustomerNotice(
+        user.email,
+        'Welcome to ExShopi',
+        'Your account is ready',
+        'Your ExShopi customer account has been created successfully.',
+        [
+          { label: 'Account name', value: user.name },
+          { label: 'Email', value: user.email },
+          { label: 'Country', value: user.country || 'AE' },
+        ]
+      );
+    }
     res.json(session);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -1078,11 +1480,22 @@ app.post('/api/users/login', async (req: Request, res: Response) => {
 
 app.get('/api/users/:id', authMiddleware, (req: Request, res: Response) => {
   try {
-    const user = db.getUser(req.params.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    const respond = (user: any) => {
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      res.json(sanitizeUser(user));
+    };
+
+    if (prismaRuntime.enabled) {
+      prismaRuntime
+        .getUser(req.params.id)
+        .then(respond)
+        .catch((error) => res.status(500).json({ error: String(error) }));
+      return;
     }
-    res.json(sanitizeUser(user));
+
+    respond(db.getUser(req.params.id));
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
@@ -1095,9 +1508,25 @@ app.put('/api/users/:id', authMiddleware, (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const updated = db.updateUser(req.params.id, req.body as any);
-    if (!updated) return res.status(404).json({ error: 'User not found' });
-    res.json(updated ? sanitizeUser(updated) : null);
+    const nextData = {
+      ...(req.body as any),
+      name: req.body?.name || req.body?.fullName,
+    };
+
+    const respond = (updated: any) => {
+      if (!updated) return res.status(404).json({ error: 'User not found' });
+      res.json(sanitizeUser(updated));
+    };
+
+    if (prismaRuntime.enabled) {
+      prismaRuntime
+        .updateUser(req.params.id, nextData)
+        .then(respond)
+        .catch((error) => res.status(500).json({ error: String(error) }));
+      return;
+    }
+
+    respond(db.updateUser(req.params.id, nextData as any));
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
@@ -1395,6 +1824,28 @@ app.post('/api/seller-applications', authMiddleware, async (req: Request, res: R
           status: 'pending_review',
         });
 
+    const isResubmission = Boolean(existingApplication);
+    pushNotification({
+      audience: 'admin',
+      title: isResubmission ? 'Seller application resubmitted' : 'New seller application',
+      message: `${application.businessName} is waiting for review.`,
+      type: isResubmission ? 'seller_resubmitted' : 'seller_application_submitted',
+      entityType: 'seller_application',
+      entityId: application.id,
+    });
+    await sendAdminAlert(
+      isResubmission ? 'Seller resubmission received' : 'New seller application received',
+      isResubmission ? 'Seller resubmission ready for review' : 'New seller application ready for review',
+      `${application.businessName} has been submitted to ExShopi and is waiting for admin review.`,
+      [
+        { label: 'Store / business', value: application.businessName },
+        { label: 'Owner', value: application.ownerName },
+        { label: 'Email', value: application.email },
+        { label: 'Phone', value: application.phone },
+        { label: 'Status', value: formatOperationalStatusLabel(application.status) },
+      ]
+    );
+
     res.json(application);
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -1476,6 +1927,29 @@ app.post('/api/admin/seller-applications/:id/approve', authMiddleware, async (re
       seller = db.ensureSellerFromApplication(application.id, req.user!.id);
       db.updateUser(application.userId, { role: 'seller', status: 'active', sellerApplicationStatus: 'approved' });
     }
+    const sellerUser = prismaRuntime.enabled ? await prismaRuntime.getUser(application.userId) : db.getUser(application.userId);
+    pushNotification({
+      audience: 'seller',
+      audienceId: seller?.userId || application.userId,
+      title: 'Seller account approved',
+      message: 'Your seller application has been approved and your store is now live for operations.',
+      type: 'seller_approved',
+      entityType: 'seller_application',
+      entityId: application.id,
+    });
+    if (sellerUser?.email) {
+      await sendSellerNotice(
+        sellerUser.email,
+        'Your ExShopi seller account is approved',
+        'Seller approval confirmed',
+        'Your ExShopi seller application has been approved. You can now access the seller center and start submitting products.',
+        [
+          { label: 'Store name', value: seller?.storeName || application.businessName },
+          { label: 'Commission rate', value: `${Number(application.commissionRate || 6)}%` },
+          { label: 'Monthly fee', value: toCurrency(Number(application.monthlyFeeAed || 0)) },
+        ]
+      );
+    }
     res.json({ application, seller });
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -1506,6 +1980,28 @@ app.post('/api/admin/seller-applications/:id/reject', authMiddleware, async (req
       await prismaRuntime.updateUser(application.userId, { status: 'suspended', sellerApplicationStatus: 'rejected' } as any);
     } else {
       db.updateUser(application.userId, { status: 'suspended', sellerApplicationStatus: 'rejected' });
+    }
+    const sellerUser = prismaRuntime.enabled ? await prismaRuntime.getUser(application.userId) : db.getUser(application.userId);
+    pushNotification({
+      audience: 'seller',
+      audienceId: application.userId,
+      title: 'Seller application rejected',
+      message: payload.reason || 'Your seller application was rejected.',
+      type: 'seller_rejected',
+      entityType: 'seller_application',
+      entityId: application.id,
+    });
+    if (sellerUser?.email) {
+      await sendSellerNotice(
+        sellerUser.email,
+        'ExShopi seller application update',
+        'Seller application rejected',
+        'Your seller application could not be approved at this time.',
+        [
+          { label: 'Store / business', value: application.businessName },
+          { label: 'Reason', value: payload.reason || 'Application rejected' },
+        ]
+      );
     }
     res.json(application);
   } catch (error) {
@@ -1538,6 +2034,28 @@ app.post('/api/admin/seller-applications/:id/request-info', authMiddleware, asyn
     } else {
       db.updateUser(application.userId, { status: 'pending', sellerApplicationStatus: 'needs_more_info' });
     }
+    const sellerUser = prismaRuntime.enabled ? await prismaRuntime.getUser(application.userId) : db.getUser(application.userId);
+    pushNotification({
+      audience: 'seller',
+      audienceId: application.userId,
+      title: 'More seller information requested',
+      message: payload.notes || 'Please update your seller application with the requested details.',
+      type: 'seller_info_requested',
+      entityType: 'seller_application',
+      entityId: application.id,
+    });
+    if (sellerUser?.email) {
+      await sendSellerNotice(
+        sellerUser.email,
+        'More information needed for your seller application',
+        'Additional seller details requested',
+        'ExShopi needs a few more details before approving your seller account.',
+        [
+          { label: 'Store / business', value: application.businessName },
+          { label: 'Requested update', value: payload.notes || 'Please review the application notes in your seller center.' },
+        ]
+      );
+    }
     res.json(application);
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -1556,71 +2074,129 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
     const payload = productPayloadSchema.parse(req.body);
     const isDraft = payload.status === 'draft';
     
-    const product = prismaRuntime.enabled
-      ? await prismaRuntime.createProduct({
-          sellerId: seller.id,
-          storeId: seller.id,
-          categoryId: payload.categoryId,
-          title: payload.title,
-          description: payload.description,
-          price: Number(payload.price) || 0,
-          originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
-          salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
-          image: payload.image,
-          images: payload.images,
-          stock: Number(payload.stock) || 0,
-          rating: 0,
-          reviews: 0,
-          sku: payload.sku,
-          specs: payload.specs,
-          brand: payload.brand || payload.specs?.attributes?.brand || '',
-          status: isDraft ? 'draft' : 'pending',
-          approvalStatus: isDraft ? 'pending' : 'pending',
-          productStatus: isDraft ? 'draft' : Number(payload.stock || 0) <= 0 ? 'out_of_stock' : 'pending_approval',
-          visibilityStatus: 'hidden',
-          ownership: 'seller',
-          createdByRole: 'seller',
-          approvalRequestedAt: isDraft ? '' : new Date().toISOString(),
-          approvedAt: '',
-          rejectedAt: '',
-          views: 0,
-          wishlistCount: 0,
-          rejectionReason: '',
-          approvalNotes: '',
-          badges: payload.badges,
-          createdAt: '',
-          updatedAt: '',
-        } as any)
-      : db.createProduct({
-      sellerId: seller.id,
-      storeId: seller.id,
-      categoryId: payload.categoryId,
-      title: payload.title,
-      description: payload.description,
-      price: Number(payload.price) || 0,
-      originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
-      salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
-      image: payload.image,
-      images: payload.images,
-      stock: Number(payload.stock) || 0,
-      rating: 0,
-      reviews: 0,
-      sku: payload.sku,
-      specs: payload.specs,
-      brand: payload.brand || payload.specs?.attributes?.brand || '',
-      status: isDraft ? 'draft' : 'pending',
-      approvalStatus: isDraft ? 'pending' : 'pending',
-      productStatus: isDraft ? 'draft' : Number(payload.stock || 0) <= 0 ? 'out_of_stock' : 'pending_approval',
-      visibilityStatus: 'hidden',
-      ownership: 'seller',
-      createdByRole: 'seller',
-      approvalRequestedAt: isDraft ? '' : new Date().toISOString(),
-      approvedAt: '',
-      rejectedAt: '',
-      views: 0,
-      wishlistCount: 0,
-      badges: payload.badges,
-    });
+    let product: any = null;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.createProduct({
+        sellerId: seller.id,
+        storeId: seller.id,
+        categoryId: payload.categoryId,
+        title: payload.title,
+        description: payload.description,
+        price: Number(payload.price) || 0,
+        originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
+        salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
+        image: payload.image,
+        images: payload.images,
+        stock: Number(payload.stock) || 0,
+        rating: 0,
+        reviews: 0,
+        sku: payload.sku,
+        specs: payload.specs,
+        brand: payload.brand || payload.specs?.attributes?.brand || '',
+        status: isDraft ? 'draft' : 'pending',
+        approvalStatus: isDraft ? 'pending' : 'pending',
+        productStatus: isDraft ? 'draft' : Number(payload.stock || 0) <= 0 ? 'out_of_stock' : 'pending_approval',
+        visibilityStatus: 'hidden',
+        ownership: 'seller',
+        createdByRole: 'seller',
+        approvalRequestedAt: isDraft ? '' : new Date().toISOString(),
+        approvedAt: '',
+        rejectedAt: '',
+        views: 0,
+        wishlistCount: 0,
+        rejectionReason: '',
+        approvalNotes: '',
+        badges: payload.badges,
+      } as any);
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.createProduct({
+        sellerId: seller.id,
+        storeId: seller.id,
+        categoryId: payload.categoryId,
+        title: payload.title,
+        description: payload.description,
+        price: Number(payload.price) || 0,
+        originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
+        salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
+        image: payload.image,
+        images: payload.images,
+        stock: Number(payload.stock) || 0,
+        rating: 0,
+        reviews: 0,
+        sku: payload.sku,
+        specs: payload.specs,
+        brand: payload.brand || payload.specs?.attributes?.brand || '',
+        status: isDraft ? 'draft' : 'pending',
+        approvalStatus: isDraft ? 'pending' : 'pending',
+        productStatus: isDraft ? 'draft' : Number(payload.stock || 0) <= 0 ? 'out_of_stock' : 'pending_approval',
+        visibilityStatus: 'hidden',
+        ownership: 'seller',
+        createdByRole: 'seller',
+        approvalRequestedAt: isDraft ? '' : new Date().toISOString(),
+        approvedAt: '',
+        rejectedAt: '',
+        views: 0,
+        wishlistCount: 0,
+        rejectionReason: '',
+        approvalNotes: '',
+        badges: payload.badges,
+        createdAt: '',
+        updatedAt: '',
+      } as any);
+    } else {
+      product = db.createProduct({
+        sellerId: seller.id,
+        storeId: seller.id,
+        categoryId: payload.categoryId,
+        title: payload.title,
+        description: payload.description,
+        price: Number(payload.price) || 0,
+        originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
+        salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
+        image: payload.image,
+        images: payload.images,
+        stock: Number(payload.stock) || 0,
+        rating: 0,
+        reviews: 0,
+        sku: payload.sku,
+        specs: payload.specs,
+        brand: payload.brand || payload.specs?.attributes?.brand || '',
+        status: isDraft ? 'draft' : 'pending',
+        approvalStatus: isDraft ? 'pending' : 'pending',
+        productStatus: isDraft ? 'draft' : Number(payload.stock || 0) <= 0 ? 'out_of_stock' : 'pending_approval',
+        visibilityStatus: 'hidden',
+        ownership: 'seller',
+        createdByRole: 'seller',
+        approvalRequestedAt: isDraft ? '' : new Date().toISOString(),
+        approvedAt: '',
+        rejectedAt: '',
+        views: 0,
+        wishlistCount: 0,
+        badges: payload.badges,
+      });
+    }
+
+    if (!isDraft) {
+      pushNotification({
+        audience: 'admin',
+        title: 'New product submitted',
+        message: `${payload.title} was submitted for moderation by ${seller.storeName}.`,
+        type: 'product_submitted',
+        entityType: 'product',
+        entityId: product.id,
+      });
+      await sendAdminAlert(
+        'New product submitted for review',
+        'Product review required',
+        `${payload.title} is waiting for catalog review in ExShopi.`,
+        [
+          { label: 'Product', value: payload.title },
+          { label: 'Seller', value: seller.storeName },
+          { label: 'SKU', value: payload.sku || '-' },
+          { label: 'Price', value: toCurrency(Number(payload.price || 0)) },
+        ]
+      );
+    }
 
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
@@ -1630,21 +2206,110 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
 
 app.get('/api/products/:id', async (req: Request, res: Response) => {
   try {
-    const product = prismaRuntime.enabled
-      ? await prismaRuntime.getProduct(req.params.id)
-      : db.getProduct(req.params.id);
+    const param = req.params.id;
+    console.debug('[api] GET /api/products/:id param=', param, 'prismaEnabled=', prismaRuntime.enabled);
+
+    let product: any = null;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.getProduct(param);
+      if (!product) {
+        product = await supabaseRuntime.getProductBySlug(param);
+      }
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.getProduct(param);
+      // If not found, try direct slug lookup via runtime
+      if (!product) {
+        console.debug('[api] not found by id, trying getProductBySlug');
+        product = await prismaRuntime.getProductBySlug(param);
+      }
+    } else {
+      product = db.getProduct(param);
+    }
+
+    // Final fallback: search the full list (covers db fallback and any mismatch)
     if (!product) {
+      console.debug('[api] final fallback: scanning all products for id/slug');
+      const all = prismaRuntime.enabled ? await prismaRuntime.getAllProducts() : db.getAllProducts();
+      product = all.find((p) => String((p as any).id) === param || String((p as any).slug || (p as any).id) === param) || null;
+    }
+
+    if (!product) {
+      console.debug('[api] product not found after fallbacks for', param);
       return res.status(404).json({ error: 'Product not found' });
     }
+
+    console.debug('[api] product found, returning', (product as any).id || (product as any).slug);
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
+    console.error('[api] error fetching product:', error);
     res.status(500).json({ error: String(error) });
   }
 });
 
 app.get('/api/products', async (req: Request, res: Response) => {
   try {
-    const products = prismaRuntime.enabled ? await prismaRuntime.getAllProducts() : db.getAllProducts();
+    const categoryId = typeof req.query.categoryId === 'string' ? req.query.categoryId : '';
+    const categorySlug = typeof req.query.categorySlug === 'string' ? req.query.categorySlug : '';
+    const subcategorySlug = typeof req.query.subcategorySlug === 'string' ? req.query.subcategorySlug : '';
+    const parentSlug = typeof req.query.parentSlug === 'string' ? req.query.parentSlug : '';
+
+    let products: any[] = [];
+
+    // Fast path: explicit backend category id
+    if (categoryId) {
+      if (supabaseRuntime.enabled) {
+        const all = await supabaseRuntime.getAllProducts();
+        products = all.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
+      } else if (prismaRuntime.enabled) {
+        products = await prismaRuntime.getAllProducts();
+        products = products.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
+      } else {
+        products = db.getAllProducts();
+        products = products.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
+      }
+    } else if (categorySlug || subcategorySlug || parentSlug) {
+      // Query by canonical slugs
+      if (supabaseRuntime.enabled) {
+        products = await supabaseRuntime.getProductsByCategorySlugs(parentSlug || null, categorySlug || null, subcategorySlug || null);
+      } else if (prismaRuntime.enabled) {
+        products = await prismaRuntime.getProductsByCategorySlugs(parentSlug || null, categorySlug || null, subcategorySlug || null);
+      } else {
+        const all = db.getAllProducts();
+        products = all.filter((product: any) => {
+          const specs = product.specs || (product.specsJson as any) || {};
+          const pParent = String(specs.parentCategorySlug || specs.parentCategory || '');
+          const pCategory = String(specs.categorySlug || specs.category || '');
+          const pSub = String(specs.subcategorySlug || specs.subcategory || '');
+
+          if (categorySlug && !parentSlug && !subcategorySlug) {
+            return pParent === categorySlug || pCategory === categorySlug || pSub === categorySlug;
+          }
+          if (parentSlug && !categorySlug && !subcategorySlug) {
+            return pParent === parentSlug;
+          }
+          if (categorySlug && subcategorySlug) {
+            return pCategory === categorySlug && pSub === subcategorySlug;
+          }
+          if (categorySlug) {
+            return pCategory === categorySlug || pParent === categorySlug;
+          }
+          if (subcategorySlug) {
+            return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
+          }
+          return false;
+        });
+      }
+    } else {
+      // No filters: return global marketplace products
+      if (supabaseRuntime.enabled) {
+        products = await supabaseRuntime.getAllProducts();
+      } else if (prismaRuntime.enabled) {
+        products = await prismaRuntime.getAllProducts();
+      } else {
+        products = db.getAllProducts();
+      }
+    }
+
     res.json(await Promise.all(products.map((product) => serializeMarketplaceProductAsync(product))));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -1662,9 +2327,14 @@ app.get('/api/products/seller/:sellerId', authMiddleware, async (req: Request, r
     ) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const products = prismaRuntime.enabled
-      ? await prismaRuntime.getSellerProducts(req.params.sellerId)
-      : db.getSellerProducts(req.params.sellerId);
+    let products: any[] = [];
+    if (supabaseRuntime.enabled) {
+      products = await supabaseRuntime.getSellerProducts(req.params.sellerId);
+    } else if (prismaRuntime.enabled) {
+      products = await prismaRuntime.getSellerProducts(req.params.sellerId);
+    } else {
+      products = db.getSellerProducts(req.params.sellerId);
+    }
     res.json(await Promise.all(products.map((product) => serializeMarketplaceProductAsync(product))));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -1673,9 +2343,14 @@ app.get('/api/products/seller/:sellerId', authMiddleware, async (req: Request, r
 
 app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const current = prismaRuntime.enabled
-      ? await prismaRuntime.getProduct(req.params.id)
-      : db.getProduct(req.params.id);
+    let current: any = null;
+    if (supabaseRuntime.enabled) {
+      current = await supabaseRuntime.getProduct(req.params.id);
+    } else if (prismaRuntime.enabled) {
+      current = await prismaRuntime.getProduct(req.params.id);
+    } else {
+      current = db.getProduct(req.params.id);
+    }
     if (!current) {
       return res.status(404).json({ error: 'Product not found' });
     }
@@ -1709,9 +2384,14 @@ app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response)
       payload.brand = payload.brand || payload.specs?.attributes?.brand || current.brand || '';
     }
 
-    const product = prismaRuntime.enabled
-      ? await prismaRuntime.updateProduct(req.params.id, payload)
-      : db.updateProduct(req.params.id, payload);
+    let product: any = null;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.updateProduct(req.params.id, payload as any);
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.updateProduct(req.params.id, payload as any);
+    } else {
+      product = db.updateProduct(req.params.id, payload as any);
+    }
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -1723,28 +2403,22 @@ app.post('/api/products/:id/submit', authMiddleware, async (req: Request, res: R
     if (req.user?.role !== 'seller') {
       return res.status(403).json({ error: 'Seller only' });
     }
-    const product = prismaRuntime.enabled
-      ? await prismaRuntime.getProduct(req.params.id)
-      : db.getProduct(req.params.id);
+    let product: any = null;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.getProduct(req.params.id);
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.getProduct(req.params.id);
+    } else {
+      product = db.getProduct(req.params.id);
+    }
     const seller = prismaRuntime.enabled
       ? await prismaRuntime.getSellerByUserId(req.user.id)
       : db.getSellerByUserId(req.user.id);
     if (!product || !seller || product.sellerId !== seller.id) {
       return res.status(404).json({ error: 'Product not found' });
     }
-    const updated = prismaRuntime.enabled
-      ? await prismaRuntime.updateProduct(req.params.id, {
-          status: 'pending',
-          approvalStatus: 'pending',
-          productStatus: Number(product.stock || 0) <= 0 ? 'out_of_stock' : 'pending_approval',
-          visibilityStatus: 'hidden',
-          approvalRequestedAt: new Date().toISOString(),
-          rejectedAt: '',
-          approvedAt: '',
-          rejectionReason: '',
-          approvalNotes: '',
-        } as any)
-      : db.updateProduct(req.params.id, {
+    let updated: any = null;
+    const updates = {
       status: 'pending',
       approvalStatus: 'pending',
       productStatus: Number(product.stock || 0) <= 0 ? 'out_of_stock' : 'pending_approval',
@@ -1754,7 +2428,32 @@ app.post('/api/products/:id/submit', authMiddleware, async (req: Request, res: R
       approvedAt: '',
       rejectionReason: '',
       approvalNotes: '',
+    } as any;
+    if (supabaseRuntime.enabled) {
+      updated = await supabaseRuntime.updateProduct(req.params.id, updates);
+    } else if (prismaRuntime.enabled) {
+      updated = await prismaRuntime.updateProduct(req.params.id, updates as any);
+    } else {
+      updated = db.updateProduct(req.params.id, updates as any);
+    }
+    pushNotification({
+      audience: 'admin',
+      title: 'New product submitted',
+      message: `${product.title} was submitted for moderation by ${seller.storeName}.`,
+      type: 'product_submitted',
+      entityType: 'product',
+      entityId: product.id,
     });
+    await sendAdminAlert(
+      'Product submitted for review',
+      'Product moderation queue updated',
+      `${product.title} has been resubmitted and is waiting for admin review.`,
+      [
+        { label: 'Product', value: product.title },
+        { label: 'Seller', value: seller.storeName },
+        { label: 'SKU', value: product.sku || '-' },
+      ]
+    );
     res.json(await serializeMarketplaceProductAsync(updated));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -1764,14 +2463,21 @@ app.post('/api/products/:id/submit', authMiddleware, async (req: Request, res: R
 // Allow sellers to delete their own products or admin to delete any product
 app.delete('/api/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const product = prismaRuntime.enabled
-      ? await prismaRuntime.getProduct(req.params.id)
-      : db.getProduct(req.params.id);
+    let product: any = null;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.getProduct(req.params.id);
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.getProduct(req.params.id);
+    } else {
+      product = db.getProduct(req.params.id);
+    }
     if (!product) return res.status(404).json({ error: 'Product not found' });
 
     // Admins can delete any product
     if (isAdminLike(req.user?.role)) {
-      const ok = prismaRuntime.enabled
+      const ok = supabaseRuntime.enabled
+        ? await supabaseRuntime.deleteProduct(req.params.id)
+        : prismaRuntime.enabled
         ? await prismaRuntime.deleteProduct(req.params.id)
         : db.deleteProduct(req.params.id);
       return ok ? res.json({ success: true }) : res.status(500).json({ error: 'Failed to delete' });
@@ -1782,7 +2488,9 @@ app.delete('/api/products/:id', authMiddleware, async (req: Request, res: Respon
       ? await prismaRuntime.getSellerByUserId(req.user!.id)
       : db.getSellerByUserId(req.user!.id);
     if (req.user?.role === 'seller' && product.sellerId === ownerSeller?.id) {
-      const ok = prismaRuntime.enabled
+      const ok = supabaseRuntime.enabled
+        ? await supabaseRuntime.deleteProduct(req.params.id)
+        : prismaRuntime.enabled
         ? await prismaRuntime.deleteProduct(req.params.id)
         : db.deleteProduct(req.params.id);
       return ok ? res.json({ success: true }) : res.status(500).json({ error: 'Failed to delete' });
@@ -1894,14 +2602,19 @@ app.get('/api/admin/products/pending', authMiddleware, async (req: Request, res:
     if (!hasAdminPermission(req.user?.role, 'catalog:review')) {
       return res.status(403).json({ error: 'Catalog access only' });
     }
-    const allProducts = prismaRuntime.enabled
-      ? await prismaRuntime.getAllProductsForAdmin()
-      : [
-          ...db.getAllProducts(),
-          ...db.getProductsByStatus('pending'),
-          ...db.getProductsByStatus('approved'),
-          ...db.getProductsByStatus('rejected'),
-        ];
+    let allProducts: any[] = [];
+    if (supabaseRuntime.enabled) {
+      allProducts = await supabaseRuntime.getAllProductsForAdmin();
+    } else if (prismaRuntime.enabled) {
+      allProducts = await prismaRuntime.getAllProductsForAdmin();
+    } else {
+      allProducts = [
+        ...db.getAllProducts(),
+        ...db.getProductsByStatus('pending'),
+        ...db.getProductsByStatus('approved'),
+        ...db.getProductsByStatus('rejected'),
+      ];
+    }
     const pendingProducts = allProducts
       .filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index)
       .filter((product) => product.approvalStatus === 'pending' || product.status === 'pending' || product.productStatus === 'pending_approval');
@@ -1925,19 +2638,24 @@ app.get('/api/admin/products', authMiddleware, async (req: Request, res: Respons
     const sellerId = typeof req.query.sellerId === 'string' ? req.query.sellerId : '';
     const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
 
-    let products = prismaRuntime.enabled
-      ? await prismaRuntime.getAllProductsForAdmin()
-      : [
-      ...db.getAllProducts(),
-      ...db.getProductsByStatus('pending'),
-      ...db.getProductsByStatus('approved'),
-      ...db.getProductsByStatus('rejected'),
-    ];
+    let products: any[] = [];
+    if (supabaseRuntime.enabled) {
+      products = await supabaseRuntime.getAllProductsForAdmin();
+    } else if (prismaRuntime.enabled) {
+      products = await prismaRuntime.getAllProductsForAdmin();
+    } else {
+      products = [
+        ...db.getAllProducts(),
+        ...db.getProductsByStatus('pending'),
+        ...db.getProductsByStatus('approved'),
+        ...db.getProductsByStatus('rejected'),
+      ];
+    }
 
     products = products.filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index);
 
     if (status && status !== 'all') {
-      products = products.filter((product) => product.status === status);
+      products = products.filter((product) => resolveEffectiveProductStatus(product) === status);
     }
 
     if (sellerId && sellerId !== 'all') {
@@ -1974,17 +2692,8 @@ app.post('/api/admin/products/:id/approve', authMiddleware, async (req: Request,
       return res.status(403).json({ error: 'Catalog access only' });
     }
     
-    const product = prismaRuntime.enabled
-      ? await prismaRuntime.updateProduct(req.params.id, {
-          status: 'live',
-          approvalStatus: 'approved',
-          productStatus: 'live',
-          visibilityStatus: 'live',
-          approvalNotes: req.body.notes,
-          rejectionReason: '',
-          approvedAt: new Date().toISOString(),
-        } as any)
-      : db.updateProduct(req.params.id, {
+    let product: any = null;
+    const approveUpdates = {
       status: 'live',
       approvalStatus: 'approved',
       productStatus: 'live',
@@ -1992,12 +2701,41 @@ app.post('/api/admin/products/:id/approve', authMiddleware, async (req: Request,
       approvalNotes: req.body.notes,
       rejectionReason: '',
       approvedAt: new Date().toISOString(),
-    });
+    } as any;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.updateProduct(req.params.id, approveUpdates);
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.updateProduct(req.params.id, approveUpdates as any);
+    } else {
+      product = db.updateProduct(req.params.id, approveUpdates as any);
+    }
     
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
     }
-    
+    const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(product.sellerId) : db.getSeller(product.sellerId);
+    if (seller?.email) {
+      pushNotification({
+        audience: 'seller',
+        audienceId: seller.userId || seller.id,
+        title: 'Product approved',
+        message: `${product.title} is now live on ExShopi.`,
+        type: 'product_approved',
+        entityType: 'product',
+        entityId: product.id,
+      });
+      await sendSellerNotice(
+        seller.email,
+        'Your product is now live on ExShopi',
+        'Product approved',
+        `${product.title} has been approved and is now visible to customers.`,
+        [
+          { label: 'Product', value: product.title },
+          { label: 'Seller store', value: seller.storeName },
+          { label: 'Visibility', value: 'Live' },
+        ]
+      );
+    }
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2010,28 +2748,48 @@ app.post('/api/admin/products/:id/reject', authMiddleware, async (req: Request, 
       return res.status(403).json({ error: 'Catalog access only' });
     }
     
-    const product = prismaRuntime.enabled
-      ? await prismaRuntime.updateProduct(req.params.id, {
-          status: 'rejected',
-          approvalStatus: 'rejected',
-          productStatus: 'rejected',
-          visibilityStatus: 'hidden',
-          rejectionReason: req.body.reason,
-          rejectedAt: new Date().toISOString(),
-        } as any)
-      : db.updateProduct(req.params.id, {
+    let product: any = null;
+    const rejectUpdates = {
       status: 'rejected',
       approvalStatus: 'rejected',
       productStatus: 'rejected',
       visibilityStatus: 'hidden',
       rejectionReason: req.body.reason,
       rejectedAt: new Date().toISOString(),
-    });
+    } as any;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.updateProduct(req.params.id, rejectUpdates);
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.updateProduct(req.params.id, rejectUpdates as any);
+    } else {
+      product = db.updateProduct(req.params.id, rejectUpdates as any);
+    }
     
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
     }
-    
+    const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(product.sellerId) : db.getSeller(product.sellerId);
+    if (seller?.email) {
+      pushNotification({
+        audience: 'seller',
+        audienceId: seller.userId || seller.id,
+        title: 'Product rejected',
+        message: req.body.reason || `${product.title} was rejected by the catalog team.`,
+        type: 'product_rejected',
+        entityType: 'product',
+        entityId: product.id,
+      });
+      await sendSellerNotice(
+        seller.email,
+        'Your product needs changes on ExShopi',
+        'Product rejected',
+        `${product.title} was rejected during moderation.`,
+        [
+          { label: 'Product', value: product.title },
+          { label: 'Reason', value: req.body.reason || 'Rejected by catalog team' },
+        ]
+      );
+    }
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2055,7 +2813,7 @@ app.post('/api/admin/products/bulk-review', authMiddleware, async (req: Request,
     for (const id of payload.ids) {
       const updates =
         payload.action === 'approve'
-          ? {
+              ? {
               status: 'live',
               approvalStatus: 'approved',
               productStatus: 'live',
@@ -2074,10 +2832,64 @@ app.post('/api/admin/products/bulk-review', authMiddleware, async (req: Request,
               rejectedAt: new Date().toISOString(),
             };
 
-      const updated = prismaRuntime.enabled
-        ? await prismaRuntime.updateProduct(id, updates as any)
-        : db.updateProduct(id, updates as any);
+      let updated: any = null;
+      if (supabaseRuntime.enabled) {
+        updated = await supabaseRuntime.updateProduct(id, updates as any);
+      } else if (prismaRuntime.enabled) {
+        updated = await prismaRuntime.updateProduct(id, updates as any);
+      } else {
+        updated = db.updateProduct(id, updates as any);
+      }
       if (updated) {
+        const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(updated.sellerId) : db.getSeller(updated.sellerId);
+        if (seller?.email) {
+          const actionType =
+            payload.action === 'approve'
+              ? 'product_approved'
+              : payload.action === 'request_changes'
+              ? 'product_info_requested'
+              : 'product_rejected';
+          pushNotification({
+            audience: 'seller',
+            audienceId: seller.userId || seller.id,
+            title:
+              payload.action === 'approve'
+                ? 'Product approved'
+                : payload.action === 'request_changes'
+                ? 'More product information requested'
+                : 'Product rejected',
+            message:
+              payload.action === 'approve'
+                ? `${updated.title} is now live on ExShopi.`
+                : payload.reason || payload.notes || `${updated.title} was reviewed by the catalog team.`,
+            type: actionType,
+            entityType: 'product',
+            entityId: updated.id,
+          });
+          await sendSellerNotice(
+            seller.email,
+            payload.action === 'approve'
+              ? 'Your product is now live on ExShopi'
+              : payload.action === 'request_changes'
+              ? 'More information needed for your product'
+              : 'Your product was rejected on ExShopi',
+            payload.action === 'approve'
+              ? 'Product approved'
+              : payload.action === 'request_changes'
+              ? 'Additional product details requested'
+              : 'Product rejected',
+            payload.action === 'approve'
+              ? `${updated.title} is now live on the marketplace.`
+              : `${updated.title} needs catalog follow-up before it can go live.`,
+            [
+              { label: 'Product', value: updated.title },
+              {
+                label: payload.action === 'approve' ? 'Status' : 'Review note',
+                value: payload.reason || payload.notes || 'Catalog team review completed',
+              },
+            ]
+          );
+        }
         results.push(await serializeMarketplaceProductAsync(updated));
       }
     }
@@ -2089,29 +2901,39 @@ app.post('/api/admin/products/bulk-review', authMiddleware, async (req: Request,
 });
 
 // Admin create/update/delete products (ExShopi official)
-app.post('/api/admin/products', authMiddleware, (req: Request, res: Response) => {
+app.post('/api/admin/products', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const payload = req.body;
-    const assignedSellerId = payload.sellerId || 'exshopi_official';
-    const assignedSeller = db.getSeller(assignedSellerId);
-    if (!assignedSeller) {
-      return res.status(400).json({ error: 'Assigned seller not found' });
+    const payload = await adminProductPayloadSchema.parseAsync(req.body);
+    const lifecycle = deriveAdminLifecycle(payload);
+    const categoryId = payload.categoryId || payload.category || '';
+    assertAdminProductRequirements({ ...payload, categoryId }, lifecycle.status);
+
+    const categoryIds = flattenCategoryIds(prismaRuntime.enabled ? await prismaRuntime.getCategories() : db.getCategories());
+    if (categoryId && !categoryIds.has(categoryId)) {
+      return res.status(400).json({ error: 'Selected category no longer exists. Please choose a valid category.' });
     }
-    const product = db.createProduct({
-      sellerId: assignedSellerId,
-      storeId: assignedSellerId,
-      categoryId: payload.categoryId || payload.category || 'cat1',
+
+    const assignedSeller = await resolveAdminAssignedSeller(payload.sellerId);
+    if (!assignedSeller) {
+      return res.status(400).json({ error: 'ExShopi Official seller profile is missing. Please seed the official store first.' });
+    }
+
+    const productInput = {
+      sellerId: assignedSeller.id,
+      storeId: assignedSeller.id,
+      categoryId,
       title: payload.title || 'Untitled',
       description: payload.description || '',
-      price: Number(payload.price) || 0,
-      originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
-      salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
-      image: payload.image || '',
-      images: payload.images || [],
-      stock: payload.stock || 0,
-      rating: payload.rating || 0,
-      reviews: payload.reviews || 0,
+      price: Number(payload.price || 0),
+      originalPrice:
+        payload.originalPrice != null ? Number(payload.originalPrice) : Number(payload.salePrice ?? payload.price ?? 0),
+      salePrice: payload.salePrice != null ? Number(payload.salePrice) : Number(payload.price || 0),
+      image: payload.image || payload.images?.[0] || '',
+      images: Array.isArray(payload.images) ? payload.images : [],
+      stock: Number(payload.stock || 0),
+      rating: Number(payload.rating || 0),
+      reviews: Number(payload.reviews || 0),
       sku: payload.sku || '',
       brand: payload.brand || payload.specs?.attributes?.brand || '',
       specs: {
@@ -2122,34 +2944,56 @@ app.post('/api/admin/products', authMiddleware, (req: Request, res: Response) =>
           isOfficialStore: Boolean(assignedSeller.isOfficial),
         },
       },
-      status: payload.status || 'live',
-      approvalStatus: payload.approvalStatus || 'approved',
-      productStatus: payload.productStatus || 'live',
-      visibilityStatus: payload.visibilityStatus || 'live',
+      status: lifecycle.status,
+      approvalStatus: lifecycle.approvalStatus,
+      productStatus: lifecycle.productStatus,
+      visibilityStatus: lifecycle.visibilityStatus,
       ownership: assignedSeller.isOfficial ? 'official' : 'seller',
       createdByRole: 'admin',
-      approvalRequestedAt: new Date().toISOString(),
-      approvedAt: new Date().toISOString(),
-      rejectedAt: '',
+      approvalRequestedAt: payload.approvalRequestedAt || new Date().toISOString(),
+      approvedAt: lifecycle.approvalStatus === 'approved' ? payload.approvedAt || new Date().toISOString() : '',
+      rejectedAt: lifecycle.approvalStatus === 'rejected' ? payload.rejectedAt || new Date().toISOString() : '',
+      approvalNotes: payload.approvalNotes || '',
+      rejectionReason: payload.rejectionReason || '',
       views: Number(payload.views || 0),
       wishlistCount: Number(payload.wishlistCount || 0),
       badges: payload.badges || [],
-    });
-    res.json(serializeMarketplaceProduct(product));
+    };
+
+    let product: any = null;
+    if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.createProduct(productInput as any);
+    } else if (prismaRuntime.enabled) {
+      product = await prismaRuntime.createProduct(productInput as any);
+    } else {
+      product = db.createProduct(productInput as any);
+    }
+
+    res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
   }
 });
 
-app.put('/api/admin/products/:id', authMiddleware, (req: Request, res: Response) => {
+app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const nextPayload = { ...(req.body as any) };
+    const nextPayload = { ...(await adminProductPayloadSchema.partial().parseAsync(req.body)) } as any;
+
+    if (nextPayload.categoryId) {
+      const categoryIds = flattenCategoryIds(prismaRuntime.enabled ? await prismaRuntime.getCategories() : db.getCategories());
+      if (!categoryIds.has(nextPayload.categoryId)) {
+        return res.status(400).json({ error: 'Selected category no longer exists. Please choose a valid category.' });
+      }
+    }
+
     if (nextPayload.sellerId) {
-      const assignedSeller = db.getSeller(nextPayload.sellerId);
+      const assignedSeller = await resolveAdminAssignedSeller(nextPayload.sellerId);
       if (!assignedSeller) {
         return res.status(400).json({ error: 'Assigned seller not found' });
       }
+      nextPayload.sellerId = assignedSeller.id;
+      nextPayload.storeId = assignedSeller.id;
       nextPayload.specs = {
         ...(nextPayload.specs || {}),
         ownership: {
@@ -2159,19 +3003,50 @@ app.put('/api/admin/products/:id', authMiddleware, (req: Request, res: Response)
         },
       };
     }
-    const updated = db.updateProduct(req.params.id, nextPayload);
+
+    if (nextPayload.status || nextPayload.productStatus || nextPayload.approvalStatus) {
+      const lifecycle = deriveAdminLifecycle(nextPayload);
+      nextPayload.status = lifecycle.status;
+      nextPayload.approvalStatus = lifecycle.approvalStatus;
+      nextPayload.productStatus = lifecycle.productStatus;
+      nextPayload.visibilityStatus = lifecycle.visibilityStatus;
+      if (lifecycle.approvalStatus === 'approved' && !nextPayload.approvedAt) {
+        nextPayload.approvedAt = new Date().toISOString();
+      }
+      if (lifecycle.approvalStatus === 'rejected' && !nextPayload.rejectedAt) {
+        nextPayload.rejectedAt = new Date().toISOString();
+      }
+    }
+
+    let updated: any = null;
+    if (supabaseRuntime.enabled) {
+      updated = await supabaseRuntime.updateProduct(req.params.id, nextPayload as any);
+    } else if (prismaRuntime.enabled) {
+      updated = await prismaRuntime.updateProduct(req.params.id, nextPayload as any);
+    } else {
+      updated = db.updateProduct(req.params.id, nextPayload as any);
+    }
     if (!updated) return res.status(404).json({ error: 'Product not found' });
-    res.json(serializeMarketplaceProduct(updated));
+    res.json(await serializeMarketplaceProductAsync(updated));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
   }
 });
 
-app.delete('/api/admin/products/:id', authMiddleware, (req: Request, res: Response) => {
+app.delete('/api/admin/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const ok = db.deleteProduct(req.params.id);
+    const ok = supabaseRuntime.enabled
+      ? await supabaseRuntime.deleteProduct(req.params.id)
+      : prismaRuntime.enabled
+      ? await prismaRuntime.deleteProduct(req.params.id)
+      : db.deleteProduct(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Product not found' });
+    try {
+      sendSseEvent('product-deleted', { id: req.params.id, ts: new Date().toISOString() });
+    } catch (e) {
+      /* ignore SSE errors */
+    }
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2319,7 +3194,17 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       return res.status(403).json({ error: `This customer is blocked from COD ordering (${blacklistHit.type}).` });
     }
 
-    consumeCodOtpVerification(verificationToken, req.user.id, customerPhone);
+    const isFirebaseVerification = verificationToken.startsWith('firebase:');
+    let verificationMethod = 'phone_otp';
+    if (isFirebaseVerification) {
+      const [, verifiedPhone = ''] = verificationToken.split(':');
+      if (normalizePhone(verifiedPhone) !== normalizePhone(customerPhone)) {
+        return res.status(400).json({ error: 'Verified Firebase phone does not match the checkout phone.' });
+      }
+      verificationMethod = 'firebase_phone';
+    } else {
+      consumeCodOtpVerification(verificationToken, req.user.id, customerPhone);
+    }
 
     const allOrders = prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders();
     const now = Date.now();
@@ -2362,7 +3247,7 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
         risk,
         verification: {
           verifiedAt: new Date().toISOString(),
-          method: 'phone_otp',
+          method: verificationMethod,
           sessionId: verificationToken,
         },
       },
@@ -2421,14 +3306,62 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       action: 'cod_order_created',
       summary: `${customerName} placed COD order ${orderPayload.orderId}${risk.riskLevel === 'suspicious' ? ' (flagged)' : ''}`,
     });
-
-    if (prismaRuntime.enabled) {
-      await prismaRuntime.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
-      return res.json(await serializeMarketplaceOrderAsync(order));
+    await sendAdminAlert(
+      risk.riskLevel === 'suspicious' ? 'Suspicious COD order placed' : 'New COD order placed',
+      risk.riskLevel === 'suspicious' ? 'Suspicious COD order requires review' : 'New COD order received',
+      `${customerName} placed a COD order on ExShopi.`,
+      [
+        { label: 'Order ID', value: orderPayload.orderId || order.id },
+        { label: 'Customer', value: customerName },
+        { label: 'Phone', value: normalizePhone(customerPhone) },
+        { label: 'Seller', value: seller?.storeName || 'Marketplace Seller' },
+        { label: 'Items', value: summarizeOrderItems(orderPayload) },
+        { label: 'Risk level', value: risk.riskLevel },
+      ]
+    );
+    if (seller?.email) {
+      await sendSellerNotice(
+        seller.email,
+        'New order received in ExShopi Seller Center',
+        'A new order is ready for confirmation',
+        `${customerName} has placed a COD order for your store.`,
+        buildOrderFacts(orderPayload, seller.storeName)
+      );
+    }
+    if (customerEmail) {
+      await sendCustomerNotice(
+        customerEmail,
+        'Your ExShopi order has been placed',
+        'Order placed successfully',
+        `Your Cash on Delivery order ${orderPayload.orderId} has been created and is now waiting for seller confirmation.`,
+        buildOrderFacts(orderPayload, seller?.storeName)
+      );
     }
 
-    db.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
-    res.json(serializeMarketplaceOrder(order));
+    let enrichedOrder: any;
+    if (prismaRuntime.enabled) {
+      await prismaRuntime.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
+      enrichedOrder = await serializeMarketplaceOrderAsync(order);
+    } else {
+      db.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
+      enrichedOrder = serializeMarketplaceOrder(order);
+    }
+
+    // Notify connected admin UIs in realtime
+    try {
+      sendSseEvent('order-created', {
+        id: enrichedOrder.id,
+        orderId: enrichedOrder.orderId,
+        status: enrichedOrder.status,
+        subtotal: enrichedOrder.subtotal,
+        sellerId: enrichedOrder.sellerId,
+        createdAt: enrichedOrder.createdAt,
+      });
+    } catch (e) {
+      /* ignore SSE failures */
+    }
+
+    res.json(enrichedOrder);
   } catch (error) {
     res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
   }
@@ -2477,8 +3410,20 @@ app.post('/api/payments/stripe/checkout-session', authMiddleware, async (req: Re
       createdOrders.push(order);
       if (prismaRuntime.enabled) {
         await prismaRuntime.addTrackingEvent(order.id, 'placed', new Date().toISOString(), 'Stripe checkout initiated');
+        try {
+          const enriched = await serializeMarketplaceOrderAsync(order);
+          sendSseEvent('order-created', { id: enriched.id, orderId: enriched.orderId, status: enriched.status, subtotal: enriched.subtotal, sellerId: enriched.sellerId, createdAt: enriched.createdAt });
+        } catch (e) {
+          /* ignore */
+        }
       } else {
         db.addTrackingEvent(order.id, 'placed', new Date().toISOString(), 'Stripe checkout initiated');
+        try {
+          const enriched = serializeMarketplaceOrder(order);
+          sendSseEvent('order-created', { id: enriched.id, orderId: enriched.orderId, status: enriched.status, subtotal: enriched.subtotal, sellerId: enriched.sellerId, createdAt: enriched.createdAt });
+        } catch (e) {
+          /* ignore */
+        }
       }
     }
 
@@ -2570,6 +3515,21 @@ app.post('/api/payments/stripe/webhook', async (req: Request, res: Response) => 
           } as any);
           db.addTrackingEvent(orderId, 'confirmed', new Date().toISOString(), 'Stripe payment confirmed');
         }
+
+        // Notify admin UIs about the order update
+        try {
+          const latest = prismaRuntime.enabled ? await prismaRuntime.getOrder(orderId) : db.getOrder(orderId);
+          const enriched = prismaRuntime.enabled ? await serializeMarketplaceOrderAsync(latest) : serializeMarketplaceOrder(latest);
+          sendSseEvent('order-updated', {
+            id: enriched.id,
+            orderId: enriched.orderId,
+            status: enriched.status,
+            paymentStatus: enriched.paymentStatus,
+            updatedAt: enriched.updatedAt || new Date().toISOString(),
+          });
+        } catch (e) {
+          /* ignore SSE failures */
+        }
       }
     }
 
@@ -2591,6 +3551,21 @@ app.post('/api/payments/stripe/webhook', async (req: Request, res: Response) => 
             status: 'failed',
           } as any);
           db.addTrackingEvent(orderId, 'failed', new Date().toISOString(), 'Stripe payment failed or expired');
+        }
+
+        // Notify admin UIs about the failed payment
+        try {
+          const latest = prismaRuntime.enabled ? await prismaRuntime.getOrder(orderId) : db.getOrder(orderId);
+          const enriched = prismaRuntime.enabled ? await serializeMarketplaceOrderAsync(latest) : serializeMarketplaceOrder(latest);
+          sendSseEvent('order-updated', {
+            id: enriched.id,
+            orderId: enriched.orderId,
+            status: enriched.status,
+            paymentStatus: enriched.paymentStatus,
+            updatedAt: enriched.updatedAt || new Date().toISOString(),
+          });
+        } catch (e) {
+          /* ignore SSE failures */
         }
       }
     }
@@ -2686,6 +3661,7 @@ app.put('/api/orders/:id/status', authMiddleware, async (req: Request, res: Resp
       return res.status(404).json({ error: 'Order not found' });
     }
     const timestamp = new Date().toISOString();
+    const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(currentOrder.sellerId) : db.getSeller(currentOrder.sellerId);
     if (prismaRuntime.enabled) {
       await prismaRuntime.addTrackingEvent(order.id, requestedStatus, timestamp, `Order moved to ${requestedStatus.replace(/_/g, ' ')}`);
       pushNotification({
@@ -2714,6 +3690,15 @@ app.put('/api/orders/:id/status', authMiddleware, async (req: Request, res: Resp
         action: 'order_status_updated',
         summary: `${currentOrder.orderId || currentOrder.id} moved to ${requestedStatus.replace(/_/g, ' ')}`,
       });
+      if (currentOrder.customerEmail) {
+        await sendCustomerNotice(
+          currentOrder.customerEmail,
+          `Your ExShopi order is now ${formatOperationalStatusLabel(requestedStatus)}`,
+          `Order ${formatOperationalStatusLabel(requestedStatus)}`,
+          `${currentOrder.orderId || currentOrder.id} is now ${requestedStatus.replace(/_/g, ' ')}.`,
+          buildOrderFacts(currentOrder, seller?.storeName)
+        );
+      }
       return res.json(await serializeMarketplaceOrderAsync(order));
     }
     db.addTrackingEvent(order.id, requestedStatus, timestamp, `Order moved to ${requestedStatus.replace(/_/g, ' ')}`);
@@ -2734,6 +3719,15 @@ app.put('/api/orders/:id/status', authMiddleware, async (req: Request, res: Resp
       action: 'order_status_updated',
       summary: `${currentOrder.orderId || currentOrder.id} moved to ${requestedStatus.replace(/_/g, ' ')}`,
     });
+    if (currentOrder.customerEmail) {
+      await sendCustomerNotice(
+        currentOrder.customerEmail,
+        `Your ExShopi order is now ${formatOperationalStatusLabel(requestedStatus)}`,
+        `Order ${formatOperationalStatusLabel(requestedStatus)}`,
+        `${currentOrder.orderId || currentOrder.id} is now ${requestedStatus.replace(/_/g, ' ')}.`,
+        buildOrderFacts(currentOrder, seller?.storeName)
+      );
+    }
     res.json(serializeMarketplaceOrder(order));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2764,6 +3758,38 @@ app.put('/api/orders/:id/request-return', authMiddleware, async (req: Request, r
     }
     if (prismaRuntime.enabled) {
       await prismaRuntime.addTrackingEvent(next.id, 'return_requested', new Date().toISOString(), next.refundReason || 'Return requested');
+      pushNotification({
+        audience: 'admin',
+        title: 'Return requested',
+        message: `${order.orderId || order.id} has a new return request.`,
+        type: 'return_requested',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      pushNotification({
+        audience: 'customer',
+        audienceId: order.customerId,
+        title: 'Return request submitted',
+        message: `Return request submitted for ${order.orderId || order.id}.`,
+        type: 'return_requested',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      await sendAdminAlert(
+        'New return request received',
+        'Return request needs review',
+        `${order.orderId || order.id} has a new return request from the customer.`,
+        buildOrderFacts(order)
+      );
+      if (order.customerEmail) {
+        await sendCustomerNotice(
+          order.customerEmail,
+          'Your return request has been submitted',
+          'Return request submitted',
+          `We have received your return request for ${order.orderId || order.id}.`,
+          buildOrderFacts(order)
+        );
+      }
       return res.json(await serializeMarketplaceOrderAsync(next));
     }
     next.refundStatus = 'requested';
@@ -2771,6 +3797,38 @@ app.put('/api/orders/:id/request-return', authMiddleware, async (req: Request, r
     next.refundAmount = req.body.refundAmount || next.totalAmount || next.subtotal;
     next.updatedAt = new Date().toISOString();
     db.addTrackingEvent(next.id, 'return_requested', new Date().toISOString(), next.refundReason || 'Return requested');
+    pushNotification({
+      audience: 'admin',
+      title: 'Return requested',
+      message: `${order.orderId || order.id} has a new return request.`,
+      type: 'return_requested',
+      entityType: 'order',
+      entityId: order.id,
+    });
+    pushNotification({
+      audience: 'customer',
+      audienceId: order.customerId,
+      title: 'Return request submitted',
+      message: `Return request submitted for ${order.orderId || order.id}.`,
+      type: 'return_requested',
+      entityType: 'order',
+      entityId: order.id,
+    });
+    await sendAdminAlert(
+      'New return request received',
+      'Return request needs review',
+      `${order.orderId || order.id} has a new return request from the customer.`,
+      buildOrderFacts(order)
+    );
+    if (order.customerEmail) {
+      await sendCustomerNotice(
+        order.customerEmail,
+        'Your return request has been submitted',
+        'Return request submitted',
+        `We have received your return request for ${order.orderId || order.id}.`,
+        buildOrderFacts(order)
+      );
+    }
     res.json(serializeMarketplaceOrder(next));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2821,6 +3879,15 @@ app.put('/api/orders/:id/dispatch-slot', authMiddleware, async (req: Request, re
         entityType: 'order',
         entityId: order.id,
       });
+      if (order.customerEmail) {
+        await sendCustomerNotice(
+          order.customerEmail,
+          'Your order is waiting for pickup',
+          'Order waiting for pickup',
+          `${order.orderId || order.id} is packed and waiting for ExShopi pickup.`,
+          buildOrderFacts(order)
+        );
+      }
       return res.json(await serializeMarketplaceOrderAsync(updated));
     }
     pushNotification({
@@ -2832,6 +3899,15 @@ app.put('/api/orders/:id/dispatch-slot', authMiddleware, async (req: Request, re
       entityType: 'order',
       entityId: order.id,
     });
+    if (order.customerEmail) {
+      await sendCustomerNotice(
+        order.customerEmail,
+        'Your order is waiting for pickup',
+        'Order waiting for pickup',
+        `${order.orderId || order.id} is packed and waiting for ExShopi pickup.`,
+        buildOrderFacts(order)
+      );
+    }
     res.json(serializeMarketplaceOrder(updated));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2863,6 +3939,24 @@ app.put('/api/admin/orders/:id/refund', authMiddleware, async (req: Request, res
         });
         if (!updated) return res.status(404).json({ error: 'Order not found' });
         await prismaRuntime.addTrackingEvent(updated.id, 'returned', new Date().toISOString(), 'Refund approved and order marked returned');
+        pushNotification({
+          audience: 'customer',
+          audienceId: order.customerId,
+          title: 'Return approved',
+          message: `${order.orderId || order.id} return has been approved.`,
+          type: 'return_approved',
+          entityType: 'order',
+          entityId: order.id,
+        });
+        if (order.customerEmail) {
+          await sendCustomerNotice(
+            order.customerEmail,
+            'Your ExShopi return was approved',
+            'Return approved',
+            `Your return for ${order.orderId || order.id} has been approved.`,
+            buildOrderFacts(order)
+          );
+        }
         return res.json(await serializeMarketplaceOrderAsync(updated));
       }
       order.refundStatus = 'refunded';
@@ -2881,6 +3975,24 @@ app.put('/api/admin/orders/:id/refund', authMiddleware, async (req: Request, res
       order.refundAmount = req.body.refundAmount || order.totalAmount || order.subtotal;
       order.updatedAt = new Date().toISOString();
       db.addTrackingEvent(order.id, 'returned', new Date().toISOString(), 'Refund approved and order marked returned');
+      pushNotification({
+        audience: 'customer',
+        audienceId: order.customerId,
+        title: 'Return approved',
+        message: `${order.orderId || order.id} return has been approved.`,
+        type: 'return_approved',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      if (order.customerEmail) {
+        await sendCustomerNotice(
+          order.customerEmail,
+          'Your ExShopi return was approved',
+          'Return approved',
+          `Your return for ${order.orderId || order.id} has been approved.`,
+          buildOrderFacts(order)
+        );
+      }
     } else if (action === 'reject') {
       if (prismaRuntime.enabled) {
         const updated = await prismaRuntime.updateOrder(req.params.id, {
@@ -2889,11 +4001,53 @@ app.put('/api/admin/orders/:id/refund', authMiddleware, async (req: Request, res
         });
         if (!updated) return res.status(404).json({ error: 'Order not found' });
         await prismaRuntime.addTrackingEvent(updated.id, 'refund_rejected', new Date().toISOString(), req.body.reason || 'Refund rejected');
+        pushNotification({
+          audience: 'customer',
+          audienceId: order.customerId,
+          title: 'Return rejected',
+          message: req.body.reason || `${order.orderId || order.id} return request was rejected.`,
+          type: 'return_rejected',
+          entityType: 'order',
+          entityId: order.id,
+        });
+        if (order.customerEmail) {
+          await sendCustomerNotice(
+            order.customerEmail,
+            'Your ExShopi return was not approved',
+            'Return rejected',
+            `Your return for ${order.orderId || order.id} could not be approved.`,
+            [
+              ...buildOrderFacts(order),
+              { label: 'Reason', value: req.body.reason || 'Refund rejected' },
+            ]
+          );
+        }
         return res.json(await serializeMarketplaceOrderAsync(updated));
       }
       order.refundStatus = 'rejected';
       order.updatedAt = new Date().toISOString();
       db.addTrackingEvent(order.id, 'refund_rejected', new Date().toISOString(), req.body.reason || 'Refund rejected');
+      pushNotification({
+        audience: 'customer',
+        audienceId: order.customerId,
+        title: 'Return rejected',
+        message: req.body.reason || `${order.orderId || order.id} return request was rejected.`,
+        type: 'return_rejected',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      if (order.customerEmail) {
+        await sendCustomerNotice(
+          order.customerEmail,
+          'Your ExShopi return was not approved',
+          'Return rejected',
+          `Your return for ${order.orderId || order.id} could not be approved.`,
+          [
+            ...buildOrderFacts(order),
+            { label: 'Reason', value: req.body.reason || 'Refund rejected' },
+          ]
+        );
+      }
     }
 
     res.json(serializeMarketplaceOrder(order));
@@ -2949,6 +4103,25 @@ app.post('/api/tracking/:orderId/scan-qr', authMiddleware, async (req: Request, 
         entityType: 'order',
         entityId: order.id,
       });
+      if (orderBefore.customerEmail) {
+        await sendCustomerNotice(
+          orderBefore.customerEmail,
+          'Your ExShopi order was picked up',
+          'Order picked up',
+          `${orderBefore.orderId || orderBefore.id} has been collected by ExShopi logistics.`,
+          buildOrderFacts(orderBefore)
+        );
+      }
+      const seller = await prismaRuntime.getSeller(orderBefore.sellerId);
+      if (seller?.email) {
+        await sendSellerNotice(
+          seller.email,
+          'Order picked up by ExShopi logistics',
+          'Order picked up',
+          `${orderBefore.orderId || orderBefore.id} has been scanned and collected by ExShopi logistics.`,
+          buildOrderFacts(orderBefore, seller.storeName)
+        );
+      }
       return res.json(await serializeMarketplaceOrderAsync(order));
     }
     db.addTrackingEvent(order.id, 'picked_up', new Date().toISOString(), `Barcode scanned by ${scannedBy}`, scanLocation);
@@ -2961,6 +4134,25 @@ app.post('/api/tracking/:orderId/scan-qr', authMiddleware, async (req: Request, 
       entityType: 'order',
       entityId: order.id,
     });
+    if (orderBefore.customerEmail) {
+      await sendCustomerNotice(
+        orderBefore.customerEmail,
+        'Your ExShopi order was picked up',
+        'Order picked up',
+        `${orderBefore.orderId || orderBefore.id} has been collected by ExShopi logistics.`,
+        buildOrderFacts(orderBefore)
+      );
+    }
+    const seller = db.getSeller(orderBefore.sellerId);
+    if (seller?.email) {
+      await sendSellerNotice(
+        seller.email,
+        'Order picked up by ExShopi logistics',
+        'Order picked up',
+        `${orderBefore.orderId || orderBefore.id} has been scanned and collected by ExShopi logistics.`,
+        buildOrderFacts(orderBefore, seller.storeName)
+      );
+    }
     res.json(serializeMarketplaceOrder(order));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2996,6 +4188,15 @@ app.post('/api/tracking/:orderId/delivery-done', authMiddleware, async (req: Req
         entityType: 'order',
         entityId: order.id,
       });
+      if (order.customerEmail) {
+        await sendCustomerNotice(
+          order.customerEmail,
+          'Your ExShopi order was delivered',
+          'Order delivered',
+          `${order.orderId || order.id} has been delivered successfully.`,
+          buildOrderFacts(order)
+        );
+      }
       return res.json(await serializeMarketplaceOrderAsync(order));
     }
     db.addTrackingEvent(order.id, 'delivered', new Date().toISOString(), 'Delivery completed and COD collected');
@@ -3008,6 +4209,15 @@ app.post('/api/tracking/:orderId/delivery-done', authMiddleware, async (req: Req
       entityType: 'order',
       entityId: order.id,
     });
+    if (order.customerEmail) {
+      await sendCustomerNotice(
+        order.customerEmail,
+        'Your ExShopi order was delivered',
+        'Order delivered',
+        `${order.orderId || order.id} has been delivered successfully.`,
+        buildOrderFacts(order)
+      );
+    }
     res.json(serializeMarketplaceOrder(order));
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -3060,6 +4270,29 @@ app.post('/api/admin/payouts/:id/process', authMiddleware, async (req: Request, 
         bankTransactionId: generateTransactionId(),
       });
       if (!updated) return res.status(404).json({ error: 'Payout not found' });
+      const seller = await prismaRuntime.getSeller(updated.sellerId);
+      pushNotification({
+        audience: 'seller',
+        audienceId: seller?.userId || seller?.id || updated.sellerId,
+        title: 'Payout released',
+        message: `Your payout of ${toCurrency(updated.netAmount)} has been released.`,
+        type: 'payout_released',
+        entityType: 'payout',
+        entityId: updated.id,
+      });
+      if (seller?.email) {
+        await sendSellerNotice(
+          seller.email,
+          'Your ExShopi payout has been released',
+          'Payout released',
+          'Your latest ExShopi payout has been marked as released by finance.',
+          [
+            { label: 'Payout ID', value: updated.id },
+            { label: 'Net amount', value: toCurrency(updated.netAmount) },
+            { label: 'Status', value: 'Paid' },
+          ]
+        );
+      }
       return res.json(updated);
     }
     
@@ -3085,6 +4318,29 @@ app.post('/api/admin/payouts/:id/process', authMiddleware, async (req: Request, 
       order.payoutStatus = 'paid';
       order.updatedAt = new Date().toISOString();
     });
+    const seller = db.getSeller(payout.sellerId);
+    pushNotification({
+      audience: 'seller',
+      audienceId: seller?.userId || seller?.id || payout.sellerId,
+      title: 'Payout released',
+      message: `Your payout of ${toCurrency(updated?.netAmount || payout.netAmount)} has been released.`,
+      type: 'payout_released',
+      entityType: 'payout',
+      entityId: payout.id,
+    });
+    if (seller?.email) {
+      await sendSellerNotice(
+        seller.email,
+        'Your ExShopi payout has been released',
+        'Payout released',
+        'Your latest ExShopi payout has been marked as released by finance.',
+        [
+          { label: 'Payout ID', value: payout.id },
+          { label: 'Net amount', value: toCurrency(updated?.netAmount || payout.netAmount) },
+          { label: 'Status', value: 'Paid' },
+        ]
+      );
+    }
 
     res.json(updated);
   } catch (error) {
@@ -3131,6 +4387,25 @@ app.post('/api/payout-requests', authMiddleware, async (req: Request, res: Respo
       notes: notes || '',
       bankDetails: seller ? { bankName: seller.bankName, accountHolder: seller.accountHolder, accountNumber: seller.bankAccount } : {},
     });
+
+    pushNotification({
+      audience: 'admin',
+      title: 'New payout request submitted',
+      message: `${seller.storeName} requested ${toCurrency(Number(amount) || 0)} for payout review.`,
+      type: 'payout_request_submitted',
+      entityType: 'payout_request',
+      entityId: pr.id,
+    });
+    await sendAdminAlert(
+      'New payout request submitted',
+      'Payout request waiting for finance review',
+      `${seller.storeName} has submitted a payout request in ExShopi.`,
+      [
+        { label: 'Seller', value: seller.storeName },
+        { label: 'Amount', value: toCurrency(Number(amount) || 0) },
+        { label: 'Request ID', value: pr.id },
+      ]
+    );
 
     res.json(pr);
   } catch (error) {
@@ -4383,6 +5658,26 @@ app.get('/api', (req: Request, res: Response) => {
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'healthy', uptime: process.uptime() });
 });
+
+// Dev-only: quick product update endpoint for local testing (no auth)
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/__dev/admin/update-product', async (req: Request, res: Response) => {
+    try {
+      const { id, payload } = req.body || {};
+      if (!id) return res.status(400).json({ error: 'Missing product id' });
+      const updated = db.updateProduct(id, payload || {});
+      if (!updated) return res.status(404).json({ error: 'Product not found' });
+      try {
+        sendSseEvent('product-updated', { id, ts: new Date().toISOString() });
+      } catch (e) {
+        // ignore SSE errors in dev
+      }
+      res.json(await serializeMarketplaceProductAsync(updated));
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+}
 
 // 404 handler
 app.use((req: Request, res: Response) => {

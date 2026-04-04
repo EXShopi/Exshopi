@@ -62,20 +62,27 @@ const PAGE_SIZE = 12;
 export default function CategoryPage() {
   const { category, subcategory } = useParams<{ category?: string; subcategory?: string }>();
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [rawProducts, setRawProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const categoryKey = (category || "categories").toLowerCase();
-  const subcategoryKey = (subcategory || "").toLowerCase();
-  const categoryInfo = categoryData.find((entry) => entry.slug === categoryKey);
-  const subcategoryInfo = categoryInfo?.subcategories.find((entry) => entry.slug === subcategoryKey);
-  const liveCategory = categories.find((entry) => entry.slug === categoryKey);
+  const rawCategoryKey = (category || "categories").toLowerCase();
+  const rawSubcategoryKey = (subcategory || "").toLowerCase();
+
+  // map legacy route slugs to canonical master category when possible
+  const legacyMap = mapLegacyCategory(rawCategoryKey);
+  const effectiveCategoryKey = (legacyMap && legacyMap.category) ? String(legacyMap.category) : rawCategoryKey;
+  const effectiveSubcategoryKey = rawSubcategoryKey || (legacyMap && legacyMap.subcategory ? String(legacyMap.subcategory) : '');
+
+  const categoryInfo = categoryData.find((entry) => entry.slug === effectiveCategoryKey);
+  const subcategoryInfo = categoryInfo?.subcategories.find((entry) => entry.slug === effectiveSubcategoryKey);
+  const liveCategory = categories.find((entry) => entry.slug === effectiveCategoryKey);
   const isComingSoon = Boolean(category && liveCategory && liveCategory.active === false);
-  const displayTitle = subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || titleFromSlug(categoryKey);
+  const displayTitle = subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || titleFromSlug(effectiveCategoryKey);
   const description =
-    categoryDescriptions[categoryKey] ||
+    categoryDescriptions[effectiveCategoryKey] ||
     `Shop ${displayTitle.toLowerCase()} with curated marketplace offers, fast UAE delivery, and trusted vendors.`;
 
   useEffect(() => {
@@ -91,40 +98,41 @@ export default function CategoryPage() {
         fetchedCategories = Array.isArray(categoryRows) ? categoryRows : [];
         setCategories(fetchedCategories);
 
-        const liveCat = fetchedCategories.find((entry) => entry.slug === categoryKey);
+        const liveCat = fetchedCategories.find((entry) => entry.slug === effectiveCategoryKey);
         if (liveCat && liveCat.id) {
           return productAPI.getByCategory(liveCat.id);
         }
-        return productAPI.getAll();
+        // No backend category id found — query server by canonical slug to avoid full client-side scans
+        return productAPI.getBySlug(effectiveCategoryKey, effectiveSubcategoryKey);
       })
       .then((productRows) => {
         if (!mounted) return;
-        const liveProducts = (productRows || [])
-          .filter(
-            (product: any) =>
-              product?.status === "live" ||
-              product?.productStatus === "live" ||
-              (product?.approvalStatus === "approved" && product?.visibilityStatus === "live")
-          )
-          .map(
-            (product: any): CatalogProduct => ({
-              id: String(product.id),
-              slug: product.slug || String(product.id),
-              title: product.title,
-              price: Number(product.price || 0),
-              oldPrice:
-                Number(product.originalPrice || 0) > Number(product.price || 0)
-                  ? Number(product.originalPrice || 0)
-                  : undefined,
-              rating: Number(product.rating || 0),
-              reviews: Number(product.reviews || product.reviewsCount || 0),
-              image: product.image || product.images?.[0] || "",
-              category: product.category || product.brand || "Marketplace",
-              stock: Number(product.stock || 0) > 0 ? "In stock" : "Out of stock",
-              seller: product.sellerName || "Marketplace Seller",
-              badge: product.badges?.[0] || product.badge,
-            })
-          );
+        const liveRaw = (productRows || []).filter(
+          (product: any) =>
+            product?.status === "live" ||
+            product?.productStatus === "live" ||
+            (product?.approvalStatus === "approved" && product?.visibilityStatus === "live")
+        );
+        setRawProducts(liveRaw);
+        const liveProducts = (liveRaw || []).map(
+          (product: any): CatalogProduct => ({
+            id: String(product.id),
+            slug: product.slug || String(product.id),
+            title: product.title,
+            price: Number(product.price || 0),
+            oldPrice:
+              Number(product.originalPrice || 0) > Number(product.price || 0)
+                ? Number(product.originalPrice || 0)
+                : undefined,
+            rating: Number(product.rating || 0),
+            reviews: Number(product.reviews || product.reviewsCount || 0),
+            image: product.image || product.images?.[0] || "",
+            category: product.specs?.categoryName || product.specs?.parentCategoryName || product.brand || "Marketplace",
+            stock: Number(product.stock || 0) > 0 ? "In stock" : "Out of stock",
+            seller: product.sellerName || "Marketplace Seller",
+            badge: product.badges?.[0] || product.badge,
+          })
+        );
         setCatalog(liveProducts);
       })
       .catch((err) => {
@@ -138,22 +146,34 @@ export default function CategoryPage() {
     return () => {
       mounted = false;
     };
-  }, [categoryKey]);
+  }, [rawCategoryKey, rawSubcategoryKey]);
 
   const filteredProducts = useMemo(() => {
-    if (categoryKey === "categories") return catalog;
-    // Use master category helpers to filter the catalog by category/subcategory
+    if (effectiveCategoryKey === "categories") return catalog;
+    // Use master category helpers to filter the raw product objects (preserve specs)
     try {
-      return filterProductsByCategoryTree(catalog || [], categoryKey || null, subcategoryKey || null, categories || []);
+      const matched = filterProductsByCategoryTree(rawProducts || [], effectiveCategoryKey || null, effectiveSubcategoryKey || null, categories || []);
+      // map matched raw products into the catalog shape
+      return (matched || []).map((product: any): CatalogProduct => ({
+        id: String(product.id),
+        slug: product.slug || String(product.id),
+        title: product.title,
+        price: Number(product.price || 0),
+        oldPrice: Number(product.originalPrice || 0) > Number(product.price || 0) ? Number(product.originalPrice || 0) : undefined,
+        rating: Number(product.rating || 0),
+        reviews: Number(product.reviews || product.reviewsCount || 0),
+        image: product.image || product.images?.[0] || "",
+        category: product.specs?.categoryName || product.specs?.parentCategoryName || product.brand || "Marketplace",
+        stock: Number(product.stock || 0) > 0 ? "In stock" : "Out of stock",
+        seller: product.sellerName || "Marketplace Seller",
+        badge: product.badges?.[0] || product.badge,
+      }));
     } catch (err) {
-      // fallback to simple title/category text search
-      const searchTerms = [categoryKey, subcategoryKey].filter(Boolean).map((t) => String(t).toLowerCase());
-      return (catalog || []).filter((product) => {
-        const haystack = normalizeText(`${product.title} ${product.category} ${product.seller} ${product.badge || ''} ${product.slug}`);
-        return searchTerms.some((term) => haystack.includes(term));
-      });
+      // Do not fallback to heuristic text search for category pages — return empty and log.
+      console.warn('Category filtering failed for', effectiveCategoryKey, effectiveSubcategoryKey, err);
+      return [];
     }
-  }, [catalog, categoryKey, subcategoryKey, categories]);
+  }, [catalog, effectiveCategoryKey, effectiveSubcategoryKey, categories]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const relatedSubcategories = categoryInfo?.subcategories || [];
@@ -170,16 +190,16 @@ export default function CategoryPage() {
             <Link to="/" className="hover:text-slate-900">Home</Link>
             <span>/</span>
             <Link to="/categories" className="hover:text-slate-900">Categories</Link>
-            {category && (
+            {effectiveCategoryKey && (
               <>
                 <span>/</span>
-                <span className="font-semibold text-slate-900">{titleFromSlug(category)}</span>
+                <Link to={`/category/${effectiveCategoryKey}`} className="font-semibold text-slate-900">{titleFromSlug(effectiveCategoryKey)}</Link>
               </>
             )}
-            {subcategory && (
+            {effectiveSubcategoryKey && (
               <>
                 <span>/</span>
-                <span className="font-semibold text-blue-600">{titleFromSlug(subcategory)}</span>
+                <span className="font-semibold text-blue-600">{titleFromSlug(effectiveSubcategoryKey)}</span>
               </>
             )}
           </div>
@@ -213,13 +233,13 @@ export default function CategoryPage() {
                 {(relatedSubcategories.length > 0
                   ? relatedSubcategories
                   : [
-                      { name: "Featured Products", slug: categoryKey },
-                      { name: "Top Rated", slug: `${categoryKey}-top-rated` },
-                      { name: "Best Deals", slug: `${categoryKey}-deals` },
+                      { name: "Featured Products", slug: effectiveCategoryKey },
+                      { name: "Top Rated", slug: `${effectiveCategoryKey}-top-rated` },
+                      { name: "Best Deals", slug: `${effectiveCategoryKey}-deals` },
                     ]).map((entry) => (
                   <Link
                     key={entry.slug}
-                    to={`/category/${categoryKey}/${entry.slug}`}
+                    to={`/category/${effectiveCategoryKey}/${entry.slug}`}
                     className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-600"
                   >
                     <span>{entry.name}</span>

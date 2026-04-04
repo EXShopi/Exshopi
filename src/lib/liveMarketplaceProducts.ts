@@ -76,6 +76,26 @@ export function getLiveMarketplaceProducts(items: any[]) {
     .filter((product) => product.price > 0);
 }
 
+export function getCampaignProducts(items: any[], featuredProductIds: string[] = []) {
+  const liveProducts = getLiveMarketplaceProducts(items);
+  const normalizedFeaturedIds = featuredProductIds.map((value) => String(value).trim()).filter(Boolean);
+
+  if (normalizedFeaturedIds.length) {
+    const selected = liveProducts.filter((product) =>
+      normalizedFeaturedIds.includes(String(product.id)) ||
+      normalizedFeaturedIds.includes(String(product.slug)) ||
+      normalizedFeaturedIds.includes(String(product.raw?.id || '')) ||
+      normalizedFeaturedIds.includes(String(product.raw?.slug || ''))
+    );
+
+    if (selected.length) {
+      return selected;
+    }
+  }
+
+  return liveProducts.filter((product) => product.discount > 0 || /deal|offer|sale|flash|campaign/i.test(product.badge || ""));
+}
+
 export function productMatchesBrand(product: LiveMarketplaceProduct, brandSlug: string) {
   const haystack = [
     product.title,

@@ -9,6 +9,7 @@ import AuthService from '../lib/authService';
 import { getAuthHeaders, orderAPI, userAPI } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import { formatAED } from '../lib/currency';
+import { OrbitLoader } from '../components/ui/OrbitLoader';
 
 interface Address {
   id: string;
@@ -293,7 +294,7 @@ export default function Account() {
   const renderSection = () => {
     switch (activeSection) {
       case 'profile':
-        if (isLoading) return <div className="flex items-center justify-center py-20"><div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div></div>;
+        if (isLoading) return <div className="flex items-center justify-center py-20"><OrbitLoader label="Loading profile..." size={28} /></div>;
         return (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <div className="w-20 h-20 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mb-8 shadow-sm border border-violet-100">
@@ -364,7 +365,7 @@ export default function Account() {
             <div className="space-y-4">
               {ordersLoading ? (
                 <div className="rounded-2xl border border-slate-100 bg-white p-10 text-center text-slate-500 font-medium">
-                  Loading your orders...
+                  <OrbitLoader label="Loading your orders..." size={24} />
                 </div>
               ) : orders.length === 0 ? (
                 <div className="rounded-2xl border border-slate-100 bg-white p-10 text-center">

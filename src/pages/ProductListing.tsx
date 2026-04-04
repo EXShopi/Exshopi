@@ -60,8 +60,10 @@ export default function ProductListing() {
             setProducts((filtered || []).filter(isVisibleMarketplaceProduct));
             return;
           } catch (err) {
-            // graceful fallback to all products
-            console.warn('Category filtering fallback', err);
+            // Do NOT fallback to full catalog for a category page. Return empty result and log.
+            console.warn('Category filtering failed for', categoryParam, err);
+            setProducts([]);
+            return;
           }
         }
 

@@ -14,6 +14,7 @@ type SellerProduct = {
   sku?: string;
   categoryId?: string;
   category?: string;
+  specs?: any;
   status?: string;
   rejectionReason?: string;
   createdAt?: string;
@@ -97,7 +98,7 @@ export default function SellerProducts() {
     return products.filter((product) => {
       const matchesSearch =
         !search ||
-        [product.title, product.sku, product.category]
+        [product.title, product.sku, (product as any).specs?.categoryName || (product as any).specs?.parentCategoryName || product.category]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(search.toLowerCase()));
       const currentStatus = (product as any).productStatus || (product as any).approvalStatus || product.status || 'draft';
@@ -338,7 +339,7 @@ export default function SellerProducts() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-5 text-sm font-semibold text-slate-700">{product.category || product.categoryId || 'Marketplace'}</td>
+                      <td className="px-6 py-5 text-sm font-semibold text-slate-700">{(product as any).specs?.categoryName || (product as any).specs?.parentCategoryName || product.category || product.categoryId || 'Marketplace'}</td>
                       <td className="px-6 py-5">
                         <div className="space-y-1">
                           <p className="text-sm font-black text-slate-900">{formatAED(Number(product.price || 0))}</p>

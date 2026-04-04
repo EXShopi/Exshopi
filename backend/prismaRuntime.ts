@@ -180,6 +180,14 @@ function mapProduct(product: any): Product {
     orderedImages[0] ||
     '';
 
+  // Merge explicit DB slug fields into the specs object for compatibility
+  const specs = (product.specsJson as Record<string, any>) || {};
+  if (!specs.parentCategorySlug && product.parentCategorySlug) specs.parentCategorySlug = product.parentCategorySlug;
+  if (!specs.categorySlug && product.categorySlug) specs.categorySlug = product.categorySlug;
+  if (!specs.subcategorySlug && product.subcategorySlug) specs.subcategorySlug = product.subcategorySlug;
+  if (!specs.childCategorySlug && product.childCategorySlug) specs.childCategorySlug = product.childCategorySlug;
+  if (!specs.categoryPath && product.categoryPathJson) specs.categoryPath = product.categoryPathJson;
+
   return {
     id: product.id,
     sellerId: product.storeId,
@@ -197,7 +205,7 @@ function mapProduct(product: any): Product {
     reviews: Number(product.reviewsCount || 0),
     sku: product.sku || '',
     brand: product.brand || '',
-    specs: (product.specsJson as Record<string, any>) || {},
+    specs,
     status:
       product.status === 'pending_approval'
         ? 'pending'
@@ -794,59 +802,114 @@ export const prismaRuntime = {
   },
 
   async createProduct(input: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> & { slug?: string }) {
-    if (!enabled) return null;
-    const baseSlug = slugify(input.title);
-    let nextSlug = input.slug || baseSlug;
-    let suffix = 1;
-    while (await prisma.product.findUnique({ where: { slug: nextSlug } })) {
-      nextSlug = `${baseSlug}-${suffix++}`;
+  if (!enabled) return null;
+
+  const baseSlug = slugify(input.title);
+  let nextSlug = input.slug || baseSlug;
+  let suffix = 1;
+
+  while (await prisma.product.findUnique({ where: { slug: nextSlug } })) {
+    nextSlug = `${baseSlug}-${suffix++}`;
+  }
+
+  const storeId = input.storeId || input.sellerId;
+  const store = storeId
+    ? await prisma.store.findUnique({ where: { id: storeId } })
+    : null;
+
+  const createdByRole = input.createdByRole || 'seller';
+  const isAdminCreated = createdByRole === 'admin';
+
+  const finalApprovalStatus = isAdminCreated
+    ? 'approved'
+    : ((input.approvalStatus || 'pending') as any);
+
+  const requestedStatus = (input.productStatus || input.status || 'pending') as string;
+
+  const finalStatus = isAdminCreated
+    ? 'live'
+    : requestedStatus === 'pending'
+    ? 'pending_approval'
+    : requestedStatus;
+
+  const finalVisibilityStatus = isAdminCreated ? 'live' : (input.visibilityStatus || 'hidden');
+
+  const imageList = [input.image, ...(input.images || [])].filter(Boolean);
+    const categoryExtras: any = {};
+    if (input.specs) {
+      categoryExtras.parentCategorySlug = input.specs?.parentCategorySlug || input.specs?.categorySlug || undefined;
+      categoryExtras.categorySlug = input.specs?.categorySlug || undefined;
+      categoryExtras.subcategorySlug = input.specs?.subcategorySlug || undefined;
+      categoryExtras.childCategorySlug = input.specs?.childCategorySlug || undefined;
+      categoryExtras.categoryPathJson = input.specs?.categoryPath
+        ? (Array.isArray(input.specs.categoryPath) ? input.specs.categoryPath : String(input.specs.categoryPath).split('/').filter(Boolean))
+        : undefined;
     }
-    const product = await prisma.product.create({
-      data: {
-        storeId: input.storeId || input.sellerId,
-        sellerUserId: (await prisma.store.findUnique({ where: { id: input.storeId || input.sellerId } }))?.sellerUserId || '',
-        categoryId: input.categoryId,
-        title: input.title,
-        slug: nextSlug,
-        shortDescription: input.specs?.shortDescription || '',
-        description: input.description,
-        sku: input.sku,
-        brand: input.brand || '',
-        price: input.price,
-        originalPrice: input.originalPrice,
-        salePrice: input.salePrice,
-        currency: 'AED',
-        stock: input.stock,
-        rating: input.rating || 0,
-        reviewsCount: input.reviews || 0,
-        specsJson: input.specs as any,
-        badgesJson: input.badges as any,
-        views: input.views || 0,
-        wishlistCount: input.wishlistCount || 0,
-        ownership: input.ownership || 'seller',
-        createdByRole: input.createdByRole || 'seller',
-        approvalRequestedAt: input.approvalRequestedAt ? new Date(input.approvalRequestedAt) : undefined,
-        approvalStatus: (input.approvalStatus || 'pending') as any,
-        status: ((input.productStatus || input.status || 'draft') === 'pending' ? 'pending_approval' : (input.productStatus || input.status || 'draft')) as any,
-        visibilityStatus: (input.visibilityStatus || 'hidden') as any,
-        rejectionReason: input.rejectionReason || '',
-        approvalNotes: input.approvalNotes || '',
-        approvedAt: input.approvedAt ? new Date(input.approvedAt) : undefined,
-        rejectedAt: input.rejectedAt ? new Date(input.rejectedAt) : undefined,
-        images: {
-          create: [input.image, ...(input.images || [])]
-            .filter(Boolean)
-            .map((imageUrl, index) => ({
-              imageUrl,
-              isPrimary: index === 0,
-              sortOrder: index,
-            })),
-        },
-      },
-      include: { images: true },
-    });
-    return mapProduct(product);
+
+   const product = await prisma.product.create({
+  data: {
+    storeId: input.storeId || input.sellerId || "",
+    sellerUserId:
+      (
+        await prisma.store.findUnique({
+          where: { id: input.storeId || input.sellerId },
+        })
+      )?.sellerUserId || "",
+
+    categoryId: input.categoryId,
+    title: input.title,
+    slug: nextSlug,
+    shortDescription: input.specs?.shortDescription || "",
+    description: input.description,
+    sku: input.sku,
+    brand: input.brand || "",
+    price: input.price,
+    originalPrice: input.originalPrice,
+    salePrice: input.salePrice,
+    currency: "AED",
+    stock: input.stock,
+    rating: input.rating || 0,
+    reviewsCount: input.reviews || 0,
+    specsJson: input.specs as any,
+    ...categoryExtras,
+    badgesJson: input.badges as any,
+    views: input.views || 0,
+    wishlistCount: input.wishlistCount || 0,
+    ownership: input.ownership || "seller",
+    createdByRole: input.createdByRole || "seller",
+
+    approvalStatus: finalApprovalStatus as any,
+
+    status: finalStatus as any,
+
+    visibilityStatus: finalVisibilityStatus as any,
+
+    approvalRequestedAt: new Date(),
+    rejectionReason: "",
+    approvalNotes: "",
+
+    approvedAt:
+      input.createdByRole === "admin" ? new Date() : undefined,
+
+    rejectedAt: undefined,
+
+    images: {
+      create: [input.image, ...(input.images || [])]
+        .filter(Boolean)
+        .map((url, index) => ({
+          imageUrl: url,
+          isPrimary: index === 0,
+          sortOrder: index,
+        })),
+    },
   },
+  include: {
+    images: true,
+  },
+});
+
+  return mapProduct(product);
+},
 
   async getProduct(id: string) {
     if (!enabled) return null;
@@ -857,12 +920,73 @@ export const prismaRuntime = {
     return product ? mapProduct(product) : null;
   },
 
+  async getProductBySlug(slug: string) {
+    if (!enabled) return null;
+    const product = await prisma.product.findUnique({
+      where: { slug },
+      include: { images: true },
+    });
+    return product ? mapProduct(product) : null;
+  },
+
   async getAllProducts() {
+  if (!enabled) return [];
+
+  const products = await prisma.product.findMany({
+    where: {
+      approvalStatus: 'approved',
+      status: 'live',
+      visibilityStatus: 'live',
+    },
+    include: { images: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return products.map(mapProduct);
+},
+
+  async getProductsByCategorySlugs(parentSlug?: string | null, categorySlug?: string | null, subcategorySlug?: string | null) {
+    if (!enabled) return [];
+    const where: any = {
+      approvalStatus: 'approved',
+      status: 'live',
+      visibilityStatus: 'live',
+    };
+
+    // If only a single categorySlug is provided, treat it as a match across any level (parent/category/subcategory)
+    if (categorySlug && !parentSlug && !subcategorySlug) {
+      where.OR = [
+        { parentCategorySlug: categorySlug },
+        { categorySlug: categorySlug },
+        { subcategorySlug: categorySlug },
+      ];
+    } else if (parentSlug && !categorySlug && !subcategorySlug) {
+      // explicit parent-only match
+      where.parentCategorySlug = parentSlug;
+    } else {
+      const andClauses: any[] = [];
+      if (parentSlug) andClauses.push({ parentCategorySlug: parentSlug });
+      if (categorySlug) andClauses.push({ categorySlug });
+      if (subcategorySlug) andClauses.push({ subcategorySlug });
+      if (andClauses.length) where.AND = andClauses;
+    }
+
+    const products = await prisma.product.findMany({
+      where,
+      include: { images: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return products.map(mapProduct);
+  },
+
+  async getSellerProducts(sellerId: string) {
     if (!enabled) return [];
     const products = await prisma.product.findMany({
       where: {
-        approvalStatus: 'approved',
-        visibilityStatus: 'live',
+        OR: [
+          { storeId: sellerId },
+          { sellerUserId: sellerId },
+        ],
       },
       include: { images: true },
       orderBy: { createdAt: 'desc' },
@@ -879,20 +1003,20 @@ export const prismaRuntime = {
     return products.map(mapProduct);
   },
 
-  async getSellerProducts(storeId: string) {
-    if (!enabled) return [];
-    const products = await prisma.product.findMany({
-      where: { storeId },
-      include: { images: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    return products.map(mapProduct);
-  },
-
   async updateProduct(id: string, updates: Partial<Product>) {
     if (!enabled) return null;
     if (updates.image || updates.images) {
       await prisma.productImage.deleteMany({ where: { productId: id } });
+    }
+    const updateExtras: any = {};
+    if (updates.specs) {
+      updateExtras.parentCategorySlug = updates.specs?.parentCategorySlug || updates.specs?.categorySlug || undefined;
+      updateExtras.categorySlug = updates.specs?.categorySlug || undefined;
+      updateExtras.subcategorySlug = updates.specs?.subcategorySlug || undefined;
+      updateExtras.childCategorySlug = updates.specs?.childCategorySlug || undefined;
+      updateExtras.categoryPathJson = updates.specs?.categoryPath
+        ? (Array.isArray(updates.specs.categoryPath) ? updates.specs.categoryPath : String(updates.specs.categoryPath).split('/').filter(Boolean))
+        : undefined;
     }
     const product = await prisma.product.update({
       where: { id },
@@ -907,6 +1031,8 @@ export const prismaRuntime = {
         originalPrice: updates.originalPrice,
         salePrice: updates.salePrice,
         stock: updates.stock,
+          // keep explicit canonical slug columns in sync with specs
+          ...updateExtras,
         specsJson: updates.specs as any,
         badgesJson: updates.badges as any,
         views: updates.views,

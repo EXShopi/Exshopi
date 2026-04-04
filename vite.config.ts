@@ -20,8 +20,20 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       port: 5176,
       strictPort: false,
-      hmr: {
-        port: 5176,
+      hmr: false,
+      watch: {
+        ignored: [
+          "**/backend/db.json",
+          "**/backend/uploads/**",
+          "**/backend/*.log",
+          "**/dist/**",
+        ],
+      },
+      proxy: {
+        "/api": {
+          target: "http://localhost:3001",
+          changeOrigin: true,
+        },
       },
     },
     preview: {

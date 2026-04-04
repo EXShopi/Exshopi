@@ -43,7 +43,18 @@ export function AdminLayout() {
       runtimeRole === 'super_admin' ||
       runtimeRole === 'finance_manager' ||
       runtimeRole === 'support_agent';
-    if ((!user && !runtimeRole) || !canAccessAdmin) {
+
+    // Avoid immediately redirecting before auth is rehydrated or a persisted session is detected.
+    // If there's a persisted auth storage or adminId, allow rehydration to complete first.
+    const hasPersistedAuth = typeof window !== 'undefined' && (Boolean(localStorage.getItem('auth-storage')) || Boolean(localStorage.getItem('adminId')));
+
+    if ((!user && !runtimeRole) && !hasPersistedAuth) {
+      navigate('/admin/login', { replace: true });
+      return;
+    }
+
+    if (!canAccessAdmin && hasPersistedAuth) {
+      // If a persisted auth exists but role is not an admin role, ensure redirection to login
       navigate('/admin/login', { replace: true });
     }
   }, [user, runtimeRole, navigate]);
@@ -143,7 +154,7 @@ export function AdminLayout() {
                           : 'text-slate-400 hover:bg-white/5 hover:text-white'
                       }`}
                     >
-                      <item.icon size={19} />
+                      {item.icon ? <item.icon size={19} /> : null}
                       <span>{item.label}</span>
                       <ChevronRight
                         size={16}

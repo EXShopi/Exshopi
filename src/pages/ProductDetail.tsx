@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { LISTING_TEMPLATE_MAP } from "../lib/marketplaceTemplates";
 import {
   Award,
   Check,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Heart,
   MessageCircle,
   Minus,
@@ -19,10 +22,15 @@ import {
   Zap,
 } from "lucide-react";
 import { useCartStore } from "../store/cart";
+import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { useWishlistStore } from "../store/wishlist";
-import { analyticsAPI, productAPI } from "../services/api";
+import { useAuthStore } from "../store/auth";
+import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
 import { formatAED, formatAEDPlain } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
+
+
+const productDetailCache = new Map<string, any>();
 
 const productHighlights = [
   "Premium aluminum unibody design",
@@ -34,8 +42,10 @@ const productHighlights = [
 type ProductVariant = {
   id?: string;
   color?: string;
+  size?: string;
   storage?: string;
   ram?: string;
+  processor?: string;
   price?: number | string | null;
   originalPrice?: number | string | null;
   stock?: number | string | null;
@@ -62,13 +72,13 @@ function colorToHex(color: string) {
   return COLOR_HEX_MAP[color.trim().toLowerCase()] || "#94a3b8";
 }
 
-function getProductImages(image: string) {
-  return [
-    image,
-    "https://images.unsplash.com/photo-1517336714739-489689fd1ca8?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
-  ];
+function getProductImages(image?: string, gallery?: unknown) {
+  const galleryImages = Array.isArray(gallery)
+    ? gallery.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+
+  const images = [String(image || "").trim(), ...galleryImages].filter(Boolean);
+  return images.length > 0 ? images : ["/hero/hero-1.png"];
 }
 
 function mapToCardProduct(item: any) {
@@ -92,6 +102,55 @@ function mapToCardProduct(item: any) {
     freeDelivery: item.freeDelivery ?? true,
     badge: item.badges?.[0] || item.badge,
   };
+}
+
+function normalizeMarketplaceProduct(item: any) {
+  return {
+    ...item,
+    slug: item.slug || item.id,
+    seller: item.sellerName || item.seller || "ExShopi Official",
+    sellerStoreSlug: item.sellerStoreSlug,
+    badges: item.badges || [],
+    stock: typeof item.stock === "number" ? item.stock : 20,
+    rating: item.rating || 4.5,
+    reviews: item.reviews || 0,
+    category: item.category || item.brand || "Marketplace",
+  };
+}
+
+function formatReviewDate(dateString?: string) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-AE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function copyTextFallback(text: string) {
+  if (typeof document === "undefined") return false;
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+
+  document.body.removeChild(textarea);
+  return copied;
 }
 
 type DetailSlimCardProps = {
@@ -214,18 +273,32 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
 };
 
 export default function ProductDetail() {
-  const { slug } = useParams<{ slug: string }>();
+  const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
   const { addItem } = useCartStore();
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
+  const authRole = useAuthStore((state) => state.role);
+  const authUser = useAuthStore((state) => state.user);
+  const cacheKey = identifier ? String(identifier) : "";
+  const cachedProduct = cacheKey ? productDetailCache.get(cacheKey) : null;
 
-  const [product, setProduct] = useState<any>(null);
+  const [product, setProduct] = useState<any>(() => cachedProduct || null);
   const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedProduct);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSuccess, setReviewSuccess] = useState("");
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState("");
+  const [selectedSize, setSelectedSize] = useState("");
   const [selectedStorage, setSelectedStorage] = useState("");
   const [selectedRam, setSelectedRam] = useState("");
+  const [selectedProcessor, setSelectedProcessor] = useState("");
   const [mainImage, setMainImage] = useState(0);
   const [activeTab, setActiveTab] = useState<"overview" | "specifications" | "reviews" | "delivery" | "seller">("overview");
   const [wishlistActive, setWishlistActive] = useState(false);
@@ -234,42 +307,113 @@ export default function ProductDetail() {
   const [shareMessage, setShareMessage] = useState("");
 
   useEffect(() => {
+    if (!identifier) return;
+
+    let active = true;
+    const controller = new AbortController();
+
     const fetchProduct = async () => {
-      try {
-        setLoading(true);
-        const allProds = await productAPI.getAll();
-        const normalized = (allProds || []).map((item: any) => ({
-          ...item,
-          slug: item.slug || item.id,
-          seller: item.sellerName || item.seller || "ExShopi Official",
-          sellerStoreSlug: item.sellerStoreSlug,
-          badges: item.badges || [],
-          stock: typeof item.stock === "number" ? item.stock : 20,
-          rating: item.rating || 4.5,
-          reviews: item.reviews || 0,
-          category: item.category || item.brand || "Marketplace",
-        }));
-
-        setAllProducts(normalized);
-
-        const matched =
-          normalized.find((item: any) => String(item.id) === slug || item.slug === slug) || null;
-
-        setProduct(matched);
-      } catch (error) {
-        console.error("Error fetching product:", error);
-        setAllProducts([]);
+      if (cachedProduct) {
+        setProduct(cachedProduct);
+        setLoading(false);
+      } else {
         setProduct(null);
-      } finally {
+        setLoading(true);
+      }
+
+      try {
+        const directProduct = await productAPI.get(String(identifier), {
+          signal: controller.signal,
+        });
+
+        if (!active) return;
+
+        if (directProduct && !directProduct.error && (directProduct.id || directProduct.slug)) {
+          const normalizedProduct = normalizeMarketplaceProduct(directProduct);
+          productDetailCache.set(cacheKey, normalizedProduct);
+          setProduct(normalizedProduct);
+          setLoading(false);
+          return;
+        }
+
+        throw new Error("Product not found");
+      } catch (_error: any) {
+        if (!active || controller.signal.aborted) return;
+
+        console.error("Error fetching product:", _error);
+        setProduct(null);
         setLoading(false);
       }
     };
 
-    if (slug) fetchProduct();
-  }, [slug]);
+    fetchProduct();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [cachedProduct, identifier]);
+
+  useEffect(() => {
+    if (!product?.id) {
+      setAllProducts([]);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+
+    productAPI
+      .getAll({ signal: controller.signal })
+      .then((allProds) => {
+        if (!active) return;
+        setAllProducts((allProds || []).map((item: any) => normalizeMarketplaceProduct(item)));
+      })
+      .catch((error) => {
+        if (!active || controller.signal.aborted) return;
+        console.error("Error fetching related products:", error);
+        setAllProducts([]);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [product?.id]);
 
   useEffect(() => {
     setMainImage(0);
+  }, [product?.id]);
+
+  useEffect(() => {
+    if (!product?.id) {
+      setReviews([]);
+      setReviewsLoading(false);
+      return;
+    }
+
+    let active = true;
+    setReviewsLoading(true);
+
+    reviewAPI
+      .getProductReviews(String(product.id))
+      .then((items) => {
+        if (!active) return;
+        setReviews(Array.isArray(items) ? items : []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("Error fetching product reviews:", error);
+        setReviews([]);
+      })
+      .finally(() => {
+        if (!active) return;
+        setReviewsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [product?.id]);
 
   const productSpecs = product?.specs || {};
@@ -310,6 +454,18 @@ export default function ProductDetail() {
     [variants]
   );
 
+  const sizeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          variants
+            .map((variant) => String(variant.size || "").trim())
+            .filter(Boolean)
+        )
+      ),
+    [variants]
+  );
+
   const ramOptions = useMemo(
     () =>
       Array.from(
@@ -322,12 +478,40 @@ export default function ProductDetail() {
     [variants]
   );
 
+  const processorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          variants
+            .map((variant) => String(variant.processor || "").trim())
+            .filter(Boolean)
+        )
+      ),
+    [variants]
+  );
+
   useEffect(() => {
     const firstVariant = variants[0];
     setSelectedColor(String(firstVariant?.color || baseAttributes.color || ""));
+    setSelectedSize(String(firstVariant?.size || baseAttributes.size || baseAttributes.Size || ""));
     setSelectedStorage(String(firstVariant?.storage || baseAttributes.storage || baseAttributes.Storage || ""));
     setSelectedRam(String(firstVariant?.ram || baseAttributes.ram || baseAttributes.RAM || ""));
-  }, [variants, baseAttributes.color, baseAttributes.storage, baseAttributes.Storage, baseAttributes.ram, baseAttributes.RAM, product?.id]);
+    setSelectedProcessor(
+      String(firstVariant?.processor || baseAttributes.processor || baseAttributes.Processor || "")
+    );
+  }, [
+    variants,
+    baseAttributes.color,
+    baseAttributes.size,
+    baseAttributes.Size,
+    baseAttributes.storage,
+    baseAttributes.Storage,
+    baseAttributes.ram,
+    baseAttributes.RAM,
+    baseAttributes.processor,
+    baseAttributes.Processor,
+    product?.id,
+  ]);
 
   const activeVariant = useMemo(() => {
     if (!variants.length) return null;
@@ -336,19 +520,27 @@ export default function ProductDetail() {
       variants.find(
         (variant) =>
           (!selectedColor || String(variant.color || "").trim() === selectedColor) &&
+          (!selectedSize || String(variant.size || "").trim() === selectedSize) &&
           (!selectedStorage || String(variant.storage || "").trim() === selectedStorage) &&
-          (!selectedRam || String(variant.ram || "").trim() === selectedRam)
+          (!selectedRam || String(variant.ram || "").trim() === selectedRam) &&
+          (!selectedProcessor || String(variant.processor || "").trim() === selectedProcessor)
       ) ||
       variants.find(
         (variant) =>
           (!selectedColor || String(variant.color || "").trim() === selectedColor) &&
+          (!selectedSize || String(variant.size || "").trim() === selectedSize) &&
           (!selectedStorage || String(variant.storage || "").trim() === selectedStorage)
+      ) ||
+      variants.find(
+        (variant) =>
+          (!selectedColor || String(variant.color || "").trim() === selectedColor) &&
+          (!selectedSize || String(variant.size || "").trim() === selectedSize)
       ) ||
       variants.find((variant) => !selectedColor || String(variant.color || "").trim() === selectedColor) ||
       variants[0];
 
     return exactMatch || null;
-  }, [variants, selectedColor, selectedStorage, selectedRam]);
+  }, [variants, selectedColor, selectedSize, selectedStorage, selectedRam, selectedProcessor]);
 
   const displayPrice = Number(activeVariant?.price ?? product?.price ?? 0);
   const displayOriginalPrice = Number(
@@ -357,6 +549,20 @@ export default function ProductDetail() {
   const displayStock = Number(activeVariant?.stock ?? product?.stock ?? 0);
   const displaySku = String(activeVariant?.sku || product?.sku || "");
   const selectedColorLabel = selectedColor || colorOptions[0]?.label || "";
+  const selectedSizeLabel = selectedSize || sizeOptions[0] || "";
+  const selectedProcessorLabel = selectedProcessor || processorOptions[0] || "";
+  const selectedVariantLabel = [
+    selectedColorLabel,
+    selectedSizeLabel,
+    selectedStorage,
+    selectedRam,
+    selectedProcessorLabel,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  const baseTitle = String(product?.title || "");
+  const displayTitle =
+    selectedVariantLabel && baseTitle ? `${baseTitle} (${selectedVariantLabel})` : baseTitle;
 
   useEffect(() => {
     if (!product?.id) return;
@@ -410,37 +616,112 @@ export default function ProductDetail() {
     [allProducts, product?.id]
   );
 
-  const specs = useMemo(() => {
-    const base = baseAttributes || {};
-    return {
-      Brand: base.Brand || product?.category || "ExShopi",
-      Model: base.Model || product?.title || "Marketplace Product",
-      Condition: base.Condition || "New / Renewed",
-      Weight: base.Weight || "Approx. 1.2 kg",
-      Processor: base.Processor || "Latest generation chipset",
-      "Memory (RAM)": selectedRam || base.ram || base.RAM || "8GB to 16GB options",
-      Storage: selectedStorage || base.storage || base.Storage || "Marketplace configured",
-      Color: selectedColorLabel || base.color || base.Color || "As selected",
-      Display: base.Display || "Premium display panel",
-      Battery: base.Battery || "Up to 20 hours",
-      Warranty: base.Warranty || "1-Year Manufacturer Warranty",
-    };
-  }, [baseAttributes, product, selectedColorLabel, selectedRam, selectedStorage]);
+  const templateKey = String(
+  productSpecs?.templateId ||
+  productSpecs?.templateName ||
+  product?.category ||
+  ""
+)
+  .trim()
+  .toLowerCase();
 
-  const productImages = useMemo(() => getProductImages(product?.image || ""), [product?.image]);
+const template = LISTING_TEMPLATE_MAP[templateKey];
 
-  if (loading) {
+const specs = useMemo(() => {
+  if (!template || !Array.isArray(template.fields)) return {};
+
+  const base = baseAttributes || {};
+  const result: Record<string, any> = {};
+
+  template.fields.forEach((field) => {
+    let value =
+      base[field.key] ??
+      base[field.label] ??
+      product?.[field.key];
+
+    if (field.key === "color") value = selectedColorLabel || value;
+    if (field.key === "size") value = selectedSizeLabel || value;
+    if (field.key === "storage") value = selectedStorage || value;
+    if (field.key === "ram") value = selectedRam || value;
+    if (field.key === "processor") value = selectedProcessorLabel || value;
+
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      result[field.label] = value;
+    }
+  });
+
+  return result;
+}, [
+  template,
+  baseAttributes,
+  product,
+  selectedColorLabel,
+  selectedSizeLabel,
+  selectedStorage,
+  selectedRam,
+  selectedProcessorLabel,
+]);
+  const productImages = useMemo(
+    () => getProductImages(activeVariant?.image || product?.image, product?.images || product?.gallery || product?.media),
+    [product?.gallery, product?.image, product?.images, product?.media, activeVariant?.image]
+  );
+
+  const overviewParagraphs = useMemo(() => {
+    const fallbackDescription = `${product?.title || "This product"} is a premium marketplace pick selected for UAE shoppers who want strong performance, trusted seller support, and a polished buying experience.`;
+    const description = String(product?.description || fallbackDescription)
+      .replace(/\r/g, "\n")
+      .split(/\n+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    return description.length > 0 ? description : [fallbackDescription];
+  }, [product?.description, product?.title]);
+
+  const overviewVisibleParagraphs = overviewExpanded ? overviewParagraphs : overviewParagraphs.slice(0, 3);
+  const hasMoreOverview = overviewParagraphs.length > 3;
+
+  const overviewBullets = useMemo(() => {
+    const explicitFeatures = Array.isArray(productSpecs?.keyFeatures)
+      ? productSpecs.keyFeatures.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+      : [];
+
+    const derivedFeatures = Object.entries(baseAttributes || {})
+      .slice(0, 6)
+      .map(([label, value]) => `${label}: ${String(value)}`);
+
+    const merged = [...explicitFeatures, ...derivedFeatures, ...productHighlights]
+      .map((item) => item.replace(/^[•\-\s]+/, "").trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(merged)).slice(0, 6);
+  }, [baseAttributes, productSpecs?.keyFeatures]);
+
+  const reviewAverage = useMemo(() => {
+    if (!reviews.length) return Number(product?.rating || 0);
+    return reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / reviews.length;
+  }, [product?.rating, reviews]);
+
+  const reviewBreakdown = useMemo(
+    () =>
+      [5, 4, 3, 2, 1].map((stars) => {
+        const count = reviews.filter((item) => Number(item.rating) === stars).length;
+        const percentage = reviews.length ? Math.round((count / reviews.length) * 100) : 0;
+        return { stars, count, percentage };
+      }),
+    [reviews]
+  );
+
+  const latestReviewCards = useMemo(() => reviews.slice(0, 3), [reviews]);
+
+  if (loading && !product) {
     return (
       <div className="flex items-center justify-center px-4 py-24">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-          <p className="text-slate-600">Loading product...</p>
-        </div>
+        <OrbitLoader label="Loading product..." size={28} variant="normal" />
       </div>
     );
   }
 
-  if (!product) {
+  if (!loading && !product) {
     return (
       <div className="flex items-center justify-center px-4 py-24">
         <div className="text-center">
@@ -458,17 +739,20 @@ export default function ProductDetail() {
   }
 
   const handleAddToCart = () => {
-    const variantLabel = [selectedColorLabel, selectedStorage, selectedRam].filter(Boolean).join(" / ");
+    const compositeId = activeVariant && activeVariant.id ? `${product.id}::${activeVariant.id}` : String(product.id);
     addItem({
-      id: String(product.id),
-      title: variantLabel ? `${product.title} (${variantLabel})` : product.title,
+      id: compositeId,
+      title: displayTitle,
       price: displayPrice,
-      image: product.image,
+      image: activeVariant?.image || product.image,
       slug: product.slug || String(product.id),
       originalPrice: displayOriginalPrice > displayPrice ? displayOriginalPrice : undefined,
       stockQuantity: displayStock,
       sku: displaySku || product.sku,
       variants: activeVariant ? [activeVariant] : [],
+      // store both human-readable seller and canonical sellerId when available
+      seller: product.seller || product.sellerName || product.storeId || 'ExShopi Official',
+      sellerId: product.sellerId || product.storeId || undefined,
     });
     window.dispatchEvent(new CustomEvent("openCartDrawer"));
   };
@@ -525,18 +809,86 @@ export default function ProductDetail() {
           url: shareUrl,
         });
       } else {
-        await navigator.clipboard.writeText(shareUrl);
-        setShareMessage("Product link copied");
-        setTimeout(() => setShareMessage(""), 2500);
+        let copied = false;
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          copied = true;
+        } catch {
+          copied = copyTextFallback(shareUrl);
+        }
+
+        if (copied) {
+          setShareMessage("Product link copied");
+          setTimeout(() => setShareMessage(""), 2500);
+        } else {
+          setShareMessage("Copy link manually");
+          window.prompt("Copy this product link:", shareUrl);
+        }
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(shareUrl);
-        setShareMessage("Product link copied");
-        setTimeout(() => setShareMessage(""), 2500);
+        let copied = false;
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          copied = true;
+        } catch {
+          copied = copyTextFallback(shareUrl);
+        }
+
+        if (copied) {
+          setShareMessage("Product link copied");
+          setTimeout(() => setShareMessage(""), 2500);
+        } else {
+          setShareMessage("Copy link manually");
+          window.prompt("Copy this product link:", shareUrl);
+        }
       } catch {
         setShareMessage("Unable to share right now");
       }
+    }
+  };
+
+  const handleSubmitReview = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!product?.id) return;
+
+    if (authRole !== "customer") {
+      setReviewError("Please sign in with a customer account to leave a review.");
+      setReviewSuccess("");
+      return;
+    }
+
+    const comment = reviewComment.trim();
+    if (!comment) {
+      setReviewError("Please write a short review before submitting.");
+      setReviewSuccess("");
+      return;
+    }
+
+    setReviewSubmitting(true);
+    setReviewError("");
+    setReviewSuccess("");
+
+    try {
+      const createdReview = await reviewAPI.create({
+        productId: String(product.id),
+        vendorId: String(product.storeId || product.sellerId || ""),
+        rating: reviewRating,
+        comment,
+      });
+
+      setReviews((current) =>
+        Array.isArray(current) ? [createdReview, ...current] : [createdReview]
+      );
+      setReviewComment("");
+      setReviewRating(5);
+      setReviewSuccess("Your review has been published.");
+      setActiveTab("reviews");
+    } catch (error: any) {
+      setReviewError(error?.message || "We couldn't save your review right now.");
+    } finally {
+      setReviewSubmitting(false);
     }
   };
 
@@ -606,7 +958,21 @@ export default function ProductDetail() {
                   </Link>
                 </div>
 
-                <h1 className="text-3xl font-black tracking-tight text-slate-950">{product.title}</h1>
+                <div className="max-w-[26ch]">
+                  <h1 className="text-[1.14rem] font-semibold leading-[1.22] tracking-[-0.014em] text-slate-950 md:text-[1.45rem] lg:text-[1.62rem]">
+                    {product.title}
+                  </h1>
+                  {selectedVariantLabel ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                        Selected
+                      </span>
+                      <span className="text-sm font-medium text-slate-600">
+                        {selectedVariantLabel}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-1">
@@ -617,10 +983,15 @@ export default function ProductDetail() {
                       />
                     ))}
                   </div>
-                  <span className="font-bold text-slate-900">{product.rating || 4.5}</span>
+                  <span className="font-bold text-slate-900">
+                    {reviewAverage > 0 ? reviewAverage.toFixed(1) : (product.rating || 4.5)}
+                  </span>
                   <span className="text-slate-300">|</span>
-                  <button className="text-sm font-medium text-blue-600 hover:underline">
-                    {(product.reviews || 0).toLocaleString()} reviews
+                  <button
+                    onClick={() => setActiveTab("reviews")}
+                    className="text-sm font-medium text-blue-600 hover:underline"
+                  >
+                    {(reviews.length || product.reviews || 0).toLocaleString()} reviews
                   </button>
                 </div>
 
@@ -707,6 +1078,27 @@ export default function ProductDetail() {
                   </div>
                   )}
 
+                  {sizeOptions.length > 0 && (
+                  <div>
+                    <p className="mb-3 font-semibold text-slate-900">Size</p>
+                    <div className="flex flex-wrap gap-2">
+                      {sizeOptions.map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => setSelectedSize(size)}
+                          className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                            selectedSize === size
+                              ? "border-blue-600 bg-blue-50 text-blue-600"
+                              : "border-slate-200 text-slate-900 hover:border-slate-300"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  )}
+
                   {ramOptions.length > 0 && (
                     <div>
                       <p className="mb-3 font-semibold text-slate-900">RAM</p>
@@ -722,6 +1114,27 @@ export default function ProductDetail() {
                             }`}
                           >
                             {size}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {processorOptions.length > 0 && (
+                    <div>
+                      <p className="mb-3 font-semibold text-slate-900">Processor</p>
+                      <div className="flex flex-wrap gap-2">
+                        {processorOptions.map((processor) => (
+                          <button
+                            key={processor}
+                            onClick={() => setSelectedProcessor(processor)}
+                            className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                              selectedProcessor === processor
+                                ? "border-blue-600 bg-blue-50 text-blue-600"
+                                : "border-slate-200 text-slate-900 hover:border-slate-300"
+                            }`}
+                          >
+                            {processor}
                           </button>
                         ))}
                       </div>
@@ -883,16 +1296,37 @@ export default function ProductDetail() {
           <div className="p-6 md:p-8">
             {activeTab === "overview" && (
               <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-6">
+                <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fbff)] p-6">
                   <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Product Overview</p>
-                  <p className="text-base leading-8 text-slate-700">
-                    {product.description || `${product.title} is a premium marketplace pick selected for UAE shoppers who want strong performance, trusted seller support, and a polished buying experience.`}
-                  </p>
+                  <div className="space-y-4">
+                    {overviewVisibleParagraphs.map((paragraph, index) => (
+                      <p key={`${index}-${paragraph.slice(0, 12)}`} className="text-[15px] leading-8 text-slate-700">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                  {hasMoreOverview && (
+                    <button
+                      type="button"
+                      onClick={() => setOverviewExpanded((current) => !current)}
+                      className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                    >
+                      {overviewExpanded ? (
+                        <>
+                          See less <ChevronUp className="h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          See more <ChevronDown className="h-4 w-4" />
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
                 <div className="rounded-[28px] border border-blue-100 bg-[linear-gradient(180deg,rgba(239,246,255,0.95),rgba(247,250,255,1))] p-6">
                   <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Top Highlights</p>
                   <div className="space-y-3">
-                    {productHighlights.map((highlight, idx) => (
+                    {overviewBullets.map((highlight, idx) => (
                       <div key={idx} className="flex items-start gap-3">
                         <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white">
                           <Check className="h-3.5 w-3.5" />
@@ -931,44 +1365,144 @@ export default function ProductDetail() {
               <div className="space-y-8">
                 <div className="grid gap-8 rounded-[30px] border border-blue-100 bg-[linear-gradient(180deg,#f8fbff,#f4f8ff)] p-6 md:grid-cols-[0.35fr_1fr]">
                   <div className="text-center">
-                    <p className="text-6xl font-black text-slate-950">{product.rating || 4.5}</p>
+                    <p className="text-6xl font-black text-slate-950">
+                      {reviewAverage > 0 ? reviewAverage.toFixed(1) : (product.rating || 4.5)}
+                    </p>
                     <div className="mt-3 flex justify-center gap-1">
                       {[...Array(5)].map((_, i) => (
-                        <Star key={i} className={`h-6 w-6 ${i < Math.floor(product.rating || 0) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+                        <Star key={i} className={`h-6 w-6 ${i < Math.floor(reviewAverage || product.rating || 0) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                       ))}
                     </div>
-                    <p className="mt-3 text-sm text-slate-500">Based on {(product.reviews || 0).toLocaleString()} verified reviews</p>
+                    <p className="mt-3 text-sm text-slate-500">
+                      Based on {(reviews.length || product.reviews || 0).toLocaleString()} verified reviews
+                    </p>
                   </div>
                   <div className="space-y-4">
-                    {[
-                      { stars: 5, percentage: 65, color: "bg-yellow-400" },
-                      { stars: 4, percentage: 20, color: "bg-blue-400" },
-                      { stars: 3, percentage: 10, color: "bg-slate-300" },
-                      { stars: 2, percentage: 3, color: "bg-orange-300" },
-                      { stars: 1, percentage: 2, color: "bg-red-400" },
-                    ].map((item) => (
+                    {reviewBreakdown.map((item) => (
                       <div key={item.stars} className="flex items-center gap-3">
                         <span className="w-10 text-sm font-semibold text-slate-700">{item.stars}★</span>
                         <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-200">
-                          <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.percentage}%` }} />
+                          <div className="h-full rounded-full bg-blue-500" style={{ width: `${item.percentage}%` }} />
                         </div>
                         <span className="w-12 text-right text-sm font-semibold text-slate-500">{item.percentage}%</span>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    ["Premium Build Quality", "Shoppers consistently praise the finish and durability."],
-                    ["Fast Delivery", "Most orders arrive quickly across UAE locations."],
-                    ["Reliable Performance", "Buyers highlight smooth everyday usage and strong speed."],
-                    ["Strong Seller Support", "Customers appreciate responsive follow-up and help."],
-                  ].map(([title, text]) => (
-                    <div key={title} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                      <p className="font-bold text-slate-900">{title}</p>
-                      <p className="mt-2 text-sm leading-7 text-slate-600">{text}</p>
+
+                <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                  <form
+                    onSubmit={handleSubmitReview}
+                    className="rounded-[28px] border border-slate-200 bg-slate-50 p-6"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Write a review</p>
+                        <h4 className="mt-2 text-2xl font-black text-slate-950">Share your purchase experience</h4>
+                      </div>
+                      {authRole === "customer" && authUser?.name && (
+                        <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                          {authUser.name}
+                        </div>
+                      )}
                     </div>
-                  ))}
+
+                    <div className="mt-5 flex flex-wrap items-center gap-2">
+                      {[1, 2, 3, 4, 5].map((stars) => (
+                        <button
+                          key={stars}
+                          type="button"
+                          onClick={() => setReviewRating(stars)}
+                          className="transition hover:scale-105"
+                        >
+                          <Star
+                            className={`h-7 w-7 ${
+                              stars <= reviewRating
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-slate-300"
+                            }`}
+                          />
+                        </button>
+                      ))}
+                      <span className="ml-2 text-sm font-semibold text-slate-600">
+                        {reviewRating} out of 5
+                      </span>
+                    </div>
+
+                    <textarea
+                      value={reviewComment}
+                      onChange={(event) => setReviewComment(event.target.value)}
+                      placeholder="Write what you liked, how the product performed, delivery quality, and overall experience."
+                      className="mt-5 min-h-[180px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-sm leading-7 text-slate-700 outline-none transition focus:border-blue-500"
+                    />
+
+                    <p className="mt-3 text-xs leading-6 text-slate-500">
+                      Reviews are only accepted for delivered purchases, so every published review shown here is tied to a real order.
+                    </p>
+
+                    {reviewError && <p className="mt-3 text-sm font-semibold text-red-600">{reviewError}</p>}
+                    {reviewSuccess && <p className="mt-3 text-sm font-semibold text-emerald-600">{reviewSuccess}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={reviewSubmitting}
+                      className="mt-5 inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {reviewSubmitting ? "Publishing..." : "Publish review"}
+                    </button>
+                  </form>
+
+                  <div className="space-y-4">
+                    {reviewsLoading ? (
+                      <div className="rounded-[28px] border border-slate-200 bg-white p-6 text-sm font-medium text-slate-500">
+                        Loading reviews...
+                      </div>
+                    ) : reviews.length === 0 ? (
+                      <div className="rounded-[28px] border border-slate-200 bg-white p-6">
+                        <p className="text-lg font-bold text-slate-900">No customer reviews yet</p>
+                        <p className="mt-2 text-sm leading-7 text-slate-600">
+                          Be the first verified buyer to rate this product once your order is delivered.
+                        </p>
+                      </div>
+                    ) : (
+                      reviews.map((review) => (
+                        <div key={review.id} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-base font-bold text-slate-900">
+                                  {review.customerName || "Verified Customer"}
+                                </p>
+                                {review.verifiedPurchase && (
+                                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                                    Verified purchase
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-2 flex items-center gap-1">
+                                {[...Array(5)].map((_, index) => (
+                                  <Star
+                                    key={index}
+                                    className={`h-4 w-4 ${
+                                      index < Number(review.rating || 0)
+                                        ? "fill-yellow-400 text-yellow-400"
+                                        : "text-slate-300"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            <span className="text-sm font-medium text-slate-500">
+                              {formatReviewDate(review.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-4 text-sm leading-7 text-slate-700">
+                            {review.comment || "Customer shared a verified purchase rating."}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1106,6 +1640,60 @@ export default function ProductDetail() {
             {viewedProducts.map((item) => (
               <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} />
             ))}
+          </div>
+        </div>
+
+        <div className="pb-12">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="text-3xl font-black text-slate-900">Customer Reviews</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Real buyer feedback with verified purchase protection
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("reviews")}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+            >
+              Open full reviews
+            </button>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {latestReviewCards.length > 0 ? (
+              latestReviewCards.map((review) => (
+                <div key={`footer-${review.id}`} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-slate-900">{review.customerName || "Verified Customer"}</p>
+                      <div className="mt-2 flex items-center gap-1">
+                        {[...Array(5)].map((_, index) => (
+                          <Star
+                            key={index}
+                            className={`h-4 w-4 ${
+                              index < Number(review.rating || 0)
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-slate-300"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      {formatReviewDate(review.createdAt)}
+                    </span>
+                  </div>
+                  <p className="mt-4 text-sm leading-7 text-slate-600">{review.comment}</p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[28px] border border-slate-200 bg-white p-6 lg:col-span-3">
+                <p className="text-lg font-bold text-slate-900">No reviews published yet</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">
+                  Delivered customers will be able to rate this product here, and those original reviews will appear on this page.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

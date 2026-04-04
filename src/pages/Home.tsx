@@ -9,6 +9,7 @@ import AccessoriesSection from "../components/AccessoriesSection";
 import MostPopularSection from "../components/MostPopularSection";
 import BlackFridaySection from "../components/BlackFridaySection";
 import PromoSection from "../components/PromoSection";
+import AllProductsSection from "../components/AllProductsSection";
 import { useSettingsStore } from "../store/settings";
 
 export default function Home() {
@@ -55,6 +56,7 @@ export default function Home() {
       <MegaCategoryCarousel />
       <AccessoriesSection />
       {orderedCmsSections.map((section) => renderHomepageSection(section.id))}
+      <AllProductsSection />
     </div>
   );
 }

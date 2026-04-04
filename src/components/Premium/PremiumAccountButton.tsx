@@ -31,19 +31,19 @@ export default function PremiumAccountButton({
         {/* Account Button */}
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="group flex items-center gap-3 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,255,0.95))] px-3 py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] transition-all duration-300 hover:border-blue-200 hover:shadow-[0_16px_32px_rgba(15,23,42,0.10)]"
+          className="group flex items-center gap-1.5 rounded-[18px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,255,0.95))] px-2 py-2 shadow-[0_10px_22px_rgba(15,23,42,0.06)] transition-all duration-300 hover:border-blue-200 hover:shadow-[0_16px_32px_rgba(15,23,42,0.10)] sm:gap-3 sm:rounded-[24px] sm:px-3 sm:py-2.5"
         >
           {/* Avatar */}
-          <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 via-blue-500 to-blue-600 text-white shadow-md transition-shadow group-hover:shadow-lg">
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 via-blue-500 to-blue-600 text-white shadow-md transition-shadow group-hover:shadow-lg sm:h-11 sm:w-11">
             {effectiveLoggedIn && effectiveUserName ? (
-              <span className="font-bold text-sm">
+              <span className="font-bold text-xs sm:text-sm">
                 {effectiveUserName?.split(" ")[0]?.[0] || "U"}
               </span>
             ) : (
-              <User className="h-5 w-5" />
+              <User className="h-4 w-4 sm:h-5 sm:w-5" />
             )}
             {effectiveLoggedIn && (
-              <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border border-white" />
+              <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-white bg-green-400 sm:h-3 sm:w-3" />
             )}
           </div>
 
@@ -59,7 +59,7 @@ export default function PremiumAccountButton({
 
           {/* Chevron */}
           <ChevronDown
-            className={`h-4 w-4 text-slate-600 transition-transform duration-300 ${
+            className={`hidden h-4 w-4 text-slate-600 transition-transform duration-300 sm:block ${
               dropdownOpen ? "rotate-180" : ""
             }`}
           />

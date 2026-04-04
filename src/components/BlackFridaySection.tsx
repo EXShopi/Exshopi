@@ -13,7 +13,8 @@ import { useCartStore } from "../store/cart";
 import { useSettingsStore } from "../store/settings";
 import { formatAEDPlain } from "../lib/currency";
 import { analyticsAPI, productAPI } from "../services/api";
-import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
+import { getCampaignProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
+import { OrbitLoader } from "./ui/OrbitLoader";
 
 type DealItem = {
   id: string;
@@ -66,7 +67,7 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
       title: item.title,
       price: item.price,
       image: item.image,
-      slug: item.slug,
+      slug: item.slug || item.id,
     });
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
@@ -78,7 +79,7 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
 
     toggleWishlist({
       id: item.id,
-      slug: item.slug,
+      slug: item.slug || item.id,
       name: item.title,
       category: "Marketplace Deals",
       price: item.price,
@@ -104,8 +105,8 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
 
   return (
     <Link
-      to={`/product/${item.slug}`}
-      className="group block min-w-[190px] max-w-[190px] overflow-hidden rounded-[18px] border border-[#d4c9f2] bg-white shadow-[0_8px_20px_rgba(36,20,84,0.08)] transition hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(36,20,84,0.12)] no-underline"
+      to={`/product/${item.slug || item.id}`}
+      className="group block w-full max-w-full overflow-hidden rounded-[18px] border border-[#d4c9f2] bg-white shadow-[0_8px_20px_rgba(36,20,84,0.08)] transition hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(36,20,84,0.12)] no-underline md:max-w-[190px] md:min-w-[190px]"
     >
       <div className="p-2.5">
         <div className="relative rounded-[14px] bg-[#f8f9fc] p-2.5">
@@ -116,16 +117,16 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
           <button
             type="button"
             onClick={handleToggleWishlist}
-            className={`absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border transition ${
+            className={`absolute right-2 top-2 z-20 flex h-7.5 w-7.5 items-center justify-center rounded-full border transition md:h-8 md:w-8 ${
               saved
                 ? "border-rose-200 bg-white text-rose-500 shadow-md"
                 : "border-slate-200 bg-white text-slate-700 shadow-md hover:bg-slate-50"
             }`}
           >
-            <Heart className={`h-3.5 w-3.5 ${saved ? "fill-current text-rose-500" : ""}`} />
+            <Heart className={`h-3 w-3 md:h-3.5 md:w-3.5 ${saved ? "fill-current text-rose-500" : ""}`} />
           </button>
 
-          <div className="flex h-[150px] items-center justify-center overflow-hidden rounded-[12px] bg-white">
+          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-[12px] bg-white md:h-[150px] md:aspect-auto">
             <img
               src={item.image}
               alt={item.title}
@@ -135,37 +136,37 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
         </div>
       </div>
 
-      <div className="flex min-h-[214px] flex-col px-3 pb-3">
-        <div className="text-[14px] font-black leading-none text-slate-900">
+      <div className="flex min-h-[154px] flex-col px-2.5 pb-2.5 md:min-h-[214px]">
+        <div className="text-[12px] font-black leading-none text-slate-900 md:text-[14px]">
           {formatAEDPlain(item.price)}
         </div>
 
         {item.oldPrice ? (
-          <div className="mt-1 text-[11px] text-slate-400 line-through">
+          <div className="mt-1 text-[10px] text-slate-400 line-through">
             {formatAEDPlain(item.oldPrice)}
           </div>
         ) : null}
 
-        <h3 className="mt-2 line-clamp-3 min-h-[58px] text-[12px] font-semibold leading-5 text-slate-800">
+        <h3 className="mt-1.5 line-clamp-2 min-h-[34px] text-[10.5px] font-semibold leading-4 text-slate-800 md:line-clamp-3 md:min-h-[58px]">
           {item.title}
         </h3>
 
-        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500">
+        <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-500">
           <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
           <span>{item.rating}</span>
           <span>(Reviews: {item.reviews})</span>
         </div>
 
         <div
-          className={`mt-1.5 text-[11px] font-medium ${
+          className={`mt-1 text-[10px] font-medium ${
             item.stockText.toLowerCase().includes("out") ? "text-slate-500" : "text-emerald-600"
           }`}
         >
           {item.stockText}
         </div>
 
-        <div className="mt-auto pt-3">
-          <div className="mb-3 rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-2 text-[10px] text-slate-500">
+        <div className="mt-auto pt-2 md:pt-3">
+          <div className="mb-2.5 rounded-2xl border border-slate-100 bg-slate-50 px-2 py-1.5 text-[9px] text-slate-500">
             <div className="truncate font-semibold text-slate-800">{item.vendor}</div>
             <div>{item.location}</div>
           </div>
@@ -173,18 +174,18 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
           <button
             type="button"
             onClick={handleAddToCart}
-            className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl px-4 text-[12px] font-semibold transition ${
+            className={`inline-flex h-8 w-full items-center justify-center gap-1 rounded-xl px-2 text-[10px] font-semibold transition md:h-10 md:gap-2 md:rounded-2xl md:px-4 md:text-[12px] ${
               isAdded ? "bg-green-600 text-white hover:bg-green-700" : "bg-slate-900 text-white hover:bg-slate-800"
             }`}
           >
             {isAdded ? (
               <>
-                <Check className="h-4 w-4" />
+                <Check className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 Added!
               </>
             ) : (
               <>
-                <ShoppingCart className="h-4 w-4" />
+                <ShoppingCart className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 Add to Cart
               </>
             )}
@@ -200,16 +201,39 @@ export default function BlackFridaySection() {
   const { settings } = useSettingsStore();
   const [deals, setDeals] = useState<DealItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
   const campaignSection = settings.homepage.sections.find((section) => section.id === "flash-deals");
-  const countdown = useMemo(
-    () => [
-      { value: "16", label: "days" },
-      { value: "20", label: "hours" },
-      { value: "1", label: "minute" },
-      { value: "12", label: "seconds" },
-    ],
-    []
-  );
+  const campaignSettings = settings.homepage.campaignSection;
+  const countdown = useMemo(() => {
+    const target = new Date(campaignSettings.endAt || "").getTime();
+    if (!target || Number.isNaN(target)) {
+      return [
+        { value: "00", label: "days" },
+        { value: "00", label: "hours" },
+        { value: "00", label: "minutes" },
+        { value: "00", label: "seconds" },
+      ];
+    }
+
+    const diff = Math.max(0, target - now);
+    const totalSeconds = Math.floor(diff / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return [
+      { value: String(days).padStart(2, "0"), label: "days" },
+      { value: String(hours).padStart(2, "0"), label: "hours" },
+      { value: String(minutes).padStart(2, "0"), label: "minutes" },
+      { value: String(seconds).padStart(2, "0"), label: "seconds" },
+    ];
+  }, [campaignSettings.endAt, now]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -218,8 +242,7 @@ export default function BlackFridaySection() {
       .getAll()
       .then((items) => {
         if (!mounted) return;
-        const liveDeals = getLiveMarketplaceProducts(items)
-          .filter((product) => product.discount > 0 || /deal|offer|sale|flash/i.test(product.badge || ""))
+        const liveDeals = getCampaignProducts(items, campaignSettings.featuredProductIds)
           .sort((a, b) => {
             if (b.discount !== a.discount) return b.discount - a.discount;
             return b.reviews - a.reviews;
@@ -239,7 +262,7 @@ export default function BlackFridaySection() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [campaignSettings.featuredProductIds]);
 
   const scrollByCards = (direction: "left" | "right") => {
     const el = scrollRef.current;
@@ -253,10 +276,19 @@ export default function BlackFridaySection() {
   };
 
   return (
-    <section className="mx-auto mt-14 max-w-[1800px] px-4 md:px-6">
-      <div className="overflow-hidden rounded-[28px] bg-[#0033CC] p-4 shadow-[0_24px_64px_rgba(0,51,204,0.24)]">
+    <section className="mx-auto mt-10 max-w-[1800px] px-4 md:mt-14 md:px-6">
+      <div
+        className="overflow-hidden rounded-[28px] p-4 shadow-[0_24px_64px_rgba(29,78,216,0.24)]"
+        style={{ backgroundColor: campaignSettings.sectionBgColor || "#1d4ed8" }}
+      >
         <div className="grid gap-4 lg:grid-cols-[205px_minmax(0,1fr)] lg:items-start">
-          <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.03))] p-4 text-white">
+          <div
+            className="rounded-[18px] p-4 text-white"
+            style={{ background: `linear-gradient(180deg, ${campaignSettings.panelBgColor || "#4338ca"}, rgba(255,255,255,0.08))` }}
+          >
+            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-white/70">
+              {campaignSettings.badgeText || "Campaign"}
+            </div>
             <h2 className="text-[23px] font-black leading-[1.08] tracking-tight">
               {campaignSection?.title || "Campaign deals selected from live approved marketplace inventory."}
             </h2>
@@ -266,13 +298,16 @@ export default function BlackFridaySection() {
                 "This section now displays only approved live products that are active in marketplace campaigns or deal pricing."}
             </p>
 
-            <div className="mt-4 text-[13px] font-medium text-white/90">Promotion expires within:</div>
+            <div className="mt-4 text-[13px] font-medium text-white/90">
+              {campaignSettings.expiresLabel || "Promotion expires within:"}
+            </div>
 
             <div className="mt-3 grid grid-cols-4 overflow-hidden rounded-[14px] bg-white shadow-lg">
               {countdown.map((time, index) => (
                 <div
                   key={time.label}
-                  className={`px-2 py-3 text-center text-[#0033CC] ${index < 3 ? "border-r border-[#dbe5ff]" : ""}`}
+                  className={`px-2 py-3 text-center ${index < 3 ? "border-r border-[#dbe5ff]" : ""}`}
+                  style={{ color: campaignSettings.sectionBgColor || "#1d4ed8" }}
                 >
                   <div className="text-[16px] font-black leading-none">{time.value}</div>
                   <div className="mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#4f73dd]">
@@ -284,17 +319,17 @@ export default function BlackFridaySection() {
 
             <div className="mt-4 flex items-center gap-3">
               <Link
-                to="/deals"
+                to={campaignSettings.moreCtaLink || "/campaigns/current"}
                 className="inline-flex rounded-full bg-[#1f1f1f] px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-black"
               >
-                More
+                {campaignSettings.moreCtaText || "More"}
               </Link>
 
               <Link
-                to="/deals"
+                to={campaignSettings.allPromotionsLink || "/promotions"}
                 className="text-[13px] font-bold text-white underline underline-offset-4 transition hover:text-white/85"
               >
-                All promotions
+                {campaignSettings.allPromotionsText || "All promotions"}
               </Link>
             </div>
           </div>
@@ -319,19 +354,32 @@ export default function BlackFridaySection() {
               </button>
             </div>
             {loading ? (
-              <div className="rounded-[18px] bg-white/10 px-6 py-16 text-center text-sm font-semibold text-white/90">
-                Loading live campaign products...
+              <div
+                className="rounded-[18px] px-6 py-16 text-center text-sm font-semibold text-white/90"
+                style={{ backgroundColor: campaignSettings.productRailBgColor || "rgba(255,255,255,0.10)" }}
+              >
+                <OrbitLoader label="Loading live campaign products..." size={24} />
               </div>
             ) : deals.length > 0 ? (
-              <div ref={scrollRef} className="overflow-x-auto overflow-y-hidden px-0 pb-1 no-scrollbar">
-                <div className="flex w-fit gap-2.5">
-                  {deals.map((deal) => (
+              <>
+                <div className="grid grid-cols-2 gap-3 pb-2 md:hidden">
+                  {deals.slice(0, 4).map((deal) => (
                     <DealCard key={deal.id || deal.title} item={deal} />
                   ))}
                 </div>
-              </div>
+                <div ref={scrollRef} className="hidden overflow-x-auto overflow-y-hidden px-0 pb-1 md:block no-scrollbar">
+                  <div className="flex w-fit gap-2.5">
+                    {deals.map((deal) => (
+                      <DealCard key={deal.id || deal.title} item={deal} />
+                    ))}
+                  </div>
+                </div>
+              </>
             ) : (
-              <div className="rounded-[18px] bg-white/10 px-6 py-16 text-center text-sm font-semibold text-white/90">
+              <div
+                className="rounded-[18px] px-6 py-16 text-center text-sm font-semibold text-white/90"
+                style={{ backgroundColor: campaignSettings.productRailBgColor || "rgba(255,255,255,0.10)" }}
+              >
                 No active campaign products are live right now.
               </div>
             )}

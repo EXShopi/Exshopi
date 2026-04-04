@@ -14,6 +14,14 @@ import AuthService from '../../lib/authService';
 import { sellerApplicationAPI } from '../../services/api';
 import { UAE_EMIRATES } from '../../lib/marketplaceTemplates';
 import { uploadDocumentFile, uploadImageFile } from '../../lib/uploadClient';
+import {
+  isFirebasePhoneVerificationEnabled,
+  isValidUaePhone,
+  normalizeUaePhone,
+  resetFirebasePhoneVerification,
+  sendFirebasePhoneCode,
+  verifyFirebasePhoneCode,
+} from '../../lib/firebasePhoneVerification';
 
 type SellerType = 'individual' | 'company' | 'distributor';
 
@@ -77,6 +85,12 @@ export function SellerRegister() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dragState, setDragState] = useState<'logo' | 'banner' | 'documents' | null>(null);
+  const [phoneCode, setPhoneCode] = useState('');
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [phoneVerificationSession, setPhoneVerificationSession] = useState('');
+  const [phoneMessage, setPhoneMessage] = useState('');
+  const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
+  const [verifyingPhoneCode, setVerifyingPhoneCode] = useState(false);
   const navigate = useNavigate();
   const { setUser, setRole, setSellerApplication } = useAuthStore();
 
@@ -89,6 +103,13 @@ export function SellerRegister() {
     if (type === 'checkbox') {
       setFormData((prev) => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
       return;
+    }
+    if (name === 'phone') {
+      setPhoneVerified(false);
+      setPhoneVerificationSession('');
+      setPhoneCode('');
+      setPhoneMessage('');
+      resetFirebasePhoneVerification();
     }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -164,6 +185,8 @@ export function SellerRegister() {
     if (!formData.email.trim()) return 'Email is required.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return 'Invalid email address.';
     if (!formData.phone.trim()) return 'Phone number is required.';
+    if (!isValidUaePhone(formData.phone)) return 'Enter a valid UAE phone number.';
+    if (!phoneVerified) return 'Phone verification is required before continuing.';
     if (!formData.password) return 'Password is required.';
     if (formData.password.length < 6) return 'Password must be at least 6 characters.';
     if (formData.password !== formData.confirmPassword) return 'Passwords do not match.';
@@ -196,6 +219,72 @@ export function SellerRegister() {
   const handleBack = () => {
     setError('');
     setStep((current) => current - 1);
+  };
+
+  const mapPhoneError = (errorValue: unknown) => {
+    const raw = String((errorValue as any)?.message || errorValue || '').trim().toLowerCase();
+    if (!raw) return 'Phone verification failed. Please try again.';
+    if (raw.includes('firebase phone verification is not configured')) {
+      return 'Firebase phone verification is not configured yet for this environment.';
+    }
+    if (raw.includes('auth/invalid-phone-number')) {
+      return 'Enter a valid UAE mobile number before requesting verification.';
+    }
+    if (raw.includes('auth/too-many-requests')) {
+      return 'Too many verification attempts. Please wait and try again.';
+    }
+    if (raw.includes('auth/invalid-verification-code')) {
+      return 'The verification code is incorrect. Please try again.';
+    }
+    if (raw.includes('auth/code-expired')) {
+      return 'The verification code expired. Request a new code and try again.';
+    }
+    return 'Phone verification failed. Please try again.';
+  };
+
+  const handleSendPhoneCode = async () => {
+    try {
+      setError('');
+      if (!isValidUaePhone(formData.phone)) {
+        setError('Enter a valid UAE mobile number before requesting verification.');
+        return;
+      }
+      if (!isFirebasePhoneVerificationEnabled()) {
+        setError('Firebase phone verification is not configured yet for this environment.');
+        return;
+      }
+      setSendingPhoneCode(true);
+      const response = await sendFirebasePhoneCode(normalizeUaePhone(formData.phone), 'seller-register-firebase-recaptcha');
+      setPhoneVerificationSession(`firebase:${response.phone}`);
+      setPhoneMessage(`Verification code sent to ${response.phone}. Enter it to confirm your seller phone.`);
+    } catch (err) {
+      setError(mapPhoneError(err));
+    } finally {
+      setSendingPhoneCode(false);
+    }
+  };
+
+  const handleVerifyPhoneCode = async () => {
+    try {
+      setError('');
+      if (!phoneVerificationSession || !phoneCode) {
+        setError('Request and enter the verification code first.');
+        return;
+      }
+      setVerifyingPhoneCode(true);
+      const result = await verifyFirebasePhoneCode(phoneCode);
+      if (normalizeUaePhone(result.phone) !== normalizeUaePhone(formData.phone)) {
+        throw new Error('Verified phone does not match the seller phone number.');
+      }
+      setPhoneVerificationSession(`firebase:${normalizeUaePhone(result.phone)}`);
+      setPhoneVerified(true);
+      setPhoneMessage('Phone verification complete. Your seller application is ready to submit.');
+    } catch (err) {
+      setPhoneVerified(false);
+      setError(mapPhoneError(err));
+    } finally {
+      setVerifyingPhoneCode(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -241,6 +330,10 @@ export function SellerRegister() {
           returnPolicy: formData.returnPolicy,
           warrantyPolicy: formData.warrantyPolicy,
           supportInfo: formData.supportInfo,
+          emailVerificationMode: 'resend',
+          phoneVerificationProvider: 'firebase',
+          phoneVerified: phoneVerified ? 'true' : 'false',
+          phoneVerifiedAt: phoneVerified ? new Date().toISOString() : '',
         },
         bankDetails: {
           bankName: formData.bankName,
@@ -459,6 +552,9 @@ export function SellerRegister() {
                     placeholder="+971 5X XXX XXXX"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
                   />
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    UAE phone verification is required before your seller application can be submitted.
+                  </p>
                 </div>
                 <div>
                   <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-slate-500">
@@ -514,6 +610,51 @@ export function SellerRegister() {
                     placeholder="Dubai"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
                   />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-end">
+                      <div className="flex-1">
+                        <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+                          Phone Verification Code
+                        </label>
+                        <input
+                          type="text"
+                          value={phoneCode}
+                          onChange={(event) => setPhoneCode(event.target.value)}
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="Enter 6-digit code"
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleVerifyPhoneCode}
+                        disabled={verifyingPhoneCode || !phoneVerificationSession}
+                        className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        {verifyingPhoneCode ? 'Verifying...' : 'Verify Code'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSendPhoneCode}
+                        disabled={sendingPhoneCode}
+                        className="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-300"
+                      >
+                        {sendingPhoneCode ? 'Sending...' : 'Send Code'}
+                      </button>
+                    </div>
+                    {phoneMessage && (
+                      <p className={`mt-3 text-sm font-semibold ${phoneVerified ? 'text-emerald-700' : 'text-slate-600'}`}>
+                        {phoneMessage}
+                      </p>
+                    )}
+                    <p className={`mt-2 text-xs font-black uppercase tracking-[0.22em] ${phoneVerified ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {phoneVerified ? 'Phone verified' : 'Verification required'}
+                    </p>
+                    <div id="seller-register-firebase-recaptcha" />
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-slate-500">

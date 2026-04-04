@@ -6,6 +6,10 @@ interface AuthResponse {
     id: string;
     email: string;
     displayName: string;
+    name?: string;
+    fullName?: string;
+    phone?: string | null;
+    country?: string | null;
     role?: string;
     status?: string;
     sellerApplicationStatus?: string | null;
@@ -28,6 +32,10 @@ export class AuthService {
           id: session.user.id,
           email: session.user.email || '',
           displayName: (session.user.name || session.user.fullName || session.user.displayName) || session.user.email || 'User',
+          name: session.user.name || session.user.fullName || session.user.displayName || '',
+          fullName: session.user.name || session.user.fullName || session.user.displayName || '',
+          phone: session.user.phone || '',
+          country: session.user.country || 'AE',
           role: session.role || session.user.role || 'customer',
           status: session.user.status || 'active',
           sellerApplicationStatus: session.user.sellerApplicationStatus || session.sellerApplication?.status || null,
@@ -40,6 +48,9 @@ export class AuthService {
     } catch (error: any) {
       console.error('[AUTH] Backend sign-in error:', error?.message || error);
       const msg = error?.message || 'Failed to sign in';
+      if (msg === 'Failed to fetch') {
+        throw new Error('The ExShopi backend could not be reached from this device. Restart the backend and try again.');
+      }
       if (msg.includes('Email not confirmed')) {
         throw new Error('Please confirm your email. Check your inbox for a confirmation link.');
       }
@@ -47,9 +58,9 @@ export class AuthService {
     }
   }
 
-  static async signUp(email: string, password: string, displayName: string): Promise<AuthResponse> {
+  static async signUp(email: string, password: string, displayName: string, phone = ''): Promise<AuthResponse> {
     try {
-      const session = await userAPI.register({ email, password, name: displayName });
+      const session = await userAPI.register({ email, password, name: displayName, phone });
       if (!session || !session.user?.id) throw new Error(session?.error || 'Failed to register user');
       useAuthStore.getState().setAccessToken(session.accessToken || null);
       return {
@@ -57,6 +68,10 @@ export class AuthService {
           id: session.user.id,
           email: session.user.email || '',
           displayName: displayName || session.user.name || session.user.fullName || 'User',
+          name: displayName || session.user.name || session.user.fullName || '',
+          fullName: displayName || session.user.name || session.user.fullName || '',
+          phone: session.user.phone || phone || '',
+          country: session.user.country || 'AE',
           role: session.role || session.user.role || 'customer',
           status: session.user.status || 'active',
           sellerApplicationStatus: session.user.sellerApplicationStatus || null,
@@ -68,6 +83,9 @@ export class AuthService {
       };
     } catch (error: any) {
       console.error('[AUTH] Backend sign-up error:', error?.message || error);
+      if (String(error?.message || '') === 'Failed to fetch') {
+        throw new Error('The ExShopi backend could not be reached from this device. Please restart the backend and try again.');
+      }
       if (String(error?.message || '').includes('already exists')) {
         throw new Error('This email is already registered.');
       }

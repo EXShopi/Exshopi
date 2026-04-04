@@ -26,6 +26,16 @@ import { compressImage } from '../../lib/imageUtils';
 import { formatAED, formatAEDPlain } from '../../lib/currency';
 import { useAuthStore } from '../../store/auth';
 import { fileToDataUrl, uploadImageDataUrl } from '../../lib/uploadClient';
+import CategorySelector from '../../components/CategorySelector';
+import {
+  MASTER_CATEGORIES,
+  mapLegacyCategory,
+  normalizeCategorySlug,
+  getSubcategories as getMasterSubcategories,
+  getChildCategories as getMasterChildCategories,
+  gatherSlugsUnder,
+} from '../../lib/masterCategories';
+import type { LiveCategory } from '../../types/category';
 
 type FormState = {
   title: string;
@@ -51,12 +61,15 @@ type FormState = {
 type VariantRow = {
   id: string;
   color: string;
+  size: string;
   storage: string;
   ram: string;
+  processor: string;
   price: string;
   originalPrice: string;
   stock: string;
   sku: string;
+  image?: string;
 };
 
 type StepId =
@@ -93,30 +106,46 @@ const initialFormState: FormState = {
 const createVariantRow = (): VariantRow => ({
   id: `variant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   color: '',
+  size: '',
   storage: '',
   ram: '',
+  processor: '',
   price: '',
   originalPrice: '',
   stock: '',
   sku: '',
+  image: '',
 });
+
+const toSkuToken = (value: string) =>
+  value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 const TEMPLATE_VARIANT_CONFIG: Record<
   string,
   {
     supportsColor: boolean;
+    supportsSize?: boolean;
     supportsStorage: boolean;
     supportsRam: boolean;
+    supportsProcessor?: boolean;
+    sizeOptions?: string[];
     storageOptions?: string[];
     ramOptions?: string[];
+    processorOptions?: string[];
   }
 > = {
   laptops: {
     supportsColor: true,
     supportsStorage: true,
     supportsRam: true,
-    storageOptions: ['256GB', '512GB', '1TB', '2TB'],
-    ramOptions: ['8GB', '16GB', '32GB', '64GB'],
+    supportsProcessor: true,
+    storageOptions: ['128GB', '256GB', '512GB', '1TB', '2TB'],
+    ramOptions: ['4GB', '8GB', '16GB', '32GB', '64GB'],
+    processorOptions: ['Intel Core i5', 'Intel Core i7', 'Intel Core Ultra 5', 'Intel Core Ultra 7', 'Apple M1', 'Apple M2', 'Apple M3'],
   },
   mobiles: {
     supportsColor: true,
@@ -137,6 +166,20 @@ const TEMPLATE_VARIANT_CONFIG: Record<
     supportsStorage: false,
     supportsRam: false,
   },
+  clothing: {
+    supportsColor: true,
+    supportsSize: true,
+    supportsStorage: false,
+    supportsRam: false,
+    sizeOptions: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', 'Free Size'],
+  },
+  shoes: {
+    supportsColor: true,
+    supportsSize: true,
+    supportsStorage: false,
+    supportsRam: false,
+    sizeOptions: ['EU 35', 'EU 36', 'EU 37', 'EU 38', 'EU 39', 'EU 40', 'EU 41', 'EU 42', 'EU 43', 'EU 44', 'EU 45', 'EU 46'],
+  },
   'electronics-used-devices': {
     supportsColor: true,
     supportsStorage: true,
@@ -154,6 +197,7 @@ const TEMPLATE_VARIANT_CONFIG: Record<
     supportsStorage: false,
     supportsRam: false,
   },
+
 };
 
 const stepMeta: { id: StepId; label: string; description: string }[] = [
@@ -189,6 +233,17 @@ const uploadFilesAsHostedImages = async (
   }
 
   return results;
+};
+
+const toUploadErrorMessage = (error: unknown) => {
+  const message = String(error || '');
+  if (/too many requests/i.test(message)) {
+    return 'Image upload is temporarily busy. Please wait a few seconds and try again.';
+  }
+  if (/failed to fetch/i.test(message)) {
+    return 'Image upload could not reach the server. Please check the backend connection and try again.';
+  }
+  return message;
 };
 
 const toBulletList = (value: string) =>
@@ -240,26 +295,72 @@ type AddProductProps = {
   mode?: 'seller' | 'admin';
 };
 
-type LiveCategory = {
-  id: string;
-  name: string;
-  slug: string;
-};
+const normalizeLiveCategories = (items: any[]): LiveCategory[] =>
+  (items || []).map((item: any) => ({
+    id: String(item.id),
+    name: item.name,
+    slug: item.slug,
+    subcategories: Array.isArray(item.subcategories)
+      ? item.subcategories.map((subcategory: any) => ({
+          name: String(subcategory.name || ''),
+          slug: String(subcategory.slug || ''),
+        }))
+      : [],
+  }));
 
-const TEMPLATE_CATEGORY_SLUG_MAP: Record<string, string> = {
-  laptops: 'electronics',
-  mobiles: 'electronics',
-  tablets: 'electronics',
-  accessories: 'electronics',
-  'electronics-used-devices': 'electronics',
-  'beauty-makeup': 'home-kitchen',
-  'gifts-daily-use': 'home-kitchen',
+const TEMPLATE_CATEGORY_MATCH_MAP: Record<
+  string,
+  {
+    categorySlug?: string;
+    subcategorySlug?: string;
+  }
+> = {
+  laptops: { categorySlug: 'electronics', subcategorySlug: 'laptops' },
+  mobiles: { categorySlug: 'electronics', subcategorySlug: 'mobiles' },
+  tablets: { categorySlug: 'electronics', subcategorySlug: 'tablets' },
+  accessories: { categorySlug: 'electronics', subcategorySlug: 'accessories' },
+  clothing: { categorySlug: 'fashion', subcategorySlug: 'men-clothing' },
+  shoes: { categorySlug: 'fashion', subcategorySlug: 'footwear' },
+  'electronics-used-devices': {
+    categorySlug: 'electronics',
+    subcategorySlug: 'used-refurbished-devices',
+  },
+  'beauty-makeup': { categorySlug: 'beauty' },
+  // Map the "gifts-daily-use" template to our Home & Kitchen category
+  'gifts-daily-use': { categorySlug: 'home-kitchen' },
 };
 
 const resolveTemplateCategoryId = (templateId: string, categories: LiveCategory[]) => {
-  const targetSlug = TEMPLATE_CATEGORY_SLUG_MAP[templateId];
-  if (!targetSlug) return null;
-  return categories.find((category) => category.slug === targetSlug)?.id || null;
+  const match = TEMPLATE_CATEGORY_MATCH_MAP[templateId];
+  if (match) {
+    if (match.subcategorySlug) {
+      const parentCategory = categories.find((category) =>
+        Array.isArray(category.subcategories) &&
+        category.subcategories.some((subcategory) => subcategory.slug === match.subcategorySlug)
+      );
+
+      if (parentCategory?.id) {
+        return parentCategory.id;
+      }
+    }
+
+    if (match.categorySlug) {
+      return categories.find((category) => category.slug === match.categorySlug)?.id || null;
+    }
+  }
+
+  // Fallback: try template's configured backendCategoryId (some templates set backendCategoryId to 'cat3' etc.)
+  const template = LISTING_TEMPLATE_MAP[templateId];
+  if (template?.backendCategoryId) {
+    // First try matching by id
+    const byId = categories.find((c) => String(c.id) === String(template.backendCategoryId));
+    if (byId?.id) return byId.id;
+    // Then try matching by slug (in case backendCategoryId was provided as a slug)
+    const bySlug = categories.find((c) => c.slug === String(template.backendCategoryId));
+    if (bySlug?.id) return bySlug.id;
+  }
+
+  return null;
 };
 
 export default function AddProduct({ mode = 'seller' }: AddProductProps) {
@@ -267,13 +368,25 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   const { user, role } = useAuthStore();
   const [searchParams] = useSearchParams();
   const editingId = searchParams.get('edit');
+  const copyingId = searchParams.get('copy');
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<StepId>('category');
   const [formData, setFormData] = useState<FormState>(initialFormState);
   const [images, setImages] = useState<string[]>([]);
   const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [defaultVariantId, setDefaultVariantId] = useState<string | null>(null);
+  const [fashionColorsInput, setFashionColorsInput] = useState('');
+  const [fashionSelectedSizes, setFashionSelectedSizes] = useState<string[]>([]);
+  const [fashionVariantBasePrice, setFashionVariantBasePrice] = useState('');
+  const [fashionVariantOriginalPrice, setFashionVariantOriginalPrice] = useState('');
+  const [fashionVariantStock, setFashionVariantStock] = useState('');
+  const [fashionVariantSkuPrefix, setFashionVariantSkuPrefix] = useState('');
   const [categories, setCategories] = useState<LiveCategory[]>([]);
+  const [selectedCategoryChoice, setSelectedCategoryChoice] = useState<string | null>(null);
+  const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string | null>(null);
+  const [selectedMasterParentSlug, setSelectedMasterParentSlug] = useState<string | null>(null);
+  const [selectedMasterChildSlug, setSelectedMasterChildSlug] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -327,13 +440,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       .getAll()
       .then((items) => {
         if (!mounted) return;
-        setCategories(
-          (items || []).map((item: any) => ({
-            id: String(item.id),
-            name: item.name,
-            slug: item.slug,
-          }))
-        );
+        setCategories(normalizeLiveCategories(items || []));
       })
       .catch(() => {
         if (mounted) setCategories([]);
@@ -344,39 +451,139 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     };
   }, []);
 
+  // master -> live categories mapping used only for selector UI (ids use slugs)
+  const masterLiveCategories: LiveCategory[] = MASTER_CATEGORIES.map((p) => ({
+    id: String(p.slug),
+    name: p.name,
+    slug: p.slug,
+    subcategories: Array.isArray(p.subcategories)
+      ? p.subcategories.map((s) => ({ name: s.name, slug: s.slug }))
+      : [],
+  }));
+
   const selectedTemplate = selectedTemplateId ? LISTING_TEMPLATE_MAP[selectedTemplateId] : null;
   const variantConfig = selectedTemplate ? TEMPLATE_VARIANT_CONFIG[selectedTemplate.id] : undefined;
   const selectedCategoryId = useMemo(
     () => (selectedTemplate ? resolveTemplateCategoryId(selectedTemplate.id, categories) : null),
     [categories, selectedTemplate]
   );
-  const draftStorageKey = selectedTemplateId ? `seller-product-draft:${editingId || 'new'}:${selectedTemplateId}` : null;
+  const draftStorageKey = selectedTemplateId
+    ? `seller-product-draft:${editingId || (copyingId ? `copy-${copyingId}` : 'new')}:${selectedTemplateId}`
+    : null;
+
+  const resolveSelectedCategoryId = async () => {
+    // prefer explicit backend id selection
+    if (selectedCategoryChoice) return selectedCategoryChoice;
+
+    // map master selection (subcategory preferred) to backend id where possible
+    if (selectedSubcategorySlug && categories && categories.length) {
+      const backendBySub = categories.find((c) =>
+        Array.isArray(c.subcategories) && c.subcategories.some((s) => String(s.slug) === String(selectedSubcategorySlug))
+      );
+      if (backendBySub && backendBySub.id) return backendBySub.id;
+    }
+
+    // fallback: map parent slug to backend id
+    if (selectedMasterParentSlug && categories && categories.length) {
+      const backend = categories.find((c) => String(c.slug) === String(selectedMasterParentSlug) || String(c.id) === String(selectedMasterParentSlug));
+      if (backend && backend.id) return backend.id;
+    }
+
+    if (!selectedTemplate) return null;
+    if (selectedCategoryId) return selectedCategoryId;
+
+    try {
+      const freshCategories = normalizeLiveCategories(await categoryAPI.getAll());
+      setCategories(freshCategories);
+      return resolveTemplateCategoryId(selectedTemplate.id, freshCategories);
+    } catch {
+      return null;
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
 
     const loadExistingProduct = async () => {
-      if (!editingId) return;
+      const sourceId = editingId || copyingId;
+      if (!sourceId) return;
       try {
-        const product = await productAPI.get(editingId);
+        const product = await productAPI.get(sourceId);
         if (!product || !mounted) return;
 
-        const matchedTemplate =
-          (product?.specs?.templateId && LISTING_TEMPLATE_MAP[product.specs.templateId]) ||
-          LAUNCH_LISTING_TEMPLATES.find(
+        // Prefer a template by most-specific mapping:
+        // 1) exact subcategorySlug matches
+        // 2) template.subcategorySlug subtree contains product subcategory
+        // 3) exact categorySlug matches
+        // 4) template.categorySlug subtree contains product parent/subcategory
+        // fall back to backend category id mapping, then stored template id
+        let matchedTemplate: any = null;
+        const specSub = product.specs?.subcategorySlug || product.specs?.attributes?.subcategory || product.subcategory || null;
+        const specParent = product.specs?.parentCategorySlug || product.specs?.categorySlug || product.category || null;
+        const normSub = specSub ? normalizeCategorySlug(String(specSub)) : '';
+        const normParent = specParent ? normalizeCategorySlug(String(specParent)) : '';
+
+        // 1) exact subcategorySlug match
+        if (normSub) {
+          matchedTemplate = LAUNCH_LISTING_TEMPLATES.find((template) => {
+            const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+            if (!map) return false;
+            return map.subcategorySlug && normalizeCategorySlug(map.subcategorySlug) === normSub;
+          }) || null;
+        }
+
+        // 2) template.subcategorySlug subtree contains specSub
+        if (!matchedTemplate && normSub) {
+          matchedTemplate = LAUNCH_LISTING_TEMPLATES.find((template) => {
+            const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+            if (!map || !map.subcategorySlug) return false;
+            const set = gatherSlugsUnder(map.subcategorySlug);
+            return set.has(normSub);
+          }) || null;
+        }
+
+        // 3) exact categorySlug match
+        if (!matchedTemplate && normParent) {
+          matchedTemplate = LAUNCH_LISTING_TEMPLATES.find((template) => {
+            const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+            if (!map || !map.categorySlug) return false;
+            return normalizeCategorySlug(map.categorySlug) === normParent;
+          }) || null;
+        }
+
+        // 4) categorySlug subtree contains specParent or sub
+        if (!matchedTemplate && (normParent || normSub)) {
+          const target = normSub || normParent;
+          matchedTemplate = LAUNCH_LISTING_TEMPLATES.find((template) => {
+            const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+            if (!map || !map.categorySlug) return false;
+            const set = gatherSlugsUnder(map.categorySlug);
+            return set.has(target);
+          }) || null;
+        }
+
+        // Fallback: try to resolve by backend category id mapping
+        if (!matchedTemplate) {
+          matchedTemplate = LAUNCH_LISTING_TEMPLATES.find(
             (template) => resolveTemplateCategoryId(template.id, categories) === product.categoryId
           );
+        }
+
+        // Final fallback: honor stored template id if present
+        if (!matchedTemplate && product?.specs?.templateId) {
+          matchedTemplate = LISTING_TEMPLATE_MAP[product.specs.templateId] || null;
+        }
 
         setSelectedTemplateId(matchedTemplate?.id || null);
         setImages([product.image, ...(product.images || [])].filter(Boolean));
         setFormData({
-          title: product.title || '',
+          title: editingId ? product.title || '' : `${product.title || ''} Copy`.trim(),
           shortDescription: product.specs?.shortDescription || '',
           longDescription: product.specs?.longDescription || product.description || '',
           price: String(product.price ?? ''),
           originalPrice: String(product.originalPrice ?? product.price ?? ''),
           stock: String(product.stock ?? ''),
-          sku: product.sku || '',
+          sku: editingId ? product.sku || '' : '',
           keyFeatures: Array.isArray(product.specs?.keyFeatures) ? product.specs.keyFeatures.join('\n') : '',
           whatsInTheBox: Array.isArray(product.specs?.whatsInTheBox) ? product.specs.whatsInTheBox.join('\n') : '',
           searchTags: Array.isArray(product.specs?.searchTags) ? product.specs.searchTags.join(', ') : '',
@@ -389,20 +596,64 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
           sellerNotes: product.specs?.sellerNotes || '',
           fieldValues: product.specs?.attributes || {},
         });
+        // preserve existing category selection when editing
+        const existingCategoryId = product.categoryId || product.specs?.backendCategoryId || null;
+        if (existingCategoryId) {
+          const exists = categories.find((c) => String(c.id) === String(existingCategoryId));
+          if (exists) {
+            setSelectedCategoryChoice(existingCategoryId);
+            // try to prefill master slugs from backend category slug and product attributes
+            setSelectedMasterParentSlug(exists.slug || null);
+            const existingSub = product.specs?.attributes?.subcategory || product.specs?.attributes?.category || null;
+            if (existingSub) setSelectedSubcategorySlug(String(existingSub));
+            const existingChild = product.specs?.attributes?.childCategory || null;
+            if (existingChild) setSelectedMasterChildSlug(String(existingChild));
+          } else {
+            // Original category id no longer exists - try legacy mapping
+            const legacySource = product.specs?.attributes?.subcategory || product.category || product.specs?.backendCategoryId || '';
+            const legacyMapped = mapLegacyCategory(String(legacySource || ''));
+            if (legacyMapped && legacyMapped.category) {
+              // find backend id by mapped category slug
+              const backendMatch = categories.find((c) => String(c.slug) === String(legacyMapped.category));
+              if (backendMatch) setSelectedCategoryChoice(backendMatch.id);
+              setSelectedMasterParentSlug(legacyMapped.category || null);
+              if (legacyMapped.subcategory) setSelectedSubcategorySlug(legacyMapped.subcategory);
+              setError('Original category not found. Legacy mapping applied — please confirm before saving.');
+            } else {
+              setSelectedCategoryChoice(null);
+              const existingSub = product.specs?.attributes?.subcategory || null;
+              if (existingSub) setSelectedSubcategorySlug(existingSub);
+              setError('Original category no longer exists. Please choose a valid category.');
+            }
+          }
+        } else {
+          // No explicit backend category id — try to infer via legacy mapping from textual fields
+          const legacyMapped = mapLegacyCategory(String(product.category || product.specs?.attributes?.subcategory || ''));
+          if (legacyMapped && legacyMapped.category) {
+            const backendMatch = categories.find((c) => String(c.slug) === String(legacyMapped.category));
+            if (backendMatch) setSelectedCategoryChoice(backendMatch.id);
+            setSelectedMasterParentSlug(legacyMapped.category || null);
+            if (legacyMapped.subcategory) setSelectedSubcategorySlug(legacyMapped.subcategory);
+          }
+        }
         setVariants(
           Array.isArray(product.specs?.variants) && product.specs.variants.length
             ? product.specs.variants.map((variant: any, index: number) => ({
                 id: variant.id || `variant-loaded-${index}`,
                 color: String(variant.color || ''),
+                size: String(variant.size || ''),
                 storage: String(variant.storage || ''),
                 ram: String(variant.ram || ''),
+                processor: String(variant.processor || ''),
                 price: String(variant.price ?? ''),
                 originalPrice: String(variant.originalPrice ?? variant.price ?? ''),
                 stock: String(variant.stock ?? ''),
-                sku: String(variant.sku || ''),
+                sku: editingId ? String(variant.sku || '') : '',
+                image: String(variant.image || ''),
               }))
             : []
         );
+        setDefaultVariantId(product.specs?.defaultVariantId || null);
         setCurrentStep('basic');
       } catch (loadError) {
         console.error('Failed to load product for editing:', loadError);
@@ -414,10 +665,10 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     return () => {
       mounted = false;
     };
-  }, [categories, editingId]);
+  }, [categories, copyingId, editingId]);
 
   useEffect(() => {
-    if (!draftStorageKey || !selectedTemplate || editingId) return;
+    if (!draftStorageKey || !selectedTemplate || editingId || copyingId) return;
     const rawDraft = localStorage.getItem(draftStorageKey);
     if (!rawDraft) return;
 
@@ -426,26 +677,28 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       setFormData((prev) => ({ ...prev, ...draft.formData, fieldValues: draft.formData?.fieldValues || prev.fieldValues }));
       setImages(Array.isArray(draft.images) ? draft.images : []);
       setVariants(Array.isArray(draft.variants) ? draft.variants : []);
+      setDefaultVariantId(draft.defaultVariantId || null);
       setCurrentStep(draft.currentStep || 'basic');
       setLastSavedAt(draft.savedAt || null);
     } catch (draftError) {
       console.error('Failed to restore listing draft:', draftError);
     }
-  }, [draftStorageKey, selectedTemplate, editingId]);
+  }, [draftStorageKey, selectedTemplate, copyingId, editingId]);
 
   useEffect(() => {
     if (!draftStorageKey || !selectedTemplate || success) return;
     const timeout = window.setTimeout(() => {
       localStorage.setItem(
-        draftStorageKey,
-        JSON.stringify({
-          formData,
-          images,
-          variants,
-          currentStep,
-          savedAt: new Date().toISOString(),
-        })
-      );
+      draftStorageKey,
+      JSON.stringify({
+        formData,
+        images,
+        variants,
+        defaultVariantId,
+        currentStep,
+        savedAt: new Date().toISOString(),
+      })
+    );
       setAutosaveState('saved');
       setLastSavedAt(new Date().toISOString());
       window.setTimeout(() => setAutosaveState('idle'), 1600);
@@ -578,6 +831,71 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     setVariants((prev) => prev.filter((variant) => variant.id !== id));
   };
 
+  const toggleFashionSize = (size: string) => {
+    setFashionSelectedSizes((prev) =>
+      prev.includes(size) ? prev.filter((item) => item !== size) : [...prev, size]
+    );
+  };
+
+  const appendFashionVariants = (mode: 'sizes-only' | 'color-size') => {
+    const parsedColors = fashionColorsInput
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const colors = mode === 'color-size' ? parsedColors : [''];
+    const sizes = fashionSelectedSizes.length > 0 ? fashionSelectedSizes : [''];
+
+    if (selectedTemplate?.id === 'shoes' || selectedTemplate?.id === 'clothing') {
+      if (mode === 'color-size' && colors.length === 0) {
+        setError('Add at least one color before generating color + size variants.');
+        return;
+      }
+      if (sizes.every((size) => !size.trim())) {
+        setError('Select at least one size before generating fashion variants.');
+        return;
+      }
+    }
+
+    setError(null);
+    setVariants((prev) => {
+      const existingCombos = new Set(
+        prev.map((variant) =>
+          `${variant.color.trim().toLowerCase()}::${variant.size.trim().toLowerCase()}`
+        )
+      );
+
+      const generated: VariantRow[] = [];
+
+      colors.forEach((color) => {
+        sizes.forEach((size) => {
+          const comboKey = `${color.trim().toLowerCase()}::${size.trim().toLowerCase()}`;
+          if (existingCombos.has(comboKey)) return;
+
+          const nextVariant = createVariantRow();
+          nextVariant.color = color;
+          nextVariant.size = size;
+          nextVariant.price = fashionVariantBasePrice.trim();
+          nextVariant.originalPrice = fashionVariantOriginalPrice.trim();
+          nextVariant.stock = fashionVariantStock.trim();
+
+          if (fashionVariantSkuPrefix.trim()) {
+            const parts = [
+              toSkuToken(fashionVariantSkuPrefix),
+              color ? toSkuToken(color) : '',
+              size ? toSkuToken(size) : '',
+            ].filter(Boolean);
+            nextVariant.sku = parts.join('-');
+          }
+
+          generated.push(nextVariant);
+          existingCombos.add(comboKey);
+        });
+      });
+
+      return generated.length > 0 ? [...prev, ...generated] : prev;
+    });
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -586,10 +904,26 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   };
 
   const addImages = async (fileCollection: FileList | File[]) => {
+    setError(null);
     setUploadProgress(0);
     const encoded = await uploadFilesAsHostedImages(fileCollection, setUploadProgress);
     setImages((prev) => [...prev, ...encoded].slice(0, 8));
     window.setTimeout(() => setUploadProgress(0), 1200);
+  };
+
+  const handleVariantImageUpload = async (variantId: string, fileList?: FileList | null) => {
+    if (!fileList || !fileList.length) return;
+    setError(null);
+    setUploadProgress(0);
+    try {
+      const urls = await uploadFilesAsHostedImages(fileList, setUploadProgress);
+      const url = urls && urls.length ? urls[0] : null;
+      if (url) updateVariant(variantId, 'image', url);
+    } catch (uploadError) {
+      setError(toUploadErrorMessage(uploadError));
+    } finally {
+      window.setTimeout(() => setUploadProgress(0), 1200);
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -597,7 +931,9 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     try {
       await addImages(e.target.files);
     } catch (uploadError) {
-      setError(String(uploadError));
+      setError(toUploadErrorMessage(uploadError));
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -608,7 +944,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     try {
       await addImages(e.dataTransfer.files);
     } catch (uploadError) {
-      setError(String(uploadError));
+      setError(toUploadErrorMessage(uploadError));
     }
   };
 
@@ -632,11 +968,206 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     setImages([]);
     setVariants([]);
     setCurrentStep(selectedTemplate ? 'basic' : 'category');
+    setDefaultVariantId(null);
     setLastSavedAt(null);
     setError(null);
   };
 
+  const handleMasterCategoryChange = (parentSlug: string | null, subSlug: string | null) => {
+    // Update master selection state
+    setSelectedMasterParentSlug(parentSlug);
+    setSelectedSubcategorySlug(subSlug);
+    setSelectedMasterChildSlug(null);
+
+    // Set slugs; the effect below will resolve the template and reset template state if needed.
+    setSelectedMasterParentSlug(parentSlug);
+    setSelectedSubcategorySlug(subSlug);
+    setSelectedMasterChildSlug(null);
+
+    // Map to backend category id when possible
+    const backendMatch =
+      categories.find((c) => String(c.slug) === String(parentSlug) || String(c.id) === String(parentSlug)) ||
+      (subSlug
+        ? categories.find((c) =>
+            Array.isArray(c.subcategories) && c.subcategories.some((s: any) => String(s.slug) === String(subSlug))
+          )
+        : null);
+    if (backendMatch && backendMatch.id) setSelectedCategoryChoice(backendMatch.id);
+    setError(null);
+
+    // Immediately resolve the best template for the selected master slugs and reset template-specific state
+    const normSub = normalizeCategorySlug(subSlug || '');
+    const normParent = normalizeCategorySlug(parentSlug || '');
+    let resolved: string | null = null;
+
+    // 1) exact subcategorySlug match
+    if (normSub) {
+      const t = LAUNCH_LISTING_TEMPLATES.find((template) => {
+        const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+        if (!map) return false;
+        return map.subcategorySlug && normalizeCategorySlug(map.subcategorySlug) === normSub;
+      });
+      if (t) resolved = t.id;
+    }
+
+    // 2) template.subcategorySlug subtree contains specSub
+    if (!resolved && normSub) {
+      const t = LAUNCH_LISTING_TEMPLATES.find((template) => {
+        const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+        if (!map || !map.subcategorySlug) return false;
+        const set = gatherSlugsUnder(map.subcategorySlug);
+        return set.has(normSub);
+      });
+      if (t) resolved = t.id;
+    }
+
+    // 3) exact categorySlug match
+    if (!resolved && normParent) {
+      const t = LAUNCH_LISTING_TEMPLATES.find((template) => {
+        const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+        if (!map || !map.categorySlug) return false;
+        return normalizeCategorySlug(map.categorySlug) === normParent;
+      });
+      if (t) resolved = t.id;
+    }
+
+    // 4) categorySlug subtree contains specParent or sub
+    if (!resolved && (normParent || normSub)) {
+      const target = normSub || normParent;
+      const t = LAUNCH_LISTING_TEMPLATES.find((template) => {
+        const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+        if (!map || !map.categorySlug) return false;
+        const set = gatherSlugsUnder(map.categorySlug);
+        return set.has(target);
+      });
+      if (t) resolved = t.id;
+    }
+
+    // fallback: try by backend category id mapping
+    if (!resolved) {
+      const byBackend = LAUNCH_LISTING_TEMPLATES.find((template) => resolveTemplateCategoryId(template.id, categories) === backendMatch?.id);
+      if (byBackend) resolved = byBackend.id;
+    }
+
+    // If the resolved template changed, reset previous template-specific state
+    if (resolved !== selectedTemplateId) {
+      const prevForm = formData;
+      const preservedBrand = prevForm.fieldValues?.brand || '';
+      const preservedColor = prevForm.fieldValues?.color || '';
+      const nextFieldValues: Record<string, string> = {};
+
+      if (resolved) {
+        const newTemplate = LAUNCH_LISTING_TEMPLATES.find((x) => x.id === resolved);
+        if (newTemplate) {
+          if (newTemplate.fields.some((f) => f.key === 'brand') && preservedBrand) nextFieldValues.brand = preservedBrand;
+          if (newTemplate.fields.some((f) => f.key === 'color') && preservedColor) nextFieldValues.color = preservedColor;
+        }
+      }
+
+      setFormData({
+        ...initialFormState,
+        title: prevForm.title || initialFormState.title,
+        shortDescription: prevForm.shortDescription || initialFormState.shortDescription,
+        longDescription: prevForm.longDescription || initialFormState.longDescription,
+        price: prevForm.price || initialFormState.price,
+        originalPrice: prevForm.originalPrice || initialFormState.originalPrice,
+        stock: prevForm.stock || initialFormState.stock,
+        sku: prevForm.sku || initialFormState.sku,
+        fieldValues: nextFieldValues,
+      });
+      setVariants([]);
+      setDefaultVariantId(null);
+      setSelectedTemplateId(resolved);
+
+      try {
+        const prevDraftKey = selectedTemplateId
+          ? `seller-product-draft:${editingId || (copyingId ? `copy-${copyingId}` : 'new')}:${selectedTemplateId}`
+          : null;
+        if (prevDraftKey) localStorage.removeItem(prevDraftKey);
+      } catch (e) {
+        // ignore
+      }
+    }
+  };
+
+  // Resolve template id from master slugs
+  const resolveTemplateIdFromMaster = (parentSlug: string | null, subSlug: string | null) => {
+    const normParent = normalizeCategorySlug(parentSlug || '');
+    const normSub = normalizeCategorySlug(subSlug || '');
+    for (const template of LAUNCH_LISTING_TEMPLATES) {
+      const map = TEMPLATE_CATEGORY_MATCH_MAP[template.id];
+      if (!map) continue;
+      if (map.subcategorySlug) {
+        const set = gatherSlugsUnder(map.subcategorySlug);
+        if (set.has(normSub) || set.has(normParent) || normalizeCategorySlug(map.subcategorySlug) === normSub || normalizeCategorySlug(map.subcategorySlug) === normParent) {
+          return template.id;
+        }
+      }
+      if (map.categorySlug) {
+        const set = gatherSlugsUnder(map.categorySlug);
+        if (set.has(normSub) || set.has(normParent) || normalizeCategorySlug(map.categorySlug) === normSub || normalizeCategorySlug(map.categorySlug) === normParent) {
+          return template.id;
+        }
+      }
+    }
+    return null;
+  };
+
+  // When master slugs change, ensure the selected template matches and reset template-specific state
+  useEffect(() => {
+    const resolved = resolveTemplateIdFromMaster(selectedMasterParentSlug, selectedSubcategorySlug);
+    if (resolved === selectedTemplateId) return;
+
+    const prevForm = formData;
+    const preservedBrand = prevForm.fieldValues?.brand || '';
+    const preservedColor = prevForm.fieldValues?.color || '';
+    const nextFieldValues: Record<string, string> = {};
+
+    if (resolved) {
+      const newTemplate = LAUNCH_LISTING_TEMPLATES.find((x) => x.id === resolved);
+      if (newTemplate) {
+        if (newTemplate.fields.some((f) => f.key === 'brand') && preservedBrand) nextFieldValues.brand = preservedBrand;
+        if (newTemplate.fields.some((f) => f.key === 'color') && preservedColor) nextFieldValues.color = preservedColor;
+      }
+    }
+
+    // Preserve only safe values; clear all category-specific temp state (specs, variants, defaults)
+    setFormData({
+      ...initialFormState,
+      title: prevForm.title || initialFormState.title,
+      shortDescription: prevForm.shortDescription || initialFormState.shortDescription,
+      longDescription: prevForm.longDescription || initialFormState.longDescription,
+      price: prevForm.price || initialFormState.price,
+      originalPrice: prevForm.originalPrice || initialFormState.originalPrice,
+      stock: prevForm.stock || initialFormState.stock,
+      sku: prevForm.sku || initialFormState.sku,
+      fieldValues: nextFieldValues,
+    });
+
+    // keep images intact; clear variants and default variant
+    setVariants([]);
+    setDefaultVariantId(null);
+    setSelectedTemplateId(resolved);
+
+    try {
+      const prevDraftKey = selectedTemplateId
+        ? `seller-product-draft:${editingId || (copyingId ? `copy-${copyingId}` : 'new')}:${selectedTemplateId}`
+        : null;
+      if (prevDraftKey) localStorage.removeItem(prevDraftKey);
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [selectedMasterParentSlug, selectedSubcategorySlug, categories]);
+
   const validateForm = () => {
+    // require master category selection
+    if (!selectedMasterParentSlug) return 'Please select a parent category.';
+    // if parent has child categories / categories, ensure one is selected
+    const parentNode = MASTER_CATEGORIES.find((p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(selectedMasterParentSlug || ''));
+    if (parentNode && Array.isArray(parentNode.subcategories) && parentNode.subcategories.length > 0 && !selectedSubcategorySlug) {
+      return 'Please select a category under the chosen parent.';
+    }
+
     if (!selectedTemplate) return 'Please choose a product category first.';
     if (!formData.title.trim()) return 'Product title is required.';
     if (!formData.price.trim() && !hasVariantPricing) return 'Price is required.';
@@ -645,12 +1176,14 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     if (
       variants.some(
         (variant) =>
-          (variant.color.trim() ||
-            variant.storage.trim() ||
-            variant.ram.trim() ||
-            variant.price.trim() ||
-            variant.stock.trim() ||
-            variant.sku.trim()) &&
+        (variant.color.trim() ||
+          variant.size.trim() ||
+          variant.storage.trim() ||
+          variant.ram.trim() ||
+          variant.processor.trim() ||
+          variant.price.trim() ||
+          variant.stock.trim() ||
+          variant.sku.trim()) &&
           (!variant.price.trim() || !variant.stock.trim())
       )
     ) {
@@ -664,6 +1197,11 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       return `${missingField.label} is required for ${selectedTemplate.title}.`;
     }
 
+    // Ensure canonical slugs will be set (child slug may fallback to category when no deeper child exists)
+    if (!selectedMasterParentSlug || !selectedSubcategorySlug) {
+      return 'Please select a valid parent and category from the official category selector.';
+    }
+
     return null;
   };
 
@@ -672,6 +1210,44 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       setError('Choose a category before saving a draft.');
       return;
     }
+
+    if (mode === 'admin') {
+      try {
+        setLoading(true);
+        setError(null);
+        const payload = buildPayload(await resolveSelectedCategoryId());
+        if (!payload) {
+          throw new Error('Unable to build listing draft. Category mapping is missing.');
+        }
+
+        const draftPayload = {
+          ...payload,
+          status: 'draft',
+          approvalStatus: 'pending',
+          productStatus: 'draft',
+          visibilityStatus: 'hidden',
+        };
+
+        const saved = editingId
+          ? await adminProductAPI.update(editingId, draftPayload)
+          : await adminProductAPI.create(draftPayload);
+
+        setAutosaveState('saved');
+        setLastSavedAt(new Date().toISOString());
+        window.setTimeout(() => setAutosaveState('idle'), 1600);
+
+        if (!editingId && saved?.id) {
+          navigate(`/admin/products/add?edit=${saved.id}`, { replace: true });
+        }
+        return;
+      } catch (draftError) {
+        setError(`Failed to save draft: ${String(draftError)}`);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
     localStorage.setItem(
       draftStorageKey,
       JSON.stringify({
@@ -687,25 +1263,28 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     window.setTimeout(() => setAutosaveState('idle'), 1600);
   };
 
-  const buildPayload = () => {
-    if (!selectedTemplate || !selectedCategoryId) return null;
+  const buildPayload = (resolvedCategoryId: string | null = selectedCategoryId) => {
+    if (!selectedTemplate || !resolvedCategoryId) return null;
 
     const normalizedVariants = variants
       .map((variant, index) => ({
         id: variant.id || `variant-${index + 1}`,
         color: variant.color.trim(),
+        size: variant.size.trim(),
         storage: variant.storage.trim(),
         ram: variant.ram.trim(),
+        processor: variant.processor.trim(),
         price: variant.price.trim() ? parseFloat(variant.price) : null,
         originalPrice: variant.originalPrice.trim() ? parseFloat(variant.originalPrice) : null,
         stock: variant.stock.trim() ? parseInt(variant.stock, 10) || 0 : null,
         sku: variant.sku.trim(),
+        image: variant.image ? String(variant.image).trim() : undefined,
       }))
       .filter(
         (variant) =>
           variant.price !== null &&
           variant.stock !== null &&
-          (variant.color || variant.storage || variant.ram || variant.sku)
+          (variant.color || variant.size || variant.storage || variant.ram || variant.processor || variant.sku)
       );
 
     const primaryVariant = normalizedVariants[0];
@@ -722,20 +1301,43 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean);
+    // prepare canonical master category values
+    const parentSlug = selectedMasterParentSlug || null;
+    const categorySlug = selectedSubcategorySlug || null; // mid-level
+    const childLevelSlug = selectedMasterChildSlug || null; // deepest level if selected
+    // final subcategory slug must always be present for strict model; fallback to categorySlug when no deeper child exists
+    const finalSubcategorySlug = childLevelSlug || categorySlug || null;
+
+    const parentNode = parentSlug ? MASTER_CATEGORIES.find((p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(parentSlug)) : null;
+    let categoryNode: any = null;
+    let childNode: any = null;
+    if (parentNode && categorySlug) {
+      categoryNode = (parentNode.subcategories || []).find((s: any) => normalizeCategorySlug(s.slug) === normalizeCategorySlug(categorySlug));
+      if (categoryNode && childLevelSlug) {
+        childNode = (categoryNode.childCategories || []).find((c: any) => normalizeCategorySlug(c.slug) === normalizeCategorySlug(childLevelSlug));
+      }
+    }
+
+    const categoryPath = [parentSlug, categorySlug, finalSubcategorySlug].filter(Boolean).join('/');
 
     const specs = {
       templateId: selectedTemplate.id,
       templateName: selectedTemplate.title,
-      backendCategoryId: selectedCategoryId,
+      backendCategoryId: resolvedCategoryId,
       shortDescription: formData.shortDescription,
       longDescription: formData.longDescription,
       attributes: {
         ...formData.fieldValues,
+        // subcategory attribute must reflect canonical master slug (no free-text fallbacks)
+        subcategory: finalSubcategorySlug || '',
         ...(primaryVariant?.color ? { color: primaryVariant.color } : {}),
+        ...(primaryVariant?.size ? { size: primaryVariant.size } : {}),
         ...(primaryVariant?.storage ? { storage: primaryVariant.storage } : {}),
         ...(primaryVariant?.ram ? { ram: primaryVariant.ram } : {}),
+        ...(primaryVariant?.processor ? { processor: primaryVariant.processor } : {}),
       },
       variants: normalizedVariants,
+      defaultVariantId: defaultVariantId || (normalizedVariants[0] && normalizedVariants[0].id) || undefined,
       variantConfig,
       keyFeatures: featureList,
       whatsInTheBox: toBulletList(formData.whatsInTheBox),
@@ -749,6 +1351,15 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       sellerNotes: formData.sellerNotes,
       listingCompleteness,
       seoScore,
+      // canonical master category slugs & readable names
+      parentCategorySlug: parentSlug || undefined,
+      categorySlug: categorySlug || undefined,
+      subcategorySlug: finalSubcategorySlug || undefined,
+      childCategorySlug: childNode ? childNode.slug : undefined,
+      parentCategoryName: parentNode ? parentNode.name : undefined,
+      categoryName: categoryNode ? categoryNode.name : undefined,
+      subcategoryName: childNode ? childNode.name : undefined,
+      categoryPath: categoryPath || undefined,
     };
 
     const descriptionParts = [
@@ -758,7 +1369,8 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     ].filter(Boolean);
 
     return {
-      categoryId: selectedCategoryId,
+      categoryId: resolvedCategoryId,
+      sellerId: mode === 'admin' ? 'exshopi_official' : undefined,
       title: formData.title,
       description: descriptionParts.join('\n\n'),
       price: Number.isFinite(basePrice) ? basePrice : 0,
@@ -773,7 +1385,16 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       sku: baseSku,
       brand: formData.fieldValues.brand || '',
       specs,
-      badges: [selectedTemplate.badge, 'Pending Review'],
+      badges:
+        mode === 'admin'
+          ? [selectedTemplate.badge, 'ExShopi Official']
+          : [selectedTemplate.badge, 'Pending Review'],
+      status: mode === 'admin' ? 'live' : 'pending',
+      approvalStatus: mode === 'admin' ? 'approved' : 'pending',
+      productStatus: mode === 'admin' ? 'live' : baseStock <= 0 ? 'out_of_stock' : 'pending_approval',
+      visibilityStatus: mode === 'admin' ? 'live' : 'pending',
+      ownership: mode === 'admin' ? 'official' : 'seller',
+      createdByRole: mode === 'admin' ? 'admin' : 'seller',
     };
   };
 
@@ -798,7 +1419,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
 
     setLoading(true);
     try {
-      const payload = buildPayload();
+      const payload = buildPayload(await resolveSelectedCategoryId());
       if (!payload) throw new Error('Unable to build listing payload. Category mapping is missing.');
       if (estimatedPayloadSizeMb > 70) {
         throw new Error('Listing payload is still too large. Please reduce the number of images or use smaller source files.');
@@ -878,6 +1499,85 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
 
   const renderStepContent = () => {
     if (!selectedTemplate) return null;
+
+    if (currentStep === 'category') {
+      const suggestedId = selectedCategoryId;
+      const suggestedName = suggestedId ? categories.find((c) => c.id === suggestedId)?.name || '' : '';
+      const selectValue = selectedCategoryChoice ? (selectedSubcategorySlug ? `${selectedCategoryChoice}::${selectedSubcategorySlug}` : selectedCategoryChoice) : '';
+
+      return (
+        <section className="space-y-6 rounded-[1.75rem] border border-slate-200 bg-slate-50/60 p-6">
+          <div>
+            <h2 className="text-xl font-black text-slate-900">Category Selection</h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              Choose the display category where this product should appear. Admins can override the automatic template mapping below.
+            </p>
+          </div>
+
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Select Category / Subcategory</label>
+              <CategorySelector
+                categories={masterLiveCategories}
+                parentId={selectedMasterParentSlug || undefined}
+                subSlug={selectedSubcategorySlug}
+                onChange={(p, s) => handleMasterCategoryChange(p || null, s || null)}
+                suggestedParentId={selectedMasterParentSlug || selectedCategoryId || undefined}
+                suggestedSubcategorySlug={selectedSubcategorySlug || undefined}
+                className="mt-2"
+              />
+
+              {/* Classic dropdown fallback removed — master selector enforced */}
+
+              {/* Child category selector (optional) */}
+              {selectedMasterParentSlug && selectedSubcategorySlug && (
+                (() => {
+                  const children = getMasterChildCategories(selectedMasterParentSlug, selectedSubcategorySlug) || [];
+                  if (!children || children.length === 0) return null;
+                  return (
+                    <div className="mt-3">
+                      <label className="mb-2 block text-sm font-bold text-slate-700">Optional child category / product type</label>
+                      <select
+                        value={selectedMasterChildSlug || ''}
+                        onChange={(e) => setSelectedMasterChildSlug(e.target.value || null)}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none"
+                      >
+                        <option value="">None</option>
+                        {children.map((c) => (
+                          <option key={c.slug} value={c.slug}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* No classic dropdown — selection must come from master categories only. */}
+
+              {suggestedName && (
+                <div className="mt-2 flex items-center gap-3">
+                  <p className="text-sm text-slate-500">Suggested mapping: <strong className="text-slate-900">{suggestedName}</strong> (from template)</p>
+                  <button
+                      type="button"
+                      onClick={() => {
+                        if (!suggestedId) return;
+                        setSelectedCategoryChoice(suggestedId);
+                        const backendParent = categories.find((c) => String(c.id) === String(suggestedId));
+                        const suggestedSubSlug = selectedTemplate ? TEMPLATE_CATEGORY_MATCH_MAP[selectedTemplate.id]?.subcategorySlug || null : null;
+                        handleMasterCategoryChange(backendParent?.slug || null, suggestedSubSlug);
+                        setError(null);
+                      }}
+                      className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      Accept Suggested Category
+                    </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      );
+    }
 
     if (currentStep === 'basic') {
       return (
@@ -1136,7 +1836,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Variant Pricing</p>
-                  <h3 className="mt-2 text-lg font-black text-slate-900">Color, storage and RAM options</h3>
+                  <h3 className="mt-2 text-lg font-black text-slate-900">Color, size, storage, RAM and processor options</h3>
                   <p className="mt-1 text-sm font-medium text-slate-500">
                     Add product combinations with their own price, stock and SKU. The first valid row becomes the default storefront option.
                   </p>
@@ -1150,9 +1850,122 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
                 </button>
               </div>
 
+              {(selectedTemplate?.id === 'clothing' || selectedTemplate?.id === 'shoes') && (
+                <div className="mt-5 rounded-[1.25rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600">Fashion Variant Builder</p>
+                      <h4 className="mt-1 text-base font-black text-slate-900">Generate size and color combinations faster</h4>
+                      <p className="mt-1 text-sm font-medium text-slate-500">
+                        This only appends missing variant rows. Existing option rows and listed products stay untouched.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-700">Colors</label>
+                      <input
+                        type="text"
+                        value={fashionColorsInput}
+                        onChange={(e) => setFashionColorsInput(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                        placeholder="Black, White, Navy, Red"
+                      />
+                      <p className="mt-2 text-xs font-medium text-slate-500">Separate colors with commas for T-shirts, shirts, sneakers, sandals, and similar fashion listings.</p>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">Base Price (AED)</label>
+                        <input
+                          type="number"
+                          value={fashionVariantBasePrice}
+                          onChange={(e) => setFashionVariantBasePrice(e.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                          placeholder="99"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">Original Price (AED)</label>
+                        <input
+                          type="number"
+                          value={fashionVariantOriginalPrice}
+                          onChange={(e) => setFashionVariantOriginalPrice(e.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                          placeholder="129"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">Stock Per Variant</label>
+                        <input
+                          type="number"
+                          value={fashionVariantStock}
+                          onChange={(e) => setFashionVariantStock(e.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                          placeholder="10"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">SKU Prefix</label>
+                        <input
+                          type="text"
+                          value={fashionVariantSkuPrefix}
+                          onChange={(e) => setFashionVariantSkuPrefix(e.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                          placeholder="TSHIRT-2026"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {variantConfig?.sizeOptions?.length ? (
+                    <div className="mt-4">
+                      <label className="mb-2 block text-sm font-bold text-slate-700">Sizes</label>
+                      <div className="flex flex-wrap gap-2">
+                        {variantConfig.sizeOptions.map((size) => {
+                          const isActive = fashionSelectedSizes.includes(size);
+                          return (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => toggleFashionSize(size)}
+                              className={`rounded-full border px-3 py-2 text-xs font-black uppercase tracking-[0.14em] transition ${
+                                isActive
+                                  ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:text-emerald-700'
+                              }`}
+                            >
+                              {size}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => appendFashionVariants('color-size')}
+                      className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+                    >
+                      Generate Color + Size Options
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => appendFashionVariants('sizes-only')}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+                    >
+                      Generate Sizes Only
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {variants.length === 0 ? (
                 <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-medium text-slate-500">
-                  No option rows added yet. Use this for storage, RAM, or color-based pricing differences.
+                  No option rows added yet. Use this for size, color, storage, RAM, or processor-based pricing differences.
                 </div>
               ) : (
                 <div className="mt-5 space-y-4">
@@ -1163,13 +1976,45 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
                           <p className="text-sm font-black text-slate-900">Option {index + 1}</p>
                           <p className="text-xs font-medium text-slate-500">Set the exact customer-selectable combination.</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeVariant(variant.id)}
-                          className="rounded-xl border border-red-200 px-3 py-2 text-xs font-black uppercase tracking-[0.18em] text-red-600 transition hover:bg-red-50"
-                        >
-                          Remove
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            {variant.image ? (
+                              <img src={variant.image} alt="variant" className="h-10 w-10 rounded-md object-cover border" />
+                            ) : (
+                              <div className="h-10 w-10 rounded-md bg-slate-100 flex items-center justify-center text-xs text-slate-400">No image</div>
+                            )}
+                          </div>
+
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleVariantImageUpload(variant.id, e.target.files)}
+                              className="hidden"
+                            />
+                            <button type="button" className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-slate-700 transition hover:bg-slate-50">
+                              <Upload className="h-3.5 w-3.5 inline-block" /> Upload
+                            </button>
+                          </label>
+
+                          <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                            <input
+                              type="radio"
+                              name={`defaultVariant`}
+                              checked={defaultVariantId === variant.id}
+                              onChange={() => setDefaultVariantId(variant.id)}
+                            />
+                            <span>Default</span>
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => removeVariant(variant.id)}
+                            className="rounded-xl border border-red-200 px-3 py-2 text-xs font-black uppercase tracking-[0.18em] text-red-600 transition hover:bg-red-50"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1183,6 +2028,23 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
                               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                               placeholder="Black"
                             />
+                          </div>
+                        )}
+                        {variantConfig?.supportsSize && (
+                          <div>
+                            <label className="mb-2 block text-sm font-bold text-slate-700">Size</label>
+                            <select
+                              value={variant.size}
+                              onChange={(e) => updateVariant(variant.id, 'size', e.target.value)}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                            >
+                              <option value="">Select size</option>
+                              {(variantConfig.sizeOptions || []).map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         )}
                         {variantConfig?.supportsStorage && (
@@ -1212,6 +2074,23 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
                             >
                               <option value="">Select RAM</option>
                               {(variantConfig.ramOptions || []).map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        {variantConfig?.supportsProcessor && (
+                          <div>
+                            <label className="mb-2 block text-sm font-bold text-slate-700">Processor</label>
+                            <select
+                              value={variant.processor}
+                              onChange={(e) => updateVariant(variant.id, 'processor', e.target.value)}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                            >
+                              <option value="">Select processor</option>
+                              {(variantConfig.processorOptions || []).map((option) => (
                                 <option key={option} value={option}>
                                   {option}
                                 </option>
@@ -1710,7 +2589,9 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
                 {editingId ? `Edit Product: ${selectedTemplate.title}` : `Add a Product: ${selectedTemplate.title}`}
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                Structured category-based listing for premium UAE marketplace approval. Your product will stay in pending approval until reviewed by ExShopi.
+                {mode === 'admin'
+                  ? 'Structured category-based listing for ExShopi Official catalog publishing. Products created here go live immediately under ExShopi Official.'
+                  : 'Structured category-based listing for premium UAE marketplace approval. Your product will stay in pending approval until reviewed by ExShopi.'}
               </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -1740,7 +2621,12 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
             <div className="mb-6 flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
               <p className="text-sm font-medium text-emerald-800">
-                {editingId ? 'Product saved successfully.' : 'Product submitted successfully for approval.'} Redirecting to your seller catalog...
+                {editingId
+                  ? 'Product saved successfully.'
+                  : mode === 'admin'
+                  ? 'ExShopi Official product published successfully.'
+                  : 'Product submitted successfully for approval.'}{' '}
+                Redirecting to your {mode === 'admin' ? 'admin catalog' : 'seller catalog'}...
               </p>
             </div>
           )}
@@ -1870,6 +2756,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
                 <button
                   type="button"
                   onClick={saveDraft}
+                  disabled={loading}
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                 >
                   Save Draft
@@ -1886,7 +2773,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
                   disabled={loading}
                   className="rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? 'Submitting...' : editingId ? 'Save & Resubmit for Approval' : 'Submit for Approval'}
+                  {loading ? 'Submitting...' : mode === 'admin' ? (editingId ? 'Update & Publish' : 'Publish Product') : editingId ? 'Save & Resubmit for Approval' : 'Submit for Approval'}
                 </button>
               </div>
             </div>

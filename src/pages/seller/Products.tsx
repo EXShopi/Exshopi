@@ -21,6 +21,7 @@ interface Product {
   title: string;
   price: number;
   category: string;
+  specs?: any;
   status: 'published' | 'draft' | 'rejected' | 'pending';
   stockQuantity: number;
   sales: number;
@@ -47,7 +48,13 @@ export function SellerProducts() {
         const sellerId = user.id || (user as any).uid;
         const prods = await productAPI.getSellerProducts(sellerId);
         setProducts(prods || []);
-        const cats = Array.from(new Set((prods || []).map((p: any) => p.category).filter(Boolean))) as string[];
+        const cats = Array.from(
+          new Set(
+            (prods || [])
+              .map((p: any) => p.specs?.categoryName || p.specs?.parentCategoryName || p.category)
+              .filter(Boolean)
+          )
+        ) as string[];
         setCategories(cats);
       } catch (err) {
         console.error('Failed to load seller products', err);
@@ -85,7 +92,8 @@ export function SellerProducts() {
     const title = product.title || '';
     const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
+    const productCategoryLabel = (product as any).specs?.categoryName || (product as any).specs?.parentCategoryName || product.category || '';
+    const matchesCategory = categoryFilter === 'all' || productCategoryLabel === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
@@ -264,7 +272,7 @@ export function SellerProducts() {
                       </div>
                     </td>
                     <td className="px-8 py-5">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg">{product.category}</span>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg">{(product as any).specs?.categoryName || (product as any).specs?.parentCategoryName || product.category}</span>
                     </td>
                     <td className="px-8 py-5">
                       <p className="font-black text-slate-900">AED {product.price.toFixed(2)}</p>

@@ -1,0 +1,243 @@
+{
+  "otpSessions": [],
+  "blacklist": [],
+  "notifications": [
+    {
+      "audience": "seller",
+      "audienceId": "cmnd60pc70009c9sjtfmcvivd",
+      "title": "Product rejected",
+      "message": "Launch Test Laptop Pro 14 was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmnd61c60000fc9sje8wczxs7",
+      "id": "notif_1775079283905_9303",
+      "createdAt": "2026-04-01T21:34:43.905Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmnd67z510000c91b3dcsd6gj",
+      "title": "Product rejected",
+      "message": "Quick Flow Product was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmnd68l1n0006c91bg7cusetj",
+      "id": "notif_1775079279310_a1f8",
+      "createdAt": "2026-04-01T21:34:39.310Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmnd6t9d30009c91b8pjl1ecp",
+      "title": "Product rejected",
+      "message": "Ops Smoke Product was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmnd6tuyt000fc91bgj49rhus",
+      "id": "notif_1775079273928_d334",
+      "createdAt": "2026-04-01T21:34:33.928Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmnd789qp0000c9t4rugronx8",
+      "title": "Product rejected",
+      "message": "Diag Product was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmnd78t4y0006c9t41x93r5cq",
+      "id": "notif_1775079268722_ad7b",
+      "createdAt": "2026-04-01T21:34:28.723Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmneosax70006c9mar6rd8lhh",
+      "title": "Product rejected",
+      "message": "Launch Smoke Product 1774965759 was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmneosoam000cc9maijaw6vas",
+      "id": "notif_1775079262070_e3ad",
+      "createdAt": "2026-04-01T21:34:22.071Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmnd5pnjm0004c9lr7es1anet",
+      "title": "Product rejected",
+      "message": "good was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmnfucutm0001c986cwt040b7",
+      "id": "notif_1775076801047_9cd3",
+      "createdAt": "2026-04-01T20:53:21.047Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmnd5pnjm0004c9lr7es1anet",
+      "title": "Product rejected",
+      "message": "good was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmnfucutm0001c986cwt040b7",
+      "id": "notif_1775076798926_2d40",
+      "createdAt": "2026-04-01T20:53:18.927Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmnd5pnjm0004c9lr7es1anet",
+      "title": "Product rejected",
+      "message": "good was reviewed by the catalog team.",
+      "type": "product_rejected",
+      "entityType": "product",
+      "entityId": "cmnfucutm0001c986cwt040b7",
+      "id": "notif_1775076797864_61b6",
+      "createdAt": "2026-04-01T20:53:17.866Z"
+    },
+    {
+      "audience": "customer",
+      "audienceId": "cmnepjekt0002c9e6qi7l6lu2",
+      "title": "Account created",
+      "message": "Your ExShopi customer account is ready.",
+      "type": "account_created",
+      "entityType": "user",
+      "entityId": "cmnepjekt0002c9e6qi7l6lu2",
+      "id": "notif_1774967028734_c0be",
+      "createdAt": "2026-03-31T14:23:48.734Z"
+    },
+    {
+      "audience": "customer",
+      "audienceId": "cmnepgoww0001c9e62w978y1k",
+      "title": "Account created",
+      "message": "Your ExShopi customer account is ready.",
+      "type": "account_created",
+      "entityType": "user",
+      "entityId": "cmnepgoww0001c9e62w978y1k",
+      "id": "notif_1774966900424_7707",
+      "createdAt": "2026-03-31T14:21:40.424Z"
+    },
+    {
+      "audience": "customer",
+      "audienceId": "cmnepebtc0000c9e6ulsbmm2f",
+      "title": "Account created",
+      "message": "Your ExShopi customer account is ready.",
+      "type": "account_created",
+      "entityType": "user",
+      "entityId": "cmnepebtc0000c9e6ulsbmm2f",
+      "id": "notif_1774966797318_b6f2",
+      "createdAt": "2026-03-31T14:19:57.318Z"
+    },
+    {
+      "audience": "customer",
+      "audienceId": "cmneost2k000fc9ma9jj8zbfj",
+      "title": "Account created",
+      "message": "Your ExShopi customer account is ready.",
+      "type": "account_created",
+      "entityType": "user",
+      "entityId": "cmneost2k000fc9ma9jj8zbfj",
+      "id": "notif_1774965787151_d520",
+      "createdAt": "2026-03-31T14:03:07.151Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmneosax70006c9mar6rd8lhh",
+      "title": "Product approved",
+      "message": "Launch Smoke Product 1774965759 is now live on ExShopi.",
+      "type": "product_approved",
+      "entityType": "product",
+      "entityId": "cmneosoam000cc9maijaw6vas",
+      "id": "notif_1774965783348_09ba",
+      "createdAt": "2026-03-31T14:03:03.348Z"
+    },
+    {
+      "audience": "seller",
+      "audienceId": "cmneosax70006c9mar6rd8lhh",
+      "title": "Seller account approved",
+      "message": "Your seller application has been approved and your store is now live for operations.",
+      "type": "seller_approved",
+      "entityType": "seller_application",
+      "entityId": "cmneosc1h0008c9mawbuw7s0z",
+      "id": "notif_1774965775019_df28",
+      "createdAt": "2026-03-31T14:02:55.019Z"
+    },
+    {
+      "audience": "admin",
+      "title": "New seller application",
+      "message": "Launch Seller Store is waiting for review.",
+      "type": "seller_application_submitted",
+      "entityType": "seller_application",
+      "entityId": "cmneosc1h0008c9mawbuw7s0z",
+      "id": "notif_1774965764209_2b54",
+      "createdAt": "2026-03-31T14:02:44.209Z"
+    },
+    {
+      "audience": "admin",
+      "title": "New seller application",
+      "message": "Body Seller Store is waiting for review.",
+      "type": "seller_application_submitted",
+      "entityType": "seller_application",
+      "entityId": "cmneop8h10005c9mawmml7lmh",
+      "id": "notif_1774965620251_914d",
+      "createdAt": "2026-03-31T14:00:20.251Z"
+    },
+    {
+      "audience": "customer",
+      "audienceId": "cmneogkv00000c9ma7x0da440",
+      "title": "Account created",
+      "message": "Your ExShopi customer account is ready.",
+      "type": "account_created",
+      "entityType": "user",
+      "entityId": "cmneogkv00000c9ma7x0da440",
+      "id": "notif_1774965217766_f962",
+      "createdAt": "2026-03-31T13:53:37.766Z"
+    },
+    {
+      "audience": "customer",
+      "audienceId": "cmneocm880005c9vp8rux2j73",
+      "title": "Account created",
+      "message": "Your ExShopi customer account is ready.",
+      "type": "account_created",
+      "entityType": "user",
+      "entityId": "cmneocm880005c9vp8rux2j73",
+      "id": "notif_1774965030798_a059",
+      "createdAt": "2026-03-31T13:50:30.798Z"
+    },
+    {
+      "audience": "customer",
+      "audienceId": "cmneobqvu0004c9vphisbftd5",
+      "title": "Account created",
+      "message": "Your ExShopi customer account is ready.",
+      "type": "account_created",
+      "entityType": "user",
+      "entityId": "cmneobqvu0004c9vphisbftd5",
+      "id": "notif_1774964991701_b1d7",
+      "createdAt": "2026-03-31T13:49:51.701Z"
+    },
+    {
+      "audience": "admin",
+      "title": "New seller application",
+      "message": "Smoke Seller 1774964022398 Store is waiting for review.",
+      "type": "seller_application_submitted",
+      "entityType": "seller_application",
+      "entityId": "cmnenrazc0002c9vp6hcxvceq",
+      "id": "notif_1774964038747_73c0",
+      "createdAt": "2026-03-31T13:33:58.747Z"
+    },
+    {
+      "audience": "admin",
+      "title": "New seller application",
+      "message": "Smoke Seller 1774963801492 Store is waiting for review.",
+      "type": "seller_application_submitted",
+      "entityType": "seller_application",
+      "entityId": "cmnenmorl0002c9rzl7lbijmv",
+      "id": "notif_1774963822075_4e3b",
+      "createdAt": "2026-03-31T13:30:22.075Z"
+    },
+    {
+      "audience": "admin",
+      "title": "New seller application",
+      "message": "Smoke Seller 1774963435807 Store is waiting for review.",
+      "type": "seller_application_submitted",
+      "entityType": "seller_application",
+      "entityId": "cmnenewsu0002c9hzerni8y35",
+      "id": "notif_1774963459376_8800",
+      "createdAt": "2026-03-31T13:24:19.377Z"
+    }
+  ]
+}

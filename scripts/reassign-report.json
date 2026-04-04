@@ -1,0 +1,56 @@
+{
+  "total": 7,
+  "changed": 6,
+  "unchanged": 1,
+  "details": [
+    {
+      "id": "prod_1774699869707",
+      "title": "iPhone 15 Pro",
+      "before": null,
+      "after": "cat1",
+      "reason": "mapped"
+    },
+    {
+      "id": "prod_1774975817449",
+      "title": "Apple MacBook Pro 13\" A1278 (2012) | Core i5 | 8GB RAM | 256GB SSD | Reliable Performance Refurbished",
+      "before": "cmnd5pp800007c9lrhh02cmrd",
+      "after": "cat1",
+      "reason": "mapped"
+    },
+    {
+      "id": "prod_1774976777643",
+      "title": "Apple MacBook Pro 13\" A1278 (2012) | Core i5 | 8GB RAM | 256GB SSD | Reliable Performance Refurbished",
+      "before": "cmnd5pp800007c9lrhh02cmrd",
+      "after": "cat1",
+      "reason": "mapped"
+    },
+    {
+      "id": "prod_1774978116986",
+      "title": "Untitled",
+      "before": "cmnd5pk...",
+      "after": "cmnd5pk...",
+      "reason": "unchanged"
+    },
+    {
+      "id": "prod_1774978307580",
+      "title": "Admin Save Smoke Product",
+      "before": "cmnd5pp800007c9lrhh02cmrd",
+      "after": "cat1",
+      "reason": "mapped"
+    },
+    {
+      "id": "prod_1774978781350",
+      "title": "Codex Admin Save Test",
+      "before": "cmnd5pp800007c9lrhh02cmrd",
+      "after": "cat1",
+      "reason": "mapped"
+    },
+    {
+      "id": "prod_1774981616392",
+      "title": "Apple MacBook Pro 13\" A1278 (2012) | Core i5 | 8GB RAM | 256GB SSD | Reliable Performance",
+      "before": "cmnd5pp800007c9lrhh02cmrd",
+      "after": "cat1",
+      "reason": "mapped"
+    }
+  ]
+}

@@ -8,11 +8,9 @@ const root = document.getElementById("root");
 
 if (root) {
   ReactDOM.createRoot(root).render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </React.StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   );
 } else {
   console.error("Root element not found!");

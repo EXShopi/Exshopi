@@ -45,27 +45,25 @@ export default function HeroSection() {
     };
   }, [settings.homepage.hero.primaryCtaLink, settings.homepage.hero.primaryCtaText, settings.homepage.hero.productImageUrl, settings.homepage.hero.subtitle, settings.homepage.hero.title]);
 
-  const baseSlides = useMemo(
-    () =>
-      remoteSlides.length > 0
-        ? remoteSlides
-        : [
-            {
-              id: 'settings-hero',
-              tag: settings.general.siteName ? `${settings.general.siteName.toUpperCase()} MARKETPLACE` : 'EXSHOPI MARKETPLACE',
-              title: settings.homepage.hero.title,
-              description: settings.homepage.hero.subtitle,
-              primaryCta: settings.homepage.hero.primaryCtaText,
-              secondaryCta: 'Browse Categories',
-              primaryLink: settings.homepage.hero.primaryCtaLink,
-              secondaryLink: '/categories',
-              bg: 'from-[#06142c] via-[#0f2347] to-[#31545f]',
-              image: settings.homepage.hero.productImageUrl,
-              glowColor: 'rgba(52, 168, 219, 0.5)',
-            },
-          ],
-    [remoteSlides, settings.general.siteName, settings.homepage.hero],
-  );
+  const baseSlides = useMemo(() => {
+    if (remoteSlides.length > 0) return remoteSlides;
+
+    // Fallback: generate 5 hero slides using public/hero images when no remote banners exist
+    const images = ['/hero/hero-1.png', '/hero/hero-2.png', '/hero/hero-3.png', '/hero/hero-4.png', '/hero/hero-5.png'];
+    return images.map((img, idx) => ({
+      id: `settings-hero-${idx}`,
+      tag: settings.general.siteName ? `${settings.general.siteName.toUpperCase()} MARKETPLACE` : 'EXSHOPI MARKETPLACE',
+      title: settings.homepage.hero.title,
+      description: settings.homepage.hero.subtitle,
+      primaryCta: settings.homepage.hero.primaryCtaText,
+      secondaryCta: 'Browse Categories',
+      primaryLink: settings.homepage.hero.primaryCtaLink,
+      secondaryLink: '/categories',
+      bg: 'from-[#06142c] via-[#0f2347] to-[#31545f]',
+      image: img,
+      glowColor: 'rgba(52, 168, 219, 0.5)',
+    }));
+  }, [remoteSlides, settings.general.siteName, settings.homepage.hero]);
 
   const translatedSlides = baseSlides.map((slide) => ({
     ...slide,
@@ -149,7 +147,7 @@ export default function HeroSection() {
   };
 
   return (
-    <section className="mx-auto mt-6 max-w-[1800px] px-4 md:px-6 relative">
+    <section className="relative mx-auto mt-2.5 max-w-[1800px] px-3 md:mt-6 md:px-6">
       {/* Dynamic glow effect layer - positioned outside hero */}
       <div
         className="absolute -inset-12 rounded-[40px] blur-2xl opacity-70 transition-all duration-700 ease-in-out pointer-events-none"
@@ -159,8 +157,8 @@ export default function HeroSection() {
         }}
       />
 
-      <div className="relative z-10 overflow-hidden rounded-[34px] border border-slate-200 shadow-lg">
-        <div className="relative aspect-[2048/890] w-full max-h-[700px] min-h-[380px]">
+      <div className="relative z-10 overflow-hidden rounded-[20px] border border-slate-200 shadow-lg md:rounded-[34px]">
+        <div className="relative h-[224px] w-full sm:h-[300px] md:aspect-[2048/890] md:max-h-[700px] md:min-h-[380px]">
           <div
             className="flex h-full transition-transform duration-700 ease-in-out"
             style={{ transform: `translateX(-${current * 100}%)` }}
@@ -174,39 +172,40 @@ export default function HeroSection() {
                     <img
                       src={slide.image}
                       alt={slide.title}
-                      className="absolute inset-0 h-full w-full object-cover opacity-90"
+                      className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
                     />
                   )}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_20%),radial-gradient(circle_at_bottom_right,rgba(52,211,153,0.18),transparent_24%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.06),transparent_18%)]" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(52,211,153,0.16),transparent_24%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_18%)]" />
 
-                  <div className="relative flex h-full items-center px-6 py-10 md:px-14 md:py-16">
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/30 to-black/20" />
-                    <div className="relative max-w-3xl" dir={isRtlText ? "rtl" : "ltr"}>
-                      <p className="mb-5 inline-flex rounded-full border border-white/30 bg-black/40 backdrop-blur-sm px-4 py-2 text-[10px] font-bold uppercase tracking-[0.24em] text-slate-100 md:text-[11px] shadow-lg">
+                  <div className="relative flex h-full items-center px-3.5 py-3.5 sm:px-6 sm:py-8 md:px-14 md:py-16">
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/42 via-black/18 to-black/6" />
+                    <div className="absolute inset-y-0 left-0 w-[58%] bg-gradient-to-r from-black/16 via-black/10 to-transparent md:w-[48%]" />
+                    <div className="relative max-w-[86%] sm:max-w-[78%] md:max-w-3xl" dir={isRtlText ? "rtl" : "ltr"}>
+                      <p className="mb-1 inline-flex rounded-full border border-white/30 bg-black/40 px-2.5 py-1 text-[6.5px] font-bold uppercase tracking-[0.14em] text-slate-100 shadow-lg backdrop-blur-sm md:mb-5 md:px-4 md:py-2 md:text-[11px]">
                         {slide.tag}
                       </p>
 
-                      <h1 className="max-w-3xl text-3xl font-black leading-[1.02] md:text-[52px] xl:text-[64px] text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)]">
+                      <h1 className="max-w-[210px] text-[1.18rem] font-black leading-[1.04] text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] sm:max-w-3xl sm:text-[1.85rem] md:text-[52px] xl:text-[64px]">
                         {slide.title}
                       </h1>
 
-                      <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-100 md:text-lg md:leading-8 drop-shadow-[0_1px_8px_rgba(0,0,0,0.4)]">
+                      <p className="mt-1.5 max-w-[210px] text-[10px] leading-4 text-slate-100 drop-shadow-[0_1px_8px_rgba(0,0,0,0.4)] sm:max-w-xl sm:text-[14px] md:mt-5 md:max-w-2xl md:text-lg md:leading-8">
                         {slide.description}
                       </p>
 
-                      <div className="mt-7 flex flex-wrap gap-3 md:mt-8 md:gap-4">
+                      <div className="mt-2 flex flex-col items-start gap-1.5 sm:flex-row sm:flex-wrap md:mt-8 md:gap-4">
                         <Link
                           to={slide.primaryLink}
                           onClick={() => handleBannerClick(slide)}
-                          className="group relative inline-flex min-h-[52px] items-center rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition-all duration-300 hover:shadow-xl hover:shadow-blue-600/50 hover:-translate-y-0.5 md:min-h-[56px] md:px-7 md:py-4 md:text-base"
+                          className="group relative inline-flex w-auto min-h-[28px] items-center justify-center self-start rounded-full bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-1.5 text-[10px] font-bold text-white shadow-lg shadow-blue-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/50 sm:min-h-[34px] sm:rounded-2xl sm:px-3.5 sm:py-2 sm:text-[11px] md:min-h-[56px] md:px-7 md:py-4 md:text-base"
                         >
                           <span className="relative z-10">{slide.primaryCta}</span>
-                          <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100 sm:rounded-2xl" />
                         </Link>
 
                         <Link
                           to={slide.secondaryLink}
-                          className="group inline-flex min-h-[52px] items-center rounded-2xl border border-white/30 bg-white/10 backdrop-blur-md px-6 py-3 text-sm font-bold text-white transition-all duration-300 hover:border-white/50 hover:bg-white/20 hover:-translate-y-0.5 md:min-h-[56px] md:px-7 md:py-4 md:text-base"
+                          className="group inline-flex w-auto min-h-[28px] items-center justify-center self-start rounded-full border border-white/30 bg-white/10 px-4 py-1.5 text-[10px] font-bold text-white backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-white/50 hover:bg-white/20 sm:min-h-[34px] sm:rounded-2xl sm:px-3.5 sm:py-2 sm:text-[11px] md:min-h-[56px] md:px-7 md:py-4 md:text-base"
                         >
                           {slide.secondaryCta}
                         </Link>
@@ -221,24 +220,8 @@ export default function HeroSection() {
             ))}
           </div>
 
-          <div className="absolute bottom-4 left-6 right-6 z-20 flex items-center justify-between md:bottom-8 md:left-14 md:right-14">
-            <div className="flex items-center gap-2">
-              {translatedSlides.map((slide, index) => (
-                <button
-                  key={slide.id}
-                  type="button"
-                  onClick={() => setCurrent(index)}
-                  aria-label={`Go to slide ${index + 1}`}
-                  className={`h-2.5 rounded-full transition-all duration-300 ${
-                    current === index
-                      ? "w-8 bg-white"
-                      : "w-2.5 bg-white/40 hover:bg-white/70"
-                  }`}
-                />
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 md:gap-3">
+          <div className="absolute bottom-3 right-4 z-20 md:bottom-8 md:right-14">
+            <div className="hidden items-center gap-2 md:flex md:gap-3">
               <button
                 type="button"
                 onClick={goPrev}

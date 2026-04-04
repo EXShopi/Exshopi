@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { categoryAPI } from '../../services/api';
 import { motion, AnimatePresence } from 'motion/react';
+import { OrbitLoader } from '../../components/ui/OrbitLoader';
 
 const ICON_OPTIONS = [
   { id: 'Headphones', icon: Headphones },
@@ -178,7 +179,7 @@ export function AdminCategories() {
         <div className="lg:col-span-2 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center p-24 bg-white rounded-3xl border border-slate-100">
-              <div className="w-12 h-12 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
+              <OrbitLoader label="Loading categories..." size={28} />
             </div>
           ) : categories.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

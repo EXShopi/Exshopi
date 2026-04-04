@@ -1,12 +1,30 @@
 import { useAuthStore } from '../store/auth';
+import { supabase } from '../supabaseClient';
 
-const browserHost =
-  typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const defaultApiBase =
+  typeof window !== 'undefined'
+    ? import.meta.env.DEV
+      ? '/api'
+      : `${window.location.origin}/api`
+    : 'http://localhost:3001/api';
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
-  `http://${browserHost}:3101/api`;
+  defaultApiBase;
+
+function isLocalDevRuntime() {
+  if (typeof window === 'undefined') return import.meta.env.DEV;
+  const host = window.location.hostname || '';
+  return (
+    import.meta.env.DEV ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.startsWith('10.') ||
+    host.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+  );
+}
 
 async function parseApiResponse(res: Response) {
   const contentType = res.headers.get('content-type') || '';
@@ -24,6 +42,82 @@ async function parseApiResponse(res: Response) {
   }
 
   return data;
+}
+
+async function refreshAccessToken() {
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  const data = await parseApiResponse(res);
+  useAuthStore.getState().setAccessToken(data?.accessToken || null);
+  return data;
+}
+
+async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
+  const runRequest = () =>
+    fetch(input, {
+      ...init,
+      headers: {
+        ...(init.headers || {}),
+        ...getAuthHeaders(),
+      },
+      credentials: init.credentials || 'include',
+    });
+
+  let response = await runRequest();
+  if (response.status !== 401) {
+    return response;
+  }
+
+  try {
+    await refreshAccessToken();
+  } catch {
+    useAuthStore.getState().setAccessToken(null);
+    throw new Error('Session expired. Please sign in again.');
+  }
+
+  response = await runRequest();
+  if (response.status === 401) {
+    useAuthStore.getState().setAccessToken(null);
+    throw new Error('Session expired. Please sign in again.');
+  }
+
+  return response;
+}
+
+async function uploadWithRetry(
+  endpoint: string,
+  payload: Record<string, unknown>,
+  retries = 2
+) {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    try {
+      return await parseApiResponse(res);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const shouldRetry =
+        attempt < retries &&
+        (res.status === 429 || /too many requests/i.test(lastError.message));
+
+      if (!shouldRetry) {
+        throw lastError;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 900 * (attempt + 1)));
+    }
+  }
+
+  throw lastError || new Error('Upload failed');
 }
 
 // Get auth headers from secure session state
@@ -109,31 +203,19 @@ export const userAPI = {
 
 export const uploadAPI = {
   async uploadImage(dataUrl: string, options?: { folder?: string; fileName?: string }) {
-    const res = await fetch(`${API_BASE}/uploads/image`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      credentials: 'include',
-      body: JSON.stringify({
+    return uploadWithRetry('/uploads/image', {
         dataUrl,
         folder: options?.folder || 'general',
         fileName: options?.fileName,
-      }),
     });
-    return parseApiResponse(res);
   },
 
   async uploadDocument(dataUrl: string, options?: { folder?: string; fileName?: string }) {
-    const res = await fetch(`${API_BASE}/uploads/document`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      credentials: 'include',
-      body: JSON.stringify({
+    return uploadWithRetry('/uploads/document', {
         dataUrl,
         folder: options?.folder || 'documents',
         fileName: options?.fileName,
-      }),
     });
-    return parseApiResponse(res);
   },
 };
 
@@ -269,19 +351,79 @@ export const productAPI = {
     return parseApiResponse(res);
   },
 
-  async get(id: string) {
-    const res = await fetch(`${API_BASE}/products/${id}`);
-    return res.json();
+  async get(id: string, options?: { signal?: AbortSignal }) {
+    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+        if (error) throw error;
+        if (data) return data;
+        const { data: bySlug, error: slugError } = await supabase.from('products').select('*').eq('slug', id).maybeSingle();
+        if (slugError) throw slugError;
+        if (bySlug) return bySlug;
+        // fallback to API
+      } catch (e) {
+        console.warn('Supabase product fetch failed, falling back to API:', e);
+      }
+    }
+    const res = await fetch(`${API_BASE}/products/${id}`, { signal: options?.signal });
+    return parseApiResponse(res);
   },
 
-  async getAll() {
-    const res = await fetch(`${API_BASE}/products`);
-    return res.json();
+  async getAll(options?: { signal?: AbortSignal }) {
+    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      } catch (e) {
+        console.warn('Supabase products fetch failed, falling back to API:', e);
+      }
+    }
+    const res = await fetch(`${API_BASE}/products`, { signal: options?.signal });
+    return parseApiResponse(res);
   },
 
   async getByCategory(categoryId: string) {
+    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+        if (error) throw error;
+        return (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId);
+      } catch (e) {
+        console.warn('Supabase category fetch failed, falling back to API:', e);
+      }
+    }
     const res = await fetch(`${API_BASE}/products?categoryId=${categoryId}`);
     return res.json();
+  },
+
+  async getBySlug(categorySlug: string, subcategorySlug?: string) {
+    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+        if (error) throw error;
+        const all = data || [];
+        // client-side filter by specs slugs
+        return all.filter((product: any) => {
+          const specs = product.specs || {};
+          if (subcategorySlug) {
+            return specs.categorySlug === categorySlug && specs.subcategorySlug === subcategorySlug;
+          }
+          return specs.parentCategorySlug === categorySlug || specs.categorySlug === categorySlug || specs.subcategorySlug === categorySlug;
+        });
+      } catch (e) {
+        console.warn('Supabase slug fetch failed, falling back to API:', e);
+      }
+    }
+    const q = new URLSearchParams();
+    if (categorySlug) q.set('categorySlug', categorySlug);
+    if (subcategorySlug) q.set('subcategorySlug', subcategorySlug);
+    const res = await fetch(`${API_BASE}/products?${q.toString()}`);
+    return parseApiResponse(res);
   },
 
   async getSellerProducts(sellerId: string) {
@@ -318,6 +460,11 @@ export const productAPI = {
   },
 };
 
+// Invalidate product-related short-lived caches (used to propagate deletes/updates across tabs)
+export function invalidateProductCaches(ids?: string | string[]) {
+  return;
+}
+
 // ==================== PRODUCT APPROVAL (ADMIN) ====================
 export const adminProductAPI = {
   async getAll(params?: { status?: string; sellerId?: string; search?: string }) {
@@ -325,41 +472,35 @@ export const adminProductAPI = {
     if (params?.status) query.set('status', params.status);
     if (params?.sellerId) query.set('sellerId', params.sellerId);
     if (params?.search) query.set('search', params.search);
-    const res = await fetch(`${API_BASE}/admin/products${query.toString() ? `?${query.toString()}` : ''}`, {
-      headers: getAuthHeaders(),
-    });
-    return res.json();
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products${query.toString() ? `?${query.toString()}` : ''}`);
+    return parseApiResponse(res);
   },
 
   async getPendingProducts() {
-    const res = await fetch(`${API_BASE}/admin/products/pending`, {
-      headers: getAuthHeaders(),
-    });
-    return res.json();
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/pending`);
+    return parseApiResponse(res);
   },
 
   async approve(id: string, notes: string = '') {
-    const res = await fetch(`${API_BASE}/admin/products/${id}/approve`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}/approve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders(),
       },
       body: JSON.stringify({ notes }),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async reject(id: string, reason: string) {
-    const res = await fetch(`${API_BASE}/admin/products/${id}/reject`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}/reject`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders(),
       },
       body: JSON.stringify({ reason }),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async bulkReview(data: {
@@ -368,47 +509,43 @@ export const adminProductAPI = {
     reason?: string;
     notes?: string;
   }) {
-    const res = await fetch(`${API_BASE}/admin/products/bulk-review`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/bulk-review`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders(),
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/admin/products`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders(),
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async update(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/admin/products/${id}`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders(),
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async delete(id: string) {
-    const res = await fetch(`${API_BASE}/admin/products/${id}`, {
+    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
@@ -610,12 +747,12 @@ export const trackingAPI = {
 export const reviewAPI = {
   async getSellerReviews(sellerId: string) {
     const res = await fetch(`${API_BASE}/reviews/vendor/${sellerId}`);
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async getProductReviews(productId: string) {
     const res = await fetch(`${API_BASE}/reviews/product/${productId}`);
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async create(data: any) {
@@ -627,7 +764,7 @@ export const reviewAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
@@ -814,6 +951,10 @@ export const analyticsAPI = {
     entityId?: string;
     metadata?: Record<string, any>;
   }) {
+    if (isLocalDevRuntime()) {
+      return { ok: true, skipped: true, reason: 'local-dev-runtime' };
+    }
+
     const res = await fetch(`${API_BASE}/analytics/events`, {
       method: 'POST',
       headers: {

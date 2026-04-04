@@ -143,6 +143,52 @@ const AdminOrderMonitoring = () => {
     fetchData();
   }, []);
 
+  // Subscribe to server-sent events for realtime order updates
+  useEffect(() => {
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource('/api/events/stream');
+
+      const handleCreated = async (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data || '{}');
+          if (!payload?.id) return;
+          const raw = await orderAPI.get(payload.id);
+          const next = normalizeOrder(raw);
+          setOrders((prev) => [next, ...prev.filter((o) => o.id !== next.id)]);
+        } catch (err) {
+          console.error('SSE order-created handler failed', err);
+        }
+      };
+
+      const handleUpdated = async (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data || '{}');
+          if (!payload?.id) return;
+          const raw = await orderAPI.get(payload.id);
+          const updated = normalizeOrder(raw);
+          setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+          setSelectedOrder((prev) => (prev && prev.id === updated.id ? updated : prev));
+        } catch (err) {
+          console.error('SSE order-updated handler failed', err);
+        }
+      };
+
+      es.addEventListener('order-created', handleCreated as any);
+      es.addEventListener('order-updated', handleUpdated as any);
+    } catch (err) {
+      // ignore SSE connection errors
+    }
+
+    return () => {
+      try {
+        es?.close();
+      } catch (e) {
+        /* ignore */
+      }
+    };
+  }, []);
+
   // Filter and sort orders
   useEffect(() => {
     let filtered = orders;

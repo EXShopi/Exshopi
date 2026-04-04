@@ -1,8 +1,10 @@
 import { getAuthHeaders } from './api';
+const browserHost =
+  typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
-  'http://localhost:3101/api';
+  `http://${browserHost}:3001/api`;
 
 export interface SiteSettings {
   general: {
@@ -29,6 +31,24 @@ export interface SiteSettings {
       primaryCtaLink: string;
       productImageUrl: string;
     };
+    featuredSection: {
+      bestsellersProductIds: string[];
+      bestchoiceProductIds: string[];
+      onsaleProductIds: string[];
+    };
+    campaignSection: {
+      badgeText: string;
+      expiresLabel: string;
+      moreCtaText: string;
+      moreCtaLink: string;
+      allPromotionsText: string;
+      allPromotionsLink: string;
+      endAt: string;
+      panelBgColor: string;
+      sectionBgColor: string;
+      productRailBgColor: string;
+      featuredProductIds: string[];
+    };
     uaeStrip: {
       show: boolean;
       leftTitle: string;
@@ -51,9 +71,15 @@ export interface SiteSettings {
       description: string;
       ctaText: string;
       ctaLink: string;
+      imageUrl: string;
       tone: 'dark' | 'light';
       show: boolean;
     }>;
+    allProductsSection: {
+      show: boolean;
+      title: string;
+      subtitle: string;
+    };
     videoSection: {
       show: boolean;
       badgeText: string;
@@ -123,6 +149,24 @@ export const defaultSettings: SiteSettings = {
       primaryCtaLink: '/products',
       productImageUrl: '/hero/hero-1.png',
     },
+    featuredSection: {
+      bestsellersProductIds: [],
+      bestchoiceProductIds: [],
+      onsaleProductIds: [],
+    },
+    campaignSection: {
+      badgeText: 'Campaign',
+      expiresLabel: 'Promotion expires within:',
+      moreCtaText: 'More',
+      moreCtaLink: '/campaigns/current',
+      allPromotionsText: 'All promotions',
+      allPromotionsLink: '/promotions',
+      endAt: '2026-04-15T23:59:59+04:00',
+      panelBgColor: '#4338ca',
+      sectionBgColor: '#1d4ed8',
+      productRailBgColor: 'rgba(255,255,255,0.10)',
+      featuredProductIds: [],
+    },
     uaeStrip: {
       show: true,
       leftTitle: 'OUR PRIDE',
@@ -141,24 +185,31 @@ export const defaultSettings: SiteSettings = {
       {
         id: 'promo-1',
         badge: 'Marketplace Offer',
-        title: 'Electronics Deals This Week',
-        description: 'Explore featured electronics, accessories and top marketplace picks with competitive weekly deals.',
+        title: 'T-Shirts Deals This Week',
+        description: 'Explore fresh T-shirts, everyday wardrobe picks, and marketplace fashion deals selected for fast-moving apparel sales.',
         ctaText: 'Shop Deals',
-        ctaLink: '/deals',
+        ctaLink: '/category/fashion/men-clothing',
+        imageUrl: '',
         tone: 'dark',
         show: true,
       },
       {
         id: 'promo-2',
         badge: 'Featured Collection',
-        title: 'Trending Accessories & Daily Essentials',
-        description: 'Discover fast-moving marketplace products, everyday essentials and customer favorites in one curated collection.',
+        title: 'Trending Shoes & Daily Essentials',
+        description: 'Discover standout shoes, daily footwear picks, and customer favorites in one curated collection built for style and comfort.',
         ctaText: 'Explore Products',
-        ctaLink: '/categories',
+        ctaLink: '/category/fashion/footwear',
+        imageUrl: '',
         tone: 'light',
         show: true,
       },
     ],
+    allProductsSection: {
+      show: true,
+      title: 'All Products',
+      subtitle: 'Browse the full live ExShopi catalog before the footer.',
+    },
     videoSection: {
       show: true,
       badgeText: 'Featured',
@@ -220,6 +271,30 @@ export async function getSiteSettings(): Promise<SiteSettings> {
         ...defaultSettings.homepage,
         ...(remote?.homepage || {}),
         hero: { ...defaultSettings.homepage.hero, ...(remote?.homepage?.hero || {}) },
+        featuredSection: {
+          ...defaultSettings.homepage.featuredSection,
+          ...(remote?.homepage?.featuredSection || {}),
+          bestsellersProductIds: Array.isArray(remote?.homepage?.featuredSection?.bestsellersProductIds)
+            ? remote.homepage.featuredSection.bestsellersProductIds.map((value: unknown) => String(value))
+            : defaultSettings.homepage.featuredSection.bestsellersProductIds,
+          bestchoiceProductIds: Array.isArray(remote?.homepage?.featuredSection?.bestchoiceProductIds)
+            ? remote.homepage.featuredSection.bestchoiceProductIds.map((value: unknown) => String(value))
+            : defaultSettings.homepage.featuredSection.bestchoiceProductIds,
+          onsaleProductIds: Array.isArray(remote?.homepage?.featuredSection?.onsaleProductIds)
+            ? remote.homepage.featuredSection.onsaleProductIds.map((value: unknown) => String(value))
+            : defaultSettings.homepage.featuredSection.onsaleProductIds,
+        },
+        campaignSection: {
+          ...defaultSettings.homepage.campaignSection,
+          ...(remote?.homepage?.campaignSection || {}),
+          featuredProductIds: Array.isArray(remote?.homepage?.campaignSection?.featuredProductIds)
+            ? remote.homepage.campaignSection.featuredProductIds.map((value: unknown) => String(value))
+            : defaultSettings.homepage.campaignSection.featuredProductIds,
+        },
+        allProductsSection: {
+          ...defaultSettings.homepage.allProductsSection,
+          ...(remote?.homepage?.allProductsSection || {}),
+        },
         uaeStrip: { ...defaultSettings.homepage.uaeStrip, ...(remote?.homepage?.uaeStrip || {}) },
         sections: Array.isArray(remote?.homepage?.sections) ? remote.homepage.sections : defaultSettings.homepage.sections,
         promoBoxes: Array.isArray(remote?.homepage?.promoBoxes) ? remote.homepage.promoBoxes : defaultSettings.homepage.promoBoxes,

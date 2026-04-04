@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import ProductCard from "../components/ProductCard";
+import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { productAPI } from "../services/api";
 import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 
@@ -65,7 +66,7 @@ export default function PopularCollectionPage() {
       <section className="mx-auto max-w-7xl px-4 py-10 md:px-6">
         {loading ? (
           <div className="rounded-[28px] border border-slate-200 bg-white p-12 text-center shadow-sm">
-            <p className="text-lg font-black text-slate-900">Loading live marketplace products...</p>
+            <OrbitLoader label="Loading live marketplace products..." size={26} />
           </div>
         ) : products.length > 0 ? (
           <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">

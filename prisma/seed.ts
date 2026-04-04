@@ -33,6 +33,14 @@ const categories = [
     slug: 'daily-use-products',
     children: [],
   },
+  {
+    name: 'Fashion',
+    slug: 'fashion',
+    children: [
+      { name: 'Men Clothing', slug: 'men-clothing' },
+      { name: 'Footwear', slug: 'footwear' },
+    ],
+  },
 ];
 
 async function upsertUser(input: {

@@ -109,10 +109,12 @@ export const signOut = async () => {
 
 // Firestore-compatible mocks using Supabase (for future data operations)
 // Backend API base for REST shims
+const browserHost =
+  typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
-  'http://localhost:3101/api';
+  `http://${browserHost}:3001/api`;
 
 // Utility: normalize path segments (skip db/placeholders)
 const buildPath = (...args: any[]) => {

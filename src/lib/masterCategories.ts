@@ -167,25 +167,31 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
   },
 ];
 
-function normalizeSlug(value?: string) {
+export function normalizeCategorySlug(value?: string) {
   if (!value) return '';
   return String(value || '')
-    .trim()
     .toLowerCase()
+    .replace(/&/g, 'and')
+    .trim()
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
+// Backwards-compatible alias
+export const normalizeSlug = normalizeCategorySlug;
+
 function findNodeBySlug(list: CategoryNode[], slug: string): { node?: CategoryNode; parent?: CategoryNode | null } {
-  const target = normalizeSlug(slug);
+  const target = normalizeCategorySlug(slug);
   for (const node of list || []) {
-    if (normalizeSlug(node.slug) === target) return { node, parent: null };
+    if (normalizeCategorySlug(node.slug) === target) return { node, parent: null };
     if (Array.isArray(node.subcategories)) {
       for (const sub of node.subcategories) {
-        if (normalizeSlug(sub.slug) === target) return { node: sub, parent: node };
+        if (normalizeCategorySlug(sub.slug) === target) return { node: sub, parent: node };
         if (Array.isArray(sub.childCategories)) {
           for (const child of sub.childCategories) {
-            if (normalizeSlug(child.slug) === target) return { node: child, parent: sub };
+            if (normalizeCategorySlug(child.slug) === target) return { node: child, parent: sub };
           }
         }
       }
@@ -204,33 +210,74 @@ export function getCategoryBySlug(slug: string) {
 }
 
 export function getSubcategories(parentSlug: string) {
-  const parent = MASTER_CATEGORIES.find((p) => normalizeSlug(p.slug) === normalizeSlug(parentSlug));
+  const parent = MASTER_CATEGORIES.find((p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(parentSlug));
   return parent?.subcategories || [];
 }
 
 export function getChildCategories(parentSlug: string, subSlug: string) {
-  const parent = MASTER_CATEGORIES.find((p) => normalizeSlug(p.slug) === normalizeSlug(parentSlug));
+  const parent = MASTER_CATEGORIES.find((p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(parentSlug));
   if (!parent) return [];
-  const sub = parent.subcategories?.find((s) => normalizeSlug(s.slug) === normalizeSlug(subSlug));
+  const sub = parent.subcategories?.find((s) => normalizeCategorySlug(s.slug) === normalizeCategorySlug(subSlug));
   return sub?.childCategories || [];
 }
 
 const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> = {
-  laptop: [{ category: 'electronics', subcategory: 'laptops' }],
-  laptopss: [{ category: 'electronics', subcategory: 'laptops' }],
-  macbook: [{ category: 'electronics', subcategory: 'laptops' }],
-  desktop: [{ category: 'electronics', subcategory: 'computers' }],
-  computer: [{ category: 'electronics', subcategory: 'computers' }],
-  phone: [{ category: 'electronics', subcategory: 'mobiles' }],
-  mobile: [{ category: 'electronics', subcategory: 'mobiles' }],
-  smartphone: [{ category: 'electronics', subcategory: 'mobiles' }],
-  tablet: [{ category: 'electronics', subcategory: 'mobiles' }],
-  ipad: [{ category: 'electronics', subcategory: 'mobiles' }],
-  tv: [{ category: 'electronics', subcategory: 'tv-video' }],
-  projector: [{ category: 'electronics', subcategory: 'tv-video' }],
-  camera: [{ category: 'electronics', subcategory: 'cameras' }],
-  'camera-lens': [{ category: 'electronics', subcategory: 'cameras' }],
-  gaming: [{ category: 'electronics', subcategory: 'gaming' }],
+  // Computers / Laptops
+  laptop: [{ category: 'computers', subcategory: 'laptops' }],
+  laptops: [{ category: 'computers', subcategory: 'laptops' }],
+  macbook: [{ category: 'computers', subcategory: 'laptops' }],
+  notebook: [{ category: 'computers', subcategory: 'laptops' }],
+  ultrabook: [{ category: 'computers', subcategory: 'laptops' }],
+
+  // Desktop / Workstation
+  desktop: [{ category: 'computers', subcategory: 'desktop-pcs' }],
+  desktops: [{ category: 'computers', subcategory: 'desktop-pcs' }],
+  pc: [{ category: 'computers', subcategory: 'desktop-pcs' }],
+  tower: [{ category: 'computers', subcategory: 'desktop-pcs' }],
+  workstation: [{ category: 'computers', subcategory: 'desktop-pcs' }],
+  'all-in-one': [{ category: 'computers', subcategory: 'all-in-one' }],
+
+  // Storage / drives
+  ssd: [{ category: 'computers', subcategory: 'storage' }],
+  hdd: [{ category: 'computers', subcategory: 'storage' }],
+  storage: [{ category: 'computers', subcategory: 'storage' }],
+  'hard-drive': [{ category: 'computers', subcategory: 'storage' }],
+
+  // Monitors / Printers
+  monitor: [{ category: 'computers', subcategory: 'monitors' }],
+  printer: [{ category: 'computers', subcategory: 'printers' }],
+
+  // Mobiles
+  phone: [{ category: 'mobiles', subcategory: 'smartphones' }],
+  phones: [{ category: 'mobiles', subcategory: 'smartphones' }],
+  mobile: [{ category: 'mobiles', subcategory: 'smartphones' }],
+  mobiles: [{ category: 'mobiles', subcategory: 'smartphones' }],
+  smartphone: [{ category: 'mobiles', subcategory: 'smartphones' }],
+  iphone: [{ category: 'mobiles', subcategory: 'smartphones' }],
+  android: [{ category: 'mobiles', subcategory: 'smartphones' }],
+  tablet: [{ category: 'mobiles', subcategory: 'tablets' }],
+  ipad: [{ category: 'mobiles', subcategory: 'tablets' }],
+
+  // Mobile accessories
+  charger: [{ category: 'mobiles', subcategory: 'chargers' }],
+  chargers: [{ category: 'mobiles', subcategory: 'chargers' }],
+  cable: [{ category: 'mobiles', subcategory: 'cables' }],
+  cables: [{ category: 'mobiles', subcategory: 'cables' }],
+  case: [{ category: 'mobiles', subcategory: 'cases' }],
+  'screen-protector': [{ category: 'mobiles', subcategory: 'screen-protectors' }],
+
+  // TV / Video / Projector
+  tv: [{ category: 'tv-video', subcategory: 'tvs' }],
+  projector: [{ category: 'tv-video', subcategory: 'projectors' }],
+
+  // Cameras
+  camera: [{ category: 'cameras', subcategory: 'dslr' }],
+  'camera-lens': [{ category: 'cameras', subcategory: 'lenses' }],
+
+  // Gaming
+  gaming: [{ category: 'gaming', subcategory: 'consoles' }],
+
+  // Others
   clothing: [{ category: 'fashion' }],
   fashion: [{ category: 'fashion' }],
   kitchen: [{ category: 'home-kitchen' }],
@@ -240,7 +287,7 @@ const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> 
 };
 
 export function mapLegacyCategory(value: string) {
-  const v = normalizeSlug(value || '');
+  const v = normalizeCategorySlug(value || '');
   if (!v) return null;
 
   // exact map
@@ -255,21 +302,43 @@ export function mapLegacyCategory(value: string) {
   // fallback: if matches any category/subcategory slug directly
   const direct = findNodeBySlug(MASTER_CATEGORIES, v);
   if (direct.node) {
-    if (direct.parent) return { category: normalizeSlug(direct.parent.slug), subcategory: normalizeSlug(direct.node.slug) };
-    return { category: normalizeSlug(direct.node.slug) };
+    if (direct.parent) return { category: normalizeCategorySlug(direct.parent.slug), subcategory: normalizeCategorySlug(direct.node.slug) };
+    return { category: normalizeCategorySlug(direct.node.slug) };
   }
 
   return null;
 }
 
 export function gatherSlugsUnder(categorySlug: string) {
+  const cacheKey = normalizeCategorySlug(categorySlug || '');
+  // simple in-memory cache to avoid recomputing the tree walk repeatedly
+  if (!gatherSlugsUnder['_cache']) {
+    (gatherSlugsUnder as any)['_cache'] = new Map<string, Set<string>>();
+  }
+  const cache: Map<string, Set<string>> = (gatherSlugsUnder as any)['_cache'];
+  if (cache.has(cacheKey)) return new Set(cache.get(cacheKey));
+
   const set = new Set<string>();
-  const parent = MASTER_CATEGORIES.find((p) => normalizeSlug(p.slug) === normalizeSlug(categorySlug));
-  if (!parent) return set;
-  set.add(normalizeSlug(parent.slug));
-  for (const sub of parent.subcategories || []) {
-    set.add(normalizeSlug(sub.slug));
-    for (const child of sub.childCategories || []) set.add(normalizeSlug(child.slug));
+  if (!categorySlug) return set;
+  const found = findNodeBySlug(MASTER_CATEGORIES, categorySlug);
+  if (!found.node) return set;
+
+  function walk(node: CategoryNode | undefined) {
+    if (!node) return;
+    set.add(normalizeCategorySlug(node.slug));
+    if (Array.isArray(node.subcategories)) {
+      for (const s of node.subcategories) walk(s);
+    }
+    if (Array.isArray(node.childCategories)) {
+      for (const c of node.childCategories) walk(c);
+    }
+  }
+
+  walk(found.node);
+  try {
+    cache.set(cacheKey, new Set(set));
+  } catch (e) {
+    // ignore caching errors
   }
   return set;
 }
@@ -280,47 +349,88 @@ export function filterProductsByCategoryTree(
   subcategorySlug?: string | null,
   backendCategories?: any[]
 ) {
-  if (!categorySlug) return products;
-  const wanted = new Set<string>();
-  const normCat = normalizeSlug(categorySlug);
-  if (subcategorySlug) {
-    wanted.add(normalizeSlug(subcategorySlug));
-  }
+  // strict behavior: if no categorySlug provided, return empty (avoids accidental full-catalog fallbacks)
+  if (!categorySlug) return [];
 
-  // include all slugs under parent if category matches a parent
-  const slugsUnder = gatherSlugsUnder(normCat);
-  if (slugsUnder.size) {
-    for (const s of slugsUnder) wanted.add(s);
-  }
+  const normCat = normalizeCategorySlug(categorySlug);
+  const normSub = subcategorySlug ? normalizeCategorySlug(subcategorySlug) : null;
 
-  // include full parent slug too
-  wanted.add(normCat);
+  // gather allowed slugs starting from the most specific node
+  const allowed = new Set<string>();
+  // If a specific subcategory was provided, gather its slugs; otherwise gather from the provided category
+  const slugsUnder = gatherSlugsUnder(normSub || normCat);
+  for (const s of slugsUnder) allowed.add(s);
+  // also include selected node itself
+  allowed.add(normSub || normCat);
 
-  return (products || []).filter((product) => {
-    // 1) if product has categoryId and backendCategories provided, try to map id -> slug
+  // debug counters
+  let matchedCount = 0;
+  let legacyMappedCount = 0;
+  let unmatchedCount = 0;
+
+  const result = (products || []).filter((product) => {
+    const values: string[] = [];
+
+    // 1) backend category id -> slug (from backendCategories list)
     const catId = product?.categoryId || product?.specs?.backendCategoryId || null;
     if (catId && backendCategories && Array.isArray(backendCategories)) {
-      const byId = backendCategories.find((c) => String(c.id) === String(catId) || c.slug === String(catId));
-      if (byId && wanted.has(normalizeSlug(byId.slug))) return true;
+      const byId = backendCategories.find((c) => String(c.id) === String(catId) || String(c.slug) === String(catId));
+      if (byId && byId.slug) values.push(normalizeCategorySlug(byId.slug));
     }
 
-    // 2) check textual category fields
-    const textual = [product?.category, product?.specs?.attributes?.subcategory, product?.specs?.attributes?.category, product?.specs?.backendCategoryId]
-      .filter(Boolean)
-      .map((t: any) => normalizeSlug(String(t)));
-    for (const t of textual) {
-      if (wanted.has(t)) return true;
+    // 2) structured specs fields (preferred)
+    if (product?.specs) {
+      if (product.specs.parentCategorySlug) values.push(normalizeCategorySlug(product.specs.parentCategorySlug));
+      if (product.specs.categorySlug) values.push(normalizeCategorySlug(product.specs.categorySlug));
+      if (product.specs.subcategorySlug) values.push(normalizeCategorySlug(product.specs.subcategorySlug));
+      if (product.specs.childCategorySlug) values.push(normalizeCategorySlug(product.specs.childCategorySlug));
+      // legacy attribute buckets
+      if (product.specs.attributes) {
+        if (product.specs.attributes.category) values.push(normalizeCategorySlug(String(product.specs.attributes.category)));
+        if (product.specs.attributes.subcategory) values.push(normalizeCategorySlug(String(product.specs.attributes.subcategory)));
+      }
     }
 
-    // 3) check title/keywords fallback
-    const hay = (String(product?.title || '') + ' ' + String(product?.description || '') + ' ' + String(product?.specs?.brand || ''))
-      .toLowerCase();
-    for (const s of Array.from(wanted)) {
-      if (s && hay.includes(s.replace(/-/g, ' '))) return true;
+    // 3) legacy top-level textual fields
+    if (product?.category) values.push(normalizeCategorySlug(String(product.category)));
+    if (product?.subcategory) values.push(normalizeCategorySlug(String(product.subcategory)));
+
+    // de-duplicate
+    const uniq = Array.from(new Set(values.filter(Boolean)));
+
+    // direct match with allowed slugs
+    for (const s of uniq) {
+      if (allowed.has(s)) {
+        matchedCount += 1;
+        return true;
+      }
     }
 
+    // 4) try safe legacy mapping using mapLegacyCategory on conservative fields
+    const legacySource = product?.category || product?.specs?.attributes?.subcategory || product?.specs?.attributes?.category || product?.specs?.backendCategoryId || product?.title || product?.description || '';
+    const mapped = mapLegacyCategory(String(legacySource || ''));
+    if (mapped && mapped.category) {
+      const mappedCat = normalizeCategorySlug(mapped.category);
+      const mappedSub = mapped.subcategory ? normalizeCategorySlug(mapped.subcategory) : null;
+      if (mappedCat === normCat || (mappedSub && allowed.has(mappedSub))) {
+        legacyMappedCount += 1;
+        return true;
+      }
+    }
+
+    unmatchedCount += 1;
     return false;
   });
+
+  // temporary debug output
+  try {
+    console.debug('[category-filter] requested:', { categorySlug: categorySlug, subcategorySlug: subcategorySlug });
+    console.debug('[category-filter] results:', { totalProducts: (products || []).length, matched: result.length, matchedCount, legacyMappedCount, unmatchedCount });
+  } catch (e) {
+    // ignore logging errors
+  }
+
+  return result;
 }
 
 export default {

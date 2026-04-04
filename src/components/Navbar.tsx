@@ -20,315 +20,14 @@ import { analyticsAPI, productAPI } from "../services/api";
 import { formatAEDPlain } from "../lib/currency";
 import { useAuthStore } from "../store/auth";
 import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
+import { marketplaceCategories } from "./categories";
 
 type SubCategoryGroup = {
   title: string;
   items: string[];
 };
 
-type MainCategory = {
-  id: string;
-  name: string;
-  description: string;
-  groups: SubCategoryGroup[];
-};
-
-const marketplaceCategories: MainCategory[] = [
-  {
-    id: "electronics-mobiles",
-    name: "Electronics & Mobiles",
-    description: "Phones, laptops, gadgets and accessories",
-    groups: [
-      {
-        title: "Mobiles & Tablets",
-        items: [
-          "Smartphones",
-          "Tablets",
-          "iPads",
-          "Refurbished Phones",
-          "Mobile Accessories",
-          "Cases",
-          "Screen Protectors",
-        ],
-      },
-      {
-        title: "Laptops & Computers",
-        items: [
-          "MacBooks",
-          "Windows Laptops",
-          "Gaming PCs",
-          "Monitors",
-          "Printers",
-          "Storage",
-          "SSD / HDD",
-        ],
-      },
-      {
-        title: "Audio & Video",
-        items: [
-          "Headphones",
-          "Earbuds (TWS)",
-          "Bluetooth Speakers",
-          "Home Theater",
-          "Smart TVs",
-        ],
-      },
-      {
-        title: "Cameras",
-        items: [
-          "DSLR",
-          "Mirrorless",
-          "Action Cameras",
-          "Drones",
-          "Security Cameras",
-        ],
-      },
-      {
-        title: "Wearables",
-        items: [
-          "Smartwatches",
-          "Fitness Trackers",
-          "Apple Watch",
-          "Accessories",
-        ],
-      },
-    ],
-  },
-  {
-    id: "fashion",
-    name: "Fashion",
-    description: "Men, women and kids fashion",
-    groups: [
-      {
-        title: "Clothing",
-        items: [
-          "Tops",
-          "Dresses",
-          "Hoodies",
-          "Activewear",
-          "Abayas",
-          "Kaftans",
-          "Kurtas",
-        ],
-      },
-      {
-        title: "Footwear",
-        items: [
-          "Sneakers",
-          "Formal Shoes",
-          "Sandals",
-          "Heels",
-          "Sports Shoes",
-        ],
-      },
-      {
-        title: "Bags & Accessories",
-        items: ["Handbags", "Backpacks", "Wallets", "Belts", "Sunglasses"],
-      },
-      {
-        title: "Jewelry & Watches",
-        items: [
-          "Luxury Watches",
-          "Smartwatches",
-          "Fine Jewelry",
-          "Fashion Jewelry",
-        ],
-      },
-    ],
-  },
-  {
-    id: "home-kitchen-appliances",
-    name: "Home, Kitchen & Appliances",
-    description: "Furniture, decor and appliances",
-    groups: [
-      {
-        title: "Large Appliances",
-        items: [
-          "Refrigerators",
-          "Washing Machines",
-          "Ovens",
-          "Dishwashers",
-          "ACs",
-        ],
-      },
-      {
-        title: "Small Appliances",
-        items: [
-          "Air Fryers",
-          "Coffee Makers",
-          "Blenders",
-          "Kettles",
-          "Microwaves",
-        ],
-      },
-      {
-        title: "Kitchen & Dining",
-        items: [
-          "Cookware Sets",
-          "Storage & Organization",
-          "Dinnerware",
-          "Bakeware",
-        ],
-      },
-      {
-        title: "Furniture",
-        items: [
-          "Living Room",
-          "Bedroom",
-          "Office Furniture",
-          "Gaming Chairs",
-        ],
-      },
-      {
-        title: "Home Decor",
-        items: ["Lighting", "Rugs", "Bedding & Bath", "Candles", "Diffusers"],
-      },
-    ],
-  },
-  {
-    id: "beauty-health-personal-care",
-    name: "Beauty, Health & Personal Care",
-    description: "Beauty, skincare and wellness",
-    groups: [
-      {
-        title: "Beauty & Makeup",
-        items: [
-          "Face Makeup",
-          "Eye Makeup",
-          "Lip Makeup",
-          "Makeup Tools",
-          "Brushes",
-        ],
-      },
-      {
-        title: "Skincare",
-        items: ["Moisturizers", "Serums", "Sunscreen", "K-Beauty"],
-      },
-      {
-        title: "Fragrances",
-        items: [
-          "Luxury Perfumes",
-          "Arabic Perfumes",
-          "Body Mists",
-          "Men’s Colognes",
-        ],
-      },
-      {
-        title: "Personal Care",
-        items: ["Haircare", "Oral Care", "Men’s Grooming", "Bath & Body"],
-      },
-      {
-        title: "Health & Wellness",
-        items: ["Vitamins & Supplements", "First Aid", "Medical Devices"],
-      },
-    ],
-  },
-  {
-    id: "baby-kids-toys",
-    name: "Baby, Kids & Toys",
-    description: "Baby essentials, toys and kids fashion",
-    groups: [
-      {
-        title: "Baby Essentials",
-        items: [
-          "Diapers",
-          "Wipes",
-          "Baby Food & Formula",
-          "Strollers",
-          "Car Seats",
-        ],
-      },
-      {
-        title: "Toys & Games",
-        items: [
-          "LEGO",
-          "Action Figures",
-          "Dolls",
-          "Board Games",
-          "Outdoor Play",
-          "Educational Toys",
-        ],
-      },
-      {
-        title: "Kids Fashion",
-        items: ["Boys Clothing", "Girls Clothing", "Infant Clothing", "Kids Shoes"],
-      },
-    ],
-  },
-  {
-    id: "sports-outdoors",
-    name: "Sports & Outdoors",
-    description: "Fitness and outdoor gear",
-    groups: [
-      {
-        title: "Fitness & Training",
-        items: ["Gym Equipment", "Treadmills", "Dumbbells", "Yoga Mats"],
-      },
-      {
-        title: "Outdoor Adventure",
-        items: ["Camping Gear", "Cycling", "Scooters", "Swimming"],
-      },
-      {
-        title: "Team Sports",
-        items: ["Football", "Basketball", "Tennis", "Padel Rackets"],
-      },
-    ],
-  },
-  {
-    id: "grocery",
-    name: "Grocery",
-    description: "Fresh, pantry and household essentials",
-    groups: [
-      {
-        title: "Fresh Food",
-        items: [
-          "Fruits & Vegetables",
-          "Meat & Seafood",
-          "Dairy & Eggs",
-          "Bakery",
-        ],
-      },
-      {
-        title: "Pantry",
-        items: [
-          "Snacks",
-          "Chocolates",
-          "Beverages",
-          "Canned Food",
-          "Cooking Oils",
-          "Rice & Pasta",
-        ],
-      },
-      {
-        title: "Household",
-        items: ["Laundry Care", "Cleaning Supplies", "Tissues & Paper Rolls"],
-      },
-      {
-        title: "Pet Supplies",
-        items: ["Dog Food", "Cat Food", "Pet Toys", "Grooming", "Pet Healthcare"],
-      },
-    ],
-  },
-  {
-    id: "tools-diy-automotive",
-    name: "Tools, DIY & Automotive",
-    description: "Tools, home improvement and automotive",
-    groups: [
-      {
-        title: "Tools",
-        items: ["Power Tools", "Hand Tools", "Measurement", "Safety Gear"],
-      },
-      {
-        title: "Home Improvement",
-        items: ["Smart Home", "Alexa / Google Home", "Electrical", "Plumbing"],
-      },
-      {
-        title: "Automotive",
-        items: ["Car Accessories", "Tires", "Car Care", "Spare Parts"],
-      },
-    ],
-  },
-];
+// marketplaceCategories are derived from src/components/categories -> uses MASTER_CATEGORIES
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -455,36 +154,69 @@ export default function Navbar() {
         {/* Premium accent line under header */}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent opacity-60"></div>
         
-        <div className="mx-auto max-w-[1800px] px-4 md:px-6">
-          <div className="flex flex-col gap-3 py-4">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex items-center gap-4">
+        <div className="mx-auto max-w-[1800px] px-3 md:px-6">
+          <div className="flex flex-col gap-2 py-1.5 md:gap-4 md:py-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2 md:gap-4">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-50 md:h-12 md:w-12 md:rounded-2xl"
                   type="button"
                 >
-                  <Menu className="h-5 w-5" />
+                  <Menu className="h-3.5 w-3.5 md:h-5 md:w-5" />
                 </button>
 
-                <Link to="/" className="flex items-center">
+                <Link to="/" className="flex min-w-0 items-center">
                   <img
                     src="/logo.png"
                     alt="Exshopi"
-                    className="h-16 w-auto object-contain"
+                    className="h-7.5 w-auto object-contain md:h-16"
                   />
-                  <div className="-ml-1 leading-tight">
-                    <div className="text-2xl font-black tracking-tight text-slate-900">
+                  <div className="-ml-1 min-w-0 leading-tight">
+                    <div className="truncate text-[16px] font-black tracking-tight text-slate-900 md:text-2xl">
                       Exshopi
                     </div>
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                    <div className="hidden text-[10px] uppercase tracking-[0.2em] text-slate-500 md:block">
                       UAE’s Trusted Marketplace
                     </div>
                   </div>
                 </Link>
               </div>
 
-              <div className="flex flex-1 flex-col gap-4 xl:mx-8 xl:max-w-5xl xl:flex-row xl:items-center">
+              <div className="flex shrink-0 items-center gap-0.5 md:gap-3 xl:hidden">
+                <NavbarWishlistIcon />
+                <PremiumAccountButton
+                  isLoggedIn={Boolean(authUser?.id || authUser?.uid)}
+                  userName={
+                    authUser?.name ||
+                    authUser?.fullName ||
+                    authUser?.displayName ||
+                    authUser?.email ||
+                    undefined
+                  }
+                />
+                <CartIcon onClick={() => setCartDrawerOpen(true)} />
+              </div>
+
+              <div className="hidden flex-wrap items-center gap-3 xl:flex xl:justify-end">
+                <SupportIcon />
+                <NavbarWishlistIcon />
+                <PremiumAccountButton
+                  isLoggedIn={Boolean(authUser?.id || authUser?.uid)}
+                  userName={
+                    authUser?.name ||
+                    authUser?.fullName ||
+                    authUser?.displayName ||
+                    authUser?.email ||
+                    undefined
+                  }
+                />
+                <CartIcon onClick={() => setCartDrawerOpen(true)} />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-1 flex-col gap-2 xl:mx-8 xl:max-w-5xl xl:flex-row xl:items-center xl:gap-4">
                 <div className="relative hidden xl:block">
                   <button
                     onClick={() => setMegaOpen((prev) => !prev)}
@@ -574,9 +306,9 @@ export default function Navbar() {
                   )}
                 </div>
 
-                <div className="relative group flex h-[70px] flex-1 items-center overflow-visible rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,250,255,0.92))] pl-5 pr-2 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-2xl transition-all duration-300 hover:border-slate-300 hover:shadow-[0_22px_50px_rgba(15,23,42,0.12)] focus-within:border-slate-300 focus-within:bg-white focus-within:shadow-[0_22px_50px_rgba(15,23,42,0.12)]">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-white shadow-inner">
-                    <Search className="h-5 w-5 text-blue-600 font-semibold" />
+                <div className="relative group flex h-[44px] w-full items-center overflow-visible rounded-[15px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,250,255,0.92))] pl-2.5 pr-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur-2xl transition-all duration-300 hover:border-slate-300 hover:shadow-[0_22px_50px_rgba(15,23,42,0.12)] focus-within:border-slate-300 focus-within:bg-white focus-within:shadow-[0_22px_50px_rgba(15,23,42,0.12)] md:h-[70px] md:rounded-[24px] md:pl-5 xl:flex-1">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-white shadow-inner md:h-11 md:w-11">
+                    <Search className="h-4 w-4 text-blue-600 font-semibold md:h-5 md:w-5" />
                   </div>
 
                   <input
@@ -590,13 +322,13 @@ export default function Navbar() {
                       }
                     }}
                     placeholder={storefrontT(lang, "search_placeholder")}
-                    className="h-full w-full bg-transparent px-4 text-[16px] font-medium text-slate-900 outline-none ring-0 border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-slate-400"
+                    className="h-full min-w-0 w-full bg-transparent px-2 text-[10.5px] font-medium text-slate-900 outline-none ring-0 border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-slate-400 md:px-4 md:text-[16px]"
                   />
 
                   <button
                     type="button"
                     onClick={startVoiceSearch}
-                    className={`relative mr-2 flex h-12 w-12 items-center justify-center rounded-full transition-all duration-300 ${
+                    className={`relative mr-2 hidden h-11 w-11 items-center justify-center rounded-full transition-all duration-300 md:flex md:h-12 md:w-12 ${
                       listening
                         ? "animate-pulse bg-gradient-to-br from-red-500 to-red-600 text-white shadow-[0_8px_20px_rgba(239,68,68,0.3)]"
                         : "border border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 hover:shadow-md"
@@ -609,7 +341,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={handleSearchSubmit}
-                    className="h-[56px] rounded-[22px] bg-gradient-to-r from-blue-600 to-blue-700 px-8 text-sm font-bold text-white transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-lg active:scale-95"
+                    className="h-8 shrink-0 rounded-[12px] bg-gradient-to-r from-blue-600 to-blue-700 px-3 text-[10.5px] font-bold text-white transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-lg active:scale-95 md:h-[56px] md:rounded-[22px] md:px-8 md:text-sm"
                   >
                     {storefrontT(lang, "search")}
                   </button>
@@ -645,29 +377,6 @@ export default function Navbar() {
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 xl:justify-end">
-                {/* Support Icon */}
-                <SupportIcon />
-
-                {/* Wishlist Icon */}
-                <NavbarWishlistIcon />
-
-                {/* Account Button */}
-                <PremiumAccountButton
-                  isLoggedIn={Boolean(authUser?.id || authUser?.uid)}
-                  userName={
-                    authUser?.name ||
-                    authUser?.fullName ||
-                    authUser?.displayName ||
-                    authUser?.email ||
-                    undefined
-                  }
-                />
-
-                {/* Cart Icon */}
-                <CartIcon onClick={() => setCartDrawerOpen(true)} />
               </div>
             </div>
           </div>

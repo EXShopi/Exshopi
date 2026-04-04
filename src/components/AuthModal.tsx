@@ -137,12 +137,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const resp = await AuthService.signUp(email, password, profileData.fullName || '');
+      const fullName = profileData.fullName.trim();
+      const normalizedPhone = phone.trim();
+      const fallbackName = email.split('@')[0]?.replace(/[._-]+/g, ' ').trim() || 'ExShopi Customer';
+      const resp = await AuthService.signUp(email, password, fullName || fallbackName, normalizedPhone);
       if (resp?.user) {
         setUser(resp.user);
         setRole((resp.role as any) || 'customer');
         setAccessToken((resp as any).accessToken || useAuthStore.getState().accessToken || null);
         setSellerApplication(resp.sellerApplication || null);
+        setProfileData((current) => ({
+          ...current,
+          fullName: fullName || resp.user.fullName || resp.user.name || fallbackName,
+        }));
+        setPhone(resp.user.phone || normalizedPhone);
         setStep('profile');
       }
     } catch (error: any) {
@@ -186,20 +194,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       const userId = useAuthStore.getState().user?.id as string | undefined;
       if (userId) {
         try {
-          const res = await fetch(`/api/users/${userId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              ...getAuthHeaders(),
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              ...profileData,
-              phone,
-            })
+          const updated = await userAPI.update(userId, {
+            name: profileData.fullName,
+            phone,
+            country: profileData.country,
           });
-          if (res.ok) {
-            const updated = await res.json();
+          if (updated) {
             setUser(updated);
           } else {
             const updated = { ...(useAuthStore.getState().user || {}), ...profileData, phone };
@@ -435,6 +435,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
                 <form className="space-y-5" onSubmit={handleRegister}>
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      minLength={2}
+                      value={profileData.fullName}
+                      onChange={(e) => setProfileData((current) => ({ ...current, fullName: e.target.value }))}
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:border-violet-500 focus:ring-4 focus:ring-violet-500/5 outline-none transition-all font-medium text-sm"
+                      placeholder="Your full name"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                     <input 
                       type="email" 
@@ -458,10 +471,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      required
+                      minLength={7}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:border-violet-500 focus:ring-4 focus:ring-violet-500/5 outline-none transition-all font-medium text-sm"
+                      placeholder="+971 50 000 0000"
+                    />
+                  </div>
+
                   <div className="flex items-start gap-3 px-1">
                     <input type="checkbox" required className="mt-1 w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                     <span className="text-xs text-slate-500 leading-relaxed font-medium">
-                      I agree to the <button type="button" className="text-violet-600 font-bold hover:underline">Terms of Service</button> and <button type="button" className="text-violet-600 font-bold hover:underline">Privacy Policy</button>.
+                      I agree to the <a href="/terms-conditions" target="_blank" rel="noreferrer" className="text-violet-600 font-bold hover:underline">Terms of Service</a> and <a href="/privacy-policy" target="_blank" rel="noreferrer" className="text-violet-600 font-bold hover:underline">Privacy Policy</a>.
                     </span>
                   </div>
 

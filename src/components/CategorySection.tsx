@@ -1,58 +1,59 @@
+import { Link } from "react-router-dom";
+
 const categories = [
   {
     name: "Computers",
     image: "/categories/Computer.png",
-    slug: "computers",
-    link: "/categories/laptops",
+    link: "/products?category=computers",
   },
   {
     name: "Cell Phones",
     image: "/categories/Cellphone.png",
-    link: "/categories/mobiles",
+    link: "/products?category=mobiles",
   },
   {
     name: "TVs / Video",
     image: "/categories/Tv.png",
-    link: "/categories/tv-video",
+    link: "/products?category=tv",
   },
   {
     name: "Video Games",
     image: "/categories/Gaming.png",
-    link: "/categories/gaming",
+    link: "/products?category=gaming",
   },
   {
-    name: "Coffee Makers",
-    image: "/categories/Cofeemaker.png",
-    link: "/categories/home-appliances",
+    name: "Tshirts & Clothing",
+    image: "/categories/Clothing.png",
+    link: "/products?category=clothing",
   },
   {
     name: "Cameras & Photo",
     image: "/categories/Camera.png",
-    link: "/categories/cameras",
+    link: "/products?category=camera",
   },
   {
     name: "Kitchen Appliances",
     image: "/categories/Kitchen_Appliances.png",
-    link: "/categories/home-appliances",
+    link: "/products?category=kitchen",
   },
   {
     name: "Projectors",
     image: "/categories/Projector.png",
-    link: "/categories/projectors",
+    link: "/products?category=projector",
   },
 ];
 
 export default function CategorySection() {
   return (
-    <section className="mx-auto mt-8 max-w-[1800px] px-4 md:px-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="mx-auto mt-6 max-w-[1800px] px-4 md:mt-8 md:px-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {categories.map((category) => (
-          <a
+          <Link
             key={category.name}
-            href={category.link}
-            className="group rounded-[26px] border border-slate-200 bg-[#f3f4f6] p-6 shadow-sm transition hover:shadow-md"
+            to={category.link}
+            className="group rounded-[22px] border border-slate-200 bg-[#f3f4f6] p-3.5 shadow-sm transition hover:shadow-md md:rounded-[26px] md:p-6"
           >
-            <div className="flex h-[180px] items-center justify-center md:h-[200px]">
+            <div className="flex h-[92px] items-center justify-center md:h-[200px]">
               <img
                 src={category.image}
                 alt={category.name}
@@ -60,10 +61,10 @@ export default function CategorySection() {
               />
             </div>
 
-            <div className="mt-4 text-center text-[15px] font-semibold text-slate-900">
+            <div className="mt-2.5 text-center text-[12px] font-semibold leading-4 text-slate-900 md:mt-4 md:text-[15px]">
               {category.name}
             </div>
-          </a>
+          </Link>
         ))}
       </div>
     </section>

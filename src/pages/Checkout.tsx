@@ -13,31 +13,30 @@ import {
 } from "lucide-react";
 import { useCartStore } from "../store/cart";
 import { useOrderStore } from "../store/orders";
-import { codAPI, orderAPI } from "../services/api";
+import { codAPI, orderAPI, userAPI } from "../services/api";
 import { formatAED } from "../lib/currency";
+import { useAuthStore } from "../store/auth";
+import {
+  isFirebasePhoneVerificationEnabled,
+  isFirebasePhoneVerificationSupportedOnCurrentOrigin,
+  isValidUaePhone,
+  normalizeUaePhone,
+  resetFirebasePhoneVerification,
+  sendFirebasePhoneCode,
+  verifyFirebasePhoneCode,
+} from "../lib/firebasePhoneVerification";
 
 const emirates = ["Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"];
-
-const normalizeUaePhone = (phone: string) => {
-  const raw = String(phone || "").replace(/[^\d+]/g, "");
-  if (raw.startsWith("+971")) return raw;
-  if (raw.startsWith("971")) return `+${raw}`;
-  if (raw.startsWith("05")) return `+971${raw.slice(1)}`;
-  if (raw.startsWith("5")) return `+971${raw}`;
-  return raw;
-};
-
-const isValidUaePhone = (phone: string) => /^\+971(5\d{8}|[234679]\d{7,8})$/.test(normalizeUaePhone(phone));
 
 export default function Checkout() {
   const navigate = useNavigate();
   const { items, getCartTotal, clearCart } = useCartStore();
   const { createOrder } = useOrderStore();
+  const authUser = useAuthStore((state) => state.user);
   const [isProcessing, setIsProcessing] = useState(false);
   const [otpSessionId, setOtpSessionId] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
-  const [otpPreviewCode, setOtpPreviewCode] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
   const [otpError, setOtpError] = useState("");
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -70,6 +69,46 @@ export default function Checkout() {
   const shippingFee = form.shippingMethod === "express" ? 25 : 12;
   const vatAmount = Math.round(total * 0.05);
   const totalPayable = total + shippingFee + vatAmount;
+  const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
+  const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
+  const useBackendOtp = !useFirebaseOtp;
+
+  useEffect(() => {
+    if (!authUser?.id) return;
+
+    let mounted = true;
+    userAPI
+      .get(authUser.id)
+      .then((user) => {
+        if (!mounted || !user) return;
+        const parts = String(user.name || user.fullName || authUser.displayName || '').trim().split(/\s+/);
+        const firstName = parts[0] || '';
+        const lastName = parts.slice(1).join(' ');
+
+        setForm((current) => ({
+          ...current,
+          firstName: current.firstName || firstName,
+          lastName: current.lastName || lastName,
+          email: current.email || user.email || authUser.email || '',
+          phone: current.phone || user.phone || authUser.phone || '',
+        }));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        const parts = String(authUser.name || authUser.fullName || authUser.displayName || '').trim().split(/\s+/);
+        setForm((current) => ({
+          ...current,
+          firstName: current.firstName || parts[0] || '',
+          lastName: current.lastName || parts.slice(1).join(' '),
+          email: current.email || authUser.email || '',
+          phone: current.phone || authUser.phone || '',
+        }));
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [authUser]);
 
   useEffect(() => {
     if (!otpResendAvailableAt) {
@@ -95,7 +134,7 @@ export default function Checkout() {
     const normalized = raw.toLowerCase();
 
     if (!raw || normalized === "not found" || normalized.includes("/api/cod/otp")) {
-      return "COD verification is temporarily unavailable. Refresh the page and try again.";
+      return "Phone verification is temporarily unavailable. Refresh the page and try again.";
     }
     if (normalized.includes("customer only") || normalized.includes("unauthorized") || normalized.includes("forbidden")) {
       return "Please sign in to your customer account to continue COD verification.";
@@ -118,10 +157,49 @@ export default function Checkout() {
     if (normalized.includes("too many otp attempts")) {
       return "Too many OTP attempts. Please request a new code.";
     }
+    if (normalized.includes("cod blocked for this")) {
+      return raw;
+    }
+    if (normalized.includes("request and enter the verification code first")) {
+      return "Request the verification code first, then enter it here.";
+    }
+    if (normalized.includes("firebase phone verification is not configured")) {
+      return "Firebase phone verification is not configured yet for this environment.";
+    }
+    if (normalized.includes("auth/invalid-phone-number")) {
+      return "Enter a valid UAE mobile number before requesting verification.";
+    }
+    if (normalized.includes("auth/too-many-requests")) {
+      return "Too many verification attempts. Please wait and try again.";
+    }
+    if (normalized.includes("auth/unauthorized-domain")) {
+      return "This domain is not authorized in Firebase yet. Add localhost, exshopi.com, and www.exshopi.com in Firebase Authentication settings.";
+    }
+    if (normalized.includes("auth/invalid-app-credential") || normalized.includes("auth/app-not-authorized")) {
+      return "Firebase phone verification is blocked for this app right now. Restart the frontend and check your Firebase app config and authorized domains.";
+    }
+    if (normalized.includes("auth/quota-exceeded")) {
+      return "Firebase SMS quota has been reached for this project. Wait or upgrade the Firebase plan.";
+    }
+    if (normalized.includes("auth/invalid-verification-code")) {
+      return "The verification code is incorrect. Please try again.";
+    }
+    if (normalized.includes("auth/code-expired")) {
+      return "The verification code expired. Request a new code and try again.";
+    }
+    if (normalized.includes("auth/captcha-check-failed")) {
+      return "Phone verification could not start. Refresh the page and try again.";
+    }
+    if (
+      normalized.includes("requires localhost or https") ||
+      normalized.includes("operation-not-supported-in-this-environment")
+    ) {
+      return "Phone verification works only on localhost or an HTTPS domain. Your current LAN HTTP URL is not supported by Firebase phone auth.";
+    }
 
     return phase === "send"
-      ? "We couldn't send the OTP right now. Please try again."
-      : "We couldn't verify the OTP. Please try again.";
+      ? "We couldn't send the verification code right now. Please try again."
+      : "We couldn't verify the code. Please try again.";
   };
 
   const handleChange = (
@@ -131,11 +209,11 @@ export default function Checkout() {
       setOtpVerified(false);
       setOtpSessionId("");
       setOtpCode("");
-      setOtpPreviewCode("");
       setOtpMessage("");
       setOtpError("");
       setOtpResendAvailableAt("");
       setOtpCooldownSeconds(0);
+      resetFirebasePhoneVerification();
     }
     setForm((prev) => ({
       ...prev,
@@ -169,20 +247,37 @@ export default function Checkout() {
 
   const handleSendOtp = async () => {
     try {
-      if (!form.email || !isValidUaePhone(form.phone)) {
-        setOtpError("Enter a valid UAE phone number and email before requesting OTP.");
+      if (!authUser?.id) {
+        setOtpError("Please sign in to your customer account before phone verification.");
         return;
+      }
+      if (!form.email || !isValidUaePhone(form.phone)) {
+        setOtpError("Enter a valid UAE phone number and email before requesting verification.");
+        return;
+      }
+      if (!phoneVerificationSupported) {
+        setOtpMessage("Using local ExShopi OTP verification for this environment.");
       }
       setSendingOtp(true);
       setOtpError("");
-      const response = await codAPI.sendOtp({
-        phone: normalizeUaePhone(form.phone),
-        email: form.email,
-      });
-      setOtpSessionId(response.sessionId || "");
-      setOtpPreviewCode(response.otpCode || "");
-      setOtpResendAvailableAt(response.resendAvailableAt || "");
-      setOtpMessage(`OTP sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
+      if (useFirebaseOtp) {
+        const response = await sendFirebasePhoneCode(normalizeUaePhone(form.phone), "checkout-firebase-recaptcha");
+        setOtpSessionId(`firebase:${response.phone}`);
+        setOtpResendAvailableAt(new Date(Date.now() + 60 * 1000).toISOString());
+        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
+      } else {
+        const response = await codAPI.sendOtp({
+          phone: normalizeUaePhone(form.phone),
+          email: form.email,
+        });
+        setOtpSessionId(response.sessionId);
+        setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
+        const localOtpHint =
+          import.meta.env.DEV && response.otpCode
+            ? ` Local test code: ${response.otpCode}.`
+            : "";
+        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.${localOtpHint}`);
+      }
     } catch (error: any) {
       setOtpError(mapOtpError(error, "send"));
     } finally {
@@ -193,18 +288,35 @@ export default function Checkout() {
   const handleVerifyOtp = async () => {
     try {
       if (!otpSessionId || !otpCode) {
-        setOtpError("Request and enter the OTP code first.");
+        setOtpError("Request and enter the verification code first.");
         return;
       }
       setVerifyingOtp(true);
       setOtpError("");
-      await codAPI.verifyOtp({
-        sessionId: otpSessionId,
-        code: otpCode,
-      });
-      setOtpVerified(true);
-      setOtpError("");
-      setOtpMessage("Phone verification complete. Your COD order is ready.");
+      if (useFirebaseOtp) {
+        const response = await verifyFirebasePhoneCode(otpCode);
+        const verifiedPhone = normalizeUaePhone(response.phone);
+        if (verifiedPhone !== normalizeUaePhone(form.phone)) {
+          throw new Error("Verified phone does not match the checkout number.");
+        }
+        setOtpSessionId(`firebase:${verifiedPhone}`);
+        setOtpVerified(true);
+        setOtpError("");
+        setOtpMessage("Phone verification complete. Your COD order is ready.");
+      } else {
+        const response = await codAPI.verifyOtp({
+          sessionId: otpSessionId,
+          code: otpCode,
+        });
+        const verifiedPhone = normalizeUaePhone(response.phone);
+        if (verifiedPhone !== normalizeUaePhone(form.phone)) {
+          throw new Error("Verified phone does not match the checkout number.");
+        }
+        setOtpSessionId(response.verificationToken);
+        setOtpVerified(true);
+        setOtpError("");
+        setOtpMessage("Phone verification complete. Your COD order is ready.");
+      }
     } catch (error: any) {
       setOtpVerified(false);
       setOtpError(mapOtpError(error, "verify"));
@@ -224,13 +336,15 @@ export default function Checkout() {
     try {
       setIsProcessing(true);
 
-      // Create orders for each unique seller in cart
+      // Create orders for each unique seller in cart (robustly handle sellerId or seller name)
       const ordersBySellerMap = new Map<string, any[]>();
       items.forEach((item: any) => {
-        if (!ordersBySellerMap.has(item.sellerId)) {
-          ordersBySellerMap.set(item.sellerId, []);
+        const sellerKey =
+          item.sellerId || item.seller || item.vendor || item.storeId || "exshopi_official";
+        if (!ordersBySellerMap.has(sellerKey)) {
+          ordersBySellerMap.set(sellerKey, []);
         }
-        ordersBySellerMap.get(item.sellerId)!.push(item);
+        ordersBySellerMap.get(sellerKey)!.push(item);
       });
 
       const createdOrders: any[] = [];
@@ -240,11 +354,20 @@ export default function Checkout() {
         const sellerShippingCost = form.shippingMethod === "express" ? 25 : 12;
         const created = await orderAPI.create({
           sellerId,
-          items: sellerItems.map((item: any) => ({
-            productId: item.id,
-            quantity: item.quantity,
-            unitPrice: item.salePrice || item.price,
-          })),
+          items: sellerItems.map((item: any) => {
+            const parts = String(item.id).split('::');
+            const productId = parts[0];
+            const variantId = parts[1] || undefined;
+            const variant = item.variants && item.variants.length ? item.variants[0] : undefined;
+            return {
+              productId,
+              variantId,
+              quantity: item.quantity,
+              unitPrice: item.salePrice || variant?.price || item.price,
+              sku: item.sku || variant?.sku,
+              image: item.image || variant?.image,
+            };
+          }),
           customerName: `${form.firstName} ${form.lastName}`.trim(),
           customerEmail: form.email,
           customerPhone: normalizeUaePhone(form.phone),
@@ -595,10 +718,20 @@ export default function Checkout() {
                   </h2>
 
                   <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                    {!authUser?.id && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                        Sign in first. COD verification and order placement require a customer account.
+                      </div>
+                    )}
+                    {!useFirebaseOtp && authUser?.id && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                        Using ExShopi local OTP verification for this environment. On your live HTTPS domain, Firebase phone verification will be used automatically.
+                      </div>
+                    )}
                     <div className="flex items-start justify-between gap-6">
                       <div>
                         <p className="text-lg font-black text-slate-900">Cash on Delivery</p>
-                        <p className="mt-1 text-sm font-medium text-slate-600">Pay on Delivery in AED. ExShopi requires UAE phone OTP confirmation before the order is sent to sellers.</p>
+                        <p className="mt-1 text-sm font-medium text-slate-600">Pay on Delivery in AED. ExShopi requires UAE phone verification before the order is sent to sellers.</p>
                       </div>
                       <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-right">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Total Payable</p>
@@ -608,14 +741,14 @@ export default function Checkout() {
 
                     <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                       <div>
-                        <label className="mb-2 block text-sm font-bold text-slate-900">Phone OTP</label>
+                        <label className="mb-2 block text-sm font-bold text-slate-900">Phone Verification</label>
                         <div className="flex gap-3">
                           <input
                             value={otpCode}
                             onChange={(event) => setOtpCode(event.target.value)}
                             inputMode="numeric"
                             maxLength={6}
-                            placeholder="Enter 6-digit OTP"
+                            placeholder="Enter 6-digit code"
                             className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                           />
                           <button
@@ -624,25 +757,19 @@ export default function Checkout() {
                             disabled={verifyingOtp || !otpSessionId}
                             className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                           >
-                            {verifyingOtp ? "Verifying..." : "Verify OTP"}
+                            {verifyingOtp ? "Verifying..." : "Verify Code"}
                           </button>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={handleSendOtp}
-                        disabled={sendingOtp || otpCooldownSeconds > 0}
+                        disabled={sendingOtp || otpCooldownSeconds > 0 || !authUser?.id}
                         className="h-12 rounded-xl bg-blue-600 px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-blue-300"
                       >
-                        {sendingOtp ? "Sending..." : otpCooldownSeconds > 0 ? `Resend in ${otpCooldownSeconds}s` : "Send OTP"}
+                        {sendingOtp ? "Sending..." : otpCooldownSeconds > 0 ? `Resend in ${otpCooldownSeconds}s` : "Send Code"}
                       </button>
                     </div>
-
-                    {otpPreviewCode && (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                        Local launch OTP preview: <span className="font-black">{otpPreviewCode}</span>
-                      </div>
-                    )}
 
                     {otpMessage && (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
@@ -677,6 +804,7 @@ export default function Checkout() {
                         )}
                       </div>
                     </div>
+                    <div id="checkout-firebase-recaptcha" />
                   </div>
                 </div>
               )}

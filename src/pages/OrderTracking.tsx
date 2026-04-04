@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { trackingAPI } from '../services/api';
 import { formatAED } from '../lib/currency';
+import { OrbitLoader } from '../components/ui/OrbitLoader';
 
 export default function OrderTracking() {
   const { trackingCode } = useParams<{ trackingCode: string }>();
@@ -146,7 +147,7 @@ export default function OrderTracking() {
 
         {loading && (
           <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-sm">
-            <p className="text-slate-600 font-medium">Loading tracking details...</p>
+            <OrbitLoader label="Loading tracking details..." size={24} />
           </div>
         )}
 

@@ -2,13 +2,14 @@ import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { RouteProgressBar } from "./components/ui/RouteProgressBar";
+import { OrbitLoader } from "./components/ui/OrbitLoader";
 import Layout from "./components/Layout";
 import { SellerLayout } from "./layouts/SellerLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
+import ProductDetail from "./pages/ProductDetail";
 
 const Home = lazy(() => import("./pages/Home"));
 const ProductListing = lazy(() => import("./pages/ProductListing"));
-const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const OrderSuccess = lazy(() => import("./pages/OrderSuccess"));
@@ -28,6 +29,8 @@ const ReturnPolicy = lazy(() => import("./pages/ReturnPolicy"));
 const Warranty = lazy(() => import("./pages/Warranty"));
 const BrandPage = lazy(() => import("./pages/BrandPage"));
 const PopularCollectionPage = lazy(() => import("./pages/PopularCollectionPage"));
+const CampaignCollectionPage = lazy(() => import("./pages/CampaignCollectionPage"));
+const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
 const TrackOrder = lazy(() => import("./pages/TrackOrder"));
 
 const SellerDashboard = lazy(() => import("./pages/seller/SellerDashboard"));
@@ -74,7 +77,7 @@ function PageLoader() {
       <div className="w-full max-w-3xl rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
         <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
-            <div className="h-4 w-24 animate-pulse rounded-full bg-slate-200" />
+            <OrbitLoader label="Loading page..." size={24} />
             <div className="h-10 w-4/5 animate-pulse rounded-2xl bg-slate-200" />
             <div className="h-5 w-full animate-pulse rounded-xl bg-slate-200" />
             <div className="h-5 w-3/4 animate-pulse rounded-xl bg-slate-200" />
@@ -92,6 +95,24 @@ function PageLoader() {
 }
 
 export default function App() {
+  React.useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === 'exshopi:product-deleted') {
+        try {
+          // other tabs: reload to reflect deletions
+          console.debug('[sync] product-deleted storage event', e.newValue);
+        } catch (err) {
+          /* ignore */
+        }
+        // full reload ensures product lists refresh across tabs
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   return (
     <BrowserRouter>
       <RouteProgressBar />
@@ -101,7 +122,7 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
             <Route path="/products" element={<ProductListing />} />
-            <Route path="/product/:slug" element={<ProductDetail />} />
+            <Route path="/product/:identifier" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/order-success" element={<OrderSuccess />} />
@@ -123,6 +144,8 @@ export default function App() {
             <Route path="/track-order" element={<TrackOrder />} />
             <Route path="/brands/:brand" element={<BrandPage />} />
             <Route path="/popular/:slug" element={<PopularCollectionPage />} />
+            <Route path="/campaigns/current" element={<CampaignCollectionPage />} />
+            <Route path="/promotions" element={<PromotionsPage />} />
             <Route path="/category/:category" element={<CategoryPage />} />
             <Route path="/category/:category/:subcategory" element={<CategoryPage />} />
             <Route path="/vendors" element={<VendorStorefront />} />

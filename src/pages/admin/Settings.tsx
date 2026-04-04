@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Globe, Palette, Home, Layout, List, Search, Share2, Info, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, Loader2, Video, Play, ShieldCheck, Upload, Settings2 } from 'lucide-react';
+import { Save, Globe, Palette, Home, Layout, List, Search, Share2, Info, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, Loader2, Video, Play, ShieldCheck, Upload, Settings2, Sparkles, LayoutPanelTop } from 'lucide-react';
 import { getSiteSettings, updateSiteSettings, SiteSettings, defaultSettings } from '../../services/settingsService';
 import { adminOpsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
@@ -718,11 +718,170 @@ export function AdminSettings() {
                 </div>
 
                 <div className="space-y-6">
+                  <div className="rounded-[32px] border border-slate-100 bg-slate-50 p-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <Sparkles size={22} className="text-violet-600" />
+                        Featured Products Selection
+                      </h3>
+                    </div>
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Bestsellers products</label>
+                        <input
+                          value={(settings.homepage.featuredSection.bestsellersProductIds || []).join(', ')}
+                          onChange={e =>
+                            updateNested(
+                              'homepage.featuredSection.bestsellersProductIds',
+                              e.target.value.split(',').map(value => value.trim()).filter(Boolean)
+                            )
+                          }
+                          placeholder="IDs or slugs, comma separated"
+                          className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Best choice products</label>
+                        <input
+                          value={(settings.homepage.featuredSection.bestchoiceProductIds || []).join(', ')}
+                          onChange={e =>
+                            updateNested(
+                              'homepage.featuredSection.bestchoiceProductIds',
+                              e.target.value.split(',').map(value => value.trim()).filter(Boolean)
+                            )
+                          }
+                          placeholder="IDs or slugs, comma separated"
+                          className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">On sale products</label>
+                        <input
+                          value={(settings.homepage.featuredSection.onsaleProductIds || []).join(', ')}
+                          onChange={e =>
+                            updateNested(
+                              'homepage.featuredSection.onsaleProductIds',
+                              e.target.value.split(',').map(value => value.trim()).filter(Boolean)
+                            )
+                          }
+                          placeholder="IDs or slugs, comma separated"
+                          className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs font-medium text-slate-500">
+                      Enter approved live product IDs or slugs to control exactly which products appear in Bestsellers, Best Choice, and On Sale. If left empty, ExShopi will keep auto-filling from the live catalog.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[32px] border border-slate-100 bg-slate-50 p-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <LayoutPanelTop size={22} className="text-violet-600" />
+                        All Products Section
+                      </h3>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.homepage.allProductsSection.show}
+                          onChange={e => updateNested('homepage.allProductsSection.show', e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all peer-checked:bg-violet-600 peer-checked:after:translate-x-full"></div>
+                      </label>
+                    </div>
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input
+                        value={settings.homepage.allProductsSection.title}
+                        onChange={e => updateNested('homepage.allProductsSection.title', e.target.value)}
+                        placeholder="Section title"
+                        className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm"
+                      />
+                      <input
+                        value={settings.homepage.allProductsSection.subtitle}
+                        onChange={e => updateNested('homepage.allProductsSection.subtitle', e.target.value)}
+                        placeholder="Section subtitle"
+                        className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm"
+                      />
+                    </div>
+                    <p className="mt-3 text-xs font-medium text-slate-500">
+                      This section sits right above the footer and shows the full mixed live catalog without removing any existing listed products.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[32px] border border-slate-100 bg-slate-50 p-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <Settings2 size={22} className="text-violet-600" />
+                        Campaign Section
+                      </h3>
+                    </div>
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input value={settings.homepage.campaignSection.badgeText} onChange={e => updateNested('homepage.campaignSection.badgeText', e.target.value)} placeholder="Badge text" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                      <input value={settings.homepage.campaignSection.expiresLabel} onChange={e => updateNested('homepage.campaignSection.expiresLabel', e.target.value)} placeholder="Countdown label" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                      <input type="datetime-local" value={settings.homepage.campaignSection.endAt ? settings.homepage.campaignSection.endAt.slice(0, 16) : ''} onChange={e => updateNested('homepage.campaignSection.endAt', e.target.value ? `${e.target.value}:00+04:00` : '')} className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                      <input value={(settings.homepage.campaignSection.featuredProductIds || []).join(', ')} onChange={e => updateNested('homepage.campaignSection.featuredProductIds', e.target.value.split(',').map(value => value.trim()).filter(Boolean))} placeholder="Campaign product IDs or slugs, comma separated" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                      <input value={settings.homepage.campaignSection.moreCtaText} onChange={e => updateNested('homepage.campaignSection.moreCtaText', e.target.value)} placeholder="More button text" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                      <input value={settings.homepage.campaignSection.allPromotionsText} onChange={e => updateNested('homepage.campaignSection.allPromotionsText', e.target.value)} placeholder="All promotions button text" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                      <input value={settings.homepage.campaignSection.moreCtaLink} onChange={e => updateNested('homepage.campaignSection.moreCtaLink', e.target.value)} placeholder="More button link" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                      <input value={settings.homepage.campaignSection.allPromotionsLink} onChange={e => updateNested('homepage.campaignSection.allPromotionsLink', e.target.value)} placeholder="All promotions link" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <label className="space-y-2">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Text Block Color</span>
+                        <div className="flex items-center gap-3">
+                          <input type="color" value={settings.homepage.campaignSection.panelBgColor} onChange={e => updateNested('homepage.campaignSection.panelBgColor', e.target.value)} className="h-12 w-12 rounded-xl cursor-pointer" />
+                          <input value={settings.homepage.campaignSection.panelBgColor} onChange={e => updateNested('homepage.campaignSection.panelBgColor', e.target.value)} className="flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
+                        </div>
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Section Color</span>
+                        <div className="flex items-center gap-3">
+                          <input type="color" value={settings.homepage.campaignSection.sectionBgColor} onChange={e => updateNested('homepage.campaignSection.sectionBgColor', e.target.value)} className="h-12 w-12 rounded-xl cursor-pointer" />
+                          <input value={settings.homepage.campaignSection.sectionBgColor} onChange={e => updateNested('homepage.campaignSection.sectionBgColor', e.target.value)} className="flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
+                        </div>
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Product Rail Color</span>
+                        <div className="flex items-center gap-3">
+                          <input type="color" value={settings.homepage.campaignSection.productRailBgColor.startsWith('#') ? settings.homepage.campaignSection.productRailBgColor : '#4f46e5'} onChange={e => updateNested('homepage.campaignSection.productRailBgColor', e.target.value)} className="h-12 w-12 rounded-xl cursor-pointer" />
+                          <input value={settings.homepage.campaignSection.productRailBgColor} onChange={e => updateNested('homepage.campaignSection.productRailBgColor', e.target.value)} className="flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
+                        </div>
+                      </label>
+                    </div>
+                    <p className="mt-3 text-xs font-medium text-slate-500">
+                      Add approved live product IDs or slugs here to control exactly which products appear in the campaign section. If left empty, ExShopi will show live discounted products automatically.
+                    </p>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                       <Plus size={24} className="text-violet-600" />
                       Promotion Boxes
                     </h3>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateNested('homepage.promoBoxes', [
+                          ...settings.homepage.promoBoxes,
+                          {
+                            id: `promo-${Date.now()}`,
+                            badge: 'Seasonal Event',
+                            title: 'New Promotion',
+                            description: 'Describe this event or festival promotion.',
+                            ctaText: 'Open Promotion',
+                            ctaLink: '/promotions',
+                            imageUrl: '',
+                            tone: 'light',
+                            show: true,
+                          },
+                        ])
+                      }
+                      className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-violet-600"
+                    >
+                      <Plus size={16} />
+                      Add Promo Box
+                    </button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {settings.homepage.promoBoxes.map((box, idx) => (
@@ -770,6 +929,53 @@ export function AdminSettings() {
                             updateNested('homepage.promoBoxes', next);
                           }} placeholder="CTA link" className="w-full bg-white border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
                         </div>
+                        <div className="space-y-3 rounded-[24px] border border-slate-100 bg-white p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-slate-400">Collection image</p>
+                              <p className="mt-1 text-xs text-slate-500">Upload T-shirts, shoes, or any promo visual from your PC.</p>
+                            </div>
+                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-violet-600">
+                              {isUploading === `promo-box-${idx}` ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                              Upload image
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  setIsUploading(`promo-box-${idx}`);
+                                  try {
+                                    const url = await uploadImageFile(file, {
+                                      folder: 'homepage/promotions',
+                                      fileName: `${box.id}-${file.name}`,
+                                    });
+                                    const next = [...settings.homepage.promoBoxes];
+                                    next[idx] = { ...box, imageUrl: url };
+                                    updateNested('homepage.promoBoxes', next);
+                                  } catch (error) {
+                                    console.error('Promo image upload failed:', error);
+                                    setMessage({ type: 'error', text: 'Failed to upload promo image. Please try again.' });
+                                  } finally {
+                                    setIsUploading(null);
+                                    e.target.value = '';
+                                  }
+                                }}
+                              />
+                            </label>
+                          </div>
+                          <input value={box.imageUrl || ''} onChange={e => {
+                            const next = [...settings.homepage.promoBoxes];
+                            next[idx] = { ...box, imageUrl: e.target.value };
+                            updateNested('homepage.promoBoxes', next);
+                          }} placeholder="Uploaded image URL" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3 px-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-sm" />
+                          {box.imageUrl ? (
+                            <div className="overflow-hidden rounded-[20px] border border-slate-100">
+                              <img src={box.imageUrl} alt={box.title} className="h-40 w-full object-cover" />
+                            </div>
+                          ) : null}
+                        </div>
                         <select value={box.tone} onChange={e => {
                           const next = [...settings.homepage.promoBoxes];
                           next[idx] = { ...box, tone: e.target.value as 'dark' | 'light' };
@@ -778,6 +984,17 @@ export function AdminSettings() {
                           <option value="dark">Dark card</option>
                           <option value="light">Light card</option>
                         </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = settings.homepage.promoBoxes.filter((_, itemIndex) => itemIndex !== idx);
+                            updateNested('homepage.promoBoxes', next);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-600 transition hover:bg-rose-50"
+                        >
+                          <Trash2 size={15} />
+                          Remove Box
+                        </button>
                       </div>
                     ))}
                   </div>

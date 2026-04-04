@@ -11,6 +11,7 @@ export interface CartItem {
   rating?: number;
   reviews?: number;
   seller?: string;
+  sellerId?: string;
   stockQuantity?: number;
   freeDelivery?: boolean;
   originalPrice?: number;

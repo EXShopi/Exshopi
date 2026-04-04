@@ -30,30 +30,32 @@ export default function TopBar() {
   ];
 
   return (
-    <div className="relative z-[9999] w-full border-b border-slate-300/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white text-[12px] shadow-[0_12px_32px_rgba(15,23,42,0.2)]">
+    <div className="relative z-[9999] hidden w-full border-b border-slate-300/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white text-[11px] shadow-[0_12px_32px_rgba(15,23,42,0.2)] md:block md:text-[12px]">
       {/* Premium decorative gradient line */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/50 to-transparent"></div>
       
-      <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-2">
-        <div className="flex items-center gap-4 text-white/80 font-medium">
-          <span className="flex items-center gap-1 bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full border border-white/10">
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 px-3 py-1.5 md:gap-3 md:px-6 md:py-2">
+        <div className="hidden min-w-0 items-center gap-3 text-white/80 font-medium sm:flex">
+          <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 backdrop-blur-sm">
             ✓ {storefrontT(language, "deliver_uae_only")}
           </span>
-          <span className="text-white/25">•</span>
-          <span className="text-white/70">{storefrontT(language, "fast_delivery")} • {storefrontT(language, "trusted_sellers")}</span>
+          <span className="hidden text-white/25 md:inline">•</span>
+          <span className="hidden text-white/70 md:inline">
+            {storefrontT(language, "fast_delivery")} • {storefrontT(language, "trusted_sellers")}
+          </span>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="ml-auto flex items-center gap-1.5 md:gap-6">
           <div className="relative">
             <button
               onClick={() => {
                 setCityOpen(!cityOpen);
                 setLangOpen(false);
               }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-white/85 bg-white/10 backdrop-blur-sm border border-white/20 transition-all hover:bg-white/15 hover:text-white hover:border-white/30"
+              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:gap-2 md:px-3"
             >
-              <MapPin className="h-4 w-4" />
-              <span className="font-semibold">{city}</span>
+              <MapPin className="h-3.5 w-3.5 md:h-4 md:w-4" />
+              <span className="max-w-[54px] truncate text-[11px] font-semibold md:max-w-none md:text-[12px]">{city}</span>
               <ChevronDown
                 className={`h-4 w-4 transition-transform duration-200 ${cityOpen ? "rotate-180" : ""}`}
               />
@@ -81,7 +83,7 @@ export default function TopBar() {
             )}
           </div>
 
-          <div className="h-5 w-px bg-white/20"></div>
+          <div className="hidden h-5 w-px bg-white/20 md:block"></div>
 
           <div className="relative">
             <button
@@ -89,10 +91,10 @@ export default function TopBar() {
                 setLangOpen(!langOpen);
                 setCityOpen(false);
               }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-white/85 bg-white/10 backdrop-blur-sm border border-white/20 transition-all hover:bg-white/15 hover:text-white hover:border-white/30"
+              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:gap-2 md:px-3"
             >
-              <Globe className="h-4 w-4" />
-              <span className="font-semibold">{language}</span>
+              <Globe className="h-3.5 w-3.5 md:h-4 md:w-4" />
+              <span className="max-w-[58px] truncate text-[11px] font-semibold md:max-w-none md:text-[12px]">{language}</span>
               <ChevronDown
                 className={`h-4 w-4 transition-transform duration-200 ${langOpen ? "rotate-180" : ""}`}
               />

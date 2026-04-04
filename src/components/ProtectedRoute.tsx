@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
-import { Loader2 } from 'lucide-react';
+import { OrbitLoader } from './ui/OrbitLoader';
 
 interface ProtectedRouteProps {
   allowedRoles: string[];
@@ -14,8 +14,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <Loader2 className="w-12 h-12 text-violet-600 animate-spin mb-4" />
-        <p className="text-slate-500 font-black uppercase tracking-widest text-xs">Verifying Access...</p>
+        <OrbitLoader label="Verifying access..." size={28} />
       </div>
     );
   }
