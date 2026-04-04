@@ -386,8 +386,8 @@ export const productAPI = {
         console.warn('Supabase product fetch failed:', e);
         const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
         if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
-          throw e;
+          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning null. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+          return null;
         }
         console.warn('Falling back to API_BASE:', API_BASE);
       }
@@ -408,14 +408,14 @@ export const productAPI = {
             .eq('status', 'live')
             .eq('approval_status', 'approved')
             .eq('visibility_status', 'live')
-            .order('createdAt', { ascending: false });
+            .order('created_at', { ascending: false });
           if (error) throw error;
           console.log('Fetched products (supabase filtered):', data?.length || 0);
           return data || [];
         } catch (err) {
           // If filtered query fails (column names or permissions), fallback to unfiltered then client-side filter
           console.warn('Filtered supabase query failed, falling back to client-side filter:', err);
-          const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+          const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
           if (error) throw error;
           const filtered = (data || []).filter((r: any) => {
             const status = r.status || r.productStatus || r.status;
@@ -430,8 +430,8 @@ export const productAPI = {
         console.warn('Supabase products fetch failed:', e);
         const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
         if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
-          throw e;
+          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning empty list. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+          return [];
         }
         console.warn('Falling back to API_BASE:', API_BASE);
       }
@@ -452,14 +452,14 @@ export const productAPI = {
             .eq('status', 'live')
             .eq('approval_status', 'approved')
             .eq('visibility_status', 'live')
-            .order('createdAt', { ascending: false });
+            .order('created_at', { ascending: false });
           if (error) throw error;
           const filtered = (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId);
           console.log('Fetched products by category (supabase):', filtered.length);
           return filtered;
         } catch (err) {
           console.warn('Filtered supabase category query failed, falling back to client-side filter:', err);
-          const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+          const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
           if (error) throw error;
           const filtered = (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId)
             .filter((r: any) => {
@@ -475,11 +475,15 @@ export const productAPI = {
         console.warn('Supabase category fetch failed:', e);
         const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
         if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
-          throw e;
+          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning empty list. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+          return [];
         }
         console.warn('Falling back to API_BASE:', API_BASE);
       }
+    }
+    const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+      return [];
     }
     const res = await fetch(`${API_BASE}/products?categoryId=${categoryId}`);
     return await parseApiResponse(res);
@@ -496,7 +500,7 @@ export const productAPI = {
             .eq('status', 'live')
             .eq('approval_status', 'approved')
             .eq('visibility_status', 'live')
-            .order('createdAt', { ascending: false });
+            .order('created_at', { ascending: false });
           if (error) throw error;
           const all = data || [];
           console.log('Fetched products for slug filter (supabase):', all.length);
@@ -509,7 +513,7 @@ export const productAPI = {
           });
         } catch (err) {
           console.warn('Filtered supabase slug query failed, falling back to client-side filter:', err);
-          const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+          const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
           if (error) throw error;
           const all = data || [];
           return all.filter((product: any) => {
@@ -529,8 +533,8 @@ export const productAPI = {
         console.warn('Supabase slug fetch failed:', e);
         const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
         if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
-          throw e;
+          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning empty list. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+          return [];
         }
         console.warn('Falling back to API_BASE:', API_BASE);
       }
@@ -538,6 +542,10 @@ export const productAPI = {
     const q = new URLSearchParams();
     if (categorySlug) q.set('categorySlug', categorySlug);
     if (subcategorySlug) q.set('subcategorySlug', subcategorySlug);
+    const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+      return [];
+    }
     const res = await fetch(`${API_BASE}/products?${q.toString()}`);
     return parseApiResponse(res);
   },

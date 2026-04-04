@@ -116,10 +116,11 @@ export const signOut = async () => {
 // Backend API base for REST shims
 const browserHost =
   typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
-  `http://${browserHost}:3001/api`;
+  (import.meta.env.DEV ? `http://${browserHost}:3001/api` : '');
 
 // Utility: normalize path segments (skip db/placeholders)
 const buildPath = (...args: any[]) => {
@@ -160,6 +161,10 @@ const buildUrlWithClauses = (path: string, clauses: any[] = []) => {
 export const getDocs = async (refOrQuery: any) => {
   try {
     if (!refOrQuery) return { docs: [] };
+    if (!API_BASE) {
+      console.warn('API_BASE not configured; skipping REST fetch in getDocs and returning empty list.');
+      return { docs: [] };
+    }
     let path = refOrQuery.__path || buildPath(refOrQuery);
     let url = '';
     if (refOrQuery.__clauses) {
@@ -181,6 +186,10 @@ export const getDoc = async (docRef: any) => {
   try {
     if (!docRef) return { exists: () => false, data: () => ({}) };
     const path = docRef.__path || buildPath(docRef);
+    if (!API_BASE) {
+      console.warn('API_BASE not configured; skipping REST fetch in getDoc and returning empty result.');
+      return { exists: () => false, data: () => ({}) };
+    }
     const res = await fetch(`${API_BASE}/${path}`, { headers: getAuthHeaders(), credentials: 'include' });
     if (res.status === 404) return { exists: () => false, data: () => ({}) };
     const json = await res.json().catch(() => null);
@@ -197,6 +206,9 @@ export const getDoc = async (docRef: any) => {
 export const addDoc = async (collectionRef: any, data: any) => {
   try {
     const path = collectionRef?.__path || buildPath(collectionRef);
+    if (!API_BASE) {
+      throw new Error('API_BASE not configured; cannot perform addDoc in this runtime.');
+    }
     const res = await fetch(`${API_BASE}/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -218,6 +230,9 @@ export const setDoc = async (docRef: any, data: any, options?: any) => {
 export const updateDoc = async (docRef: any, data: any) => {
   try {
     const path = docRef?.__path || buildPath(docRef);
+    if (!API_BASE) {
+      throw new Error('API_BASE not configured; cannot perform updateDoc in this runtime.');
+    }
     const res = await fetch(`${API_BASE}/${path}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -234,6 +249,9 @@ export const updateDoc = async (docRef: any, data: any) => {
 export const deleteDoc = async (docRef: any) => {
   try {
     const path = docRef?.__path || buildPath(docRef);
+    if (!API_BASE) {
+      throw new Error('API_BASE not configured; cannot perform deleteDoc in this runtime.');
+    }
     const res = await fetch(`${API_BASE}/${path}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),

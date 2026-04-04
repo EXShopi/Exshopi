@@ -1,10 +1,11 @@
 import { getAuthHeaders } from './api';
 const browserHost =
   typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
-  `http://${browserHost}:3001/api`;
+  (import.meta.env.DEV ? `http://${browserHost}:3001/api` : '');
 
 export interface SiteSettings {
   general: {
@@ -257,6 +258,10 @@ export const defaultSettings: SiteSettings = {
 
 export async function getSiteSettings(): Promise<SiteSettings> {
   try {
+    if (!hasExplicitApiBase && !import.meta.env.DEV) {
+      console.warn('No API base configured; skipping settings fetch and using defaults.');
+      return defaultSettings;
+    }
     const res = await fetch(`${API_BASE}/settings/site`, {
       credentials: 'include',
     });
@@ -326,6 +331,10 @@ export async function getSiteSettings(): Promise<SiteSettings> {
 }
 
 export async function updateSiteSettings(settings: SiteSettings): Promise<void> {
+  if (!hasExplicitApiBase && !import.meta.env.DEV) {
+    throw new Error('No API base configured; cannot update site settings in this runtime.');
+  }
+
   const res = await fetch(`${API_BASE}/settings/site`, {
     method: 'PUT',
     headers: {
