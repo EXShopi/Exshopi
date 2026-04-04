@@ -6,6 +6,7 @@ import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
 import CategoryComingSoon from "./CategoryComingSoon";
 import { categoryData } from "../data/categoryStructure";
 import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
+import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { categoryAPI, productAPI } from "../services/api";
 
 type CatalogProduct = {
@@ -107,12 +108,7 @@ export default function CategoryPage() {
       })
       .then((productRows) => {
         if (!mounted) return;
-        const liveRaw = (productRows || []).filter(
-          (product: any) =>
-            product?.status === "live" ||
-            product?.productStatus === "live" ||
-            (product?.approvalStatus === "approved" && product?.visibilityStatus === "live")
-        );
+        const liveRaw = (productRows || []).filter(isLiveMarketplaceProduct);
         setRawProducts(liveRaw);
         const liveProducts = (liveRaw || []).map(
           (product: any): CatalogProduct => ({

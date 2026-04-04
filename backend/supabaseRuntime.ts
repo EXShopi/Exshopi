@@ -117,42 +117,99 @@ export const supabaseRuntime = {
 
   async getAllProducts() {
     if (!enabled) return [];
-    const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
-    if (error) throw error;
-    const rows = data || [];
-    // Keep parity with db.getAllProducts which returns live products
-    const filtered = rows.filter((r: any) => r.status === 'live' || r.approvalStatus === 'approved' || r.visibilityStatus === 'live');
-    return filtered.map(mapRowToProduct);
+    try {
+      // Prefer server-side strict filtering on canonical column names
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'live')
+        .eq('approval_status', 'approved')
+        .eq('visibility_status', 'live')
+        .order('createdAt', { ascending: false });
+      if (error) throw error;
+      const rows = data || [];
+      console.log('[supabaseRuntime] getAllProducts fetched', rows.length);
+      return rows.map(mapRowToProduct);
+    } catch (err) {
+      // Fallback: query unfiltered then apply strict AND filter client-side (handle camelCase columns)
+      console.warn('[supabaseRuntime] filtered query failed, falling back to client-side filter', err);
+      const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+      if (error) throw error;
+      const rows = data || [];
+      const filtered = rows.filter((r: any) => {
+        const status = r.status || r.productStatus || r.status;
+        const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
+        const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
+        return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
+      });
+      return filtered.map(mapRowToProduct);
+    }
   },
 
   async getProductsByCategorySlugs(parentSlug?: string | null, categorySlug?: string | null, subcategorySlug?: string | null) {
     if (!enabled) return [];
-    const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
-    if (error) throw error;
-    const all = (data || []).map(mapRowToProduct);
-    return all.filter((product: any) => {
-      const specs = product.specs || {};
-      const pParent = String(specs.parentCategorySlug || specs.parentCategory || '');
-      const pCategory = String(specs.categorySlug || specs.category || '');
-      const pSub = String(specs.subcategorySlug || specs.subcategory || '');
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'live')
+        .eq('approval_status', 'approved')
+        .eq('visibility_status', 'live')
+        .order('createdAt', { ascending: false });
+      if (error) throw error;
+      const all = (data || []).map(mapRowToProduct);
+      return all.filter((product: any) => {
+        const specs = product.specs || {};
+        const pParent = String(specs.parentCategorySlug || specs.parentCategory || '');
+        const pCategory = String(specs.categorySlug || specs.category || '');
+        const pSub = String(specs.subcategorySlug || specs.subcategory || '');
 
-      if (categorySlug && !parentSlug && !subcategorySlug) {
-        return pParent === categorySlug || pCategory === categorySlug || pSub === categorySlug;
-      }
-      if (parentSlug && !categorySlug && !subcategorySlug) {
-        return pParent === parentSlug;
-      }
-      if (categorySlug && subcategorySlug) {
-        return pCategory === categorySlug && pSub === subcategorySlug;
-      }
-      if (categorySlug) {
-        return pCategory === categorySlug || pParent === categorySlug;
-      }
-      if (subcategorySlug) {
-        return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
-      }
-      return false;
-    });
+        if (categorySlug && !parentSlug && !subcategorySlug) {
+          return pParent === categorySlug || pCategory === categorySlug || pSub === categorySlug;
+        }
+        if (parentSlug && !categorySlug && !subcategorySlug) {
+          return pParent === parentSlug;
+        }
+        if (categorySlug && subcategorySlug) {
+          return pCategory === categorySlug && pSub === subcategorySlug;
+        }
+        if (categorySlug) {
+          return pCategory === categorySlug || pParent === categorySlug;
+        }
+        if (subcategorySlug) {
+          return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
+        }
+        return false;
+      });
+    } catch (err) {
+      console.warn('[supabaseRuntime] filtered category query failed, falling back to client-side filter', err);
+      const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+      if (error) throw error;
+      const all = (data || []).map(mapRowToProduct);
+      return all.filter((product: any) => {
+        const specs = product.specs || {};
+        const pParent = String(specs.parentCategorySlug || specs.parentCategory || '');
+        const pCategory = String(specs.categorySlug || specs.category || '');
+        const pSub = String(specs.subcategorySlug || specs.subcategory || '');
+
+        if (categorySlug && !parentSlug && !subcategorySlug) {
+          return pParent === categorySlug || pCategory === categorySlug || pSub === categorySlug;
+        }
+        if (parentSlug && !categorySlug && !subcategorySlug) {
+          return pParent === parentSlug;
+        }
+        if (categorySlug && subcategorySlug) {
+          return pCategory === categorySlug && pSub === subcategorySlug;
+        }
+        if (categorySlug) {
+          return pCategory === categorySlug || pParent === categorySlug;
+        }
+        if (subcategorySlug) {
+          return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
+        }
+        return false;
+      });
+    }
   },
 
   async getSellerProducts(sellerId: string) {

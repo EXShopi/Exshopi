@@ -10,11 +10,19 @@ export type LiveMarketplaceProduct = ProductCardProps & {
 export function isLiveMarketplaceProduct(product: any) {
   if (!product) return false;
 
-  return (
-    product.status === "live" ||
-    product.productStatus === "live" ||
-    (product.approvalStatus === "approved" && product.visibilityStatus === "live")
-  );
+  const status = String(
+    product.status || product.productStatus || product.product_status || ''
+  ).toLowerCase();
+  const approval = String(
+    product.approval_status || product.approvalStatus || ''
+  ).toLowerCase();
+  const visibility = String(
+    product.visibility_status || product.visibilityStatus || ''
+  ).toLowerCase();
+
+  if (status === 'live') return true;
+  if (approval === 'approved' && visibility === 'live') return true;
+  return false;
 }
 
 export function mapLiveMarketplaceProduct(product: any): LiveMarketplaceProduct {

@@ -3,11 +3,7 @@ import { productAPI } from "../services/api";
 import ProductCard from "./ProductCard";
 import { OrbitLoader } from "./ui/OrbitLoader";
 import { useSettingsStore } from "../store/settings";
-
-const isLiveMarketplaceProduct = (product: any) =>
-  product?.status === "live" ||
-  product?.productStatus === "live" ||
-  (product?.approvalStatus === "approved" && product?.visibilityStatus === "live");
+import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 
 export default function AllProductsSection() {
   const settings = useSettingsStore((state) => state.settings);

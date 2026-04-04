@@ -12,6 +12,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useWishlistStore } from "../store/wishlist";
 import { useCartStore } from "../store/cart";
 import { productAPI } from "../services/api";
+import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { formatAEDPlain } from "../lib/currency";
 import { OrbitLoader } from "./ui/OrbitLoader";
 import { useSettingsStore } from "../store/settings";
@@ -230,12 +231,7 @@ export default function FeaturedProducts() {
         const data = await productAPI.getAll();
         
         // Filter and organize products by category
-        const filtered = (data || []).filter(
-          (p: any) =>
-          p?.status === 'live' ||
-          p?.productStatus === 'live' ||
-          (p?.approvalStatus === 'approved' && p?.visibilityStatus === 'live')
-        );
+        const filtered = (data || []).filter(isLiveMarketplaceProduct);
         
         // Create tabs data from backend products
         const featuredSettings = settings.homepage.featuredSection;

@@ -7,13 +7,18 @@ import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
 import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
 
-const isVisibleMarketplaceProduct = (product: any) =>
-  ["live", "approved", "published", "active"].includes(
-    String(product?.status || "").toLowerCase(),
-  ) ||
-  String(product?.productStatus || "").toLowerCase() === "live" ||
-  (String(product?.approvalStatus || "").toLowerCase() === "approved" &&
-    String(product?.visibilityStatus || "").toLowerCase() === "live");
+const isVisibleMarketplaceProduct = (product: any) => {
+  const status = String(product?.status || '').toLowerCase();
+  const productStatus = String(product?.productStatus || '').toLowerCase();
+  const approval = String(product?.approvalStatus || product?.approval_status || '').toLowerCase();
+  const visibility = String(product?.visibilityStatus || product?.visibility_status || '').toLowerCase();
+
+  return (
+    status === 'live' ||
+    productStatus === 'live' ||
+    (approval === 'approved' && visibility === 'live')
+  );
+};
 
 export default function ProductListing() {
   const [searchParams] = useSearchParams();

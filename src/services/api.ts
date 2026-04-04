@@ -357,10 +357,28 @@ export const productAPI = {
       try {
         const { data, error } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
         if (error) throw error;
-        if (data) return data;
+        if (data) {
+          console.log('Fetched product by id (supabase):', data);
+          // Ensure product is live/approved/visible before returning to public UI
+          const status = data.status || data.productStatus || data.status;
+          const approval = data.approval_status || data.approvalStatus || data.approvalStatus;
+          const visibility = data.visibility_status || data.visibilityStatus || data.visibilityStatus;
+          if (String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live') {
+            return data;
+          }
+          // if not live/approved/visible, fall through to API fallback (may be admin view)
+        }
         const { data: bySlug, error: slugError } = await supabase.from('products').select('*').eq('slug', id).maybeSingle();
         if (slugError) throw slugError;
-        if (bySlug) return bySlug;
+        if (bySlug) {
+          console.log('Fetched product by slug (supabase):', bySlug);
+          const status = bySlug.status || bySlug.productStatus || bySlug.status;
+          const approval = bySlug.approval_status || bySlug.approvalStatus || bySlug.approvalStatus;
+          const visibility = bySlug.visibility_status || bySlug.visibilityStatus || bySlug.visibilityStatus;
+          if (String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live') {
+            return bySlug;
+          }
+        }
         // fallback to API
       } catch (e) {
         console.warn('Supabase product fetch failed, falling back to API:', e);
@@ -374,9 +392,32 @@ export const productAPI = {
     const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
     if (useSupabase) {
       try {
-        const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
-        if (error) throw error;
-        return data || [];
+        // Try server-side filtering with canonical column names
+        try {
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('status', 'live')
+            .eq('approval_status', 'approved')
+            .eq('visibility_status', 'live')
+            .order('createdAt', { ascending: false });
+          if (error) throw error;
+          console.log('Fetched products (supabase filtered):', data?.length || 0);
+          return data || [];
+        } catch (err) {
+          // If filtered query fails (column names or permissions), fallback to unfiltered then client-side filter
+          console.warn('Filtered supabase query failed, falling back to client-side filter:', err);
+          const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+          if (error) throw error;
+          const filtered = (data || []).filter((r: any) => {
+            const status = r.status || r.productStatus || r.status;
+            const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
+            const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
+            return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
+          });
+          console.log('Fetched products (client-side filtered):', filtered.length);
+          return filtered;
+        }
       } catch (e) {
         console.warn('Supabase products fetch failed, falling back to API:', e);
       }
@@ -389,9 +430,33 @@ export const productAPI = {
     const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
     if (useSupabase) {
       try {
-        const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
-        if (error) throw error;
-        return (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId);
+        // Server-side filter for public listings
+        try {
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('status', 'live')
+            .eq('approval_status', 'approved')
+            .eq('visibility_status', 'live')
+            .order('createdAt', { ascending: false });
+          if (error) throw error;
+          const filtered = (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId);
+          console.log('Fetched products by category (supabase):', filtered.length);
+          return filtered;
+        } catch (err) {
+          console.warn('Filtered supabase category query failed, falling back to client-side filter:', err);
+          const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+          if (error) throw error;
+          const filtered = (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId)
+            .filter((r: any) => {
+              const status = r.status || r.productStatus || r.status;
+              const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
+              const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
+              return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
+            });
+          console.log('Fetched products by category (client-side filtered):', filtered.length);
+          return filtered;
+        }
       } catch (e) {
         console.warn('Supabase category fetch failed, falling back to API:', e);
       }
@@ -404,17 +469,42 @@ export const productAPI = {
     const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
     if (useSupabase) {
       try {
-        const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
-        if (error) throw error;
-        const all = data || [];
-        // client-side filter by specs slugs
-        return all.filter((product: any) => {
-          const specs = product.specs || {};
-          if (subcategorySlug) {
-            return specs.categorySlug === categorySlug && specs.subcategorySlug === subcategorySlug;
-          }
-          return specs.parentCategorySlug === categorySlug || specs.categorySlug === categorySlug || specs.subcategorySlug === categorySlug;
-        });
+        try {
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('status', 'live')
+            .eq('approval_status', 'approved')
+            .eq('visibility_status', 'live')
+            .order('createdAt', { ascending: false });
+          if (error) throw error;
+          const all = data || [];
+          console.log('Fetched products for slug filter (supabase):', all.length);
+          return all.filter((product: any) => {
+            const specs = product.specs || {};
+            if (subcategorySlug) {
+              return specs.categorySlug === categorySlug && specs.subcategorySlug === subcategorySlug;
+            }
+            return specs.parentCategorySlug === categorySlug || specs.categorySlug === categorySlug || specs.subcategorySlug === categorySlug;
+          });
+        } catch (err) {
+          console.warn('Filtered supabase slug query failed, falling back to client-side filter:', err);
+          const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
+          if (error) throw error;
+          const all = data || [];
+          return all.filter((product: any) => {
+            const specs = product.specs || {};
+            if (subcategorySlug) {
+              return specs.categorySlug === categorySlug && specs.subcategorySlug === subcategorySlug;
+            }
+            return specs.parentCategorySlug === categorySlug || specs.categorySlug === categorySlug || specs.subcategorySlug === categorySlug;
+          }).filter((r: any) => {
+            const status = r.status || r.productStatus || r.status;
+            const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
+            const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
+            return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
+          });
+        }
       } catch (e) {
         console.warn('Supabase slug fetch failed, falling back to API:', e);
       }
