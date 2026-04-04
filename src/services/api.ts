@@ -2,25 +2,22 @@ import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
 
 export function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   return {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
-const defaultApiBase =
-  typeof window !== 'undefined'
-    ? import.meta.env.DEV
-      ? '/api'
-      : `${window.location.origin}/api`
-    : 'http://localhost:3001/api';
+export const hasExplicitApiBase = Boolean(
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE
+);
 
-const API_BASE =
+export const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
-  defaultApiBase;
+  null;
 
 function isLocalDevRuntime() {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -35,26 +32,79 @@ function isLocalDevRuntime() {
   );
 }
 
+export function buildApiUrl(pathOrUrl: string): string | null {
+  if (!pathOrUrl) return null;
+
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+
+  if (API_BASE && pathOrUrl.startsWith(API_BASE)) return pathOrUrl;
+
+  if (pathOrUrl.startsWith('/')) {
+    if (!API_BASE) return null;
+    return API_BASE.replace(/\/$/, '') + pathOrUrl;
+  }
+
+  if (!API_BASE) return null;
+  return API_BASE.replace(/\/$/, '') + '/' + pathOrUrl;
+}
+
+export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
+  const url = buildApiUrl(pathOrUrl);
+
+  if (!url) {
+    console.warn("No API base configured — skipping backend call");
+    return Promise.resolve({
+      ok: true,
+      json: async () => [],
+      text: async () => '[]',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      status: 200,
+    } as Response);
+  }
+
+  return fetch(url, init);
+}
+
 async function parseApiResponse(res: Response) {
   const contentType = res.headers.get('content-type') || '';
   const rawText = await res.text();
 
-  if (!contentType.includes('application/json')) {
-    const preview = rawText.slice(0, 140).replace(/\s+/g, ' ').trim();
-    throw new Error(preview || `Unexpected non-JSON response (${res.status})`);
+  const looksLikeJson =
+    contentType.includes('application/json') || /^\s*[\{\[]/.test(rawText);
+
+  if (!looksLikeJson) {
+    const preview = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
+    console.warn('Non-JSON response from API:', {
+      status: res.status,
+      contentType,
+      preview,
+    });
+    throw new Error(
+      `Unexpected non-JSON response from backend (status ${res.status}). Please check your API base and backend availability.`
+    );
   }
 
-  const data = rawText ? JSON.parse(rawText) : null;
+  let data: any = null;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    console.warn('Failed to parse JSON response from API:', {
+      status: res.status,
+      contentType,
+    });
+    throw new Error(`Invalid JSON response from backend (status ${res.status}).`);
+  }
 
   if (!res.ok) {
-    throw new Error(data?.error || data?.message || `Request failed with status ${res.status}`);
+    throw new Error(
+      data?.error || data?.message || `Request failed with status ${res.status}`
+    );
   }
 
   return data;
 }
-
 async function refreshAccessToken() {
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
+  const res = await safeFetchApi('/auth/refresh', {
     method: 'POST',
     credentials: 'include',
   });
@@ -64,8 +114,14 @@ async function refreshAccessToken() {
 }
 
 async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
+  // Normalize to an absolute URL using API_BASE when needed.
+  const resolved = buildApiUrl(input);
+  if (!resolved) {
+    throw new Error('No API base configured; cannot perform authenticated request in this runtime.');
+  }
+
   const runRequest = () =>
-    fetch(input, {
+    fetch(resolved, {
       ...init,
       headers: {
         ...(init.headers || {}),
@@ -103,7 +159,7 @@ async function uploadWithRetry(
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
+    const res = await fetchWithAuthRetry(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       credentials: 'include',
@@ -114,9 +170,7 @@ async function uploadWithRetry(
       return await parseApiResponse(res);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      const shouldRetry =
-        attempt < retries &&
-        (res.status === 429 || /too many requests/i.test(lastError.message));
+      const shouldRetry = attempt < retries && (res.status === 429 || /too many requests/i.test(lastError.message));
 
       if (!shouldRetry) {
         throw lastError;
@@ -129,13 +183,10 @@ async function uploadWithRetry(
   throw lastError || new Error('Upload failed');
 }
 
-// `getAuthHeaders` exported from this module to ensure callers can import it
-// without circular import issues. It reads a client-side token from localStorage.
-
 // ==================== USERS ====================
 export const userAPI = {
   async register(data: any) {
-    const res = await fetch(`${API_BASE}/auth/register`, {
+    const res = await safeFetchApi('/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -145,7 +196,7 @@ export const userAPI = {
   },
 
   async login(email: string, password: string) {
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    const res = await safeFetchApi('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -155,7 +206,7 @@ export const userAPI = {
   },
 
   async getSession() {
-    const res = await fetch(`${API_BASE}/auth/session`, {
+    const res = await safeFetchApi('/auth/session', {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -163,7 +214,7 @@ export const userAPI = {
   },
 
   async refresh() {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
+    const res = await safeFetchApi('/auth/refresh', {
       method: 'POST',
       credentials: 'include',
     });
@@ -171,16 +222,12 @@ export const userAPI = {
   },
 
   async logout() {
-    const res = await fetch(`${API_BASE}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: getAuthHeaders(),
-    });
+    const res = await fetchWithAuthRetry('/auth/logout', { method: 'POST' });
     return parseApiResponse(res);
   },
 
   async getUser(id: string) {
-    const res = await fetch(`${API_BASE}/users/${id}`, {
+    const res = await fetchWithAuthRetry(`/users/${id}`, {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -190,7 +237,7 @@ export const userAPI = {
     return this.getUser(id);
   },
   async update(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/users/${id}`, {
+    const res = await fetchWithAuthRetry(`/users/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -223,7 +270,7 @@ export const uploadAPI = {
 
 export const sellerApplicationAPI = {
   async submit(data: any) {
-    const res = await fetch(`${API_BASE}/seller-applications`, {
+    const res = await fetchWithAuthRetry('/seller-applications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -231,26 +278,26 @@ export const sellerApplicationAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async getMine() {
-    const res = await fetch(`${API_BASE}/seller-applications/me`, {
+    const res = await fetchWithAuthRetry('/seller-applications/me', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 export const adminSellerApplicationAPI = {
   async getAll() {
-    const res = await fetch(`${API_BASE}/admin/seller-applications`, {
+    const res = await fetchWithAuthRetry('/admin/seller-applications', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async approve(id: string, notes = '') {
-    const res = await fetch(`${API_BASE}/admin/seller-applications/${id}/approve`, {
+    const res = await fetchWithAuthRetry(`/admin/seller-applications/${id}/approve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -258,10 +305,10 @@ export const adminSellerApplicationAPI = {
       },
       body: JSON.stringify({ notes }),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async reject(id: string, reason: string) {
-    const res = await fetch(`${API_BASE}/admin/seller-applications/${id}/reject`, {
+    const res = await fetchWithAuthRetry(`/admin/seller-applications/${id}/reject`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -269,10 +316,10 @@ export const adminSellerApplicationAPI = {
       },
       body: JSON.stringify({ reason }),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async requestInfo(id: string, notes: string) {
-    const res = await fetch(`${API_BASE}/admin/seller-applications/${id}/request-info`, {
+    const res = await fetchWithAuthRetry(`/admin/seller-applications/${id}/request-info`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -280,14 +327,14 @@ export const adminSellerApplicationAPI = {
       },
       body: JSON.stringify({ notes }),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 // ==================== SELLERS ====================
 export const sellerAPI = {
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/sellers/create`, {
+    const res = await fetchWithAuthRetry('/sellers/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -295,39 +342,39 @@ export const sellerAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async get(id: string) {
-    const res = await fetch(`${API_BASE}/sellers/${id}`);
-    return res.json();
+    const res = await safeFetchApi(`/sellers/${id}`);
+    return parseApiResponse(res);
   },
 
   async getAll() {
-    const res = await fetch(`${API_BASE}/sellers`);
-    return res.json();
+    const res = await safeFetchApi('/sellers');
+    return parseApiResponse(res);
   },
 
   async getByUserId(userId: string) {
-    const res = await fetch(`${API_BASE}/sellers/user/${userId}`, {
+    const res = await fetchWithAuthRetry(`/sellers/user/${userId}`, {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async getMyStore() {
-    const res = await fetch(`${API_BASE}/seller/store/me`, {
+    const res = await fetchWithAuthRetry('/seller/store/me', {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async getBySlug(storeSlug: string) {
-    const res = await fetch(`${API_BASE}/sellers/store/${storeSlug}`);
-    return res.json();
+    const res = await safeFetchApi(`/sellers/store/${storeSlug}`);
+    return parseApiResponse(res);
   },
   async update(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/sellers/${id}`, {
+    const res = await fetchWithAuthRetry(`/sellers/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -335,14 +382,14 @@ export const sellerAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 // ==================== PRODUCTS ====================
 export const productAPI = {
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/products/create`, {
+    const res = await fetchWithAuthRetry('/products/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -392,7 +439,9 @@ export const productAPI = {
         console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
-    const res = await fetch(`${API_BASE}/products/${id}`, { signal: options?.signal });
+    const hasApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    if (!hasApi && !isLocalDevRuntime()) return null;
+    const res = await safeFetchApi(`/products/${id}`, { signal: options?.signal });
     return parseApiResponse(res);
   },
 
@@ -436,7 +485,9 @@ export const productAPI = {
         console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
-    const res = await fetch(`${API_BASE}/products`, { signal: options?.signal });
+    const hasApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    if (!hasApi && !isLocalDevRuntime()) return [];
+    const res = await safeFetchApi('/products', { signal: options?.signal });
     return parseApiResponse(res);
   },
 
@@ -485,7 +536,7 @@ export const productAPI = {
     if (!hasExplicitApiBase && !isLocalDevRuntime()) {
       return [];
     }
-    const res = await fetch(`${API_BASE}/products?categoryId=${categoryId}`);
+    const res = await safeFetchApi(`/products?categoryId=${encodeURIComponent(categoryId)}`);
     return await parseApiResponse(res);
   },
 
@@ -546,19 +597,19 @@ export const productAPI = {
     if (!hasExplicitApiBase && !isLocalDevRuntime()) {
       return [];
     }
-    const res = await fetch(`${API_BASE}/products?${q.toString()}`);
+    const res = await safeFetchApi(`/products?${q.toString()}`);
     return parseApiResponse(res);
   },
 
   async getSellerProducts(sellerId: string) {
-    const res = await fetch(`${API_BASE}/products/seller/${sellerId}`, {
+    const res = await fetchWithAuthRetry(`/products/seller/${sellerId}`, {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async update(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/products/${id}`, {
+    const res = await fetchWithAuthRetry(`/products/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -569,18 +620,18 @@ export const productAPI = {
     return parseApiResponse(res);
   },
   async submit(id: string) {
-    const res = await fetch(`${API_BASE}/products/${id}/submit`, {
+    const res = await fetchWithAuthRetry(`/products/${id}/submit`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
   async delete(id: string) {
-    const res = await fetch(`${API_BASE}/products/${id}`, {
+    const res = await fetchWithAuthRetry(`/products/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
@@ -596,17 +647,17 @@ export const adminProductAPI = {
     if (params?.status) query.set('status', params.status);
     if (params?.sellerId) query.set('sellerId', params.sellerId);
     if (params?.search) query.set('search', params.search);
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products${query.toString() ? `?${query.toString()}` : ''}`);
+    const res = await fetchWithAuthRetry(`/admin/products${query.toString() ? `?${query.toString()}` : ''}`);
     return parseApiResponse(res);
   },
 
   async getPendingProducts() {
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/pending`);
+    const res = await fetchWithAuthRetry('/admin/products/pending');
     return parseApiResponse(res);
   },
 
   async approve(id: string, notes: string = '') {
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}/approve`, {
+    const res = await fetchWithAuthRetry(`/admin/products/${id}/approve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -617,7 +668,7 @@ export const adminProductAPI = {
   },
 
   async reject(id: string, reason: string) {
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}/reject`, {
+    const res = await fetchWithAuthRetry(`/admin/products/${id}/reject`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -633,7 +684,7 @@ export const adminProductAPI = {
     reason?: string;
     notes?: string;
   }) {
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/bulk-review`, {
+    const res = await fetchWithAuthRetry('/admin/products/bulk-review', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -644,7 +695,7 @@ export const adminProductAPI = {
   },
 
   async create(data: any) {
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products`, {
+    const res = await fetchWithAuthRetry('/admin/products', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -655,7 +706,7 @@ export const adminProductAPI = {
   },
 
   async update(id: string, data: any) {
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}`, {
+    const res = await fetchWithAuthRetry(`/admin/products/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -666,7 +717,7 @@ export const adminProductAPI = {
   },
 
   async delete(id: string) {
-    const res = await fetchWithAuthRetry(`${API_BASE}/admin/products/${id}`, {
+    const res = await fetchWithAuthRetry(`/admin/products/${id}`, {
       method: 'DELETE',
     });
     return parseApiResponse(res);
@@ -676,7 +727,7 @@ export const adminProductAPI = {
 // ==================== ORDERS ====================
 export const orderAPI = {
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/orders/create`, {
+    const res = await fetchWithAuthRetry('/orders/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -689,7 +740,7 @@ export const orderAPI = {
   },
 
   async get(id: string) {
-    const res = await fetch(`${API_BASE}/orders/${id}`, {
+    const res = await fetchWithAuthRetry(`/orders/${id}`, {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -697,7 +748,7 @@ export const orderAPI = {
   },
 
   async getCustomerOrders(customerId: string) {
-    const res = await fetch(`${API_BASE}/orders/customer/${customerId}`, {
+    const res = await fetchWithAuthRetry(`/orders/customer/${customerId}`, {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -705,7 +756,7 @@ export const orderAPI = {
   },
 
   async getSellerOrders(sellerId: string) {
-    const res = await fetch(`${API_BASE}/orders/seller/${sellerId}`, {
+    const res = await fetchWithAuthRetry(`/orders/seller/${sellerId}`, {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -713,7 +764,7 @@ export const orderAPI = {
   },
 
   async updateStatus(id: string, status: string) {
-    const res = await fetch(`${API_BASE}/orders/${id}/status`, {
+    const res = await fetchWithAuthRetry(`/orders/${id}/status`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -735,7 +786,7 @@ export const orderAPI = {
       status?: string;
     }
   ) {
-    const res = await fetch(`${API_BASE}/orders/${id}/dispatch-slot`, {
+    const res = await fetchWithAuthRetry(`/orders/${id}/dispatch-slot`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -748,7 +799,7 @@ export const orderAPI = {
   },
 
   async requestReturn(id: string, data: { reason: string; refundAmount?: number }) {
-    const res = await fetch(`${API_BASE}/orders/${id}/request-return`, {
+    const res = await fetchWithAuthRetry(`/orders/${id}/request-return`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -761,7 +812,7 @@ export const orderAPI = {
   },
 
   async getAllOrders() {
-    const res = await fetch(`${API_BASE}/admin/orders`, {
+    const res = await fetchWithAuthRetry('/admin/orders', {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -769,7 +820,7 @@ export const orderAPI = {
   },
 
   async processRefund(id: string, data: { action: 'approve' | 'reject'; refundAmount?: number; reason?: string }) {
-    const res = await fetch(`${API_BASE}/admin/orders/${id}/refund`, {
+    const res = await fetchWithAuthRetry(`/admin/orders/${id}/refund`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -784,7 +835,7 @@ export const orderAPI = {
 
 export const codAPI = {
   async sendOtp(data: { phone: string; email: string }) {
-    const res = await fetch(`${API_BASE}/cod/otp/send`, {
+    const res = await fetchWithAuthRetry('/cod/otp/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -797,7 +848,7 @@ export const codAPI = {
   },
 
   async verifyOtp(data: { sessionId: string; code: string }) {
-    const res = await fetch(`${API_BASE}/cod/otp/verify`, {
+    const res = await fetchWithAuthRetry('/cod/otp/verify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -828,7 +879,7 @@ export const paymentAPI = {
     };
     deliveryCountry?: string;
   }) {
-    const res = await fetch(`${API_BASE}/payments/stripe/checkout-session`, {
+    const res = await fetchWithAuthRetry('/payments/stripe/checkout-session', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -844,12 +895,12 @@ export const paymentAPI = {
 // ==================== TRACKING ====================
 export const trackingAPI = {
   async get(trackingCode: string) {
-    const res = await fetch(`${API_BASE}/tracking/${trackingCode}`);
+    const res = await safeFetchApi(`/tracking/${trackingCode}`);
     return parseApiResponse(res);
   },
 
   async scanQR(orderId: string) {
-    const res = await fetch(`${API_BASE}/tracking/${orderId}/scan-qr`, {
+    const res = await fetchWithAuthRetry(`/tracking/${orderId}/scan-qr`, {
       method: 'POST',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -858,7 +909,7 @@ export const trackingAPI = {
   },
 
   async markDelivered(orderId: string) {
-    const res = await fetch(`${API_BASE}/tracking/${orderId}/delivery-done`, {
+    const res = await fetchWithAuthRetry(`/tracking/${orderId}/delivery-done`, {
       method: 'POST',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -870,17 +921,17 @@ export const trackingAPI = {
 // ==================== REVIEWS ====================
 export const reviewAPI = {
   async getSellerReviews(sellerId: string) {
-    const res = await fetch(`${API_BASE}/reviews/vendor/${sellerId}`);
+    const res = await safeFetchApi(`/reviews/vendor/${sellerId}`);
     return parseApiResponse(res);
   },
 
   async getProductReviews(productId: string) {
-    const res = await fetch(`${API_BASE}/reviews/product/${productId}`);
+    const res = await safeFetchApi(`/reviews/product/${productId}`);
     return parseApiResponse(res);
   },
 
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/reviews`, {
+    const res = await fetchWithAuthRetry('/reviews', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -895,32 +946,32 @@ export const reviewAPI = {
 // ==================== PAYOUTS ====================
 export const payoutAPI = {
   async getSellerPayouts(sellerId: string) {
-    const res = await fetch(`${API_BASE}/payouts/seller/${sellerId}`, {
+    const res = await fetchWithAuthRetry(`/payouts/seller/${sellerId}`, {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async getAllPayouts() {
-    const res = await fetch(`${API_BASE}/admin/payouts`, {
+    const res = await fetchWithAuthRetry('/admin/payouts', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async process(id: string) {
-    const res = await fetch(`${API_BASE}/admin/payouts/${id}/process`, {
+    const res = await fetchWithAuthRetry(`/admin/payouts/${id}/process`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 // ==================== PAYOUT REQUESTS ====================
 export const payoutRequestAPI = {
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/payout-requests`, {
+    const res = await fetchWithAuthRetry('/payout-requests', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -928,24 +979,24 @@ export const payoutRequestAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async getSellerRequests(sellerId: string) {
-    const res = await fetch(`${API_BASE}/payout-requests/seller/${sellerId}`, {
+    const res = await fetchWithAuthRetry(`/payout-requests/seller/${sellerId}`, {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async getAllAdmin() {
-    const res = await fetch(`${API_BASE}/admin/payout-requests`, {
+    const res = await fetchWithAuthRetry('/admin/payout-requests', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async update(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/admin/payout-requests/${id}`, {
+    const res = await fetchWithAuthRetry(`/admin/payout-requests/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -953,23 +1004,23 @@ export const payoutRequestAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 // ==================== CATEGORIES ====================
 export const categoryAPI = {
   async getAll() {
-    const res = await fetch(`${API_BASE}/categories`);
+    const res = await safeFetchApi('/categories');
     return parseApiResponse(res);
   },
 
   async get(id: string) {
-    const res = await fetch(`${API_BASE}/categories/${id}`);
+    const res = await safeFetchApi(`/categories/${id}`);
     return parseApiResponse(res);
   },
   async notifyInterest(id: string, data: { email?: string; phone?: string }) {
-    const res = await fetch(`${API_BASE}/categories/${id}/interest`, {
+    const res = await fetchWithAuthRetry(`/categories/${id}/interest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -981,7 +1032,7 @@ export const categoryAPI = {
     return parseApiResponse(res);
   },
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/categories`, {
+    const res = await fetchWithAuthRetry('/categories', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -989,10 +1040,10 @@ export const categoryAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async update(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/categories/${id}`, {
+    const res = await fetchWithAuthRetry(`/categories/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1000,25 +1051,25 @@ export const categoryAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async delete(id: string) {
-    const res = await fetch(`${API_BASE}/categories/${id}`, {
+    const res = await fetchWithAuthRetry(`/categories/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 // ==================== BANNERS ====================
 export const bannerAPI = {
   async getAll() {
-    const res = await fetch(`${API_BASE}/banners`);
-    return res.json();
+    const res = await safeFetchApi('/banners');
+    return parseApiResponse(res);
   },
   async create(data: any) {
-    const res = await fetch(`${API_BASE}/banners`, {
+    const res = await fetchWithAuthRetry('/banners', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1026,10 +1077,10 @@ export const bannerAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async update(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/banners/${id}`, {
+    const res = await fetchWithAuthRetry(`/banners/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1037,18 +1088,18 @@ export const bannerAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async delete(id: string) {
-    const res = await fetch(`${API_BASE}/banners/${id}`, {
+    const res = await fetchWithAuthRetry(`/banners/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async trackClick(id: string) {
-    const res = await fetch(`${API_BASE}/banners/${id}/click`, {
+    const res = await fetchWithAuthRetry(`/banners/${id}/click`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1056,14 +1107,14 @@ export const bannerAPI = {
       },
       body: JSON.stringify({}),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 
   async getAnalytics() {
-    const res = await fetch(`${API_BASE}/admin/banners/analytics`, {
+    const res = await fetchWithAuthRetry('/admin/banners/analytics', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
@@ -1079,7 +1130,11 @@ export const analyticsAPI = {
       return { ok: true, skipped: true, reason: 'local-dev-runtime' };
     }
 
-    const res = await fetch(`${API_BASE}/analytics/events`, {
+    if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+      return { ok: true, skipped: true, reason: 'no-api-base' };
+    }
+
+    const res = await fetchWithAuthRetry('/analytics/events', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1087,15 +1142,15 @@ export const analyticsAPI = {
       },
       body: JSON.stringify(event),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 // ==================== TRANSLATIONS ====================
 export const translationAPI = {
   async getAll() {
-    const res = await fetch(`${API_BASE}/translations`);
-    return res.json();
+    const res = await safeFetchApi('/translations');
+    return parseApiResponse(res);
   },
 };
 
@@ -1106,7 +1161,7 @@ export const dashboardAPI = {
     if (params?.range) query.set('range', params.range);
     if (params?.from) query.set('from', params.from);
     if (params?.to) query.set('to', params.to);
-    const res = await fetch(`${API_BASE}/admin/dashboard${query.toString() ? `?${query.toString()}` : ''}`, {
+    const res = await fetchWithAuthRetry(`/admin/dashboard${query.toString() ? `?${query.toString()}` : ''}`, {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -1114,28 +1169,28 @@ export const dashboardAPI = {
   },
 
   async getSellerDashboard(sellerId: string) {
-    const res = await fetch(`${API_BASE}/seller/dashboard/${sellerId}`, {
+    const res = await fetchWithAuthRetry(`/seller/dashboard/${sellerId}`, {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async getAdminAnalytics() {
-    const res = await fetch(`${API_BASE}/admin/analytics`, {
+    const res = await fetchWithAuthRetry('/admin/analytics', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async getSellerAnalytics(sellerId: string) {
-    const res = await fetch(`${API_BASE}/seller/analytics/${sellerId}`, {
+    const res = await fetchWithAuthRetry(`/seller/analytics/${sellerId}`, {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 export const customerAPI = {
   async getAllAdmin() {
-    const res = await fetch(`${API_BASE}/admin/customers`, {
+    const res = await fetchWithAuthRetry('/admin/customers', {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -1145,25 +1200,25 @@ export const customerAPI = {
 
 export const adminOpsAPI = {
   async getActivityLogs() {
-    const res = await fetch(`${API_BASE}/admin/activity-logs`, {
+    const res = await fetchWithAuthRetry('/admin/activity-logs', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async getNotifications() {
-    const res = await fetch(`${API_BASE}/admin/notifications`, {
+    const res = await fetchWithAuthRetry('/admin/notifications', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async getMarketplaceSettings() {
-    const res = await fetch(`${API_BASE}/settings/marketplace`, {
+    const res = await fetchWithAuthRetry('/settings/marketplace', {
       headers: getAuthHeaders(),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
   async updateMarketplaceSettings(data: any) {
-    const res = await fetch(`${API_BASE}/settings/marketplace`, {
+    const res = await fetchWithAuthRetry('/settings/marketplace', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1171,13 +1226,13 @@ export const adminOpsAPI = {
       },
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseApiResponse(res);
   },
 };
 
 export const supportAPI = {
   async createTicket(data: any) {
-    const res = await fetch(`${API_BASE}/support/tickets`, {
+    const res = await fetchWithAuthRetry('/support/tickets', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1188,19 +1243,19 @@ export const supportAPI = {
     return parseApiResponse(res);
   },
   async getMyTickets() {
-    const res = await fetch(`${API_BASE}/support/tickets/me`, {
+    const res = await fetchWithAuthRetry('/support/tickets/me', {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
   async getAdminTickets() {
-    const res = await fetch(`${API_BASE}/admin/support/tickets`, {
+    const res = await fetchWithAuthRetry('/admin/support/tickets', {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
   async updateTicket(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/admin/support/tickets/${id}`, {
+    const res = await fetchWithAuthRetry(`/admin/support/tickets/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1211,7 +1266,7 @@ export const supportAPI = {
     return parseApiResponse(res);
   },
   async addMessage(id: string, data: any) {
-    const res = await fetch(`${API_BASE}/support/tickets/${id}/messages`, {
+    const res = await fetchWithAuthRetry(`/support/tickets/${id}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

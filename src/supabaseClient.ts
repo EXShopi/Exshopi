@@ -9,6 +9,20 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 console.log('SUPABASE URL:', import.meta.env.VITE_SUPABASE_URL);
 console.log('SUPABASE KEY EXISTS:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
 console.log('SUPABASE CLIENT URL:', supabaseUrl);
+// Extra diagnostics to help detect malformed env values (typos, whitespace, missing scheme)
+try {
+  console.log('SUPABASE CLIENT URL (raw):', JSON.stringify(supabaseUrl));
+  console.log('SUPABASE CLIENT URL length:', supabaseUrl.length);
+  try {
+    const parsed = new URL(supabaseUrl);
+    console.log('SUPABASE CLIENT HOSTNAME:', parsed.hostname);
+    console.log('SUPABASE CLIENT PROTOCOL:', parsed.protocol);
+  } catch (e) {
+    console.warn('SUPABASE CLIENT URL is not a valid absolute URL:', e);
+  }
+} catch (e) {
+  // ignore
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
