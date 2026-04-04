@@ -1,19 +1,21 @@
-import { userAPI } from '../services/api';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/auth';
 
+interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  name?: string;
+  fullName?: string;
+  phone?: string | null;
+  country?: string | null;
+  role?: string;
+  status?: string;
+  sellerApplicationStatus?: string | null;
+}
+
 interface AuthResponse {
-  user: {
-    id: string;
-    email: string;
-    displayName: string;
-    name?: string;
-    fullName?: string;
-    phone?: string | null;
-    country?: string | null;
-    role?: string;
-    status?: string;
-    sellerApplicationStatus?: string | null;
-  };
+  user: AuthUser;
   role?: string;
   accessToken?: string | null;
   seller?: { id?: string } | null;
@@ -21,121 +23,344 @@ interface AuthResponse {
   isDevMode?: boolean;
 }
 
+type PublicUserRow = {
+  id?: string;
+  email?: string;
+  name?: string | null;
+  full_name?: string | null;
+  fullName?: string | null;
+  display_name?: string | null;
+  displayName?: string | null;
+  phone?: string | null;
+  country?: string | null;
+  role?: string | null;
+  status?: string | null;
+  seller_application_status?: string | null;
+  sellerApplicationStatus?: string | null;
+};
+
+function normalizeRole(role?: string | null): string {
+  return (role || 'customer').toLowerCase();
+}
+
+function normalizeStatus(status?: string | null): string {
+  return (status || 'active').toLowerCase();
+}
+
+function buildDisplayName(authEmail: string, profile?: PublicUserRow | null): string {
+  return (
+    profile?.name ||
+    profile?.full_name ||
+    profile?.fullName ||
+    profile?.display_name ||
+    profile?.displayName ||
+    authEmail ||
+    'User'
+  );
+}
+
+async function getProfileByEmail(email: string): Promise<PublicUserRow | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .ilike('email', normalizedEmail)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[AUTH] Could not load public.users profile:', error.message);
+    return null;
+  }
+
+  return (data as PublicUserRow | null) || null;
+}
+
+async function getCurrentAccessToken(): Promise<string | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    console.warn('[AUTH] Could not read session token:', error.message);
+    return null;
+  }
+  return data.session?.access_token || null;
+}
+
+function mapAuthResult(params: {
+  authUser: { id: string; email?: string | null };
+  profile?: PublicUserRow | null;
+  accessToken?: string | null;
+  isDevMode?: boolean;
+}): AuthResponse {
+  const { authUser, profile, accessToken = null, isDevMode = false } = params;
+  const email = authUser.email || profile?.email || '';
+  const role = normalizeRole(profile?.role);
+  const status = normalizeStatus(profile?.status);
+  const sellerApplicationStatus =
+    profile?.seller_application_status || profile?.sellerApplicationStatus || null;
+
+  return {
+    user: {
+      id: authUser.id,
+      email,
+      displayName: buildDisplayName(email, profile),
+      name: profile?.name || profile?.full_name || profile?.fullName || '',
+      fullName: profile?.full_name || profile?.fullName || profile?.name || '',
+      phone: profile?.phone || '',
+      country: profile?.country || 'AE',
+      role,
+      status,
+      sellerApplicationStatus,
+    },
+    role,
+    accessToken,
+    seller: null,
+    sellerApplication: sellerApplicationStatus
+      ? { status: sellerApplicationStatus }
+      : null,
+    isDevMode,
+  };
+}
+
+function isHtmlErrorMessage(message: string): boolean {
+  const msg = message.toLowerCase();
+  return (
+    msg.includes('<!doctype html') ||
+    msg.includes('<html') ||
+    msg.includes("unexpected token '<'") ||
+    msg.includes('non-json') ||
+    msg.includes('index.html')
+  );
+}
+
 export class AuthService {
   static async signIn(email: string, password: string): Promise<AuthResponse> {
     try {
-      const session = await userAPI.login(email, password);
-      if (!session || !session.user?.id) throw new Error(session?.error || 'Invalid credentials');
-      useAuthStore.getState().setAccessToken(session.accessToken || null);
-      return {
-        user: {
-          id: session.user.id,
-          email: session.user.email || '',
-          displayName: (session.user.name || session.user.fullName || session.user.displayName) || session.user.email || 'User',
-          name: session.user.name || session.user.fullName || session.user.displayName || '',
-          fullName: session.user.name || session.user.fullName || session.user.displayName || '',
-          phone: session.user.phone || '',
-          country: session.user.country || 'AE',
-          role: session.role || session.user.role || 'customer',
-          status: session.user.status || 'active',
-          sellerApplicationStatus: session.user.sellerApplicationStatus || session.sellerApplication?.status || null,
-        },
-        role: session.role || session.user.role || 'customer',
-        accessToken: session.accessToken || null,
-        seller: session.seller || null,
-        sellerApplication: session.sellerApplication || null,
-      };
-    } catch (error: any) {
-      console.error('[AUTH] Backend sign-in error:', error?.message || error);
-      const msg = error?.message || 'Failed to sign in';
-      if (msg === 'Failed to fetch') {
-        throw new Error('The ExShopi backend could not be reached from this device. Restart the backend and try again.');
+      const normalizedEmail = email.trim().toLowerCase();
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Invalid credentials');
       }
-      if (msg.includes('Email not confirmed')) {
+
+      if (!data.user?.id) {
+        throw new Error('Invalid login response. Missing user data.');
+      }
+
+      const profile = await getProfileByEmail(normalizedEmail);
+      const accessToken = data.session?.access_token || null;
+
+      useAuthStore.getState().setAccessToken(accessToken);
+
+      return mapAuthResult({
+        authUser: {
+          id: data.user.id,
+          email: data.user.email,
+        },
+        profile,
+        accessToken,
+      });
+    } catch (error: any) {
+      console.error('[AUTH] Sign-in error:', error?.message || error);
+
+      const msg = String(error?.message || 'Failed to sign in');
+
+      if (msg === 'Failed to fetch') {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+
+      if (isHtmlErrorMessage(msg)) {
+        throw new Error('Authentication service returned an invalid response. Please check live auth configuration.');
+      }
+
+      if (msg.toLowerCase().includes('email not confirmed')) {
         throw new Error('Please confirm your email. Check your inbox for a confirmation link.');
       }
+
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        throw new Error('Invalid email or password.');
+      }
+
       throw new Error(msg);
     }
   }
 
-  static async signUp(email: string, password: string, displayName: string, phone = ''): Promise<AuthResponse> {
+  static async signUp(
+    email: string,
+    password: string,
+    displayName: string,
+    phone = ''
+  ): Promise<AuthResponse> {
     try {
-      const session = await userAPI.register({ email, password, name: displayName, phone });
-      if (!session || !session.user?.id) throw new Error(session?.error || 'Failed to register user');
-      useAuthStore.getState().setAccessToken(session.accessToken || null);
-      return {
-        user: {
-          id: session.user.id,
-          email: session.user.email || '',
-          displayName: displayName || session.user.name || session.user.fullName || 'User',
-          name: displayName || session.user.name || session.user.fullName || '',
-          fullName: displayName || session.user.name || session.user.fullName || '',
-          phone: session.user.phone || phone || '',
-          country: session.user.country || 'AE',
-          role: session.role || session.user.role || 'customer',
-          status: session.user.status || 'active',
-          sellerApplicationStatus: session.user.sellerApplicationStatus || null,
+      const normalizedEmail = email.trim().toLowerCase();
+
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: {
+            displayName,
+            name: displayName,
+            phone,
+          },
         },
-        role: session.role || session.user.role || 'customer',
-        accessToken: session.accessToken || null,
-        seller: session.seller || null,
-        sellerApplication: session.sellerApplication || null,
-      };
-    } catch (error: any) {
-      console.error('[AUTH] Backend sign-up error:', error?.message || error);
-      if (String(error?.message || '') === 'Failed to fetch') {
-        throw new Error('The ExShopi backend could not be reached from this device. Please restart the backend and try again.');
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to register user');
       }
-      if (String(error?.message || '').includes('already exists')) {
+
+      if (!data.user?.id) {
+        throw new Error('Failed to register user');
+      }
+
+      const maybeToken = data.session?.access_token || null;
+      useAuthStore.getState().setAccessToken(maybeToken);
+
+      const baseProfile: PublicUserRow = {
+        email: normalizedEmail,
+        name: displayName,
+        full_name: displayName,
+        phone,
+        country: 'AE',
+        role: 'customer',
+        status: 'active',
+      };
+
+      return mapAuthResult({
+        authUser: {
+          id: data.user.id,
+          email: data.user.email,
+        },
+        profile: baseProfile,
+        accessToken: maybeToken,
+      });
+    } catch (error: any) {
+      console.error('[AUTH] Sign-up error:', error?.message || error);
+
+      const msg = String(error?.message || 'Failed to register user');
+
+      if (msg === 'Failed to fetch') {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+
+      if (isHtmlErrorMessage(msg)) {
+        throw new Error('Authentication service returned an invalid response. Please check live auth configuration.');
+      }
+
+      if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already exists')) {
         throw new Error('This email is already registered.');
       }
-      throw error;
+
+      throw new Error(msg);
     }
   }
 
   static async signOut(): Promise<void> {
     try {
-      await userAPI.logout();
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('[AUTH] Sign out error:', error);
+    } finally {
       localStorage.removeItem('sellerId');
       localStorage.removeItem('adminId');
       localStorage.removeItem('sellerEmail');
       localStorage.removeItem('adminEmail');
       useAuthStore.getState().setAccessToken(null);
-    } catch (error) {
-      console.error('[AUTH] Sign out cleanup error:', error);
     }
   }
 
   static async restoreSession() {
     try {
-      const session = await userAPI.refresh();
-      useAuthStore.getState().setAccessToken(session.accessToken || null);
-      return session;
-    } catch {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error || !data.session?.user) {
+        useAuthStore.getState().setAccessToken(null);
+        return null;
+      }
+
+      const authUser = data.session.user;
+      const accessToken = data.session.access_token || null;
+      const profile = await getProfileByEmail(authUser.email || '');
+
+      useAuthStore.getState().setAccessToken(accessToken);
+
+      return mapAuthResult({
+        authUser: {
+          id: authUser.id,
+          email: authUser.email,
+        },
+        profile,
+        accessToken,
+      });
+    } catch (error) {
+      console.error('[AUTH] Restore session error:', error);
       useAuthStore.getState().setAccessToken(null);
       return null;
     }
   }
 
-  static async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
-    return {
-      success: true,
-      message: 'Password reset link sent to your email.'
-    };
-  }
+  static async requestPasswordReset(
+    email: string
+  ): Promise<{ success: boolean; message: string }> {
+    const normalizedEmail = email.trim().toLowerCase();
 
-  static async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
-    if (!token || newPassword.length < 6) {
-      throw new Error('Invalid reset token or password too short.');
+    if (!normalizedEmail) {
+      throw new Error('Email is required.');
     }
 
-    // In production, this would verify token and update password
+    const redirectTo =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/admin/reset-password`
+        : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo,
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to send reset email.');
+    }
+
     return {
       success: true,
-      message: 'Password reset successful. You can now log in with your new password.'
+      message: 'Password reset link sent to your email.',
     };
   }
 
+  static async resetPassword(
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
+
+    if (!token) {
+      console.warn('[AUTH] Reset password called without explicit token. Proceeding with recovery session if present.');
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to reset password.');
+    }
+
+    const accessToken = await getCurrentAccessToken();
+    useAuthStore.getState().setAccessToken(accessToken);
+
+    return {
+      success: true,
+      message: 'Password reset successful. You can now log in with your new password.',
+    };
+  }
 }
 
 export default AuthService;
