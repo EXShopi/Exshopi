@@ -1,9 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
-import { getAuthHeaders } from "./services/api";
+import { getAuthHeaders } from "./lib/authHeaders";
 
 // Initialize Supabase
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+
+// Debug: surface env usage so Netlify / browser console shows misconfiguration quickly
+console.log('SUPABASE URL:', import.meta.env.VITE_SUPABASE_URL);
+console.log('SUPABASE KEY EXISTS:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+console.log('SUPABASE CLIENT URL:', supabaseUrl);
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

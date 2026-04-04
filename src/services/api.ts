@@ -1,6 +1,15 @@
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
 
+export function getAuthHeaders() {
+  const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
+
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 const defaultApiBase =
   typeof window !== 'undefined'
     ? import.meta.env.DEV
@@ -120,15 +129,8 @@ async function uploadWithRetry(
   throw lastError || new Error('Upload failed');
 }
 
-// Get auth headers from secure session state
-export function getAuthHeaders() {
-  const token = useAuthStore.getState().accessToken;
-  return token
-    ? {
-        Authorization: `Bearer ${token}`,
-      }
-    : {};
-}
+// `getAuthHeaders` exported from this module to ensure callers can import it
+// without circular import issues. It reads a client-side token from localStorage.
 
 // ==================== USERS ====================
 export const userAPI = {
@@ -381,7 +383,13 @@ export const productAPI = {
         }
         // fallback to API
       } catch (e) {
-        console.warn('Supabase product fetch failed, falling back to API:', e);
+        console.warn('Supabase product fetch failed:', e);
+        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
+          throw e;
+        }
+        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
     const res = await fetch(`${API_BASE}/products/${id}`, { signal: options?.signal });
@@ -419,7 +427,13 @@ export const productAPI = {
           return filtered;
         }
       } catch (e) {
-        console.warn('Supabase products fetch failed, falling back to API:', e);
+        console.warn('Supabase products fetch failed:', e);
+        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
+          throw e;
+        }
+        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
     const res = await fetch(`${API_BASE}/products`, { signal: options?.signal });
@@ -458,11 +472,17 @@ export const productAPI = {
           return filtered;
         }
       } catch (e) {
-        console.warn('Supabase category fetch failed, falling back to API:', e);
+        console.warn('Supabase category fetch failed:', e);
+        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
+          throw e;
+        }
+        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
     const res = await fetch(`${API_BASE}/products?categoryId=${categoryId}`);
-    return res.json();
+    return await parseApiResponse(res);
   },
 
   async getBySlug(categorySlug: string, subcategorySlug?: string) {
@@ -506,7 +526,13 @@ export const productAPI = {
           });
         }
       } catch (e) {
-        console.warn('Supabase slug fetch failed, falling back to API:', e);
+        console.warn('Supabase slug fetch failed:', e);
+        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+          console.error('Supabase fetch failed and no explicit API base configured — avoiding fallback to site /api which likely serves index.html. Set VITE_API_BASE_URL or VITE_API_BASE in your environment (Netlify).');
+          throw e;
+        }
+        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
     const q = new URLSearchParams();
