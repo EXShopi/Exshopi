@@ -69,8 +69,8 @@ export function AdminLayout() {
             restored.role && ADMIN_ROLES.includes(restored.role)
               ? restored.role
               : persistedAdminEmail && restoredEmail && persistedAdminEmail === restoredEmail
-              ? 'admin'
-              : restored.role || null;
+                ? 'admin'
+                : restored.role || null;
 
           setUser({
             id: restored.user.id,
@@ -133,21 +133,96 @@ export function AdminLayout() {
   ) as 'admin' | 'super_admin' | 'finance_manager' | 'support_agent';
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/admin/dashboard', permission: 'dashboard:view' as const },
-    { icon: Users, label: 'Vendors', path: '/admin/vendors', permission: 'vendors:view' as const },
-    { icon: ShoppingBag, label: 'Products', path: '/admin/products', permission: 'catalog:view' as const },
-    { icon: Package, label: 'Inventory', path: '/admin/inventory', permission: 'inventory:view' as const },
-    { icon: ShoppingCart, label: 'Orders', path: '/admin/orders', permission: 'orders:view' as const },
-    { icon: RotateCcw, label: 'Returns', path: '/admin/returns', permission: 'returns:view' as const },
-    { icon: UserCircle, label: 'Customers', path: '/admin/customers', permission: 'customers:view' as const },
-    { icon: Percent, label: 'Commissions', path: '/admin/commissions', permission: 'commissions:view' as const },
-    { icon: Wallet, label: 'Payouts', path: '/admin/payouts', permission: 'payouts:view' as const },
-    { icon: Layers, label: 'Categories', path: '/admin/categories', permission: 'categories:manage' as const },
-    { icon: ImageIcon, label: 'Banners', path: '/admin/banners', permission: 'banners:manage' as const },
-    { icon: Tag, label: 'Offers', path: '/admin/offers', permission: 'offers:manage' as const },
-    { icon: BarChart3, label: 'Reports', path: '/admin/reports', permission: 'reports:view' as const },
-    { icon: Settings, label: 'Settings', path: '/admin/settings', permission: 'settings:manage' as const },
-    { icon: HelpCircle, label: 'Support', path: '/admin/support', permission: 'support:view' as const },
+    {
+      icon: LayoutDashboard,
+      label: 'Dashboard',
+      path: '/admin/dashboard',
+      permission: 'dashboard:view' as const,
+    },
+    {
+      icon: Users,
+      label: 'Vendors',
+      path: '/admin/vendors',
+      permission: 'vendors:view' as const,
+    },
+    {
+      icon: ShoppingBag,
+      label: 'Products',
+      path: '/admin/products',
+      permission: 'catalog:view' as const,
+    },
+    {
+      icon: Package,
+      label: 'Inventory',
+      path: '/admin/inventory',
+      permission: 'inventory:view' as const,
+    },
+    {
+      icon: ShoppingCart,
+      label: 'Orders',
+      path: '/admin/orders',
+      permission: 'orders:view' as const,
+    },
+    {
+      icon: RotateCcw,
+      label: 'Returns',
+      path: '/admin/returns',
+      permission: 'returns:view' as const,
+    },
+    {
+      icon: UserCircle,
+      label: 'Customers',
+      path: '/admin/customers',
+      permission: 'customers:view' as const,
+    },
+    {
+      icon: Percent,
+      label: 'Commissions',
+      path: '/admin/commissions',
+      permission: 'commissions:view' as const,
+    },
+    {
+      icon: Wallet,
+      label: 'Payouts',
+      path: '/admin/payouts',
+      permission: 'payouts:view' as const,
+    },
+    {
+      icon: Layers,
+      label: 'Categories',
+      path: '/admin/categories',
+      permission: 'categories:manage' as const,
+    },
+    {
+      icon: ImageIcon,
+      label: 'Banners',
+      path: '/admin/banners',
+      permission: 'banners:manage' as const,
+    },
+    {
+      icon: Tag,
+      label: 'Offers',
+      path: '/admin/offers',
+      permission: 'offers:manage' as const,
+    },
+    {
+      icon: BarChart3,
+      label: 'Reports',
+      path: '/admin/reports',
+      permission: 'reports:view' as const,
+    },
+    {
+      icon: Settings,
+      label: 'Settings',
+      path: '/admin/settings',
+      permission: 'settings:manage' as const,
+    },
+    {
+      icon: HelpCircle,
+      label: 'Support',
+      path: '/admin/support',
+      permission: 'support:view' as const,
+    },
   ].filter((item) => hasAdminPermission(effectiveRole, item.permission));
 
   const activeItem = useMemo(() => {
@@ -345,3 +420,5 @@ export function AdminLayout() {
     </div>
   );
 }
+
+export default AdminLayout;
