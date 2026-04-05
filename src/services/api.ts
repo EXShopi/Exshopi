@@ -52,7 +52,7 @@ export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
   const url = buildApiUrl(pathOrUrl);
 
   if (!url) {
-    console.warn("No API base configured — skipping backend call");
+    console.warn('No API base configured — skipping backend call');
     return Promise.resolve({
       ok: true,
       json: async () => [],
@@ -70,7 +70,7 @@ async function parseApiResponse(res: Response) {
   const rawText = await res.text();
 
   const looksLikeJson =
-    contentType.includes('application/json') || /^\s*[\{\[]/.test(rawText);
+    contentType.includes('application/json') || /^\s*[\[{]/.test(rawText);
 
   if (!looksLikeJson) {
     const preview = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
@@ -103,6 +103,7 @@ async function parseApiResponse(res: Response) {
 
   return data;
 }
+
 async function refreshAccessToken() {
   const res = await safeFetchApi('/auth/refresh', {
     method: 'POST',
@@ -114,10 +115,11 @@ async function refreshAccessToken() {
 }
 
 async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
-  // Normalize to an absolute URL using API_BASE when needed.
   const resolved = buildApiUrl(input);
   if (!resolved) {
-    throw new Error('No API base configured; cannot perform authenticated request in this runtime.');
+    throw new Error(
+      'No API base configured; cannot perform authenticated request in this runtime.'
+    );
   }
 
   const runRequest = () =>
@@ -170,7 +172,9 @@ async function uploadWithRetry(
       return await parseApiResponse(res);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      const shouldRetry = attempt < retries && (res.status === 429 || /too many requests/i.test(lastError.message));
+      const shouldRetry =
+        attempt < retries &&
+        (res.status === 429 || /too many requests/i.test(lastError.message));
 
       if (!shouldRetry) {
         throw lastError;
@@ -181,6 +185,104 @@ async function uploadWithRetry(
   }
 
   throw lastError || new Error('Upload failed');
+}
+
+function normalizeProductPayload(input: any) {
+  const data = { ...(input || {}) };
+
+  const title =
+    data.title ||
+    data.name ||
+    data.productTitle ||
+    '';
+
+  const slug =
+    data.slug ||
+    String(title || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  const priceValue =
+    data.price ??
+    data.salePrice ??
+    data.regularPrice ??
+    0;
+
+  const productStatus =
+    data.status ||
+    data.productStatus ||
+    (data.mode === 'admin' ? 'live' : 'draft');
+
+  const approvalStatus =
+    data.approval_status ||
+    data.approvalStatus ||
+    (data.mode === 'admin' ? 'approved' : 'pending');
+
+  const visibilityStatus =
+    data.visibility_status ||
+    data.visibilityStatus ||
+    (data.mode === 'admin' ? 'live' : 'hidden');
+
+  return {
+    ...data,
+    title,
+    slug,
+    price: Number(priceValue || 0),
+    images: Array.isArray(data.images) ? data.images : [],
+    status: productStatus,
+    approval_status: approvalStatus,
+    visibility_status: visibilityStatus,
+    created_at: data.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function createSupabaseProduct(data: any) {
+  const payload = normalizeProductPayload(data);
+
+  const { data: created, error } = await supabase
+    .from('products')
+    .insert([payload])
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return created;
+}
+
+async function updateSupabaseProduct(id: string, data: any) {
+  const payload = normalizeProductPayload(data);
+
+  const { data: updated, error } = await supabase
+    .from('products')
+    .update({
+      ...payload,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return updated;
+}
+
+async function deleteSupabaseProduct(id: string) {
+  const { error } = await supabase.from('products').delete().eq('id', id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { success: true };
 }
 
 // ==================== USERS ====================
@@ -233,9 +335,11 @@ export const userAPI = {
     });
     return parseApiResponse(res);
   },
+
   async get(id: string) {
     return this.getUser(id);
   },
+
   async update(id: string, data: any) {
     const res = await fetchWithAuthRetry(`/users/${id}`, {
       method: 'PUT',
@@ -250,21 +354,18 @@ export const userAPI = {
   },
 };
 
+// ==================== UPLOADS ====================
 export const uploadAPI = {
-  async uploadImage(dataUrl: string, options?: { folder?: string; fileName?: string }) {
-    return uploadWithRetry('/uploads/image', {
-        dataUrl,
-        folder: options?.folder || 'general',
-        fileName: options?.fileName,
-    });
+  async uploadImage(_dataUrl: string, _options?: { folder?: string; fileName?: string }) {
+    throw new Error(
+      'Image upload is handled directly by Supabase Storage via uploadClient.ts. This API endpoint is disabled.'
+    );
   },
 
-  async uploadDocument(dataUrl: string, options?: { folder?: string; fileName?: string }) {
-    return uploadWithRetry('/uploads/document', {
-        dataUrl,
-        folder: options?.folder || 'documents',
-        fileName: options?.fileName,
-    });
+  async uploadDocument(_dataUrl: string, _options?: { folder?: string; fileName?: string }) {
+    throw new Error(
+      'Document upload is handled directly by Supabase Storage. This API endpoint is disabled.'
+    );
   },
 };
 
@@ -296,6 +397,7 @@ export const adminSellerApplicationAPI = {
     });
     return parseApiResponse(res);
   },
+
   async approve(id: string, notes = '') {
     const res = await fetchWithAuthRetry(`/admin/seller-applications/${id}/approve`, {
       method: 'POST',
@@ -307,6 +409,7 @@ export const adminSellerApplicationAPI = {
     });
     return parseApiResponse(res);
   },
+
   async reject(id: string, reason: string) {
     const res = await fetchWithAuthRetry(`/admin/seller-applications/${id}/reject`, {
       method: 'POST',
@@ -318,6 +421,7 @@ export const adminSellerApplicationAPI = {
     });
     return parseApiResponse(res);
   },
+
   async requestInfo(id: string, notes: string) {
     const res = await fetchWithAuthRetry(`/admin/seller-applications/${id}/request-info`, {
       method: 'POST',
@@ -362,6 +466,7 @@ export const sellerAPI = {
     });
     return parseApiResponse(res);
   },
+
   async getMyStore() {
     const res = await fetchWithAuthRetry('/seller/store/me', {
       headers: getAuthHeaders(),
@@ -369,10 +474,12 @@ export const sellerAPI = {
     });
     return parseApiResponse(res);
   },
+
   async getBySlug(storeSlug: string) {
     const res = await safeFetchApi(`/sellers/store/${storeSlug}`);
     return parseApiResponse(res);
   },
+
   async update(id: string, data: any) {
     const res = await fetchWithAuthRetry(`/sellers/${id}`, {
       method: 'PUT',
@@ -389,67 +496,82 @@ export const sellerAPI = {
 // ==================== PRODUCTS ====================
 export const productAPI = {
   async create(data: any) {
-    const res = await fetchWithAuthRetry('/products/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify(data),
-    });
-    return parseApiResponse(res);
+    return createSupabaseProduct(data);
   },
 
   async get(id: string, options?: { signal?: AbortSignal }) {
-    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    const useSupabase = Boolean(
+      import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+    );
+
     if (useSupabase) {
       try {
-        const { data, error } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+
         if (error) throw error;
+
         if (data) {
-          console.log('Fetched product by id (supabase):', data);
-          // Ensure product is live/approved/visible before returning to public UI
           const status = data.status || data.productStatus || data.status;
           const approval = data.approval_status || data.approvalStatus || data.approvalStatus;
           const visibility = data.visibility_status || data.visibilityStatus || data.visibilityStatus;
-          if (String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live') {
+
+          if (
+            String(status) === 'live' &&
+            String(approval) === 'approved' &&
+            String(visibility) === 'live'
+          ) {
             return data;
           }
-          // if not live/approved/visible, fall through to API fallback (may be admin view)
         }
-        const { data: bySlug, error: slugError } = await supabase.from('products').select('*').eq('slug', id).maybeSingle();
+
+        const { data: bySlug, error: slugError } = await supabase
+          .from('products')
+          .select('*')
+          .eq('slug', id)
+          .maybeSingle();
+
         if (slugError) throw slugError;
+
         if (bySlug) {
-          console.log('Fetched product by slug (supabase):', bySlug);
           const status = bySlug.status || bySlug.productStatus || bySlug.status;
           const approval = bySlug.approval_status || bySlug.approvalStatus || bySlug.approvalStatus;
           const visibility = bySlug.visibility_status || bySlug.visibilityStatus || bySlug.visibilityStatus;
-          if (String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live') {
+
+          if (
+            String(status) === 'live' &&
+            String(approval) === 'approved' &&
+            String(visibility) === 'live'
+          ) {
             return bySlug;
           }
         }
-        // fallback to API
       } catch (e) {
         console.warn('Supabase product fetch failed:', e);
-        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
-        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning null. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!explicitApi && !isLocalDevRuntime()) {
           return null;
         }
-        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
+
     const hasApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
     if (!hasApi && !isLocalDevRuntime()) return null;
+
     const res = await safeFetchApi(`/products/${id}`, { signal: options?.signal });
     return parseApiResponse(res);
   },
 
   async getAll(options?: { signal?: AbortSignal }) {
-    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    const useSupabase = Boolean(
+      import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+    );
+
     if (useSupabase) {
       try {
-        // Try server-side filtering with canonical column names
         try {
           const { data, error } = await supabase
             .from('products')
@@ -458,44 +580,56 @@ export const productAPI = {
             .eq('approval_status', 'approved')
             .eq('visibility_status', 'live')
             .order('created_at', { ascending: false });
+
           if (error) throw error;
-          console.log('Fetched products (supabase filtered):', data?.length || 0);
           return data || [];
         } catch (err) {
-          // If filtered query fails (column names or permissions), fallback to unfiltered then client-side filter
           console.warn('Filtered supabase query failed, falling back to client-side filter:', err);
-          const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false });
+
           if (error) throw error;
+
           const filtered = (data || []).filter((r: any) => {
             const status = r.status || r.productStatus || r.status;
             const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
             const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
-            return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
+
+            return (
+              String(status) === 'live' &&
+              String(approval) === 'approved' &&
+              String(visibility) === 'live'
+            );
           });
-          console.log('Fetched products (client-side filtered):', filtered.length);
+
           return filtered;
         }
       } catch (e) {
         console.warn('Supabase products fetch failed:', e);
-        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
-        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning empty list. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!explicitApi && !isLocalDevRuntime()) {
           return [];
         }
-        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
+
     const hasApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
     if (!hasApi && !isLocalDevRuntime()) return [];
+
     const res = await safeFetchApi('/products', { signal: options?.signal });
     return parseApiResponse(res);
   },
 
   async getByCategory(categoryId: string) {
-    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    const useSupabase = Boolean(
+      import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+    );
+
     if (useSupabase) {
       try {
-        // Server-side filter for public listings
         try {
           const { data, error } = await supabase
             .from('products')
@@ -504,44 +638,61 @@ export const productAPI = {
             .eq('approval_status', 'approved')
             .eq('visibility_status', 'live')
             .order('created_at', { ascending: false });
+
           if (error) throw error;
-          const filtered = (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId);
-          console.log('Fetched products by category (supabase):', filtered.length);
-          return filtered;
+
+          return (data || []).filter(
+            (p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId
+          );
         } catch (err) {
           console.warn('Filtered supabase category query failed, falling back to client-side filter:', err);
-          const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false });
+
           if (error) throw error;
-          const filtered = (data || []).filter((p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId)
+
+          return (data || [])
+            .filter(
+              (p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId
+            )
             .filter((r: any) => {
               const status = r.status || r.productStatus || r.status;
               const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
               const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
-              return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
+
+              return (
+                String(status) === 'live' &&
+                String(approval) === 'approved' &&
+                String(visibility) === 'live'
+              );
             });
-          console.log('Fetched products by category (client-side filtered):', filtered.length);
-          return filtered;
         }
       } catch (e) {
         console.warn('Supabase category fetch failed:', e);
-        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
-        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning empty list. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!explicitApi && !isLocalDevRuntime()) {
           return [];
         }
-        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
-    const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
-    if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+
+    const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    if (!explicitApi && !isLocalDevRuntime()) {
       return [];
     }
+
     const res = await safeFetchApi(`/products?categoryId=${encodeURIComponent(categoryId)}`);
-    return await parseApiResponse(res);
+    return parseApiResponse(res);
   },
 
   async getBySlug(categorySlug: string, subcategorySlug?: string) {
-    const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    const useSupabase = Boolean(
+      import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+    );
+
     if (useSupabase) {
       try {
         try {
@@ -552,130 +703,187 @@ export const productAPI = {
             .eq('approval_status', 'approved')
             .eq('visibility_status', 'live')
             .order('created_at', { ascending: false });
+
           if (error) throw error;
+
           const all = data || [];
-          console.log('Fetched products for slug filter (supabase):', all.length);
           return all.filter((product: any) => {
             const specs = product.specs || {};
             if (subcategorySlug) {
-              return specs.categorySlug === categorySlug && specs.subcategorySlug === subcategorySlug;
+              return (
+                specs.categorySlug === categorySlug &&
+                specs.subcategorySlug === subcategorySlug
+              );
             }
-            return specs.parentCategorySlug === categorySlug || specs.categorySlug === categorySlug || specs.subcategorySlug === categorySlug;
+            return (
+              specs.parentCategorySlug === categorySlug ||
+              specs.categorySlug === categorySlug ||
+              specs.subcategorySlug === categorySlug
+            );
           });
         } catch (err) {
           console.warn('Filtered supabase slug query failed, falling back to client-side filter:', err);
-          const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false });
+
           if (error) throw error;
-          const all = data || [];
-          return all.filter((product: any) => {
-            const specs = product.specs || {};
-            if (subcategorySlug) {
-              return specs.categorySlug === categorySlug && specs.subcategorySlug === subcategorySlug;
-            }
-            return specs.parentCategorySlug === categorySlug || specs.categorySlug === categorySlug || specs.subcategorySlug === categorySlug;
-          }).filter((r: any) => {
-            const status = r.status || r.productStatus || r.status;
-            const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
-            const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
-            return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
-          });
+
+          return (data || [])
+            .filter((product: any) => {
+              const specs = product.specs || {};
+              if (subcategorySlug) {
+                return (
+                  specs.categorySlug === categorySlug &&
+                  specs.subcategorySlug === subcategorySlug
+                );
+              }
+              return (
+                specs.parentCategorySlug === categorySlug ||
+                specs.categorySlug === categorySlug ||
+                specs.subcategorySlug === categorySlug
+              );
+            })
+            .filter((r: any) => {
+              const status = r.status || r.productStatus || r.status;
+              const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
+              const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
+
+              return (
+                String(status) === 'live' &&
+                String(approval) === 'approved' &&
+                String(visibility) === 'live'
+              );
+            });
         }
       } catch (e) {
         console.warn('Supabase slug fetch failed:', e);
-        const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
-        if (!hasExplicitApiBase && !isLocalDevRuntime()) {
-          console.warn('Supabase fetch failed and no explicit API base configured — skipping API fallback and returning empty list. Set VITE_API_BASE_URL or VITE_API_BASE if you want a backend fallback.');
+        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        if (!explicitApi && !isLocalDevRuntime()) {
           return [];
         }
-        console.warn('Falling back to API_BASE:', API_BASE);
       }
     }
+
     const q = new URLSearchParams();
     if (categorySlug) q.set('categorySlug', categorySlug);
     if (subcategorySlug) q.set('subcategorySlug', subcategorySlug);
-    const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
-    if (!hasExplicitApiBase && !isLocalDevRuntime()) {
+
+    const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    if (!explicitApi && !isLocalDevRuntime()) {
       return [];
     }
+
     const res = await safeFetchApi(`/products?${q.toString()}`);
     return parseApiResponse(res);
   },
 
   async getSellerProducts(sellerId: string) {
-    const res = await fetchWithAuthRetry(`/products/seller/${sellerId}`, {
-      headers: getAuthHeaders(),
-    });
-    return parseApiResponse(res);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('sellerId', sellerId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data || [];
   },
 
   async update(id: string, data: any) {
-    const res = await fetchWithAuthRetry(`/products/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify(data),
-    });
-    return parseApiResponse(res);
+    return updateSupabaseProduct(id, data);
   },
+
   async submit(id: string) {
-    const res = await fetchWithAuthRetry(`/products/${id}/submit`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
+    return updateSupabaseProduct(id, {
+      status: 'live',
+      approval_status: 'approved',
+      visibility_status: 'live',
     });
-    return parseApiResponse(res);
   },
+
   async delete(id: string) {
-    const res = await fetchWithAuthRetry(`/products/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders(),
-    });
-    return parseApiResponse(res);
+    return deleteSupabaseProduct(id);
   },
 };
 
-// Invalidate product-related short-lived caches (used to propagate deletes/updates across tabs)
-export function invalidateProductCaches(ids?: string | string[]) {
+export function invalidateProductCaches(_ids?: string | string[]) {
   return;
 }
 
 // ==================== PRODUCT APPROVAL (ADMIN) ====================
 export const adminProductAPI = {
   async getAll(params?: { status?: string; sellerId?: string; search?: string }) {
-    const query = new URLSearchParams();
-    if (params?.status) query.set('status', params.status);
-    if (params?.sellerId) query.set('sellerId', params.sellerId);
-    if (params?.search) query.set('search', params.search);
-    const res = await fetchWithAuthRetry(`/admin/products${query.toString() ? `?${query.toString()}` : ''}`);
-    return parseApiResponse(res);
+    let query = supabase.from('products').select('*').order('created_at', { ascending: false });
+
+    if (params?.sellerId) {
+      query = query.eq('sellerId', params.sellerId);
+    }
+
+    if (params?.status) {
+      query = query.eq('status', params.status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    let items = data || [];
+
+    if (params?.search) {
+      const q = params.search.toLowerCase().trim();
+      items = items.filter((item: any) =>
+        [
+          item.title,
+          item.slug,
+          item.sku,
+          item.sellerName,
+          item.brand,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(q))
+      );
+    }
+
+    return items;
   },
 
   async getPendingProducts() {
-    const res = await fetchWithAuthRetry('/admin/products/pending');
-    return parseApiResponse(res);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('approval_status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data || [];
   },
 
   async approve(id: string, notes: string = '') {
-    const res = await fetchWithAuthRetry(`/admin/products/${id}/approve`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ notes }),
+    return updateSupabaseProduct(id, {
+      approval_status: 'approved',
+      status: 'live',
+      visibility_status: 'live',
+      adminNotes: notes,
     });
-    return parseApiResponse(res);
   },
 
   async reject(id: string, reason: string) {
-    const res = await fetchWithAuthRetry(`/admin/products/${id}/reject`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ reason }),
+    return updateSupabaseProduct(id, {
+      approval_status: 'rejected',
+      status: 'rejected',
+      visibility_status: 'hidden',
+      rejectionReason: reason,
     });
-    return parseApiResponse(res);
   },
 
   async bulkReview(data: {
@@ -684,43 +892,52 @@ export const adminProductAPI = {
     reason?: string;
     notes?: string;
   }) {
-    const res = await fetchWithAuthRetry('/admin/products/bulk-review', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-    return parseApiResponse(res);
+    const updates =
+      data.action === 'approve'
+        ? {
+            approval_status: 'approved',
+            status: 'live',
+            visibility_status: 'live',
+            adminNotes: data.notes || '',
+          }
+        : data.action === 'reject'
+        ? {
+            approval_status: 'rejected',
+            status: 'rejected',
+            visibility_status: 'hidden',
+            rejectionReason: data.reason || '',
+          }
+        : {
+            approval_status: 'pending_changes',
+            adminNotes: data.notes || data.reason || '',
+          };
+
+    const { data: updated, error } = await supabase
+      .from('products')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .in('id', data.ids)
+      .select('*');
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return updated || [];
   },
 
   async create(data: any) {
-    const res = await fetchWithAuthRetry('/admin/products', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-    return parseApiResponse(res);
+    return createSupabaseProduct(data);
   },
 
   async update(id: string, data: any) {
-    const res = await fetchWithAuthRetry(`/admin/products/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-    return parseApiResponse(res);
+    return updateSupabaseProduct(id, data);
   },
 
   async delete(id: string) {
-    const res = await fetchWithAuthRetry(`/admin/products/${id}`, {
-      method: 'DELETE',
-    });
-    return parseApiResponse(res);
+    return deleteSupabaseProduct(id);
   },
 };
 
@@ -995,6 +1212,7 @@ export const payoutRequestAPI = {
     });
     return parseApiResponse(res);
   },
+
   async update(id: string, data: any) {
     const res = await fetchWithAuthRetry(`/admin/payout-requests/${id}`, {
       method: 'PUT',
@@ -1019,6 +1237,7 @@ export const categoryAPI = {
     const res = await safeFetchApi(`/categories/${id}`);
     return parseApiResponse(res);
   },
+
   async notifyInterest(id: string, data: { email?: string; phone?: string }) {
     const res = await fetchWithAuthRetry(`/categories/${id}/interest`, {
       method: 'POST',
@@ -1031,6 +1250,7 @@ export const categoryAPI = {
     });
     return parseApiResponse(res);
   },
+
   async create(data: any) {
     const res = await fetchWithAuthRetry('/categories', {
       method: 'POST',
@@ -1042,6 +1262,7 @@ export const categoryAPI = {
     });
     return parseApiResponse(res);
   },
+
   async update(id: string, data: any) {
     const res = await fetchWithAuthRetry(`/categories/${id}`, {
       method: 'PUT',
@@ -1053,6 +1274,7 @@ export const categoryAPI = {
     });
     return parseApiResponse(res);
   },
+
   async delete(id: string) {
     const res = await fetchWithAuthRetry(`/categories/${id}`, {
       method: 'DELETE',
@@ -1068,6 +1290,7 @@ export const bannerAPI = {
     const res = await safeFetchApi('/banners');
     return parseApiResponse(res);
   },
+
   async create(data: any) {
     const res = await fetchWithAuthRetry('/banners', {
       method: 'POST',
@@ -1079,6 +1302,7 @@ export const bannerAPI = {
     });
     return parseApiResponse(res);
   },
+
   async update(id: string, data: any) {
     const res = await fetchWithAuthRetry(`/banners/${id}`, {
       method: 'PUT',
@@ -1090,6 +1314,7 @@ export const bannerAPI = {
     });
     return parseApiResponse(res);
   },
+
   async delete(id: string) {
     const res = await fetchWithAuthRetry(`/banners/${id}`, {
       method: 'DELETE',
@@ -1156,15 +1381,23 @@ export const translationAPI = {
 
 // ==================== DASHBOARDS ====================
 export const dashboardAPI = {
-  async getAdminDashboard(params?: { range?: 'today' | '7d' | '30d' | 'custom'; from?: string; to?: string }) {
+  async getAdminDashboard(params?: {
+    range?: 'today' | '7d' | '30d' | 'custom';
+    from?: string;
+    to?: string;
+  }) {
     const query = new URLSearchParams();
     if (params?.range) query.set('range', params.range);
     if (params?.from) query.set('from', params.from);
     if (params?.to) query.set('to', params.to);
-    const res = await fetchWithAuthRetry(`/admin/dashboard${query.toString() ? `?${query.toString()}` : ''}`, {
-      headers: getAuthHeaders(),
-      credentials: 'include',
-    });
+
+    const res = await fetchWithAuthRetry(
+      `/admin/dashboard${query.toString() ? `?${query.toString()}` : ''}`,
+      {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      }
+    );
     return parseApiResponse(res);
   },
 
@@ -1174,12 +1407,14 @@ export const dashboardAPI = {
     });
     return parseApiResponse(res);
   },
+
   async getAdminAnalytics() {
     const res = await fetchWithAuthRetry('/admin/analytics', {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
+
   async getSellerAnalytics(sellerId: string) {
     const res = await fetchWithAuthRetry(`/seller/analytics/${sellerId}`, {
       headers: getAuthHeaders(),
@@ -1205,18 +1440,21 @@ export const adminOpsAPI = {
     });
     return parseApiResponse(res);
   },
+
   async getNotifications() {
     const res = await fetchWithAuthRetry('/admin/notifications', {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
+
   async getMarketplaceSettings() {
     const res = await fetchWithAuthRetry('/settings/marketplace', {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
+
   async updateMarketplaceSettings(data: any) {
     const res = await fetchWithAuthRetry('/settings/marketplace', {
       method: 'PUT',
@@ -1242,18 +1480,21 @@ export const supportAPI = {
     });
     return parseApiResponse(res);
   },
+
   async getMyTickets() {
     const res = await fetchWithAuthRetry('/support/tickets/me', {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
+
   async getAdminTickets() {
     const res = await fetchWithAuthRetry('/admin/support/tickets', {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);
   },
+
   async updateTicket(id: string, data: any) {
     const res = await fetchWithAuthRetry(`/admin/support/tickets/${id}`, {
       method: 'PUT',
@@ -1265,6 +1506,7 @@ export const supportAPI = {
     });
     return parseApiResponse(res);
   },
+
   async addMessage(id: string, data: any) {
     const res = await fetchWithAuthRetry(`/support/tickets/${id}/messages`, {
       method: 'POST',
