@@ -296,6 +296,7 @@ export function AdminLayout() {
               <button
                 className="text-slate-400 lg:hidden"
                 onClick={() => setIsSidebarOpen(false)}
+                type="button"
               >
                 <X size={24} />
               </button>
@@ -352,6 +353,7 @@ export function AdminLayout() {
               <button
                 onClick={handleLogout}
                 className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-rose-400 transition hover:bg-rose-500/10"
+                type="button"
               >
                 <LogOut size={20} />
                 Logout
@@ -366,6 +368,7 @@ export function AdminLayout() {
               <button
                 className="rounded-2xl border border-slate-200 bg-white p-3 text-slate-500 shadow-sm lg:hidden"
                 onClick={() => setIsSidebarOpen(true)}
+                type="button"
               >
                 <Menu size={22} />
               </button>
@@ -390,7 +393,10 @@ export function AdminLayout() {
               </div>
 
               <div className="flex items-center gap-3">
-                <button className="relative rounded-2xl border border-slate-200 bg-white p-3 text-slate-500 shadow-sm transition hover:text-blue-600">
+                <button
+                  className="relative rounded-2xl border border-slate-200 bg-white p-3 text-slate-500 shadow-sm transition hover:text-blue-600"
+                  type="button"
+                >
                   <Bell size={20} />
                   <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-rose-500" />
                 </button>
