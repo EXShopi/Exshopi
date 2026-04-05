@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/auth';
 import { dashboardAPI } from '../../services/api';
 import {
   CartesianGrid,
@@ -22,8 +21,6 @@ import {
   Building2,
   CheckCircle2,
   LayoutTemplate,
-  Package,
-  ShoppingCart,
   Store,
   TrendingUp,
   Users,
@@ -43,35 +40,73 @@ const getEmptyAdminData = () => ({
   returnRequestedOrders: 0,
   pendingPayoutRequests: 0,
   lowStockProducts: 0,
+  totalCustomers: 0,
+  totalBanners: 0,
+  openSupportCases: 0,
+  marketplaceHealthScore: 0,
+  repeatPurchaseRate: 0,
+  alerts: [],
+  quickActions: [],
+  searchKeywords: [],
+  salesTrend: [],
+  topSellers: [],
 });
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { user, role } = useAuthStore();
   const [dashboard, setDashboard] = useState<any>(getEmptyAdminData());
   const [range, setRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const canAccessAdmin =
-      role === 'admin' || role === 'super_admin' || role === 'finance_manager' || role === 'support_agent';
-    if (!canAccessAdmin) {
-      navigate('/admin/login', { replace: true });
-      return;
-    }
+    let cancelled = false;
 
-    dashboardAPI
-      .getAdminDashboard({
-        range,
-        from: range === 'custom' ? customFrom || undefined : undefined,
-        to: range === 'custom' ? customTo || undefined : undefined,
-      })
-      .then((data) => {
-        if (data) setDashboard(data);
-      })
-      .catch(() => setDashboard(getEmptyAdminData()));
-  }, [role, navigate, range, customFrom, customTo]);
+    const loadDashboard = async () => {
+      setLoading(true);
+
+      try {
+        const data = await dashboardAPI.getAdminDashboard({
+          range,
+          from: range === 'custom' ? customFrom || undefined : undefined,
+          to: range === 'custom' ? customTo || undefined : undefined,
+        });
+
+        if (!cancelled && data) {
+          setDashboard(data);
+        }
+      } catch (error) {
+        console.warn('[ADMIN_DASHBOARD] Backend unavailable, showing fallback dashboard:', error);
+        if (!cancelled) {
+          setDashboard(getEmptyAdminData());
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [range, customFrom, customTo]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="rounded-3xl border border-slate-200 bg-white px-8 py-6 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-violet-600" />
+            <p className="text-sm font-bold text-slate-700">Loading admin dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const dashboardData = dashboard || getEmptyAdminData();
   const totalSellers = dashboardData.totalVendors ?? dashboardData.metrics?.totalSellers ?? 0;

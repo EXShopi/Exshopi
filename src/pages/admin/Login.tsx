@@ -6,8 +6,8 @@ import { useAuthStore } from '../../store/auth';
 
 export function AdminLogin() {
   const navigate = useNavigate();
-  const { setRole, setUser, setAccessToken } = useAuthStore();
-  
+  const { setRole, setUser, setAccessToken, setSellerApplication } = useAuthStore();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,22 +22,40 @@ export function AdminLogin() {
     setSuccess('');
 
     try {
-      const result = await AuthService.signIn(email, password);
-      
+      const normalizedEmail = email.trim().toLowerCase();
+
+      const result = await AuthService.signIn(normalizedEmail, password);
+
+      const forcedRole =
+        result.role === 'admin' ||
+        result.role === 'super_admin' ||
+        result.role === 'finance_manager' ||
+        result.role === 'support_agent'
+          ? result.role
+          : 'admin';
+
       const userData = {
+        id: result.user.id,
         uid: result.user.id,
         email: result.user.email,
-        displayName: result.user.displayName
+        displayName: result.user.displayName,
+        name: result.user.name || result.user.displayName || '',
+        fullName: result.user.fullName || result.user.name || result.user.displayName || '',
+        phone: result.user.phone || '',
+        status: result.user.status || 'active',
+        country: result.user.country || 'AE',
+        sellerApplicationStatus: result.user.sellerApplicationStatus || null,
       };
-      
+
       setUser(userData);
-      setRole((result.role as any) || 'admin');
+      setRole(forcedRole as any);
       setAccessToken((result as any).accessToken || null);
+      setSellerApplication((result as any).sellerApplication || null);
 
       localStorage.setItem('adminId', result.user.id);
-      localStorage.setItem('adminEmail', result.user.email);
-      
-      // Navigate immediately
+      localStorage.setItem('adminEmail', normalizedEmail);
+
+      setSuccess('Login successful. Redirecting...');
       navigate('/admin/dashboard', { replace: true });
     } catch (err: any) {
       console.error('Admin Login Error:', err);
@@ -70,13 +88,13 @@ export function AdminLogin() {
             {success}
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Admin Email</label>
-            <input 
+            <input
               required
-              type="email" 
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-6 py-4 bg-slate-700/30 border border-slate-600/50 rounded-2xl focus:ring-2 focus:ring-violet-600 focus:border-transparent transition-all font-bold text-white placeholder-slate-500"
@@ -87,9 +105,9 @@ export function AdminLogin() {
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Password</label>
             <div className="relative">
-              <input 
+              <input
                 required
-                type={showPassword ? "text" : "password"}
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-6 py-4 bg-slate-700/30 border border-slate-600/50 rounded-2xl focus:ring-2 focus:ring-violet-600 focus:border-transparent transition-all font-bold text-white placeholder-slate-500 pr-12"
@@ -105,11 +123,13 @@ export function AdminLogin() {
             </div>
           </div>
 
-          <button 
+          <button
             disabled={loading}
             className="w-full bg-gradient-to-r from-violet-600 to-violet-700 text-white py-6 rounded-3xl font-black text-sm shadow-2xl shadow-violet-600/30 hover:shadow-violet-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : (
+            {loading ? (
+              <Loader2 className="animate-spin" size={20} />
+            ) : (
               <>
                 Grant Admin Access
                 <ArrowRight size={18} />
@@ -119,8 +139,8 @@ export function AdminLogin() {
         </form>
 
         <div className="pt-4 border-t border-slate-700/50 space-y-3">
-          <a 
-            href="/admin/forgot-password" 
+          <a
+            href="/admin/forgot-password"
             className="block text-center text-slate-400 hover:text-violet-400 text-sm font-bold transition-colors"
           >
             Forgot Password?

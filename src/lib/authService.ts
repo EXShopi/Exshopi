@@ -39,8 +39,10 @@ type PublicUserRow = {
   sellerApplicationStatus?: string | null;
 };
 
+const ADMIN_ROLES = ['admin', 'super_admin', 'finance_manager', 'support_agent'] as const;
+
 function normalizeRole(role?: string | null): string {
-  return (role || 'customer').toLowerCase();
+  return (role || '').toLowerCase();
 }
 
 function normalizeStatus(status?: string | null): string {
@@ -57,6 +59,17 @@ function buildDisplayName(authEmail: string, profile?: PublicUserRow | null): st
     authEmail ||
     'User'
   );
+}
+
+function getPersistedAdminEmail(): string {
+  if (typeof window === 'undefined') return '';
+  return (localStorage.getItem('adminEmail') || '').trim().toLowerCase();
+}
+
+function isPersistedAdminEmail(email?: string | null): boolean {
+  const saved = getPersistedAdminEmail();
+  const current = (email || '').trim().toLowerCase();
+  return Boolean(saved && current && saved === current);
 }
 
 async function getProfileByEmail(email: string): Promise<PublicUserRow | null> {
@@ -87,15 +100,27 @@ async function getCurrentAccessToken(): Promise<string | null> {
   return data.session?.access_token || null;
 }
 
+function deriveRole(email?: string | null, profile?: PublicUserRow | null, storedRole?: string | null): string {
+  const normalizedStoredRole = normalizeRole(storedRole);
+  const normalizedProfileRole = normalizeRole(profile?.role);
+
+  if (ADMIN_ROLES.includes(normalizedStoredRole as any)) return normalizedStoredRole;
+  if (ADMIN_ROLES.includes(normalizedProfileRole as any)) return normalizedProfileRole;
+  if (isPersistedAdminEmail(email)) return 'admin';
+
+  return normalizedProfileRole || 'customer';
+}
+
 function mapAuthResult(params: {
   authUser: { id: string; email?: string | null };
   profile?: PublicUserRow | null;
   accessToken?: string | null;
   isDevMode?: boolean;
+  storedRole?: string | null;
 }): AuthResponse {
-  const { authUser, profile, accessToken = null, isDevMode = false } = params;
+  const { authUser, profile, accessToken = null, isDevMode = false, storedRole = null } = params;
   const email = authUser.email || profile?.email || '';
-  const role = normalizeRole(profile?.role);
+  const role = deriveRole(email, profile, storedRole);
   const status = normalizeStatus(profile?.status);
   const sellerApplicationStatus =
     profile?.seller_application_status || profile?.sellerApplicationStatus || null;
@@ -116,9 +141,7 @@ function mapAuthResult(params: {
     role,
     accessToken,
     seller: null,
-    sellerApplication: sellerApplicationStatus
-      ? { status: sellerApplicationStatus }
-      : null,
+    sellerApplication: sellerApplicationStatus ? { status: sellerApplicationStatus } : null,
     isDevMode,
   };
 }
@@ -144,13 +167,8 @@ export class AuthService {
         password,
       });
 
-      if (error) {
-        throw new Error(error.message || 'Invalid credentials');
-      }
-
-      if (!data.user?.id) {
-        throw new Error('Invalid login response. Missing user data.');
-      }
+      if (error) throw new Error(error.message || 'Invalid credentials');
+      if (!data.user?.id) throw new Error('Invalid login response. Missing user data.');
 
       const profile = await getProfileByEmail(normalizedEmail);
       const accessToken = data.session?.access_token || null;
@@ -164,6 +182,7 @@ export class AuthService {
         },
         profile,
         accessToken,
+        storedRole: isPersistedAdminEmail(normalizedEmail) ? 'admin' : useAuthStore.getState().role,
       });
     } catch (error: any) {
       console.error('[AUTH] Sign-in error:', error?.message || error);
@@ -211,13 +230,8 @@ export class AuthService {
         },
       });
 
-      if (error) {
-        throw new Error(error.message || 'Failed to register user');
-      }
-
-      if (!data.user?.id) {
-        throw new Error('Failed to register user');
-      }
+      if (error) throw new Error(error.message || 'Failed to register user');
+      if (!data.user?.id) throw new Error('Failed to register user');
 
       const maybeToken = data.session?.access_token || null;
       useAuthStore.getState().setAccessToken(maybeToken);
@@ -239,6 +253,7 @@ export class AuthService {
         },
         profile: baseProfile,
         accessToken: maybeToken,
+        storedRole: 'customer',
       });
     } catch (error: any) {
       console.error('[AUTH] Sign-up error:', error?.message || error);
@@ -271,7 +286,7 @@ export class AuthService {
       localStorage.removeItem('adminId');
       localStorage.removeItem('sellerEmail');
       localStorage.removeItem('adminEmail');
-      useAuthStore.getState().setAccessToken(null);
+      useAuthStore.getState().resetAuth();
     }
   }
 
@@ -297,6 +312,7 @@ export class AuthService {
         },
         profile,
         accessToken,
+        storedRole: useAuthStore.getState().role,
       });
     } catch (error) {
       console.error('[AUTH] Restore session error:', error);

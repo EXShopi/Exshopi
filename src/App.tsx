@@ -1,5 +1,5 @@
-import React, { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import React, { Suspense, lazy, useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { RouteProgressBar } from "./components/ui/RouteProgressBar";
 import { OrbitLoader } from "./components/ui/OrbitLoader";
@@ -94,29 +94,69 @@ function PageLoader() {
   );
 }
 
+function PasswordRecoveryRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const hash = window.location.hash || "";
+
+    if (!hash.includes("access_token") || !hash.includes("type=recovery")) return;
+    if (location.pathname === "/admin/reset-password") return;
+    if (location.pathname === "/seller/reset-password") return;
+
+    const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+    const next =
+      hashParams.get("next") ||
+      new URLSearchParams(window.location.search).get("next") ||
+      "";
+
+    if (next === "admin") {
+      navigate(`/admin/reset-password${window.location.hash}`, { replace: true });
+      return;
+    }
+
+    if (next === "seller") {
+      navigate(`/seller/reset-password${window.location.hash}`, { replace: true });
+      return;
+    }
+
+    if (location.pathname.startsWith("/seller")) {
+      navigate(`/seller/reset-password${window.location.hash}`, { replace: true });
+      return;
+    }
+
+    navigate(`/admin/reset-password${window.location.hash}`, { replace: true });
+  }, [navigate, location.pathname]);
+
+  return null;
+}
+
 export default function App() {
-  React.useEffect(() => {
+  useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
-      if (e.key === 'exshopi:product-deleted') {
+
+      if (e.key === "exshopi:product-deleted") {
         try {
-          // other tabs: reload to reflect deletions
-          console.debug('[sync] product-deleted storage event', e.newValue);
-        } catch (err) {
-          /* ignore */
+          console.debug("[sync] product-deleted storage event", e.newValue);
+        } catch {
+          //
         }
-        // full reload ensures product lists refresh across tabs
         window.location.reload();
       }
     };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   return (
     <BrowserRouter>
+      <PasswordRecoveryRedirect />
       <RouteProgressBar />
       <ScrollToTop />
+
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route element={<Layout />}>
@@ -157,16 +197,15 @@ export default function App() {
           <Route path="/seller/register" element={<SellerRegister />} />
           <Route path="/seller/forgot-password" element={<SellerForgotPassword />} />
           <Route path="/seller/reset-password" element={<SellerResetPassword />} />
+
           <Route element={<SellerLayout />}>
             <Route path="/seller/dashboard" element={<SellerDashboard />} />
             <Route path="/seller/products" element={<SellerProducts />} />
-            <Route path="/seller/add-product" element={<AddProduct />} />
             <Route path="/seller/products/add" element={<AddProduct />} />
             <Route path="/seller/orders" element={<SellerOrders />} />
-            <Route path="/seller/earnings" element={<SellerEarnings />} />
             <Route path="/seller/payouts" element={<SellerPayouts />} />
+            <Route path="/seller/earnings" element={<SellerEarnings />} />
             <Route path="/seller/settings" element={<SellerSettings />} />
-            <Route path="/seller/store-settings" element={<SellerSettings />} />
             <Route path="/seller/support" element={<SellerSupport />} />
             <Route path="/seller/reviews" element={<SellerReviews />} />
             <Route path="/seller/commissions" element={<SellerCommissions />} />
@@ -176,23 +215,24 @@ export default function App() {
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/forgot-password" element={<AdminForgotPassword />} />
           <Route path="/admin/reset-password" element={<AdminResetPassword />} />
+
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/approvals" element={<AdminApprovals />} />
-            <Route path="/admin/vendors" element={<AdminVendors />} />
             <Route path="/admin/sellers" element={<AdminSellerManagement />} />
+            <Route path="/admin/vendors" element={<AdminVendors />} />
             <Route path="/admin/products" element={<AdminProducts />} />
             <Route path="/admin/products/add" element={<AdminAddProduct />} />
             <Route path="/admin/inventory" element={<AdminInventory />} />
-            <Route path="/admin/payouts" element={<AdminPayoutProcessing />} />
-            <Route path="/admin/orders" element={<AdminOrderMonitoring />} />
-            <Route path="/admin/returns" element={<AdminReturns />} />
-            <Route path="/admin/customers" element={<AdminCustomers />} />
             <Route path="/admin/commissions" element={<AdminCommissions />} />
             <Route path="/admin/categories" element={<AdminCategories />} />
             <Route path="/admin/banners" element={<AdminBanners />} />
             <Route path="/admin/offers" element={<AdminOffers />} />
+            <Route path="/admin/payouts" element={<AdminPayoutProcessing />} />
+            <Route path="/admin/order-monitoring" element={<AdminOrderMonitoring />} />
+            <Route path="/admin/customers" element={<AdminCustomers />} />
             <Route path="/admin/reports" element={<AdminReports />} />
+            <Route path="/admin/returns" element={<AdminReturns />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/support" element={<AdminSupport />} />
           </Route>
