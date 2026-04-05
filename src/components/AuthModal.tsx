@@ -10,7 +10,8 @@ import {
 import AuthService from '../lib/authService';
 import { getAuthHeaders, userAPI } from '../services/api';
 import { useAuthStore } from '../store/auth';
-import { auth, db, doc, getDoc } from '../supabaseClient';
+import { auth, db } from '../supabaseClient';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface AuthModalProps {
   isOpen: boolean;
