@@ -81,6 +81,100 @@ type LiveCategory = {
 type AddProductProps = {
   mode?: 'seller' | 'admin';
 };
+const MASTER_CATEGORIES: LiveCategory[] = [
+  {
+    id: 'electronics',
+    name: 'Electronics',
+    slug: 'electronics',
+    subcategories: [
+      { id: 'computers', name: 'Computers', slug: 'computers' },
+      { id: 'mobiles-tablets', name: 'Mobiles & Tablets', slug: 'mobiles-tablets' },
+      { id: 'tv-video', name: 'TV & Video', slug: 'tv-video' },
+      { id: 'cameras-photo', name: 'Cameras & Photo', slug: 'cameras-photo' },
+      { id: 'audio', name: 'Audio', slug: 'audio' },
+      { id: 'gaming', name: 'Gaming', slug: 'gaming' },
+    ],
+  },
+  {
+    id: 'fashion',
+    name: 'Fashion',
+    slug: 'fashion',
+    subcategories: [
+      { id: 'mens', name: "Men's", slug: 'mens' },
+      { id: 'womens', name: "Women's", slug: 'womens' },
+      { id: 'kids', name: 'Kids', slug: 'kids' },
+      { id: 'shoes', name: 'Shoes', slug: 'shoes' },
+      { id: 'bags', name: 'Bags', slug: 'bags' },
+      { id: 'watches', name: 'Watches', slug: 'watches' },
+      { id: 'accessories', name: 'Accessories', slug: 'accessories' },
+    ],
+  },
+  {
+    id: 'home-kitchen-appliances',
+    name: 'Home / Kitchen / Appliances',
+    slug: 'home-kitchen-appliances',
+    subcategories: [
+      { id: 'kitchen-appliances', name: 'Kitchen Appliances', slug: 'kitchen-appliances' },
+      { id: 'home-appliances', name: 'Home Appliances', slug: 'home-appliances' },
+      { id: 'furniture', name: 'Furniture', slug: 'furniture' },
+      { id: 'decor', name: 'Decor', slug: 'decor' },
+      { id: 'cleaning', name: 'Cleaning', slug: 'cleaning' },
+      { id: 'storage-organization', name: 'Storage & Organization', slug: 'storage-organization' },
+    ],
+  },
+  {
+    id: 'beauty-health',
+    name: 'Beauty / Health',
+    slug: 'beauty-health',
+    subcategories: [
+      { id: 'makeup', name: 'Makeup', slug: 'makeup' },
+      { id: 'skincare', name: 'Skincare', slug: 'skincare' },
+      { id: 'haircare', name: 'Haircare', slug: 'haircare' },
+      { id: 'grooming', name: 'Grooming', slug: 'grooming' },
+      { id: 'perfumes', name: 'Perfumes', slug: 'perfumes' },
+    ],
+  },
+  {
+    id: 'grocery-daily-use',
+    name: 'Grocery / Daily Use',
+    slug: 'grocery-daily-use',
+    subcategories: [
+      { id: 'snacks', name: 'Snacks', slug: 'snacks' },
+      { id: 'beverages', name: 'Beverages', slug: 'beverages' },
+      { id: 'household-essentials', name: 'Household essentials', slug: 'household-essentials' },
+    ],
+  },
+  {
+    id: 'baby-toys',
+    name: 'Baby / Toys',
+    slug: 'baby-toys',
+    subcategories: [
+      { id: 'baby-products', name: 'Baby products', slug: 'baby-products' },
+      { id: 'kids-products', name: 'Kids products', slug: 'kids-products' },
+      { id: 'toys', name: 'Toys', slug: 'toys' },
+    ],
+  },
+  {
+    id: 'sports-outdoors',
+    name: 'Sports / Outdoors',
+    slug: 'sports-outdoors',
+    subcategories: [
+      { id: 'fitness', name: 'Fitness', slug: 'fitness' },
+      { id: 'outdoor-gear', name: 'Outdoor gear', slug: 'outdoor-gear' },
+      { id: 'sports-accessories', name: 'Sports accessories', slug: 'sports-accessories' },
+    ],
+  },
+  {
+    id: 'automotive-tools',
+    name: 'Automotive / Tools',
+    slug: 'automotive-tools',
+    subcategories: [
+      { id: 'car-accessories', name: 'Car accessories', slug: 'car-accessories' },
+      { id: 'tools', name: 'Tools', slug: 'tools' },
+      { id: 'diy', name: 'DIY', slug: 'diy' },
+    ],
+  },
+];
 
 const initialFormState: FormState = {
   title: '',
@@ -128,19 +222,35 @@ const createVariantRow = (): VariantRow => ({
   image: '',
 });
 
-const normalizeLiveCategories = (items: any[]): LiveCategory[] =>
-  (items || []).map((item: any) => ({
-    id: String(item.id),
-    name: String(item.name || ''),
-    slug: String(item.slug || ''),
-    subcategories: Array.isArray(item.subcategories)
-      ? item.subcategories.map((subcategory: any) => ({
-          id: subcategory?.id ? String(subcategory.id) : undefined,
-          name: String(subcategory?.name || ''),
-          slug: String(subcategory?.slug || ''),
-        }))
-      : [],
-  }));
+const normalizeLiveCategories = (items: any[]): LiveCategory[] => {
+  const source = Array.isArray(items) ? items : [];
+
+  return source
+    .map((item: any) => {
+      const rawSubs =
+        item?.subcategories ||
+        item?.children ||
+        item?.categories ||
+        item?.items ||
+        [];
+
+      return {
+        id: String(item?.id || item?.slug || item?.name || ''),
+        name: String(item?.name || item?.title || ''),
+        slug: String(item?.slug || slugifyValue(item?.name || item?.title || '')),
+        subcategories: (Array.isArray(rawSubs) ? rawSubs : [])
+          .map((subcategory: any) => ({
+            id: String(subcategory?.id || subcategory?.slug || subcategory?.name || ''),
+            name: String(subcategory?.name || subcategory?.title || ''),
+            slug: String(
+              subcategory?.slug || slugifyValue(subcategory?.name || subcategory?.title || '')
+            ),
+          }))
+          .filter((subcategory: Subcategory) => subcategory.name && subcategory.slug),
+      };
+    })
+    .filter((category: LiveCategory) => category.name && category.slug);
+};
 
 const toBulletList = (value: string) =>
   value
@@ -250,10 +360,17 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+
+  const categoryOptions = useMemo(
+  () => (categories.length ? categories : MASTER_CATEGORIES),
+  [categories]
+);
+
   const selectedParentCategory = useMemo(
-    () => categories.find((category) => category.slug === selectedParentSlug) || null,
-    [categories, selectedParentSlug]
-  );
+  () => categoryOptions.find((category) => category.slug === selectedParentSlug) || null,
+  [categoryOptions, selectedParentSlug]
+);
+
 
   const selectedSubcategory = useMemo(
     () =>
@@ -304,24 +421,33 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     };
   }, [mode, navigate, role, user]);
 
-  useEffect(() => {
-    let mounted = true;
+useEffect(() => {
+  let mounted = true;
 
-    categoryAPI
-      .getAll()
-      .then((items) => {
-        if (!mounted) return;
-        setCategories(normalizeLiveCategories(items || []));
-      })
-      .catch(() => {
-        if (mounted) setCategories([]);
-      });
+  const loadCategories = async () => {
+    try {
+      const apiResult = await categoryAPI.getAll();
+      const normalized = normalizeLiveCategories(apiResult || []);
+      if (!mounted) return;
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
+      if (normalized.length > 0) {
+        setCategories(normalized);
+      } else {
+        setCategories(MASTER_CATEGORIES);
+      }
+    } catch {
+      if (mounted) {
+        setCategories(MASTER_CATEGORIES);
+      }
+    }
+  };
 
+  loadCategories();
+
+  return () => {
+    mounted = false;
+  };
+}, []);
   useEffect(() => {
     if (editingId || copyingId) return;
     const rawDraft = localStorage.getItem(draftStorageKey);
@@ -511,42 +637,45 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     return score;
   }, [formData.metaTitle, formData.metaDescription, formData.searchTags, formData.title]);
 
-  const validationChecklist = [
-    { label: 'Parent category selected', done: Boolean(selectedParentSlug) },
-    { label: 'Subcategory selected', done: Boolean(selectedSubcategorySlug) },
-    { label: 'Title and short description added', done: Boolean(formData.title.trim() && formData.shortDescription.trim()) },
-    { label: 'At least one product image', done: images.length > 0 },
-    { label: 'Price and stock set', done: Boolean((formData.price.trim() && formData.stock.trim()) || hasVariantPricing) },
-    { label: 'Brand and shipping details added', done: Boolean(formData.brand.trim() && (formData.shippingWeight.trim() || formData.packageSize.trim())) },
-  ];
+ const validationChecklist = [
+  { label: 'Parent category selected', done: Boolean(selectedParentSlug) },
+  { label: 'Subcategory selected', done: Boolean(selectedSubcategorySlug) },
+  { label: 'Title and short description added', done: Boolean(formData.title.trim() && formData.shortDescription.trim()) },
+  { label: 'At least one product image', done: images.length > 0 },
+  { label: 'Price and stock set', done: Boolean((formData.price.trim() && formData.stock.trim()) || hasVariantPricing) },
+  { label: 'Brand and shipping details added', done: Boolean(formData.brand.trim() && (formData.shippingWeight.trim() || formData.packageSize.trim())) },
+];
 
   const completedStepIndexes = useMemo(() => {
-    const completed = new Set<number>();
-    if (selectedParentSlug && selectedSubcategorySlug) completed.add(0);
-    if (formData.title.trim() && formData.shortDescription.trim()) completed.add(1);
-    if (images.length > 0) completed.add(2);
-    if ((formData.price.trim() && formData.stock.trim()) || hasVariantPricing) completed.add(3);
-    if (formData.brand.trim()) completed.add(4);
-    if (formData.returnPolicy.trim() && (formData.shippingWeight.trim() || formData.packageSize.trim())) completed.add(5);
-    if (formData.metaTitle.trim() && formData.metaDescription.trim()) completed.add(6);
-    if (selectedParentSlug && selectedSubcategorySlug) completed.add(7);
-    return completed;
-  }, [
-    selectedParentSlug,
-    selectedSubcategorySlug,
-    formData.title,
-    formData.shortDescription,
-    images.length,
-    formData.price,
-    formData.stock,
-    hasVariantPricing,
-    formData.brand,
-    formData.returnPolicy,
-    formData.shippingWeight,
-    formData.packageSize,
-    formData.metaTitle,
-    formData.metaDescription,
-  ]);
+  const completed = new Set<number>();
+  if (selectedParentSlug && selectedSubcategorySlug) completed.add(0);
+  if (formData.title.trim() && formData.shortDescription.trim()) completed.add(1);
+  if (images.length > 0) completed.add(2);
+  if ((formData.price.trim() && formData.stock.trim()) || hasVariantPricing) completed.add(3);
+  if (formData.keyFeatures.trim() || formData.whatsInTheBox.trim()) completed.add(4);
+  if (formData.returnPolicy.trim() && (formData.shippingWeight.trim() || formData.packageSize.trim())) completed.add(5);
+  if (formData.metaTitle.trim() || formData.metaDescription.trim() || formData.searchTags.trim()) completed.add(6);
+  if (validationChecklist.every((item) => item.done)) completed.add(7);
+  return completed;
+}, [
+  selectedParentSlug,
+  selectedSubcategorySlug,
+  formData.title,
+  formData.shortDescription,
+  images.length,
+  formData.price,
+  formData.stock,
+  hasVariantPricing,
+  formData.keyFeatures,
+  formData.whatsInTheBox,
+  formData.returnPolicy,
+  formData.shippingWeight,
+  formData.packageSize,
+  formData.metaTitle,
+  formData.metaDescription,
+  formData.searchTags,
+  validationChecklist,
+]);
 
   const estimatedPayloadSizeMb = useMemo(() => {
     const payload = JSON.stringify({
@@ -579,20 +708,20 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   };
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const parentSlug = e.target.value || null;
-    const parentCategory = categories.find((item) => item.slug === parentSlug) || null;
+  const parentSlug = e.target.value || null;
+  const parentCategory = categoryOptions.find((item) => item.slug === parentSlug) || null;
 
-    setSelectedParentSlug(parentSlug);
-    setSelectedCategoryId(parentCategory?.id || null);
-    setSelectedSubcategorySlug(null);
-    setError(null);
-  };
+  setSelectedParentSlug(parentSlug);
+  setSelectedCategoryId(parentCategory?.id || null);
+  setSelectedSubcategorySlug(null);
+  setError(null);
+};
 
-  const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const subSlug = e.target.value || null;
-    setSelectedSubcategorySlug(subSlug);
-    setError(null);
-  };
+const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const subSlug = e.target.value || null;
+  setSelectedSubcategorySlug(subSlug);
+  setError(null);
+};
 
   const addImages = async (fileCollection: FileList | File[]) => {
     setError(null);
@@ -906,75 +1035,75 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   };
 
   const renderStepContent = () => {
-    if (currentStep === 'category') {
-      return (
-        <section className="space-y-6 rounded-[1.75rem] border border-slate-200 bg-slate-50/60 p-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">Category Selection</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Select parent category first, then subcategory. Saved category mapping controls homepage placement and category page filtering.
+   if (currentStep === 'category') {
+  return (
+    <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 md:p-6">
+      <div className="mb-5">
+        <h2 className="text-2xl font-black text-slate-900">Category Selection</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Select parent category first, then subcategory. Saved category mapping controls homepage placement and category page filtering.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-sm font-bold text-slate-700">Parent Category</label>
+          <select
+            value={selectedParentSlug || ''}
+            onChange={handleCategoryChange}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          >
+            <option value="">Select parent category</option>
+            {categoryOptions.map((category) => (
+              <option key={category.id} value={category.slug}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-bold text-slate-700">Subcategory</label>
+          <select
+            value={selectedSubcategorySlug || ''}
+            onChange={handleSubcategoryChange}
+            disabled={!selectedParentCategory}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+          >
+            <option value="">Select subcategory</option>
+            {(selectedParentCategory?.subcategories || []).map((subcategory) => (
+              <option key={subcategory.slug} value={subcategory.slug}>
+                {subcategory.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Saved Mapping</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl bg-white p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Parent Slug</p>
+            <p className="mt-2 text-sm font-bold text-slate-900">{selectedParentSlug || 'Not selected'}</p>
+          </div>
+          <div className="rounded-2xl bg-white p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Subcategory Slug</p>
+            <p className="mt-2 text-sm font-bold text-slate-900">{selectedSubcategorySlug || 'Not selected'}</p>
+          </div>
+          <div className="rounded-2xl bg-white p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Category Path</p>
+            <p className="mt-2 text-sm font-bold text-slate-900">
+              {selectedParentSlug && selectedSubcategorySlug
+                ? `${selectedParentSlug}/${selectedSubcategorySlug}`
+                : 'Not selected'}
             </p>
           </div>
-
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">Parent Category</label>
-              <select
-                value={selectedParentSlug || ''}
-                onChange={handleCategoryChange}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-              >
-                <option value="">Select parent category</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.slug}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">Subcategory</label>
-              <select
-                value={selectedSubcategorySlug || ''}
-                onChange={handleSubcategoryChange}
-                disabled={!selectedParentCategory}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-              >
-                <option value="">Select subcategory</option>
-                {(selectedParentCategory?.subcategories || []).map((subcategory) => (
-                  <option key={subcategory.slug} value={subcategory.slug}>
-                    {subcategory.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Saved Mapping</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Parent Slug</p>
-                <p className="mt-2 text-sm font-bold text-slate-900">{selectedParentSlug || 'Not selected'}</p>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Subcategory Slug</p>
-                <p className="mt-2 text-sm font-bold text-slate-900">{selectedSubcategorySlug || 'Not selected'}</p>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Category Path</p>
-                <p className="mt-2 text-sm font-bold text-slate-900">
-                  {selectedParentSlug && selectedSubcategorySlug
-                    ? `${selectedParentSlug}/${selectedSubcategorySlug}`
-                    : 'Not selected'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      );
-    }
+        </div>
+      </div>
+    </section>
+  );
+}
 
     if (currentStep === 'basic') {
       return (
@@ -1317,45 +1446,44 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       );
     }
 
-    if (currentStep === 'specs') {
-      return (
-        <section className="space-y-6 rounded-[1.75rem] border border-slate-200 bg-white p-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">Specifications & Highlights</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Add the product highlights that will help customers trust the listing.
-            </p>
-          </div>
+   if (currentStep === 'specs') {
+  return (
+    <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 md:p-6">
+      <div className="mb-5">
+        <h2 className="text-2xl font-black text-slate-900">Specifications & Highlights</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Add product highlights that build trust and help customers understand the item.
+        </p>
+      </div>
 
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">Key Features</label>
-              <textarea
-                name="keyFeatures"
-                value={formData.keyFeatures}
-                onChange={handleInputChange}
-                rows={8}
-                placeholder={'Line 1\nLine 2\nLine 3'}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-              />
-            </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-sm font-bold text-slate-700">Key Features</label>
+          <textarea
+            name="keyFeatures"
+            value={formData.keyFeatures}
+            onChange={handleInputChange}
+            rows={8}
+            placeholder={'Line 1\nLine 2\nLine 3'}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-7 font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          />
+        </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">What’s in the Box</label>
-              <textarea
-                name="whatsInTheBox"
-                value={formData.whatsInTheBox}
-                onChange={handleInputChange}
-                rows={8}
-                placeholder={'Laptop\nCharger\nCable'}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-              />
-            </div>
-          </div>
-        </section>
-      );
-    }
-
+        <div>
+          <label className="mb-2 block text-sm font-bold text-slate-700">What’s in the Box</label>
+          <textarea
+            name="whatsInTheBox"
+            value={formData.whatsInTheBox}
+            onChange={handleInputChange}
+            rows={8}
+            placeholder={'Laptop\nCharger\nCable'}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-7 font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
     if (currentStep === 'shipping') {
       return (
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -1690,69 +1818,71 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
               ))}
             </div>
 
-            <div className="mt-8 grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
-              <div className="space-y-8">{renderStepContent()}</div>
+           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_420px]">
+  <div>{renderStepContent()}</div>
 
-              <aside className="space-y-5 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-violet-50 p-3 text-violet-700">
-                    <Eye className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Preview Helper</p>
-                    <h3 className="mt-2 text-xl font-black tracking-tight text-slate-900">Missing Fields Checker</h3>
-                  </div>
-                </div>
+  <aside className="h-fit rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-center gap-3">
+      <div className="rounded-2xl bg-violet-50 p-3 text-violet-700">
+        <Eye className="h-5 w-5" />
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Preview Helper</p>
+        <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">Missing Fields Checker</h3>
+      </div>
+    </div>
 
-                <div className="space-y-3">
-                  {validationChecklist.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                      <span className="text-sm font-medium text-slate-600">{item.label}</span>
-                      <span
-                        className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] ${
-                          item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                        }`}
-                      >
-                        {item.done ? 'Done' : 'Missing'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </aside>
-            </div>
+    <div className="mt-5 space-y-3">
+      {validationChecklist.map((item) => (
+        <div
+          key={item.label}
+          className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-4"
+        >
+          <span className="text-sm font-medium text-slate-600">{item.label}</span>
+          <span
+            className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] ${
+              item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            {item.done ? 'Done' : 'Missing'}
+          </span>
+        </div>
+      ))}
+    </div>
+  </aside>
+</div>
 
-            <div className="mt-8 flex flex-col gap-3 border-t border-slate-100 pt-6 md:flex-row md:items-center md:justify-between">
-              <div className="flex flex-wrap items-center gap-3">
-                {currentStep !== 'category' ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCurrentStep(stepMeta[Math.max(0, stepMeta.findIndex((step) => step.id === currentStep) - 1)].id)
-                    }
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-                  >
-                    Previous Step
-                  </button>
-                ) : null}
+            <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-6 md:flex-row md:items-center md:justify-between">
+  <div className="flex flex-wrap items-center gap-3">
+    {currentStep !== 'category' ? (
+      <button
+        type="button"
+        onClick={() =>
+          setCurrentStep(stepMeta[Math.max(0, stepMeta.findIndex((step) => step.id === currentStep) - 1)].id)
+        }
+        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+      >
+        Previous Step
+      </button>
+    ) : null}
 
-                {currentStep !== 'preview' ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCurrentStep(
-                        stepMeta[Math.min(stepMeta.length - 1, stepMeta.findIndex((step) => step.id === currentStep) + 1)].id
-                      )
-                    }
-                    className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      Next Step
-                      <ChevronRight className="h-4 w-4" />
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-
+    {currentStep !== 'preview' ? (
+      <button
+        type="button"
+        onClick={() =>
+          setCurrentStep(
+            stepMeta[Math.min(stepMeta.length - 1, stepMeta.findIndex((step) => step.id === currentStep) + 1)].id
+          )
+        }
+        className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+      >
+        <span className="inline-flex items-center gap-2">
+          Next Step
+          <ChevronRight className="h-4 w-4" />
+        </span>
+      </button>
+    ) : null}
+  </div>
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
