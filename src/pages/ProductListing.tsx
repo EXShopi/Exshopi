@@ -84,7 +84,7 @@ export default function ProductListing() {
     };
 
     fetchProducts();
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     setSearchQuery(searchParams.get("search") || "");
