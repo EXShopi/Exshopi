@@ -2210,17 +2210,16 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
     console.debug('[api] GET /api/products/:id param=', param, 'prismaEnabled=', prismaRuntime.enabled);
 
     let product: any = null;
-    if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.getProduct(param);
-      if (!product) {
-        product = await supabaseRuntime.getProductBySlug(param);
-      }
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       product = await prismaRuntime.getProduct(param);
-      // If not found, try direct slug lookup via runtime
       if (!product) {
         console.debug('[api] not found by id, trying getProductBySlug');
         product = await prismaRuntime.getProductBySlug(param);
+      }
+    } else if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.getProduct(param);
+      if (!product) {
+        product = await supabaseRuntime.getProductBySlug(param);
       }
     } else {
       product = db.getProduct(param);
@@ -2229,7 +2228,11 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
     // Final fallback: search the full list (covers db fallback and any mismatch)
     if (!product) {
       console.debug('[api] final fallback: scanning all products for id/slug');
-      const all = prismaRuntime.enabled ? await prismaRuntime.getAllProducts() : db.getAllProducts();
+      const all = prismaRuntime.enabled
+        ? await prismaRuntime.getAllProducts()
+        : supabaseRuntime.enabled
+        ? await supabaseRuntime.getAllProducts()
+        : db.getAllProducts();
       product = all.find((p) => String((p as any).id) === param || String((p as any).slug || (p as any).id) === param) || null;
     }
 
@@ -2257,22 +2260,22 @@ app.get('/api/products', async (req: Request, res: Response) => {
 
     // Fast path: explicit backend category id
     if (categoryId) {
-      if (supabaseRuntime.enabled) {
-        const all = await supabaseRuntime.getAllProducts();
-        products = all.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
-      } else if (prismaRuntime.enabled) {
+      if (prismaRuntime.enabled) {
         products = await prismaRuntime.getAllProducts();
         products = products.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
+      } else if (supabaseRuntime.enabled) {
+        const all = await supabaseRuntime.getAllProducts();
+        products = all.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
       } else {
         products = db.getAllProducts();
         products = products.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
       }
     } else if (categorySlug || subcategorySlug || parentSlug) {
       // Query by canonical slugs
-      if (supabaseRuntime.enabled) {
-        products = await supabaseRuntime.getProductsByCategorySlugs(parentSlug || null, categorySlug || null, subcategorySlug || null);
-      } else if (prismaRuntime.enabled) {
+      if (prismaRuntime.enabled) {
         products = await prismaRuntime.getProductsByCategorySlugs(parentSlug || null, categorySlug || null, subcategorySlug || null);
+      } else if (supabaseRuntime.enabled) {
+        products = await supabaseRuntime.getProductsByCategorySlugs(parentSlug || null, categorySlug || null, subcategorySlug || null);
       } else {
         const all = db.getAllProducts();
         products = all.filter((product: any) => {
@@ -2301,10 +2304,10 @@ app.get('/api/products', async (req: Request, res: Response) => {
       }
     } else {
       // No filters: return global marketplace products
-      if (supabaseRuntime.enabled) {
-        products = await supabaseRuntime.getAllProducts();
-      } else if (prismaRuntime.enabled) {
+      if (prismaRuntime.enabled) {
         products = await prismaRuntime.getAllProducts();
+      } else if (supabaseRuntime.enabled) {
+        products = await supabaseRuntime.getAllProducts();
       } else {
         products = db.getAllProducts();
       }
@@ -2328,10 +2331,10 @@ app.get('/api/products/seller/:sellerId', authMiddleware, async (req: Request, r
       return res.status(403).json({ error: 'Forbidden' });
     }
     let products: any[] = [];
-    if (supabaseRuntime.enabled) {
-      products = await supabaseRuntime.getSellerProducts(req.params.sellerId);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       products = await prismaRuntime.getSellerProducts(req.params.sellerId);
+    } else if (supabaseRuntime.enabled) {
+      products = await supabaseRuntime.getSellerProducts(req.params.sellerId);
     } else {
       products = db.getSellerProducts(req.params.sellerId);
     }
@@ -2344,10 +2347,10 @@ app.get('/api/products/seller/:sellerId', authMiddleware, async (req: Request, r
 app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     let current: any = null;
-    if (supabaseRuntime.enabled) {
-      current = await supabaseRuntime.getProduct(req.params.id);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       current = await prismaRuntime.getProduct(req.params.id);
+    } else if (supabaseRuntime.enabled) {
+      current = await supabaseRuntime.getProduct(req.params.id);
     } else {
       current = db.getProduct(req.params.id);
     }
@@ -2385,10 +2388,10 @@ app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response)
     }
 
     let product: any = null;
-    if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.updateProduct(req.params.id, payload as any);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       product = await prismaRuntime.updateProduct(req.params.id, payload as any);
+    } else if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.updateProduct(req.params.id, payload as any);
     } else {
       product = db.updateProduct(req.params.id, payload as any);
     }
@@ -2404,10 +2407,10 @@ app.post('/api/products/:id/submit', authMiddleware, async (req: Request, res: R
       return res.status(403).json({ error: 'Seller only' });
     }
     let product: any = null;
-    if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.getProduct(req.params.id);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       product = await prismaRuntime.getProduct(req.params.id);
+    } else if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.getProduct(req.params.id);
     } else {
       product = db.getProduct(req.params.id);
     }
@@ -2429,10 +2432,10 @@ app.post('/api/products/:id/submit', authMiddleware, async (req: Request, res: R
       rejectionReason: '',
       approvalNotes: '',
     } as any;
-    if (supabaseRuntime.enabled) {
-      updated = await supabaseRuntime.updateProduct(req.params.id, updates);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       updated = await prismaRuntime.updateProduct(req.params.id, updates as any);
+    } else if (supabaseRuntime.enabled) {
+      updated = await supabaseRuntime.updateProduct(req.params.id, updates);
     } else {
       updated = db.updateProduct(req.params.id, updates as any);
     }
@@ -2464,10 +2467,10 @@ app.post('/api/products/:id/submit', authMiddleware, async (req: Request, res: R
 app.delete('/api/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     let product: any = null;
-    if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.getProduct(req.params.id);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       product = await prismaRuntime.getProduct(req.params.id);
+    } else if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.getProduct(req.params.id);
     } else {
       product = db.getProduct(req.params.id);
     }
@@ -2475,10 +2478,10 @@ app.delete('/api/products/:id', authMiddleware, async (req: Request, res: Respon
 
     // Admins can delete any product
     if (isAdminLike(req.user?.role)) {
-      const ok = supabaseRuntime.enabled
-        ? await supabaseRuntime.deleteProduct(req.params.id)
-        : prismaRuntime.enabled
+      const ok = prismaRuntime.enabled
         ? await prismaRuntime.deleteProduct(req.params.id)
+        : supabaseRuntime.enabled
+        ? await supabaseRuntime.deleteProduct(req.params.id)
         : db.deleteProduct(req.params.id);
       return ok ? res.json({ success: true }) : res.status(500).json({ error: 'Failed to delete' });
     }
@@ -2488,10 +2491,10 @@ app.delete('/api/products/:id', authMiddleware, async (req: Request, res: Respon
       ? await prismaRuntime.getSellerByUserId(req.user!.id)
       : db.getSellerByUserId(req.user!.id);
     if (req.user?.role === 'seller' && product.sellerId === ownerSeller?.id) {
-      const ok = supabaseRuntime.enabled
-        ? await supabaseRuntime.deleteProduct(req.params.id)
-        : prismaRuntime.enabled
+      const ok = prismaRuntime.enabled
         ? await prismaRuntime.deleteProduct(req.params.id)
+        : supabaseRuntime.enabled
+        ? await supabaseRuntime.deleteProduct(req.params.id)
         : db.deleteProduct(req.params.id);
       return ok ? res.json({ success: true }) : res.status(500).json({ error: 'Failed to delete' });
     }
@@ -2603,10 +2606,10 @@ app.get('/api/admin/products/pending', authMiddleware, async (req: Request, res:
       return res.status(403).json({ error: 'Catalog access only' });
     }
     let allProducts: any[] = [];
-    if (supabaseRuntime.enabled) {
-      allProducts = await supabaseRuntime.getAllProductsForAdmin();
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       allProducts = await prismaRuntime.getAllProductsForAdmin();
+    } else if (supabaseRuntime.enabled) {
+      allProducts = await supabaseRuntime.getAllProductsForAdmin();
     } else {
       allProducts = [
         ...db.getAllProducts(),
@@ -2639,10 +2642,10 @@ app.get('/api/admin/products', authMiddleware, async (req: Request, res: Respons
     const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
 
     let products: any[] = [];
-    if (supabaseRuntime.enabled) {
-      products = await supabaseRuntime.getAllProductsForAdmin();
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       products = await prismaRuntime.getAllProductsForAdmin();
+    } else if (supabaseRuntime.enabled) {
+      products = await supabaseRuntime.getAllProductsForAdmin();
     } else {
       products = [
         ...db.getAllProducts(),
@@ -2702,10 +2705,10 @@ app.post('/api/admin/products/:id/approve', authMiddleware, async (req: Request,
       rejectionReason: '',
       approvedAt: new Date().toISOString(),
     } as any;
-    if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.updateProduct(req.params.id, approveUpdates);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       product = await prismaRuntime.updateProduct(req.params.id, approveUpdates as any);
+    } else if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.updateProduct(req.params.id, approveUpdates);
     } else {
       product = db.updateProduct(req.params.id, approveUpdates as any);
     }
@@ -2757,10 +2760,10 @@ app.post('/api/admin/products/:id/reject', authMiddleware, async (req: Request, 
       rejectionReason: req.body.reason,
       rejectedAt: new Date().toISOString(),
     } as any;
-    if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.updateProduct(req.params.id, rejectUpdates);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       product = await prismaRuntime.updateProduct(req.params.id, rejectUpdates as any);
+    } else if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.updateProduct(req.params.id, rejectUpdates);
     } else {
       product = db.updateProduct(req.params.id, rejectUpdates as any);
     }
@@ -2833,10 +2836,10 @@ app.post('/api/admin/products/bulk-review', authMiddleware, async (req: Request,
             };
 
       let updated: any = null;
-      if (supabaseRuntime.enabled) {
-        updated = await supabaseRuntime.updateProduct(id, updates as any);
-      } else if (prismaRuntime.enabled) {
+      if (prismaRuntime.enabled) {
         updated = await prismaRuntime.updateProduct(id, updates as any);
+      } else if (supabaseRuntime.enabled) {
+        updated = await supabaseRuntime.updateProduct(id, updates as any);
       } else {
         updated = db.updateProduct(id, updates as any);
       }
@@ -2961,10 +2964,10 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
     };
 
     let product: any = null;
-    if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.createProduct(productInput as any);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       product = await prismaRuntime.createProduct(productInput as any);
+    } else if (supabaseRuntime.enabled) {
+      product = await supabaseRuntime.createProduct(productInput as any);
     } else {
       product = db.createProduct(productInput as any);
     }
@@ -3019,10 +3022,10 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
     }
 
     let updated: any = null;
-    if (supabaseRuntime.enabled) {
-      updated = await supabaseRuntime.updateProduct(req.params.id, nextPayload as any);
-    } else if (prismaRuntime.enabled) {
+    if (prismaRuntime.enabled) {
       updated = await prismaRuntime.updateProduct(req.params.id, nextPayload as any);
+    } else if (supabaseRuntime.enabled) {
+      updated = await supabaseRuntime.updateProduct(req.params.id, nextPayload as any);
     } else {
       updated = db.updateProduct(req.params.id, nextPayload as any);
     }
@@ -3036,10 +3039,10 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
 app.delete('/api/admin/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const ok = supabaseRuntime.enabled
-      ? await supabaseRuntime.deleteProduct(req.params.id)
-      : prismaRuntime.enabled
+    const ok = prismaRuntime.enabled
       ? await prismaRuntime.deleteProduct(req.params.id)
+      : supabaseRuntime.enabled
+      ? await supabaseRuntime.deleteProduct(req.params.id)
       : db.deleteProduct(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Product not found' });
     try {
