@@ -1,11 +1,4 @@
-import { getAuthHeaders } from './api';
-const browserHost =
-  typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_BASE ||
-  (import.meta.env.DEV ? `http://${browserHost}:3001/api` : '');
+import { API_BASE, getAuthHeaders, hasExplicitApiBase } from './api';
 
 export interface SiteSettings {
   general: {
