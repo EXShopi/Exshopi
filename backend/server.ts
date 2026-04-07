@@ -44,56 +44,83 @@ import {
 
 const app: Express = express();
 
+// ==================== CORS CONFIGURATION ====================
+// Define trusted origins for CORS
 const defaultAllowedOrigins = new Set([
   'https://exshopi.onrender.com',
   'https://exshopi-api.onrender.com',
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:5178',
   'http://localhost:5179',
   'http://localhost:5180',
   'http://localhost:3000',
 ]);
 
 // Allow additional origins via environment variable CORS_ORIGIN (comma-separated)
-;(process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean)
-  .forEach((o) => defaultAllowedOrigins.add(o));
+if (process.env.CORS_ORIGIN) {
+  process.env.CORS_ORIGIN
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((o) => {
+      defaultAllowedOrigins.add(o);
+      console.log(`[CORS] Added origin from env: ${o}`);
+    });
+}
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // allow non-browser / server-to-server requests
-      if (!origin) return callback(null, true);
-      if (defaultAllowedOrigins.has(origin)) return callback(null, true);
-      console.warn('[CORS] Denied origin:', origin);
-      return callback(new Error('Not allowed by CORS'));
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-    credentials: true,
-    optionsSuccessStatus: 204,
-  })
-);
+console.log(`[CORS] Configured allowed origins:`, Array.from(defaultAllowedOrigins));
 
-app.options('*', cors());
-
-// Ensure CORS headers are present on all responses for allowed origins.
-// This helps when other middleware or error handlers return responses
-// that would otherwise omit CORS headers (fixes missing Access-Control-Allow-Origin).
-app.use((req, res, next) => {
-  try {
-    const origin = String(req.headers.origin || '');
-    if (origin && defaultAllowedOrigins.has(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin');
+// Define CORS options config
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or server-to-server requests)
+    if (!origin) {
+      return callback(null, true);
     }
-  } catch (e) {
-    /* ignore header-setting errors */
+
+    // Check if origin is in allowed list
+    if (defaultAllowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+
+    // Log and reject blocked origins
+    console.warn(`[CORS] 🚫 Blocked request from origin: ${origin}`);
+    callback(new Error('CORS policy: Origin not allowed'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control'],
+  credentials: true,
+  optionsSuccessStatus: 200, // Some legacy browsers (IE11) require 200 for successful preflight
+  maxAge: 86400, // Cache preflight for 24 hours
+};
+
+// IMPORTANT: Apply CORS middleware BEFORE all other middleware and routes
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
+// Additional middleware to ensure CORS headers are always present
+app.use((req: Request, res: Response, next) => {
+  const origin = String(req.headers.origin || '').trim();
+
+  // Re-verify and set CORS headers on every response (defensive programming)
+  if (origin && defaultAllowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Cache-Control');
   }
+
+  // Log incoming requests from cross-origin sources
+  if (origin && origin !== 'http://localhost' && req.method === 'OPTIONS') {
+    console.log(`[CORS] 🔄 Preflight request from: ${origin} → ${req.path}`);
+  }
+
   next();
 });
 
@@ -521,6 +548,34 @@ function sendSseEvent(eventName: string, data: any) {
     }
   }
 }
+
+// ==================== HEALTH CHECK ENDPOINT ====================
+// Simple health check endpoint for monitoring and debugging CORS issues
+app.get('/api/health', (req: Request, res: Response) => {
+  const origin = String(req.headers.origin || 'no-origin');
+  const userAgent = String(req.headers['user-agent'] || 'unknown');
+  
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    backend: {
+      url: process.env.FRONTEND_URL || 'http://localhost:3001',
+      version: '1.0.0',
+    },
+    request: {
+      origin,
+      method: req.method,
+      corsHeaders: {
+        'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin'),
+        'Access-Control-Allow-Credentials': res.getHeader('Access-Control-Allow-Credentials'),
+      },
+      userAgent,
+    },
+    message: 'Backend is running and CORS is configured correctly! 🎉',
+  });
+});
 
 app.get('/api/events/stream', (req: Request, res: Response) => {
   // Keep a very small, public, unauthenticated stream for UI updates (delete/update events)
@@ -5710,20 +5765,47 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// Global error handler (logs errors and returns JSON)
+// ==================== GLOBAL ERROR HANDLER ====================
+// Logs errors and returns JSON, ensuring CORS headers are included in error responses
 app.use((err: any, req: Request, res: Response, next: any) => {
-  console.error('Unhandled error in request:', req.method, req.path, err);
+  // Ensure CORS headers are set even on error responses
+  const origin = String(req.headers.origin || '');
+  if (origin && defaultAllowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
+  console.error('❌ Unhandled error in request:', req.method, req.path, err?.message || err);
+  
   if (res.headersSent) return next(err);
-  res.status(err?.status || 500).json({ error: err?.message || String(err) || 'Internal Server Error' });
+  
+  const statusCode = err?.status || err?.statusCode || 500;
+  const errorMessage = err?.message || String(err) || 'Internal Server Error';
+  
+  res.status(statusCode).json({
+    error: errorMessage,
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString(),
+    ...(process.env.NODE_ENV === 'development' && { stack: err?.stack }),
+  });
 });
 
 // 404 handler
 app.use((req: Request, res: Response) => {
+  // Ensure CORS headers are set even on 404 responses
+  const origin = String(req.headers.origin || '');
+  if (origin && defaultAllowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
   res.status(404).json({
     error: 'Not Found',
     path: req.path,
     method: req.method,
-    message: `${req.method} ${req.path} not found. Check /api-docs for available endpoints`,
+    message: `${req.method} ${req.path} not found. Try /api/health for a test endpoint.`,
+    timestamp: new Date().toISOString(),
   });
 });
 

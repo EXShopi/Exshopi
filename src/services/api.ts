@@ -64,7 +64,12 @@ export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
     } as Response);
   }
 
-  return fetch(url, init);
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Network error while fetching ${url}: ${msg}`);
+  }
 }
 
 async function parseApiResponse(res: Response) {
@@ -124,15 +129,21 @@ async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
     );
   }
 
-  const runRequest = () =>
-    fetch(resolved, {
-      ...init,
-      headers: {
-        ...(init.headers || {}),
-        ...getAuthHeaders(),
-      },
-      credentials: init.credentials || 'include',
-    });
+  const runRequest = async () => {
+    try {
+      return await fetch(resolved, {
+        ...init,
+        headers: {
+          ...(init.headers || {}),
+          ...getAuthHeaders(),
+        },
+        credentials: init.credentials || 'include',
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Network error while fetching ${resolved}: ${msg}`);
+    }
+  };
 
   let response = await runRequest();
   if (response.status !== 401) {
