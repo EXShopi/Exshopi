@@ -67,6 +67,7 @@ app.use(
       // allow non-browser / server-to-server requests
       if (!origin) return callback(null, true);
       if (defaultAllowedOrigins.has(origin)) return callback(null, true);
+      console.warn('[CORS] Denied origin:', origin);
       return callback(new Error('Not allowed by CORS'));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -77,6 +78,24 @@ app.use(
 );
 
 app.options('*', cors());
+
+// Ensure CORS headers are present on all responses for allowed origins.
+// This helps when other middleware or error handlers return responses
+// that would otherwise omit CORS headers (fixes missing Access-Control-Allow-Origin).
+app.use((req, res, next) => {
+  try {
+    const origin = String(req.headers.origin || '');
+    if (origin && defaultAllowedOrigins.has(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin');
+    }
+  } catch (e) {
+    /* ignore header-setting errors */
+  }
+  next();
+});
 
 const PORT = Number(process.env.PORT || 3001);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
