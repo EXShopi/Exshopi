@@ -10,46 +10,12 @@ export function getAuthHeaders() {
   };
 }
 
-function inferApiBase() {
-  if (typeof window === 'undefined') return null;
-
-  const protocol = window.location.protocol || 'https:';
-  const host = window.location.hostname || '';
-
-  if (!host) return null;
-
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return `${protocol}//${host}:3001/api`;
-  }
-
-  if (
-    host.startsWith('10.') ||
-    host.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-  ) {
-    return `${protocol}//${host}:3001/api`;
-  }
-
-  if (host.endsWith('.onrender.com')) {
-    const subdomain = host.replace(/\.onrender\.com$/i, '');
-    if (subdomain === 'exshopi') {
-      return `${protocol}//exshopi-api.onrender.com/api`;
-    }
-    if (!subdomain.endsWith('-api')) {
-      return `${protocol}//${subdomain}-api.onrender.com/api`;
-    }
-  }
-
-  return null;
-}
-
+// API base URL: prefer explicit env var, fallback to production API host
 export const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_BASE ||
-  inferApiBase() ||
-  null;
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || 'https://exshopi-api.onrender.com/api';
 
-export const hasExplicitApiBase = Boolean(API_BASE);
+// Only treat as an explicit API base when an env var was provided
+export const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
 
 function isLocalDevRuntime() {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -1553,6 +1519,19 @@ export const adminOpsAPI = {
         ...getAuthHeaders(),
       },
       body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
+
+  async generateContent(payload: { title?: string; category?: string; subcategory?: string; condition?: string }) {
+    const res = await fetchWithAuthRetry('/admin/generate-content', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
     });
     return parseApiResponse(res);
   },

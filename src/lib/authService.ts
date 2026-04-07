@@ -170,7 +170,24 @@ export class AuthService {
       if (error) throw new Error(error.message || 'Invalid credentials');
       if (!data.user?.id) throw new Error('Invalid login response. Missing user data.');
 
-      const profile = await getProfileByEmail(normalizedEmail);
+      let profile: PublicUserRow | null = null;
+      // Prefer fetching profile by user id (works with RLS policies that allow users to read their own row)
+      try {
+        const { data: p, error: pErr } = await supabase.from('users').select('*').eq('id', data.user.id).maybeSingle();
+        if (pErr) {
+          console.warn('[AUTH] Could not load users profile by id:', pErr.message);
+        } else {
+          profile = (p as PublicUserRow) || null;
+        }
+      } catch (e) {
+        console.warn('[AUTH] Error fetching profile by id:', e);
+      }
+
+      // Fallback to email lookup (older deployments); may be restricted by RLS
+      if (!profile) {
+        profile = await getProfileByEmail(normalizedEmail);
+      }
+
       const accessToken = data.session?.access_token || null;
 
       useAuthStore.getState().setAccessToken(accessToken);
@@ -301,7 +318,21 @@ export class AuthService {
 
       const authUser = data.session.user;
       const accessToken = data.session.access_token || null;
-      const profile = await getProfileByEmail(authUser.email || '');
+      let profile: PublicUserRow | null = null;
+      try {
+        const { data: p, error: pErr } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
+        if (pErr) {
+          console.warn('[AUTH] Could not load users profile by id:', pErr.message);
+        } else {
+          profile = (p as PublicUserRow) || null;
+        }
+      } catch (e) {
+        console.warn('[AUTH] Error fetching profile by id:', e);
+      }
+
+      if (!profile) {
+        profile = await getProfileByEmail(authUser.email || '');
+      }
 
       useAuthStore.getState().setAccessToken(accessToken);
 

@@ -4,7 +4,7 @@ import { LayoutDashboard, ShoppingBag, Users, Package, Tag, Settings, LogOut, Se
 import { Product } from '../store/cart';
 import { GoogleGenAI } from "@google/genai";
 import { compressImage } from '../lib/imageUtils';
-import { dashboardAPI, productAPI, sellerAPI, categoryAPI, getAuthHeaders } from '../services/api';
+import { dashboardAPI, productAPI, sellerAPI, categoryAPI, adminOpsAPI, adminProductAPI, orderAPI, customerAPI, getAuthHeaders } from '../services/api';
 import { useAuthStore } from '../store/auth';
 
 interface Vendor {
@@ -117,9 +117,8 @@ export function AdminDashboard() {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch('/api/categories');
-      const data = await res.json();
-      setCategories(data);
+      const data = await categoryAPI.getAll();
+      setCategories(data || []);
     } catch (error) {
       console.error("Fetch Categories Error:", error);
     }
@@ -132,18 +131,12 @@ export function AdminDashboard() {
     }
     setIsGeneratingContent(true);
     try {
-      const res = await fetch('/api/admin/generate-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newProduct.title,
-          category: newProduct.category,
-          subcategory: newProduct.subcategory,
-          condition: newProduct.condition
-        })
+      const data = await adminOpsAPI.generateContent({
+        title: newProduct.title,
+        category: newProduct.category,
+        subcategory: newProduct.subcategory,
+        condition: newProduct.condition,
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
 
       setNewProduct(prev => ({
         ...prev,
@@ -185,9 +178,13 @@ export function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/admin/stats');
-      const data = await res.json();
-      setStats(data);
+      const data = await dashboardAPI.getAdminDashboard({ range: '30d' });
+      setStats({
+        revenue: data?.totalSales || stats.revenue,
+        orders: data?.totalOrders || stats.orders,
+        customers: data?.totalCustomers || stats.customers,
+        products: data?.totalProducts || stats.products,
+      });
     } catch (error) {
       console.error("Fetch Stats Error:", error);
     }
@@ -226,9 +223,8 @@ export function AdminDashboard() {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders');
-      const data = await res.json();
-      setOrders(data);
+      const data = await orderAPI.getAllOrders();
+      setOrders(data || []);
     } catch (error) {
       console.error("Fetch Orders Error:", error);
     }
@@ -236,8 +232,7 @@ export function AdminDashboard() {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch('/api/customers');
-      const data = await res.json();
+      const data = await customerAPI.getAllAdmin();
       setCustomers(data || []);
     } catch (error) {
       console.error("Fetch Customers Error:", error);
@@ -352,21 +347,9 @@ export function AdminDashboard() {
 
     try {
       if (editingProduct) {
-        // Update existing product via admin API
-        const res = await fetch(`/api/admin/products/${editingProduct.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(productData)
-        });
-        if (!res.ok) throw new Error('Failed to update product via API');
+        await adminProductAPI.update(editingProduct.id, productData);
       } else {
-        // Create new product via admin API
-        const apiRes = await fetch('/api/admin/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(productData)
-        });
-        if (!apiRes.ok) throw new Error('Failed to save to backend API');
+        await adminProductAPI.create(productData);
       }
 
       setIsAddingProduct(false);
@@ -388,7 +371,7 @@ export function AdminDashboard() {
     
     try {
       // Delete via API
-      await fetch(`/api/admin/products/${id}`, { method: 'DELETE' });
+      await adminProductAPI.delete(id);
       
       fetchProducts();
       setSuccessMsg("Product deleted successfully!");

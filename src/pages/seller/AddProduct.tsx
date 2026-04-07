@@ -19,7 +19,6 @@ import { sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import { fileToDataUrl, uploadImageDataUrl } from '../../lib/uploadClient';
 import { compressImage } from '../../lib/imageUtils';
-import { LAUNCH_LISTING_TEMPLATES } from '../../lib/marketplaceTemplates';
 
 type FormState = {
   title: string;
@@ -101,7 +100,6 @@ const MASTER_CATEGORIES: LiveCategory[] = [
     name: 'Fashion',
     slug: 'fashion',
     subcategories: [
-      { id: 'clothing', name: 'Clothing', slug: 'clothing' },
       { id: 'mens', name: "Men's", slug: 'mens' },
       { id: 'womens', name: "Women's", slug: 'womens' },
       { id: 'kids', name: 'Kids', slug: 'kids' },
@@ -254,46 +252,6 @@ const normalizeLiveCategories = (items: any[]): LiveCategory[] => {
     .filter((category: LiveCategory) => category.name && category.slug);
 };
 
-const mergeCategoryOptions = (liveCategories: LiveCategory[], masterCategories: LiveCategory[]) => {
-  const merged = new Map<string, LiveCategory>();
-
-  for (const category of masterCategories) {
-    merged.set(category.slug, {
-      ...category,
-      subcategories: [...category.subcategories],
-    });
-  }
-
-  for (const category of liveCategories) {
-    const existing = merged.get(category.slug);
-    if (!existing) {
-      merged.set(category.slug, {
-        ...category,
-        subcategories: [...category.subcategories],
-      });
-      continue;
-    }
-
-    const subMap = new Map<string, Subcategory>();
-    for (const subcategory of existing.subcategories) subMap.set(subcategory.slug, subcategory);
-    for (const subcategory of category.subcategories) {
-      subMap.set(subcategory.slug, {
-        ...subcategory,
-        id: subcategory.id || subMap.get(subcategory.slug)?.id,
-      });
-    }
-
-    merged.set(category.slug, {
-      ...existing,
-      ...category,
-      id: category.id || existing.id,
-      subcategories: Array.from(subMap.values()),
-    });
-  }
-
-  return Array.from(merged.values());
-};
-
 const toBulletList = (value: string) =>
   value
     .split('\n')
@@ -404,9 +362,9 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
 
 
   const categoryOptions = useMemo(
-    () => mergeCategoryOptions(categories.length ? categories : MASTER_CATEGORIES, MASTER_CATEGORIES),
-    [categories]
-  );
+  () => (categories.length ? categories : MASTER_CATEGORIES),
+  [categories]
+);
 
   const selectedParentCategory = useMemo(
   () => categoryOptions.find((category) => category.slug === selectedParentSlug) || null,
@@ -420,11 +378,6 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
         (subcategory) => subcategory.slug === selectedSubcategorySlug
       ) || null,
     [selectedParentCategory, selectedSubcategorySlug]
-  );
-
-  const selectedTemplate = useMemo(
-    () => LAUNCH_LISTING_TEMPLATES.find((template) => template.id === selectedSubcategorySlug) || null,
-    [selectedSubcategorySlug]
   );
 
   const draftStorageKey = `product-draft:${mode}:${editingId || copyingId || 'new'}`;
@@ -842,142 +795,133 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
   };
 
   const buildPayload = () => {
-    const resolvedCategoryId =
-      selectedSubcategory?.id ||
-      selectedCategoryId ||
-      selectedParentCategory?.id ||
-      selectedTemplate?.backendCategoryId ||
-      null;
+  if (!selectedCategoryId || !selectedParentSlug || !selectedSubcategorySlug) {
+    return null;
+  }
 
-    if (!resolvedCategoryId || !selectedParentSlug || !selectedSubcategorySlug) {
-      return null;
-    }
+  const normalizedVariants = variants
+    .map((variant, index) => ({
+      id: variant.id || `variant-${index + 1}`,
+      color: variant.color.trim(),
+      size: variant.size.trim(),
+      storage: variant.storage.trim(),
+      ram: variant.ram.trim(),
+      processor: variant.processor.trim(),
+      price: variant.price.trim() ? parseFloat(variant.price) : null,
+      originalPrice: variant.originalPrice.trim() ? parseFloat(variant.originalPrice) : null,
+      stock: variant.stock.trim() ? parseInt(variant.stock, 10) || 0 : null,
+      sku: variant.sku.trim(),
+      image: variant.image ? String(variant.image).trim() : undefined,
+    }))
+    .filter((variant) => variant.price !== null && variant.stock !== null);
 
-    const normalizedVariants = variants
-      .map((variant, index) => ({
-        id: variant.id || `variant-${index + 1}`,
-        color: variant.color.trim(),
-        size: variant.size.trim(),
-        storage: variant.storage.trim(),
-        ram: variant.ram.trim(),
-        processor: variant.processor.trim(),
-        price: variant.price.trim() ? parseFloat(variant.price) : null,
-        originalPrice: variant.originalPrice.trim() ? parseFloat(variant.originalPrice) : null,
-        stock: variant.stock.trim() ? parseInt(variant.stock, 10) || 0 : null,
-        sku: variant.sku.trim(),
-        image: variant.image ? String(variant.image).trim() : undefined,
-      }))
-      .filter((variant) => variant.price !== null && variant.stock !== null);
+  const primaryVariant = normalizedVariants[0];
 
-    const primaryVariant = normalizedVariants[0];
+  const basePrice =
+    primaryVariant?.price ?? (formData.price.trim() ? parseFloat(formData.price) : 0);
 
-    const basePrice =
-      primaryVariant?.price ?? (formData.price.trim() ? parseFloat(formData.price) : 0);
+  const baseOriginalPrice =
+    primaryVariant?.originalPrice ??
+    (formData.originalPrice.trim()
+      ? parseFloat(formData.originalPrice)
+      : basePrice);
 
-    const baseOriginalPrice =
-      primaryVariant?.originalPrice ??
-      (formData.originalPrice.trim()
-        ? parseFloat(formData.originalPrice)
-        : basePrice);
+  const baseStock =
+    primaryVariant?.stock ?? (formData.stock.trim() ? parseInt(formData.stock, 10) || 0 : 0);
 
-    const baseStock =
-      primaryVariant?.stock ?? (formData.stock.trim() ? parseInt(formData.stock, 10) || 0 : 0);
+  const baseSku =
+    primaryVariant?.sku ||
+    formData.sku.trim() ||
+    `EX-${selectedSubcategorySlug.toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Date.now()}`;
 
-    const baseSku =
-      primaryVariant?.sku ||
-      formData.sku.trim() ||
-      `EX-${selectedSubcategorySlug.toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Date.now()}`;
+  const keyFeatures = toBulletList(formData.keyFeatures);
+  const whatsInTheBox = toBulletList(formData.whatsInTheBox);
+  const searchTags = formData.searchTags
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
-    const keyFeatures = toBulletList(formData.keyFeatures);
-    const whatsInTheBox = toBulletList(formData.whatsInTheBox);
-    const searchTags = formData.searchTags
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean);
+  const descriptionParts = [
+    formData.shortDescription.trim(),
+    formData.longDescription.trim(),
+    keyFeatures.length ? `Key Features:\n- ${keyFeatures.join('\n- ')}` : '',
+  ].filter(Boolean);
 
-    const descriptionParts = [
-      formData.shortDescription.trim(),
-      formData.longDescription.trim(),
-      keyFeatures.length ? `Key Features:\n- ${keyFeatures.join('\n- ')}` : '',
-    ].filter(Boolean);
+return {
+  categoryId: selectedCategoryId,
+  sellerId: mode === 'admin' ? 'exshopi_official' : undefined,
+  title: formData.title.trim(),
+  description: descriptionParts.join('\n\n'),
+  price: Number.isFinite(basePrice) ? basePrice : 0,
+  originalPrice: Number.isFinite(baseOriginalPrice)
+    ? baseOriginalPrice
+    : Number.isFinite(basePrice)
+    ? basePrice
+    : 0,
+  salePrice:
+    Number.isFinite(baseOriginalPrice) &&
+    Number.isFinite(basePrice) &&
+    baseOriginalPrice > basePrice
+      ? basePrice
+      : undefined,
+  image: images[0] || '',
+  images: images.slice(1),
+  stock: baseStock,
+  sku: baseSku,
+  brand: formData.brand.trim(),
+  status: mode === 'admin' ? 'live' : 'pending',
 
-    return {
-      categoryId: resolvedCategoryId,
-      sellerId: mode === 'admin' ? 'exshopi_official' : undefined,
-      title: formData.title.trim(),
-      description: descriptionParts.join('\n\n'),
-      price: Number.isFinite(basePrice) ? basePrice : 0,
-      originalPrice: Number.isFinite(baseOriginalPrice)
-        ? baseOriginalPrice
-        : Number.isFinite(basePrice)
-        ? basePrice
-        : 0,
-      salePrice:
-        Number.isFinite(baseOriginalPrice) &&
-        Number.isFinite(basePrice) &&
-        baseOriginalPrice > basePrice
-          ? basePrice
-          : undefined,
-      image: images[0] || '',
-      images: images.slice(1),
-      stock: baseStock,
-      sku: baseSku,
+  specs: {
+    templateId: selectedSubcategorySlug,
+    templateName: selectedSubcategory?.name || selectedSubcategorySlug,
+    shortDescription: formData.shortDescription.trim(),
+    longDescription: formData.longDescription.trim(),
+    attributes: {
       brand: formData.brand.trim(),
-      status: mode === 'admin' ? 'live' : 'pending',
-
-      specs: {
-        templateId: selectedSubcategorySlug,
-        templateName: selectedSubcategory?.name || selectedSubcategorySlug,
-        shortDescription: formData.shortDescription.trim(),
-        longDescription: formData.longDescription.trim(),
-        attributes: {
-          brand: formData.brand.trim(),
-          subcategory: selectedSubcategorySlug,
-          ...(primaryVariant?.color ? { color: primaryVariant.color } : {}),
-          ...(primaryVariant?.size ? { size: primaryVariant.size } : {}),
-          ...(primaryVariant?.storage ? { storage: primaryVariant.storage } : {}),
-          ...(primaryVariant?.ram ? { ram: primaryVariant.ram } : {}),
-          ...(primaryVariant?.processor ? { processor: primaryVariant.processor } : {}),
-        },
-        variants: normalizedVariants,
-        defaultVariantId: defaultVariantId || normalizedVariants[0]?.id || undefined,
-        keyFeatures,
-        whatsInTheBox,
-        searchTags,
-        metaTitle: formData.metaTitle.trim() || formData.title.trim(),
-        metaDescription: formData.metaDescription.trim() || formData.shortDescription.trim(),
-        shippingWeight: formData.shippingWeight.trim(),
-        packageSize: formData.packageSize.trim(),
-        returnPolicy: formData.returnPolicy.trim(),
-        warrantyPolicy: formData.warrantyPolicy.trim(),
-        sellerNotes: formData.sellerNotes.trim(),
-        listingCompleteness,
-        seoScore,
-        parentCategorySlug: selectedParentSlug,
-        categorySlug: selectedParentSlug,
-        subcategorySlug: selectedSubcategorySlug,
-        parentCategoryName: selectedParentCategory?.name || '',
-        categoryName: selectedParentCategory?.name || '',
-        subcategoryName: selectedSubcategory?.name || '',
-        categoryPath: `${selectedParentSlug}/${selectedSubcategorySlug}`,
-
-        approvalStatus: mode === 'admin' ? 'approved' : 'pending',
-        productStatus:
-          mode === 'admin'
-            ? 'live'
-            : baseStock <= 0
-            ? 'out_of_stock'
-            : 'pending_approval',
-        visibilityStatus: mode === 'admin' ? 'live' : 'pending',
-        ownership: mode === 'admin' ? 'official' : 'seller',
-        createdByRole: mode === 'admin' ? 'admin' : 'seller',
-
-        badges:
-          mode === 'admin'
-            ? ['ExShopi Official', selectedSubcategory?.name || 'Catalog']
-            : ['Pending Review', selectedSubcategory?.name || 'Catalog'],
-      },
-    };
+      subcategory: selectedSubcategorySlug,
+      ...(primaryVariant?.color ? { color: primaryVariant.color } : {}),
+      ...(primaryVariant?.size ? { size: primaryVariant.size } : {}),
+      ...(primaryVariant?.storage ? { storage: primaryVariant.storage } : {}),
+      ...(primaryVariant?.ram ? { ram: primaryVariant.ram } : {}),
+      ...(primaryVariant?.processor ? { processor: primaryVariant.processor } : {}),
+    },
+    variants: normalizedVariants,
+    defaultVariantId: defaultVariantId || normalizedVariants[0]?.id || undefined,
+    keyFeatures,
+    whatsInTheBox,
+    searchTags,
+    metaTitle: formData.metaTitle.trim() || formData.title.trim(),
+    metaDescription: formData.metaDescription.trim() || formData.shortDescription.trim(),
+    shippingWeight: formData.shippingWeight.trim(),
+    packageSize: formData.packageSize.trim(),
+    returnPolicy: formData.returnPolicy.trim(),
+    warrantyPolicy: formData.warrantyPolicy.trim(),
+    sellerNotes: formData.sellerNotes.trim(),
+    listingCompleteness,
+    seoScore,
+    parentCategorySlug: selectedParentSlug,
+    categorySlug: selectedParentSlug,
+    subcategorySlug: selectedSubcategorySlug,
+    parentCategoryName: selectedParentCategory?.name || '',
+    categoryName: selectedParentCategory?.name || '',
+    subcategoryName: selectedSubcategory?.name || '',
+    categoryPath: `${selectedParentSlug}/${selectedSubcategorySlug}`,
+    approvalStatus: mode === 'admin' ? 'approved' : 'pending',
+    productStatus:
+      mode === 'admin'
+        ? 'live'
+        : baseStock <= 0
+        ? 'out_of_stock'
+        : 'pending_approval',
+    visibilityStatus: mode === 'admin' ? 'live' : 'pending',
+    ownership: mode === 'admin' ? 'official' : 'seller',
+    createdByRole: mode === 'admin' ? 'admin' : 'seller',
+    badges:
+      mode === 'admin'
+        ? ['ExShopi Official', selectedSubcategory?.name || 'Catalog']
+        : ['Pending Review', selectedSubcategory?.name || 'Catalog'],
+  },
+};
   };
   const validateForm = () => {
     if (!selectedParentSlug) return 'Please select a parent category.';

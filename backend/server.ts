@@ -43,6 +43,41 @@ import {
 } from './auth';
 
 const app: Express = express();
+
+const defaultAllowedOrigins = new Set([
+  'https://exshopi.onrender.com',
+  'https://exshopi-api.onrender.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5179',
+  'http://localhost:5180',
+  'http://localhost:3000',
+]);
+
+// Allow additional origins via environment variable CORS_ORIGIN (comma-separated)
+;(process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .forEach((o) => defaultAllowedOrigins.add(o));
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow non-browser / server-to-server requests
+      if (!origin) return callback(null, true);
+      if (defaultAllowedOrigins.has(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    credentials: true,
+    optionsSuccessStatus: 204,
+  })
+);
+
+app.options('*', cors());
+
 const PORT = Number(process.env.PORT || 3001);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
 const ADMIN_ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || '';
@@ -422,33 +457,6 @@ const decorateCategory = (category: any) => {
 };
 
 // Middleware
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      const configured = (process.env.CORS_ORIGIN || '')
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-
-      const privateLanAllowed =
-        !origin ||
-        /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):(5173|5174|5175|5176|5177|5178|5179)$/.test(
-          origin
-        );
-
-      const localhostAllowed =
-        !origin ||
-        /^https?:\/\/localhost:(5173|5174|5175|5176|5177|5178|5179)$/.test(origin);
-
-      if (localhostAllowed || privateLanAllowed || configured.includes(origin || '')) {
-        return callback(null, true);
-      }
-
-      return callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true,
-  })
-);
 app.use(helmet());
 app.use(cookieParser());
 app.use(
@@ -1375,6 +1383,7 @@ app.get('/api/auth/session', authMiddleware, async (req: Request, res: Response)
     if (!session) return res.status(404).json({ error: 'Session user not found' });
     res.json(session);
   } catch (error) {
+    console.error('[admin/dashboard] error:', error);
     res.status(500).json({ error: String(error) });
   }
 });
@@ -5681,6 +5690,13 @@ if (process.env.NODE_ENV !== 'production') {
     }
   });
 }
+
+// Global error handler (logs errors and returns JSON)
+app.use((err: any, req: Request, res: Response, next: any) => {
+  console.error('Unhandled error in request:', req.method, req.path, err);
+  if (res.headersSent) return next(err);
+  res.status(err?.status || 500).json({ error: err?.message || String(err) || 'Internal Server Error' });
+});
 
 // 404 handler
 app.use((req: Request, res: Response) => {
