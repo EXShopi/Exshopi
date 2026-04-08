@@ -104,26 +104,6 @@ app.use(cors(corsOptions));
 // Handle preflight requests explicitly
 app.options('*', cors(corsOptions));
 
-// Additional middleware to ensure CORS headers are always present
-app.use((req: Request, res: Response, next) => {
-  const origin = String(req.headers.origin || '').trim();
-
-  // Re-verify and set CORS headers on every response (defensive programming)
-  if (origin && defaultAllowedOrigins.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Cache-Control');
-  }
-
-  // Log incoming requests from cross-origin sources
-  if (origin && origin !== 'http://localhost' && req.method === 'OPTIONS') {
-    console.log(`[CORS] 🔄 Preflight request from: ${origin} → ${req.path}`);
-  }
-
-  next();
-});
-
 const PORT = Number(process.env.PORT || 3001);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
 const ADMIN_ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || '';
@@ -5766,15 +5746,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // ==================== GLOBAL ERROR HANDLER ====================
-// Logs errors and returns JSON, ensuring CORS headers are included in error responses
+// Logs errors and returns JSON
 app.use((err: any, req: Request, res: Response, next: any) => {
-  // Ensure CORS headers are set even on error responses
-  const origin = String(req.headers.origin || '');
-  if (origin && defaultAllowedOrigins.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-
   console.error('❌ Unhandled error in request:', req.method, req.path, err?.message || err);
   
   if (res.headersSent) return next(err);
@@ -5793,13 +5766,6 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 
 // 404 handler
 app.use((req: Request, res: Response) => {
-  // Ensure CORS headers are set even on 404 responses
-  const origin = String(req.headers.origin || '');
-  if (origin && defaultAllowedOrigins.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-
   res.status(404).json({
     error: 'Not Found',
     path: req.path,
