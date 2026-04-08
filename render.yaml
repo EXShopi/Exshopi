@@ -6,7 +6,7 @@ services:
     rootDir: .
     buildCommand: npm install --include=dev && npm run prisma:generate
     startCommand: npm run backend
-    healthCheckPath: /health
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: 22

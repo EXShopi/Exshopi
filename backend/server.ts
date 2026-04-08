@@ -557,6 +557,32 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+app.get('/health', (req: Request, res: Response) => {
+  const origin = String(req.headers.origin || 'no-origin');
+  const userAgent = String(req.headers['user-agent'] || 'unknown');
+  
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    backend: {
+      url: process.env.FRONTEND_URL || 'http://localhost:3001',
+      version: '1.0.0',
+    },
+    request: {
+      origin,
+      method: req.method,
+      corsHeaders: {
+        'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin'),
+        'Access-Control-Allow-Credentials': res.getHeader('Access-Control-Allow-Credentials'),
+      },
+      userAgent,
+    },
+    message: 'Backend is running and CORS is configured correctly! 🎉',
+  });
+});
+
 app.get('/api/events/stream', (req: Request, res: Response) => {
   // Keep a very small, public, unauthenticated stream for UI updates (delete/update events)
   res.setHeader('Content-Type', 'text/event-stream');
