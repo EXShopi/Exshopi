@@ -1,10 +1,28 @@
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
 
+function readPersistedAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const legacyToken = localStorage.getItem('token');
+  if (legacyToken) return legacyToken;
+
+  const persistedAuth = localStorage.getItem('auth-storage');
+  if (!persistedAuth) return null;
+
+  try {
+    const parsed = JSON.parse(persistedAuth);
+    const accessToken = parsed?.state?.accessToken;
+    return typeof accessToken === 'string' && accessToken.trim() ? accessToken : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getAuthHeaders() {
   const token =
     useAuthStore.getState().accessToken ||
-    (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+    readPersistedAccessToken();
 
   return {
     'Content-Type': 'application/json',

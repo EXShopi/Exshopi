@@ -36,6 +36,16 @@ interface AuthState {
   resetAuth: () => void;
 }
 
+function syncLegacyAccessToken(accessToken: string | null) {
+  if (typeof window === 'undefined') return;
+
+  if (accessToken) {
+    localStorage.setItem('token', accessToken);
+  } else {
+    localStorage.removeItem('token');
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -46,10 +56,16 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       setUser: (user) => set({ user }),
       setRole: (role) => set({ role }),
-      setAccessToken: (accessToken) => set({ accessToken }),
+      setAccessToken: (accessToken) => {
+        syncLegacyAccessToken(accessToken);
+        set({ accessToken });
+      },
       setSellerApplication: (sellerApplication) => set({ sellerApplication }),
       setLoading: (isLoading) => set({ isLoading }),
-      resetAuth: () => set({ user: null, role: null, accessToken: null, sellerApplication: null, isLoading: false }),
+      resetAuth: () => {
+        syncLegacyAccessToken(null);
+        set({ user: null, role: null, accessToken: null, sellerApplication: null, isLoading: false });
+      },
     }),
     {
       name: 'auth-storage',

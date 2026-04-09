@@ -45,6 +45,9 @@ import {
 const app: Express = express();
 app.set('trust proxy', 1);
 
+const SERVER_ENTRY = 'backend/server.ts';
+const STARTED_AT = new Date().toISOString();
+
 // ==================== CORS CONFIGURATION ====================
 const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '');
 const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
@@ -5735,6 +5738,8 @@ app.get('/', (req: Request, res: Response) => {
     status: 'ok',
     service: 'ExShopi Backend API',
     version: '1.0.0',
+    entry: SERVER_ENTRY,
+    startedAt: STARTED_AT,
     message: 'Backend server is running',
     apiBase: `${req.protocol}://${req.get('host') || 'localhost'}/api`,
     availableEndpoints: {
@@ -5754,6 +5759,8 @@ app.get('/api', (req: Request, res: Response) => {
   res.json({
     service: 'ExShopi API',
     version: '1.0.0',
+    entry: SERVER_ENTRY,
+    startedAt: STARTED_AT,
     endpoints: 30,
     description: 'Premium UAE Marketplace Backend',
     apiBase: `${req.protocol}://${req.get('host') || 'localhost'}/api`,
@@ -5814,6 +5821,12 @@ app.use((req: Request, res: Response) => {
 
 // ==================== START SERVER ====================
 app.listen(PORT, () => {
+  console.log(`[BOOT] ExShopi API entry: ${SERVER_ENTRY}`);
+  console.log(`[BOOT] Node env: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`[BOOT] Port binding: ${PORT}`);
+  console.log(`[BOOT] Started at: ${STARTED_AT}`);
+  console.log(`[BOOT] Frontend URL: ${APP_URL}`);
+  console.log(`[BOOT] CORS origins: ${Array.from(defaultAllowedOrigins).join(', ')}`);
   console.log(`✅ Backend server running on http://localhost:${PORT}`);
   console.log(`📚 API Base: http://localhost:${PORT}/api`);
   console.log(`👤 Frontend on http://localhost:5173`);
