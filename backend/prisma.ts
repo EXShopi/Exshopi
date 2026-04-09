@@ -5,11 +5,76 @@ declare global {
   var __exshopiPrisma: PrismaClient | undefined;
 }
 
+const safeParseConnectionTarget = (value?: string | null) => {
+  if (!value) {
+    return {
+      host: 'missing',
+      port: '',
+      protocol: '',
+      valid: false,
+    };
+  }
+
+  try {
+    const parsed = new URL(value);
+    return {
+      host: parsed.hostname || 'unknown',
+      port: parsed.port || '',
+      protocol: parsed.protocol.replace(/:$/, ''),
+      valid: true,
+    };
+  } catch {
+    return {
+      host: 'invalid',
+      port: '',
+      protocol: '',
+      valid: false,
+    };
+  }
+};
+
+export const getPrismaEnvDiagnostics = () => {
+  const databaseUrl = safeParseConnectionTarget(process.env.DATABASE_URL);
+  const directUrl = safeParseConnectionTarget(process.env.DIRECT_URL);
+  const usePrismaRuntime =
+    process.env.USE_PRISMA_RUNTIME === 'true' ||
+    process.env.EXSHOPI_DB_MODE === 'prisma';
+
+  return {
+    usePrismaRuntime: String(process.env.USE_PRISMA_RUNTIME || ''),
+    exshopiDbMode: String(process.env.EXSHOPI_DB_MODE || ''),
+    connectionMode: usePrismaRuntime ? 'prisma' : 'legacy-json',
+    databaseUrlHost: databaseUrl.port ? `${databaseUrl.host}:${databaseUrl.port}` : databaseUrl.host,
+    directUrlHost: directUrl.port ? `${directUrl.host}:${directUrl.port}` : directUrl.host,
+    databaseUrlProtocol: databaseUrl.protocol || 'unknown',
+    directUrlProtocol: directUrl.protocol || 'unknown',
+    hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+    hasDirectUrl: Boolean(process.env.DIRECT_URL),
+  };
+};
+
 export const prisma =
   global.__exshopiPrisma ||
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
+
+export const probePrismaConnection = async () => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return {
+      ok: true,
+      message: 'Prisma database connection probe succeeded.',
+    };
+  } catch (error: any) {
+    return {
+      ok: false,
+      message: error?.message || 'Unknown Prisma connection failure',
+      code: error?.code || 'unknown',
+      name: error?.name || 'Error',
+    };
+  }
+};
 
 if (process.env.NODE_ENV !== 'production') {
   global.__exshopiPrisma = prisma;

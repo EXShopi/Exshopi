@@ -41,12 +41,19 @@ import {
   verifyRefreshToken,
   tryAuthenticateRequest,
 } from './auth';
+import { getPrismaEnvDiagnostics, probePrismaConnection } from './prisma';
 
 const app: Express = express();
 app.set('trust proxy', 1);
 
 const SERVER_ENTRY = 'backend/server.ts';
 const STARTED_AT = new Date().toISOString();
+const prismaEnvDiagnostics = getPrismaEnvDiagnostics();
+const connectionMode = prismaRuntime.enabled
+  ? 'prisma'
+  : supabaseRuntime.enabled
+    ? 'supabase'
+    : 'json-db';
 
 // ==================== CORS CONFIGURATION ====================
 const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '');
@@ -572,6 +579,12 @@ const buildHealthResponse = (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
+    data: {
+      connectionMode,
+      usePrismaRuntime: prismaEnvDiagnostics.usePrismaRuntime,
+      hasDatabaseUrl: prismaEnvDiagnostics.hasDatabaseUrl,
+      hasDirectUrl: prismaEnvDiagnostics.hasDirectUrl,
+    },
     backend: {
       url: `${req.protocol}://${req.get('host') || 'localhost'}`,
       version: '1.0.0',
@@ -5851,11 +5864,32 @@ app.listen(PORT, () => {
   console.log(`[BOOT] Node env: ${process.env.NODE_ENV || 'development'}`);
   console.log(`[BOOT] Port binding: ${PORT}`);
   console.log(`[BOOT] Started at: ${STARTED_AT}`);
+  console.log(`[BOOT] USE_PRISMA_RUNTIME: ${prismaEnvDiagnostics.usePrismaRuntime || 'unset'}`);
+  console.log(`[BOOT] EXSHOPI_DB_MODE: ${prismaEnvDiagnostics.exshopiDbMode || 'unset'}`);
+  console.log(`[BOOT] Connection mode: ${connectionMode}`);
+  console.log(`[BOOT] DATABASE_URL host: ${prismaEnvDiagnostics.databaseUrlHost}`);
+  console.log(`[BOOT] DIRECT_URL host: ${prismaEnvDiagnostics.directUrlHost}`);
   console.log(`[BOOT] Frontend URL: ${APP_URL}`);
   console.log(`[BOOT] CORS origins: ${Array.from(defaultAllowedOrigins).join(', ')}`);
   console.log(`✅ Backend server running on http://localhost:${PORT}`);
   console.log(`📚 API Base: http://localhost:${PORT}/api`);
   console.log(`👤 Frontend on http://localhost:5173`);
+
+  if (prismaRuntime.enabled) {
+    void probePrismaConnection().then((result) => {
+      if (result.ok) {
+        console.log('[DB] Prisma connection probe succeeded');
+        return;
+      }
+
+      console.error(
+        `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
+      );
+      console.error(
+        '[DB] Verify Render DATABASE_URL uses the Supabase transaction pooler host:6543 and DIRECT_URL uses the direct database host:5432.'
+      );
+    });
+  }
 });
 
 export default app;
