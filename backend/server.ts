@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -43,9 +43,11 @@ import {
 } from './auth';
 
 const app: Express = express();
+app.set('trust proxy', 1);
 
 // ==================== CORS CONFIGURATION ====================
-// Define trusted origins for CORS
+const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '');
+const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 const defaultAllowedOrigins = new Set([
   'https://exshopi.onrender.com',
   'https://exshopi-api.onrender.com',
@@ -58,13 +60,48 @@ const defaultAllowedOrigins = new Set([
   'http://localhost:5179',
   'http://localhost:5180',
   'http://localhost:3000',
-]);
+].map(normalizeOrigin));
+const defaultAllowedMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
+const defaultAllowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-Requested-With',
+  'Accept',
+  'Origin',
+  'Cache-Control',
+];
+
+const isAllowedOrigin = (origin?: string) => {
+  if (!origin) return true;
+  const normalized = normalizeOrigin(origin);
+  return defaultAllowedOrigins.has(normalized) || LOCALHOST_ORIGIN_PATTERN.test(normalized);
+};
+
+const applyCorsHeaders = (req: Request, res: Response) => {
+  const requestOrigin = String(req.headers.origin || '').trim();
+  if (!requestOrigin || !isAllowedOrigin(requestOrigin)) return;
+
+  const requestedHeaders = String(req.headers['access-control-request-headers'] || '')
+    .split(',')
+    .map((header) => header.trim())
+    .filter(Boolean);
+
+  res.setHeader('Access-Control-Allow-Origin', normalizeOrigin(requestOrigin));
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', defaultAllowedMethods.join(','));
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    requestedHeaders.length ? requestedHeaders.join(', ') : defaultAllowedHeaders.join(',')
+  );
+  res.setHeader('Access-Control-Max-Age', '86400');
+};
 
 // Allow additional origins via environment variable CORS_ORIGIN (comma-separated)
 if (process.env.CORS_ORIGIN) {
   process.env.CORS_ORIGIN
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => normalizeOrigin(s))
     .filter(Boolean)
     .forEach((o) => {
       defaultAllowedOrigins.add(o);
@@ -74,35 +111,44 @@ if (process.env.CORS_ORIGIN) {
 
 console.log(`[CORS] Configured allowed origins:`, Array.from(defaultAllowedOrigins));
 
-// Define CORS options config
-const corsOptions = {
+const corsOptions: CorsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests with no origin (like mobile apps or server-to-server requests)
     if (!origin) {
       return callback(null, true);
     }
 
-    // Check if origin is in allowed list
-    if (defaultAllowedOrigins.has(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
 
-    // Log and reject blocked origins
     console.warn(`[CORS] 🚫 Blocked request from origin: ${origin}`);
     callback(new Error('CORS policy: Origin not allowed'));
   },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control'],
+  methods: defaultAllowedMethods,
+  allowedHeaders: defaultAllowedHeaders,
   credentials: true,
-  optionsSuccessStatus: 200, // Some legacy browsers (IE11) require 200 for successful preflight
-  maxAge: 86400, // Cache preflight for 24 hours
+  optionsSuccessStatus: 204,
+  maxAge: 86400,
 };
 
-// IMPORTANT: Apply CORS middleware BEFORE all other middleware and routes
-app.use(cors(corsOptions));
+app.use((req: Request, res: Response, next) => {
+  const requestOrigin = String(req.headers.origin || '').trim();
+  applyCorsHeaders(req, res);
 
-// Handle preflight requests explicitly
-app.options('*', cors(corsOptions));
+  if (req.method === 'OPTIONS') {
+    if (requestOrigin && !isAllowedOrigin(requestOrigin)) {
+      console.warn(`[CORS] 🚫 Blocked preflight request from origin: ${requestOrigin}`);
+      return res.status(403).json({ error: 'CORS policy: Origin not allowed' });
+    }
+
+    console.log(`[CORS] 🔄 Preflight request from: ${requestOrigin || 'no-origin'} → ${req.path}`);
+    return res.status(204).end();
+  }
+
+  return next();
+});
+
+app.use(cors(corsOptions));
 
 const PORT = Number(process.env.PORT || 3001);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
@@ -5777,6 +5823,7 @@ app.use((err: any, req: Request, res: Response, next: any) => {
   console.error('❌ Unhandled error in request:', req.method, req.path, err?.message || err);
   
   if (res.headersSent) return next(err);
+  applyCorsHeaders(req, res);
   
   const statusCode = err?.status || err?.statusCode || 500;
   const errorMessage = err?.message || String(err) || 'Internal Server Error';
@@ -5792,6 +5839,7 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 
 // 404 handler
 app.use((req: Request, res: Response) => {
+  applyCorsHeaders(req, res);
   res.status(404).json({
     error: 'Not Found',
     path: req.path,

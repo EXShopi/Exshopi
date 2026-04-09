@@ -4,8 +4,8 @@ services:
     runtime: node
     plan: starter
     rootDir: .
-    buildCommand: npm install
-    startCommand: npx tsx backend/server.ts
+    buildCommand: npm install && npm run prisma:generate
+    startCommand: npm run render:start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
