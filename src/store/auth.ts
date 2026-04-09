@@ -26,11 +26,13 @@ interface AuthState {
   user: User | null;
   role: 'customer' | 'seller' | 'admin' | 'super_admin' | 'finance_manager' | 'support_agent' | null;
   accessToken: string | null;
+  refreshToken: string | null;
   sellerApplication: SellerApplication | null;
   isLoading: boolean;
   setUser: (user: User | null) => void;
   setRole: (role: 'customer' | 'seller' | 'admin' | 'super_admin' | 'finance_manager' | 'support_agent' | null) => void;
   setAccessToken: (accessToken: string | null) => void;
+  setRefreshToken: (refreshToken: string | null) => void;
   setSellerApplication: (sellerApplication: SellerApplication | null) => void;
   setLoading: (isLoading: boolean) => void;
   resetAuth: () => void;
@@ -46,12 +48,23 @@ function syncLegacyAccessToken(accessToken: string | null) {
   }
 }
 
+function syncLegacyRefreshToken(refreshToken: string | null) {
+  if (typeof window === 'undefined') return;
+
+  if (refreshToken) {
+    localStorage.setItem('refreshToken', refreshToken);
+  } else {
+    localStorage.removeItem('refreshToken');
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
       role: null,
       accessToken: null,
+      refreshToken: null,
       sellerApplication: null,
       isLoading: false,
       setUser: (user) => set({ user }),
@@ -60,11 +73,23 @@ export const useAuthStore = create<AuthState>()(
         syncLegacyAccessToken(accessToken);
         set({ accessToken });
       },
+      setRefreshToken: (refreshToken) => {
+        syncLegacyRefreshToken(refreshToken);
+        set({ refreshToken });
+      },
       setSellerApplication: (sellerApplication) => set({ sellerApplication }),
       setLoading: (isLoading) => set({ isLoading }),
       resetAuth: () => {
         syncLegacyAccessToken(null);
-        set({ user: null, role: null, accessToken: null, sellerApplication: null, isLoading: false });
+        syncLegacyRefreshToken(null);
+        set({
+          user: null,
+          role: null,
+          accessToken: null,
+          refreshToken: null,
+          sellerApplication: null,
+          isLoading: false,
+        });
       },
     }),
     {

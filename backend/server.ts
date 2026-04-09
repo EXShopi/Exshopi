@@ -589,6 +589,24 @@ const buildHealthResponse = (req: Request, res: Response) => {
   };
 };
 
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/api/auth/refresh',
+};
+
+const resolveRefreshToken = (req: Request) => {
+  const bodyToken =
+    typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '';
+  return (
+    req.cookies?.refresh_token ||
+    req.cookies?.refreshToken ||
+    bodyToken ||
+    ''
+  );
+};
+
 // ==================== HEALTH CHECK ENDPOINT ====================
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json(buildHealthResponse(req, res));
@@ -1385,12 +1403,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 
     const refreshToken = signRefreshToken({ id: user.id, role: user.role as any });
-    res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/auth/refresh',
-    });
+    res.cookie('refresh_token', refreshToken, refreshCookieOptions);
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
     const session = await buildSessionPayloadAsync(user.id);
     if (role === 'customer') {
@@ -1415,7 +1429,10 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         ]
       );
     }
-    res.json(session);
+    res.json({
+      ...session,
+      refreshToken,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues.map((issue) => issue.message).join(', ') });
@@ -1455,15 +1472,14 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 
     const refreshToken = signRefreshToken({ id: user.id, role: user.role as any });
-    res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/auth/refresh',
-    });
+    res.cookie('refresh_token', refreshToken, refreshCookieOptions);
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
     const session = await buildSessionPayloadAsync(user.id);
-    res.json(session);
+    res.json({
+      ...session,
+      refreshToken,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues.map((issue) => issue.message).join(', ') });
@@ -1485,18 +1501,27 @@ app.get('/api/auth/session', authMiddleware, async (req: Request, res: Response)
 
 app.post('/api/auth/refresh', async (req: Request, res: Response) => {
   try {
-    const token = req.cookies?.refresh_token;
+    const token = resolveRefreshToken(req);
     if (!token) {
       return res.status(401).json({ error: 'Missing refresh token' });
     }
 
     const payload = verifyRefreshToken(token);
+    const nextRefreshToken = signRefreshToken({
+      id: String(payload.sub),
+      role: String(payload.role) as any,
+    });
+    res.cookie('refresh_token', nextRefreshToken, refreshCookieOptions);
+    res.cookie('refreshToken', nextRefreshToken, refreshCookieOptions);
     const session = await buildSessionPayloadAsync(String(payload.sub));
     if (!session) {
       return res.status(401).json({ error: 'Invalid refresh session' });
     }
 
-    res.json(session);
+    res.json({
+      ...session,
+      refreshToken: nextRefreshToken,
+    });
   } catch (error) {
     res.status(401).json({ error: 'Refresh token expired or invalid' });
   }
@@ -1504,6 +1529,7 @@ app.post('/api/auth/refresh', async (req: Request, res: Response) => {
 
 app.post('/api/auth/logout', (_req: Request, res: Response) => {
   res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+  res.clearCookie('refreshToken', { path: '/api/auth/refresh' });
   res.json({ success: true });
 });
 

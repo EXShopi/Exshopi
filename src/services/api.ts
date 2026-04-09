@@ -19,6 +19,24 @@ function readPersistedAccessToken(): string | null {
   }
 }
 
+function readPersistedRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const legacyToken = localStorage.getItem('refreshToken');
+  if (legacyToken) return legacyToken;
+
+  const persistedAuth = localStorage.getItem('auth-storage');
+  if (!persistedAuth) return null;
+
+  try {
+    const parsed = JSON.parse(persistedAuth);
+    const refreshToken = parsed?.state?.refreshToken;
+    return typeof refreshToken === 'string' && refreshToken.trim() ? refreshToken : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getAuthHeaders() {
   const token =
     useAuthStore.getState().accessToken ||
@@ -135,12 +153,19 @@ async function parseApiResponse(res: Response) {
 }
 
 async function refreshAccessToken() {
+  const refreshToken =
+    useAuthStore.getState().refreshToken ||
+    readPersistedRefreshToken();
+
   const res = await safeFetchApi('/auth/refresh', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
+    body: JSON.stringify(refreshToken ? { refreshToken } : {}),
   });
   const data = await parseApiResponse(res);
   useAuthStore.getState().setAccessToken(data?.accessToken || null);
+  useAuthStore.getState().setRefreshToken(data?.refreshToken || refreshToken || null);
   return data;
 }
 
@@ -177,12 +202,14 @@ async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
     await refreshAccessToken();
   } catch {
     useAuthStore.getState().setAccessToken(null);
+    useAuthStore.getState().setRefreshToken(null);
     throw new Error('Session expired. Please sign in again.');
   }
 
   response = await runRequest();
   if (response.status === 401) {
     useAuthStore.getState().setAccessToken(null);
+    useAuthStore.getState().setRefreshToken(null);
     throw new Error('Session expired. Please sign in again.');
   }
 
@@ -352,15 +379,30 @@ export const userAPI = {
   },
 
   async refresh() {
+    const refreshToken =
+      useAuthStore.getState().refreshToken ||
+      readPersistedRefreshToken();
+
     const res = await safeFetchApi('/auth/refresh', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
     });
     return parseApiResponse(res);
   },
 
   async logout() {
-    const res = await fetchWithAuthRetry('/auth/logout', { method: 'POST' });
+    const refreshToken =
+      useAuthStore.getState().refreshToken ||
+      readPersistedRefreshToken();
+
+    const res = await fetchWithAuthRetry('/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+    });
     return parseApiResponse(res);
   },
 

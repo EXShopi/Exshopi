@@ -19,6 +19,7 @@ interface AuthResponse {
   user: AuthUser;
   role?: string;
   accessToken?: string | null;
+  refreshToken?: string | null;
   seller?: { id?: string } | null;
   sellerApplication?: { id?: string; status?: string } | null;
   isDevMode?: boolean;
@@ -55,6 +56,7 @@ type BackendSessionResponse = {
   } | null;
   role?: string;
   accessToken?: string | null;
+  refreshToken?: string | null;
   seller?: { id?: string } | null;
   sellerApplication?: { id?: string; status?: string } | null;
 };
@@ -145,6 +147,7 @@ function mapBackendSessionToAuthResult(session: BackendSessionResponse): AuthRes
     },
     role: session.role || user.role || 'customer',
     accessToken: session.accessToken || null,
+    refreshToken: session.refreshToken || null,
     seller: session.seller || null,
     sellerApplication: session.sellerApplication || null,
     isDevMode: false,
@@ -221,6 +224,7 @@ function mapAuthResult(params: {
     },
     role,
     accessToken,
+    refreshToken: null,
     seller: null,
     sellerApplication: sellerApplicationStatus ? { status: sellerApplicationStatus } : null,
     isDevMode,
@@ -250,6 +254,7 @@ export class AuthService {
 
         if (backendSession) {
           useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
           return backendSession;
         }
       } catch (backendError: any) {
@@ -291,6 +296,7 @@ export class AuthService {
       const accessToken = data.session?.access_token || null;
 
       useAuthStore.getState().setAccessToken(accessToken);
+      useAuthStore.getState().setRefreshToken(null);
 
       return mapAuthResult({
         authUser: {
@@ -349,6 +355,7 @@ export class AuthService {
 
         if (backendSession) {
           useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
           return backendSession;
         }
       } catch (backendError: any) {
@@ -372,6 +379,7 @@ export class AuthService {
 
       const maybeToken = data.session?.access_token || null;
       useAuthStore.getState().setAccessToken(maybeToken);
+      useAuthStore.getState().setRefreshToken(null);
 
       const baseProfile: PublicUserRow = {
         email: normalizedEmail,
@@ -430,11 +438,20 @@ export class AuthService {
 
   static async restoreSession() {
     try {
+      const storedRefreshToken =
+        useAuthStore.getState().refreshToken ||
+        (typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null);
+
       try {
-        const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
-        if (backendSession) {
-          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-          return backendSession;
+        if (storedRefreshToken) {
+          const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
+          if (backendSession) {
+            useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+            useAuthStore.getState().setRefreshToken(
+              backendSession.refreshToken || storedRefreshToken || null
+            );
+            return backendSession;
+          }
         }
       } catch (backendError: any) {
         console.warn('[AUTH] Backend session restore fallback:', backendError?.message || backendError);
@@ -444,6 +461,7 @@ export class AuthService {
 
       if (error || !data.session?.user) {
         useAuthStore.getState().setAccessToken(null);
+        useAuthStore.getState().setRefreshToken(null);
         return null;
       }
 
@@ -472,6 +490,7 @@ export class AuthService {
       }
 
       useAuthStore.getState().setAccessToken(accessToken);
+      useAuthStore.getState().setRefreshToken(null);
 
       return mapAuthResult({
         authUser: {
@@ -485,6 +504,7 @@ export class AuthService {
     } catch (error) {
       console.error('[AUTH] Restore session error:', error);
       useAuthStore.getState().setAccessToken(null);
+      useAuthStore.getState().setRefreshToken(null);
       return null;
     }
   }
@@ -539,6 +559,7 @@ export class AuthService {
 
     const accessToken = await getCurrentAccessToken();
     useAuthStore.getState().setAccessToken(accessToken);
+    useAuthStore.getState().setRefreshToken(null);
 
     return {
       success: true,
