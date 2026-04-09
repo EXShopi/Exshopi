@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { userAPI } from '../services/api';
 import { useAuthStore } from '../store/auth';
 
 interface AuthUser {
@@ -39,6 +40,25 @@ type PublicUserRow = {
   sellerApplicationStatus?: string | null;
 };
 
+type BackendSessionResponse = {
+  user?: {
+    id?: string;
+    email?: string;
+    name?: string;
+    fullName?: string;
+    displayName?: string;
+    phone?: string | null;
+    country?: string | null;
+    role?: string;
+    status?: string;
+    sellerApplicationStatus?: string | null;
+  } | null;
+  role?: string;
+  accessToken?: string | null;
+  seller?: { id?: string } | null;
+  sellerApplication?: { id?: string; status?: string } | null;
+};
+
 const ADMIN_ROLES = ['admin', 'super_admin', 'finance_manager', 'support_agent'] as const;
 
 function normalizeRole(role?: string | null): string {
@@ -72,6 +92,65 @@ function isPersistedAdminEmail(email?: string | null): boolean {
   return Boolean(saved && current && saved === current);
 }
 
+function isProfilePermissionError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('permission denied') ||
+    normalized.includes('schema public') ||
+    normalized.includes('row-level security') ||
+    normalized.includes('not allowed')
+  );
+}
+
+function buildProfileFromAuthUser(authUser: {
+  id?: string;
+  email?: string | null;
+  user_metadata?: Record<string, any> | null;
+}): PublicUserRow {
+  const metadata = authUser.user_metadata || {};
+
+  return {
+    id: authUser.id,
+    email: authUser.email || '',
+    name: metadata.name || metadata.full_name || metadata.fullName || metadata.displayName || '',
+    full_name: metadata.full_name || metadata.fullName || metadata.name || metadata.displayName || '',
+    display_name: metadata.displayName || metadata.name || metadata.full_name || metadata.fullName || '',
+    phone: metadata.phone || '',
+    country: metadata.country || 'AE',
+    role: metadata.role || null,
+    status: metadata.status || 'active',
+    seller_application_status:
+      metadata.seller_application_status || metadata.sellerApplicationStatus || null,
+  };
+}
+
+function mapBackendSessionToAuthResult(session: BackendSessionResponse): AuthResponse | null {
+  if (!session?.user?.id) return null;
+
+  const user = session.user;
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email || '',
+      displayName: user.displayName || user.name || user.fullName || user.email || 'User',
+      name: user.name || user.fullName || user.displayName || '',
+      fullName: user.fullName || user.name || user.displayName || '',
+      phone: user.phone || '',
+      country: user.country || 'AE',
+      role: session.role || user.role || 'customer',
+      status: user.status || 'active',
+      sellerApplicationStatus:
+        user.sellerApplicationStatus || session.sellerApplication?.status || null,
+    },
+    role: session.role || user.role || 'customer',
+    accessToken: session.accessToken || null,
+    seller: session.seller || null,
+    sellerApplication: session.sellerApplication || null,
+    isDevMode: false,
+  };
+}
+
 async function getProfileByEmail(email: string): Promise<PublicUserRow | null> {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) return null;
@@ -84,7 +163,9 @@ async function getProfileByEmail(email: string): Promise<PublicUserRow | null> {
     .maybeSingle();
 
   if (error) {
-    console.warn('[AUTH] Could not load public.users profile:', error.message);
+    if (!isProfilePermissionError(error.message || '')) {
+      console.warn('[AUTH] Could not load public.users profile:', error.message);
+    }
     return null;
   }
 
@@ -162,6 +243,19 @@ export class AuthService {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
+      try {
+        const backendSession = mapBackendSessionToAuthResult(
+          await userAPI.login(normalizedEmail, password)
+        );
+
+        if (backendSession) {
+          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          return backendSession;
+        }
+      } catch (backendError: any) {
+        console.warn('[AUTH] Backend sign-in fallback:', backendError?.message || backendError);
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password,
@@ -175,7 +269,9 @@ export class AuthService {
       try {
         const { data: p, error: pErr } = await supabase.from('users').select('*').eq('id', data.user.id).maybeSingle();
         if (pErr) {
-          console.warn('[AUTH] Could not load users profile by id:', pErr.message);
+          if (!isProfilePermissionError(pErr.message || '')) {
+            console.warn('[AUTH] Could not load users profile by id:', pErr.message);
+          }
         } else {
           profile = (p as PublicUserRow) || null;
         }
@@ -186,6 +282,10 @@ export class AuthService {
       // Fallback to email lookup (older deployments); may be restricted by RLS
       if (!profile) {
         profile = await getProfileByEmail(normalizedEmail);
+      }
+
+      if (!profile) {
+        profile = buildProfileFromAuthUser(data.user as any);
       }
 
       const accessToken = data.session?.access_token || null;
@@ -234,6 +334,26 @@ export class AuthService {
   ): Promise<AuthResponse> {
     try {
       const normalizedEmail = email.trim().toLowerCase();
+
+      try {
+        const backendSession = mapBackendSessionToAuthResult(
+          await userAPI.register({
+            name: displayName,
+            email: normalizedEmail,
+            password,
+            phone,
+            role: 'customer',
+            country: 'AE',
+          })
+        );
+
+        if (backendSession) {
+          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          return backendSession;
+        }
+      } catch (backendError: any) {
+        console.warn('[AUTH] Backend sign-up fallback:', backendError?.message || backendError);
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email: normalizedEmail,
@@ -295,6 +415,7 @@ export class AuthService {
 
   static async signOut(): Promise<void> {
     try {
+      await userAPI.logout().catch(() => null);
       await supabase.auth.signOut();
     } catch (error) {
       console.error('[AUTH] Sign out error:', error);
@@ -309,6 +430,16 @@ export class AuthService {
 
   static async restoreSession() {
     try {
+      try {
+        const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
+        if (backendSession) {
+          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          return backendSession;
+        }
+      } catch (backendError: any) {
+        console.warn('[AUTH] Backend session restore fallback:', backendError?.message || backendError);
+      }
+
       const { data, error } = await supabase.auth.getSession();
 
       if (error || !data.session?.user) {
@@ -322,7 +453,9 @@ export class AuthService {
       try {
         const { data: p, error: pErr } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
         if (pErr) {
-          console.warn('[AUTH] Could not load users profile by id:', pErr.message);
+          if (!isProfilePermissionError(pErr.message || '')) {
+            console.warn('[AUTH] Could not load users profile by id:', pErr.message);
+          }
         } else {
           profile = (p as PublicUserRow) || null;
         }
@@ -332,6 +465,10 @@ export class AuthService {
 
       if (!profile) {
         profile = await getProfileByEmail(authUser.email || '');
+      }
+
+      if (!profile) {
+        profile = buildProfileFromAuthUser(authUser as any);
       }
 
       useAuthStore.getState().setAccessToken(accessToken);

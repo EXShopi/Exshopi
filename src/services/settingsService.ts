@@ -1,4 +1,4 @@
-import { API_BASE, getAuthHeaders, hasExplicitApiBase } from './api';
+import { getAuthHeaders, safeFetchApi } from './api';
 
 export interface SiteSettings {
   general: {
@@ -251,11 +251,7 @@ export const defaultSettings: SiteSettings = {
 
 export async function getSiteSettings(): Promise<SiteSettings> {
   try {
-    if (!hasExplicitApiBase && !import.meta.env.DEV) {
-      console.warn('No API base configured; skipping settings fetch and using defaults.');
-      return defaultSettings;
-    }
-    const res = await fetch(`${API_BASE}/settings/site`, {
+    const res = await safeFetchApi('/settings/site', {
       credentials: 'include',
     });
     if (!res.ok) throw new Error('Failed to load settings');
@@ -324,11 +320,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
 }
 
 export async function updateSiteSettings(settings: SiteSettings): Promise<void> {
-  if (!hasExplicitApiBase && !import.meta.env.DEV) {
-    throw new Error('No API base configured; cannot update site settings in this runtime.');
-  }
-
-  const res = await fetch(`${API_BASE}/settings/site`, {
+  const res = await safeFetchApi('/settings/site', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

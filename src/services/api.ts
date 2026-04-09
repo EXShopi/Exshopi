@@ -2,7 +2,9 @@ import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
 
 export function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token =
+    useAuthStore.getState().accessToken ||
+    (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
 
   return {
     'Content-Type': 'application/json',
@@ -10,12 +12,15 @@ export function getAuthHeaders() {
   };
 }
 
+const configuredApiBase =
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '';
+
 // API base URL: prefer explicit env var, fallback to production API host
 export const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || 'https://exshopi-api.onrender.com/api';
+  configuredApiBase || 'https://exshopi-api.onrender.com/api';
 
 // Only treat as an explicit API base when an env var was provided
-export const hasExplicitApiBase = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+export const hasExplicitApiBase = Boolean(configuredApiBase);
 
 function isLocalDevRuntime() {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -510,7 +515,7 @@ export const sellerAPI = {
 export const productAPI = {
   async create(data: any) {
     if (shouldPreferBackendProductApi()) {
-      const res = await fetchWithAuthRetry('/products', {
+      const res = await fetchWithAuthRetry('/products/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -581,14 +586,14 @@ export const productAPI = {
         }
       } catch (e) {
         console.warn('Supabase product fetch failed:', e);
-        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        const explicitApi = Boolean(API_BASE);
         if (!explicitApi && !isLocalDevRuntime()) {
           return null;
         }
       }
     }
 
-    const hasApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    const hasApi = Boolean(API_BASE);
     if (!hasApi && !isLocalDevRuntime()) return null;
 
     const res = await safeFetchApi(`/products/${id}`, { signal: options?.signal });
@@ -618,7 +623,7 @@ export const productAPI = {
 
           if (error) throw error;
           const safeData = data || [];
-          const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+          const explicitApi = Boolean(API_BASE);
           if (safeData.length === 0 && explicitApi) {
             const res = await safeFetchApi('/products', { signal: options?.signal });
             return parseApiResponse(res);
@@ -650,14 +655,14 @@ export const productAPI = {
         }
       } catch (e) {
         console.warn('Supabase products fetch failed:', e);
-        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        const explicitApi = Boolean(API_BASE);
         if (!explicitApi && !isLocalDevRuntime()) {
           return [];
         }
       }
     }
 
-    const hasApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    const hasApi = Boolean(API_BASE);
     if (!hasApi && !isLocalDevRuntime()) return [];
 
     const res = await safeFetchApi('/products', { signal: options?.signal });
@@ -718,14 +723,14 @@ export const productAPI = {
         }
       } catch (e) {
         console.warn('Supabase category fetch failed:', e);
-        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        const explicitApi = Boolean(API_BASE);
         if (!explicitApi && !isLocalDevRuntime()) {
           return [];
         }
       }
     }
 
-    const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    const explicitApi = Boolean(API_BASE);
     if (!explicitApi && !isLocalDevRuntime()) {
       return [];
     }
@@ -814,7 +819,7 @@ export const productAPI = {
         }
       } catch (e) {
         console.warn('Supabase slug fetch failed:', e);
-        const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+        const explicitApi = Boolean(API_BASE);
         if (!explicitApi && !isLocalDevRuntime()) {
           return [];
         }
@@ -825,7 +830,7 @@ export const productAPI = {
     if (categorySlug) q.set('categorySlug', categorySlug);
     if (subcategorySlug) q.set('subcategorySlug', subcategorySlug);
 
-    const explicitApi = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE);
+    const explicitApi = Boolean(API_BASE);
     if (!explicitApi && !isLocalDevRuntime()) {
       return [];
     }

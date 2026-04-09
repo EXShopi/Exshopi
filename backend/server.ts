@@ -129,26 +129,11 @@ const corsOptions: CorsOptions = {
   credentials: true,
   optionsSuccessStatus: 204,
   maxAge: 86400,
+  preflightContinue: false,
 };
 
-app.use((req: Request, res: Response, next) => {
-  const requestOrigin = String(req.headers.origin || '').trim();
-  applyCorsHeaders(req, res);
-
-  if (req.method === 'OPTIONS') {
-    if (requestOrigin && !isAllowedOrigin(requestOrigin)) {
-      console.warn(`[CORS] 🚫 Blocked preflight request from origin: ${requestOrigin}`);
-      return res.status(403).json({ error: 'CORS policy: Origin not allowed' });
-    }
-
-    console.log(`[CORS] 🔄 Preflight request from: ${requestOrigin || 'no-origin'} → ${req.path}`);
-    return res.status(204).end();
-  }
-
-  return next();
-});
-
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 const PORT = Number(process.env.PORT || 3001);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
@@ -575,19 +560,17 @@ function sendSseEvent(eventName: string, data: any) {
   }
 }
 
-// ==================== HEALTH CHECK ENDPOINT ====================
-// Simple health check endpoint for monitoring and debugging CORS issues
-app.get('/api/health', (req: Request, res: Response) => {
+const buildHealthResponse = (req: Request, res: Response) => {
   const origin = String(req.headers.origin || 'no-origin');
   const userAgent = String(req.headers['user-agent'] || 'unknown');
-  
-  res.status(200).json({
+
+  return {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
     backend: {
-      url: process.env.FRONTEND_URL || 'http://localhost:3001',
+      url: `${req.protocol}://${req.get('host') || 'localhost'}`,
       version: '1.0.0',
     },
     request: {
@@ -599,34 +582,17 @@ app.get('/api/health', (req: Request, res: Response) => {
       },
       userAgent,
     },
-    message: 'Backend is running and CORS is configured correctly! 🎉',
-  });
+    message: 'Backend is running and CORS is configured correctly.',
+  };
+};
+
+// ==================== HEALTH CHECK ENDPOINT ====================
+app.get('/api/health', (req: Request, res: Response) => {
+  res.status(200).json(buildHealthResponse(req, res));
 });
 
 app.get('/health', (req: Request, res: Response) => {
-  const origin = String(req.headers.origin || 'no-origin');
-  const userAgent = String(req.headers['user-agent'] || 'unknown');
-  
-  res.status(200).json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    backend: {
-      url: process.env.FRONTEND_URL || 'http://localhost:3001',
-      version: '1.0.0',
-    },
-    request: {
-      origin,
-      method: req.method,
-      corsHeaders: {
-        'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin'),
-        'Access-Control-Allow-Credentials': res.getHeader('Access-Control-Allow-Credentials'),
-      },
-      userAgent,
-    },
-    message: 'Backend is running and CORS is configured correctly! 🎉',
-  });
+  res.status(200).json(buildHealthResponse(req, res));
 });
 
 app.get('/api/events/stream', (req: Request, res: Response) => {
@@ -5770,7 +5736,7 @@ app.get('/', (req: Request, res: Response) => {
     service: 'ExShopi Backend API',
     version: '1.0.0',
     message: 'Backend server is running',
-    apiDocs: 'http://localhost:3001/api-docs',
+    apiBase: `${req.protocol}://${req.get('host') || 'localhost'}/api`,
     availableEndpoints: {
       auth: '/api/users/login, /api/users/register',
       products: '/api/products, /api/products/:id, /api/products/create',
@@ -5790,11 +5756,8 @@ app.get('/api', (req: Request, res: Response) => {
     version: '1.0.0',
     endpoints: 30,
     description: 'Premium UAE Marketplace Backend',
+    apiBase: `${req.protocol}://${req.get('host') || 'localhost'}/api`,
   });
-});
-
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'healthy', uptime: process.uptime() });
 });
 
 // Dev-only: quick product update endpoint for local testing (no auth)
