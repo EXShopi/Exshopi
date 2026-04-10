@@ -147,7 +147,7 @@ function mapBackendSessionToAuthResult(session: BackendSessionResponse): AuthRes
     },
     role: session.role || user.role || 'customer',
     accessToken: session.accessToken || null,
-    refreshToken: session.refreshToken || null,
+    refreshToken: null,
     seller: session.seller || null,
     sellerApplication: session.sellerApplication || null,
     isDevMode: false,
@@ -254,7 +254,7 @@ export class AuthService {
 
         if (backendSession) {
           useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
+          useAuthStore.getState().setRefreshToken(null);
           return backendSession;
         }
       } catch (backendError: any) {
@@ -355,7 +355,7 @@ export class AuthService {
 
         if (backendSession) {
           useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
+          useAuthStore.getState().setRefreshToken(null);
           return backendSession;
         }
       } catch (backendError: any) {
@@ -438,23 +438,38 @@ export class AuthService {
 
   static async restoreSession() {
     try {
-      const storedRefreshToken =
-        useAuthStore.getState().refreshToken ||
-        (typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null);
+      const storedAccessToken =
+        useAuthStore.getState().accessToken ||
+        (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
 
       try {
-        if (storedRefreshToken) {
-          const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
+        if (storedAccessToken) {
+          const backendSession = mapBackendSessionToAuthResult(await userAPI.getSession());
           if (backendSession) {
             useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-            useAuthStore.getState().setRefreshToken(
-              backendSession.refreshToken || storedRefreshToken || null
-            );
+            useAuthStore.getState().setRefreshToken(null);
             return backendSession;
           }
         }
-      } catch (backendError: any) {
-        console.warn('[AUTH] Backend session restore fallback:', backendError?.message || backendError);
+      } catch (backendSessionError: any) {
+        console.warn(
+          '[AUTH] Backend session check fallback:',
+          backendSessionError?.message || backendSessionError
+        );
+      }
+
+      try {
+        const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
+        if (backendSession) {
+          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          useAuthStore.getState().setRefreshToken(null);
+          return backendSession;
+        }
+      } catch (backendRefreshError: any) {
+        console.warn(
+          '[AUTH] Backend session restore fallback:',
+          backendRefreshError?.message || backendRefreshError
+        );
       }
 
       const { data, error } = await supabase.auth.getSession();

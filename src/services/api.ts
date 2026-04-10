@@ -19,31 +19,12 @@ function readPersistedAccessToken(): string | null {
   }
 }
 
-function readPersistedRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  const legacyToken = localStorage.getItem('refreshToken');
-  if (legacyToken) return legacyToken;
-
-  const persistedAuth = localStorage.getItem('auth-storage');
-  if (!persistedAuth) return null;
-
-  try {
-    const parsed = JSON.parse(persistedAuth);
-    const refreshToken = parsed?.state?.refreshToken;
-    return typeof refreshToken === 'string' && refreshToken.trim() ? refreshToken : null;
-  } catch {
-    return null;
-  }
-}
-
 export function getAuthHeaders() {
   const token =
     useAuthStore.getState().accessToken ||
     readPersistedAccessToken();
 
   return {
-    'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
@@ -113,33 +94,11 @@ export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
   }
 }
 
-function getStoredRefreshTokenForRequest(): string {
-  if (typeof window === 'undefined') {
-    return useAuthStore.getState().refreshToken || '';
-  }
-
-  return (
-    useAuthStore.getState().refreshToken ||
-    localStorage.getItem('refreshToken') ||
-    readPersistedRefreshToken() ||
-    ''
-  );
-}
-
 function persistAuthTokens(data: { accessToken?: string | null; refreshToken?: string | null }) {
   const accessToken = typeof data?.accessToken === 'string' ? data.accessToken : null;
-  const refreshToken = typeof data?.refreshToken === 'string' ? data.refreshToken : null;
 
   useAuthStore.getState().setAccessToken(accessToken);
-  useAuthStore.getState().setRefreshToken(refreshToken);
-
-  if (typeof window !== 'undefined') {
-    if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken);
-    } else {
-      localStorage.removeItem('refreshToken');
-    }
-  }
+  useAuthStore.getState().setRefreshToken(null);
 }
 
 async function parseApiResponse(res: Response) {
@@ -181,30 +140,46 @@ async function parseApiResponse(res: Response) {
   return data;
 }
 
+let refreshPromise: Promise<any> | null = null;
+
 async function refreshAccessToken() {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
   const refreshUrl = buildApiUrl('/auth/refresh');
   if (!refreshUrl) {
     throw new Error('No API base configured; cannot refresh session.');
   }
 
-  const refreshToken = getStoredRefreshTokenForRequest();
+  const legacyRefreshToken = useAuthStore.getState().refreshToken || '';
 
-  const res = await fetch(refreshUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-    body: JSON.stringify({
-      refreshToken,
-    }),
-  });
-  const data = await parseApiResponse(res);
-  persistAuthTokens({
-    accessToken: data?.accessToken || null,
-    refreshToken: data?.refreshToken || refreshToken || null,
-  });
-  return data;
+  refreshPromise = (async () => {
+    const res = await fetch(refreshUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(
+        legacyRefreshToken
+          ? { refreshToken: legacyRefreshToken }
+          : {}
+      ),
+    });
+    const data = await parseApiResponse(res);
+    persistAuthTokens({
+      accessToken: data?.accessToken || null,
+      refreshToken: null,
+    });
+    return data;
+  })();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
 }
 
 async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
@@ -408,13 +383,13 @@ export const userAPI = {
     const data = await parseApiResponse(res);
     persistAuthTokens({
       accessToken: data?.accessToken || null,
-      refreshToken: data?.refreshToken || null,
+      refreshToken: null,
     });
     return data;
   },
 
   async getSession() {
-    const res = await safeFetchApi('/auth/session', {
+    const res = await fetchWithAuthRetry('/auth/session', {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
@@ -427,34 +402,28 @@ export const userAPI = {
       throw new Error('No API base configured; cannot refresh session.');
     }
 
-    const refreshToken = getStoredRefreshTokenForRequest();
-
     const res = await fetch(refreshUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       credentials: 'include',
-      body: JSON.stringify({
-        refreshToken,
-      }),
+      body: JSON.stringify({}),
     });
     const data = await parseApiResponse(res);
     persistAuthTokens({
       accessToken: data?.accessToken || null,
-      refreshToken: data?.refreshToken || refreshToken || null,
+      refreshToken: null,
     });
     return data;
   },
 
   async logout() {
-    const refreshToken = getStoredRefreshTokenForRequest();
-
     const res = await fetchWithAuthRetry('/auth/logout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({}),
     });
     return parseApiResponse(res);
   },

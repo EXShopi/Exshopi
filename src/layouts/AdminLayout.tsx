@@ -57,7 +57,7 @@ export function AdminLayout() {
 
         if (!mounted) return;
 
-        if (restored?.user && restored.refreshToken && restored.role && ADMIN_ROLES.includes(restored.role)) {
+        if (restored?.user && restored.accessToken && restored.role && ADMIN_ROLES.includes(restored.role)) {
           const persistedAdminEmail =
             typeof window !== 'undefined'
               ? (localStorage.getItem('adminEmail') || '').trim().toLowerCase()
@@ -91,7 +91,7 @@ export function AdminLayout() {
 
           setRole((effectiveRole as any) || null);
           setAccessToken(restored.accessToken || null);
-          setRefreshToken(restored.refreshToken || null);
+          setRefreshToken(null);
           setSellerApplication((restored.sellerApplication as any) || null);
         } else {
           localStorage.removeItem('adminId');

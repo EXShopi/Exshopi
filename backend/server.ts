@@ -45,6 +45,7 @@ import { getPrismaEnvDiagnostics, probePrismaConnection } from './prisma';
 
 const app: Express = express();
 app.set('trust proxy', 1);
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const SERVER_ENTRY = 'backend/server.ts';
 const STARTED_AT = new Date().toISOString();
@@ -81,6 +82,17 @@ const defaultAllowedHeaders = [
   'Cache-Control',
 ];
 
+const addAllowedOrigin = (value?: string | null) => {
+  String(value || '')
+    .split(',')
+    .map((entry) => normalizeOrigin(entry))
+    .filter(Boolean)
+    .forEach((origin) => {
+      defaultAllowedOrigins.add(origin);
+      console.log(`[CORS] Added origin from env: ${origin}`);
+    });
+};
+
 const isAllowedOrigin = (origin?: string) => {
   if (!origin) return true;
   const normalized = normalizeOrigin(origin);
@@ -107,17 +119,9 @@ const applyCorsHeaders = (req: Request, res: Response) => {
   res.setHeader('Access-Control-Max-Age', '86400');
 };
 
-// Allow additional origins via environment variable CORS_ORIGIN (comma-separated)
-if (process.env.CORS_ORIGIN) {
-  process.env.CORS_ORIGIN
-    .split(',')
-    .map((s) => normalizeOrigin(s))
-    .filter(Boolean)
-    .forEach((o) => {
-      defaultAllowedOrigins.add(o);
-      console.log(`[CORS] Added origin from env: ${o}`);
-    });
-}
+addAllowedOrigin(process.env.APP_URL);
+addAllowedOrigin(process.env.FRONTEND_URL);
+addAllowedOrigin(process.env.CORS_ORIGIN);
 
 console.log(`[CORS] Configured allowed origins:`, Array.from(defaultAllowedOrigins));
 
@@ -604,18 +608,33 @@ const buildHealthResponse = (req: Request, res: Response) => {
 
 const refreshCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: IS_PRODUCTION,
+  sameSite: (IS_PRODUCTION ? 'none' : 'lax') as const,
   path: '/api/auth/refresh',
+};
+
+const clearRefreshCookieOptions = {
+  ...refreshCookieOptions,
+  maxAge: 0,
+};
+
+const setRefreshCookies = (res: Response, refreshToken: string) => {
+  res.cookie('refresh_token', refreshToken, refreshCookieOptions);
+  res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+};
+
+const clearRefreshCookies = (res: Response) => {
+  res.clearCookie('refresh_token', clearRefreshCookieOptions);
+  res.clearCookie('refreshToken', clearRefreshCookieOptions);
 };
 
 const resolveRefreshToken = (req: Request) => {
   const bodyToken =
     typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '';
   return (
-    bodyToken ||
     req.cookies?.refresh_token ||
     req.cookies?.refreshToken ||
+    bodyToken ||
     ''
   );
 };
@@ -1420,8 +1439,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 
     const refreshToken = signRefreshToken({ id: user.id, role: user.role as any });
-    res.cookie('refresh_token', refreshToken, refreshCookieOptions);
-    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+    setRefreshCookies(res, refreshToken);
 
     const session = await buildSessionPayloadAsync(user.id);
     if (role === 'customer') {
@@ -1494,8 +1512,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 
     const refreshToken = signRefreshToken({ id: user.id, role: user.role as any });
-    res.cookie('refresh_token', refreshToken, refreshCookieOptions);
-    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+    setRefreshCookies(res, refreshToken);
 
     const session = await buildSessionPayloadAsync(user.id);
     res.json({
@@ -1523,9 +1540,6 @@ app.get('/api/auth/session', authMiddleware, async (req: Request, res: Response)
 
 app.post('/api/auth/refresh', async (req: Request, res: Response) => {
   try {
-    console.log('REFRESH BODY:', req.body);
-    console.log('REFRESH COOKIE:', req.cookies);
-
     const token = resolveRefreshToken(req);
     if (!token) {
       return res.status(401).json({ error: 'Missing refresh token' });
@@ -1536,10 +1550,10 @@ app.post('/api/auth/refresh', async (req: Request, res: Response) => {
       id: String(payload.sub),
       role: String(payload.role) as any,
     });
-    res.cookie('refresh_token', nextRefreshToken, refreshCookieOptions);
-    res.cookie('refreshToken', nextRefreshToken, refreshCookieOptions);
+    setRefreshCookies(res, nextRefreshToken);
     const session = await buildSessionPayloadAsync(String(payload.sub));
     if (!session) {
+      clearRefreshCookies(res);
       return res.status(401).json({ error: 'Invalid refresh session' });
     }
 
@@ -1548,13 +1562,13 @@ app.post('/api/auth/refresh', async (req: Request, res: Response) => {
       refreshToken: nextRefreshToken,
     });
   } catch (error) {
+    clearRefreshCookies(res);
     res.status(401).json({ error: 'Refresh token expired or invalid' });
   }
 });
 
 app.post('/api/auth/logout', (_req: Request, res: Response) => {
-  res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
-  res.clearCookie('refreshToken', { path: '/api/auth/refresh' });
+  clearRefreshCookies(res);
   res.json({ success: true });
 });
 
@@ -5900,6 +5914,9 @@ const startServer = async () => {
     console.log(`[BOOT] Connection mode: ${connectionMode}`);
     console.log(`[BOOT] DATABASE_URL host: ${prismaEnvDiagnostics.databaseUrlHost}`);
     console.log(`[BOOT] DIRECT_URL host: ${prismaEnvDiagnostics.directUrlHost}`);
+    console.log(
+      `[BOOT] DB config summary: mode=${connectionMode} databaseHost=${prismaEnvDiagnostics.databaseUrlHost} directHost=${prismaEnvDiagnostics.directUrlHost}`
+    );
     console.log(`[BOOT] Frontend URL: ${APP_URL}`);
     console.log(`[BOOT] CORS origins: ${Array.from(defaultAllowedOrigins).join(', ')}`);
     console.log(`✅ Backend server running on http://localhost:${PORT}`);
@@ -5916,8 +5933,14 @@ const startServer = async () => {
         console.error(
           `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
         );
+        if (prismaEnvDiagnostics.databaseUrlIssues.length) {
+          console.error(`[DB] DATABASE_URL issues: ${prismaEnvDiagnostics.databaseUrlIssues.join(' | ')}`);
+        }
+        if (prismaEnvDiagnostics.directUrlIssues.length) {
+          console.error(`[DB] DIRECT_URL issues: ${prismaEnvDiagnostics.directUrlIssues.join(' | ')}`);
+        }
         console.error(
-          '[DB] Verify Render DATABASE_URL uses the Supabase transaction pooler host:6543 and DIRECT_URL uses the direct database host:5432.'
+          '[DB] Expected format: DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@<region>.pooler.supabase.com:6543/postgres?pgbouncer=true and DIRECT_URL=postgresql://postgres:<db-password>@db.<project-ref>.supabase.co:5432/postgres'
         );
       });
     }
