@@ -14,7 +14,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { adminProductAPI, categoryAPI, productAPI } from '../../services/api';
+import { authFetch, parseJsonSafe, categoryAPI, productAPI } from '../../services/api';
 import { sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import AuthService from '../../lib/authService';
@@ -358,7 +358,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   const [loading, setLoading] = useState(false);
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saved'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
 
@@ -727,17 +727,17 @@ useEffect(() => {
   setSelectedParentSlug(parentSlug);
   setSelectedCategoryId(parentCategory?.id || null);
   setSelectedSubcategorySlug(null);
-  setError(null);
+  setError('');
 };
 
 const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
   const subSlug = e.target.value || null;
   setSelectedSubcategorySlug(subSlug);
-  setError(null);
+  setError('');
 };
 
   const addImages = async (fileCollection: FileList | File[]) => {
-    setError(null);
+    setError('');
     setUploadProgress(0);
     const encoded = await uploadFilesAsHostedImages(fileCollection, setUploadProgress);
     setImages((prev) => [...prev, ...encoded].slice(0, 8));
@@ -768,7 +768,7 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 
   const handleVariantImageUpload = async (variantId: string, fileList?: FileList | null) => {
     if (!fileList || !fileList.length) return;
-    setError(null);
+    setError('');
     setUploadProgress(0);
 
     try {
@@ -804,7 +804,7 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedParentSlug(null);
     setSelectedSubcategorySlug(null);
     setLastSavedAt(null);
-    setError(null);
+    setError('');
   };
 
   const buildPayload = () => {
@@ -963,68 +963,57 @@ return {
     return null;
   };
 
+  const buildProductPayload = () => buildPayload();
+
   const saveDraft = async () => {
     if (loading) return;
+    setLoading(true);
+    setError('');
 
-    const payload = buildPayload();
-    if (mode === 'admin' && payload) {
+    if (mode === 'admin') {
       try {
-        setLoading(true);
-        setError(null);
-
-       const draftPayload = {
-  ...payload,
-  status: 'draft',
-  specs: {
-    ...(payload.specs || {}),
-    approvalStatus: 'pending',
-    productStatus: 'draft',
-    visibilityStatus: 'hidden',
-  },
-};
-
-        const saved = editingId
-          ? await adminProductAPI.update(editingId, draftPayload)
-          : await adminProductAPI.create(draftPayload);
-
+        const payload = buildProductPayload();
+        localStorage.setItem('admin_product_draft', JSON.stringify(payload));
         setAutosaveState('saved');
         setLastSavedAt(new Date().toISOString());
         window.setTimeout(() => setAutosaveState('idle'), 1400);
-
-        if (!editingId && saved?.id) {
-          navigate(`/admin/products/add?edit=${saved.id}`, { replace: true });
-        }
         return;
-      } catch (draftError) {
-        setError(`Failed to save draft: ${String(draftError)}`);
+      } catch (draftError: any) {
+        setError(draftError?.message || 'Failed to save draft');
       } finally {
         setLoading(false);
       }
     }
 
-    localStorage.setItem(
-      draftStorageKey,
-      JSON.stringify({
-        formData,
-        images,
-        variants,
-        defaultVariantId,
-        currentStep,
-        selectedCategoryId,
-        selectedParentSlug,
-        selectedSubcategorySlug,
-        savedAt: new Date().toISOString(),
-      })
-    );
-    setAutosaveState('saved');
-    setLastSavedAt(new Date().toISOString());
-    window.setTimeout(() => setAutosaveState('idle'), 1400);
+    try {
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          formData,
+          images,
+          variants,
+          defaultVariantId,
+          currentStep,
+          selectedCategoryId,
+          selectedParentSlug,
+          selectedSubcategorySlug,
+          savedAt: new Date().toISOString(),
+        })
+      );
+      setAutosaveState('saved');
+      setLastSavedAt(new Date().toISOString());
+      window.setTimeout(() => setAutosaveState('idle'), 1400);
+    } catch (draftError: any) {
+      setError(draftError?.message || 'Failed to save draft');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
-    setError(null);
+    setError('');
 
     const validationError = validateForm();
     if (validationError) {
@@ -1033,7 +1022,7 @@ return {
       return;
     }
 
-    const payload = buildPayload();
+    const payload = buildProductPayload();
     if (!payload) {
       setError('Unable to build listing payload. Category mapping is missing.');
       return;
@@ -1047,28 +1036,43 @@ return {
     setLoading(true);
 
     try {
-      if (editingId) {
-        if (mode === 'admin') {
-          await adminProductAPI.update(editingId, payload);
-        } else {
-          await productAPI.update(editingId, payload);
+      if (mode === 'admin') {
+        const endpoint = editingId
+          ? `/api/admin/products/${editingId}`
+          : '/api/admin/products';
+
+        const method = editingId ? 'PUT' : 'POST';
+
+        const response = await authFetch(endpoint, {
+          method,
+          body: JSON.stringify(payload),
+        });
+
+        const data = await parseJsonSafe(response);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              'Failed to save product. Please sign in again.'
+          );
         }
+
+        try {
+          localStorage.removeItem('admin_product_draft');
+        } catch {}
+      } else if (editingId) {
+        await productAPI.update(editingId, payload);
       } else {
-        if (mode === 'admin') {
-          await adminProductAPI.create(payload);
-        } else {
-          await productAPI.create(payload);
-        }
+        await productAPI.create(payload);
       }
 
       localStorage.removeItem(draftStorageKey);
       setSuccess(true);
 
-      setTimeout(() => {
-        navigate(mode === 'admin' ? '/admin/products' : '/seller/products');
-      }, 1200);
-    } catch (submitError) {
-      setError(`Failed to save product: ${String(submitError)}`);
+      navigate(mode === 'admin' ? '/admin/products' : '/seller/products');
+    } catch (submitError: any) {
+      setError(submitError?.message || 'Failed to save product');
     } finally {
       setLoading(false);
     }

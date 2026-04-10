@@ -144,6 +144,14 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   }
 }
 
+export async function parseJsonSafe(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 async function parseApiResponse(res: Response) {
   const contentType = res.headers.get('content-type') || '';
   const rawText = await res.text();
@@ -226,10 +234,19 @@ async function refreshAccessToken() {
 }
 
 export async function authFetch(path: string, options: RequestInit = {}) {
-  const resolved = buildApiUrl(path);
+  const normalizedPath =
+    path.startsWith('/api/')
+      ? path.replace(/^\/api/, '')
+      : path === '/api'
+      ? ''
+      : path;
+
+  const resolved = buildApiUrl(normalizedPath);
   if (!resolved) {
     throw new Error('No API base configured; cannot perform authenticated request in this runtime.');
   }
+
+  let token = localStorage.getItem('accessToken');
 
   const makeRequest = async (bearer?: string) =>
     fetchWithTimeout(resolved, {
@@ -242,26 +259,32 @@ export async function authFetch(path: string, options: RequestInit = {}) {
       },
     });
 
-  let token = readPersistedAccessToken() || useAuthStore.getState().accessToken || '';
   let response = await makeRequest(token || undefined);
 
   if (response.status === 401) {
-    let refreshData: any = null;
-
-    try {
-      refreshData = await refreshAccessToken();
-    } catch {
+    const refreshUrl = buildApiUrl('/auth/refresh');
+    if (!refreshUrl) {
       clearPersistedAuthState();
       throw new Error('Session expired. Please sign in again.');
     }
 
+    const refreshRes = await fetchWithTimeout(refreshUrl, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const refreshData = await parseJsonSafe(refreshRes);
     const newToken =
-      typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : null;
+      typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : '';
 
-    if (!newToken) {
+    if (!refreshRes.ok || !newToken) {
       clearPersistedAuthState();
       throw new Error('Session expired. Please sign in again.');
     }
+
+    localStorage.setItem('accessToken', newToken);
+    useAuthStore.getState().setAccessToken(newToken);
 
     token = newToken;
     response = await makeRequest(newToken);
