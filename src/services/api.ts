@@ -101,6 +101,27 @@ function persistAuthTokens(data: { accessToken?: string | null; refreshToken?: s
   useAuthStore.getState().setRefreshToken(null);
 }
 
+const AUTH_REQUEST_TIMEOUT_MS = 30000;
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = AUTH_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: init.signal || controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 async function parseApiResponse(res: Response) {
   const contentType = res.headers.get('content-type') || '';
   const rawText = await res.text();
@@ -155,7 +176,7 @@ async function refreshAccessToken() {
   const legacyRefreshToken = useAuthStore.getState().refreshToken || '';
 
   refreshPromise = (async () => {
-    const res = await fetch(refreshUrl, {
+    const res = await fetchWithTimeout(refreshUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -192,7 +213,7 @@ async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
 
   const runRequest = async () => {
     try {
-      return await fetch(resolved, {
+      return await fetchWithTimeout(resolved, {
         ...init,
         headers: {
           ...(init.headers || {}),
@@ -205,6 +226,14 @@ async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
       throw new Error(`Network error while fetching ${resolved}: ${msg}`);
     }
   };
+
+  if (!getAuthHeaders().Authorization) {
+    try {
+      await refreshAccessToken();
+    } catch {
+      // If cookie-based restore is unavailable, let the protected request run and surface its real response.
+    }
+  }
 
   let response = await runRequest();
   if (response.status !== 401) {
@@ -989,6 +1018,13 @@ export function invalidateProductCaches(_ids?: string | string[]) {
   return;
 }
 
+function normalizeAdminProductList(data: any) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.products)) return data.products;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
 // ==================== PRODUCT APPROVAL (ADMIN) ====================
 export const adminProductAPI = {
   async getAll(params?: { status?: string; sellerId?: string; search?: string }) {
@@ -1004,7 +1040,7 @@ export const adminProductAPI = {
         credentials: 'include',
       }
     );
-    return parseApiResponse(res);
+    return normalizeAdminProductList(await parseApiResponse(res));
   },
 
   async getPendingProducts() {

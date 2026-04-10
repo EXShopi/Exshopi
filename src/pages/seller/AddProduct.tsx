@@ -17,6 +17,7 @@ import {
 import { adminProductAPI, categoryAPI, productAPI } from '../../services/api';
 import { sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
+import AuthService from '../../lib/authService';
 import { fileToDataUrl, uploadImageDataUrl } from '../../lib/uploadClient';
 import { compressImage } from '../../lib/imageUtils';
 
@@ -386,7 +387,19 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
     let mounted = true;
 
     const ensureAccess = async () => {
-      const userId = user?.id || (user as any)?.uid || '';
+      let userId = user?.id || (user as any)?.uid || '';
+      let effectiveRole = role;
+
+      if (!userId) {
+        const restored = await AuthService.restoreSession().catch(() => null);
+        if (!mounted) return;
+
+        if (restored?.user?.id) {
+          userId = restored.user.id;
+          effectiveRole = (restored.role as any) || effectiveRole;
+        }
+      }
+
       if (!userId) {
         navigate(mode === 'admin' ? '/admin/login' : '/seller/login');
         return;
@@ -394,10 +407,10 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
 
       if (mode === 'admin') {
         const isAdminUser =
-          role === 'admin' ||
-          role === 'super_admin' ||
-          role === 'finance_manager' ||
-          role === 'support_agent';
+          effectiveRole === 'admin' ||
+          effectiveRole === 'super_admin' ||
+          effectiveRole === 'finance_manager' ||
+          effectiveRole === 'support_agent';
         if (!isAdminUser) {
           navigate('/admin/login');
         }
