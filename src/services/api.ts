@@ -113,6 +113,35 @@ export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
   }
 }
 
+function getStoredRefreshTokenForRequest(): string {
+  if (typeof window === 'undefined') {
+    return useAuthStore.getState().refreshToken || '';
+  }
+
+  return (
+    useAuthStore.getState().refreshToken ||
+    localStorage.getItem('refreshToken') ||
+    readPersistedRefreshToken() ||
+    ''
+  );
+}
+
+function persistAuthTokens(data: { accessToken?: string | null; refreshToken?: string | null }) {
+  const accessToken = typeof data?.accessToken === 'string' ? data.accessToken : null;
+  const refreshToken = typeof data?.refreshToken === 'string' ? data.refreshToken : null;
+
+  useAuthStore.getState().setAccessToken(accessToken);
+  useAuthStore.getState().setRefreshToken(refreshToken);
+
+  if (typeof window !== 'undefined') {
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    } else {
+      localStorage.removeItem('refreshToken');
+    }
+  }
+}
+
 async function parseApiResponse(res: Response) {
   const contentType = res.headers.get('content-type') || '';
   const rawText = await res.text();
@@ -153,19 +182,28 @@ async function parseApiResponse(res: Response) {
 }
 
 async function refreshAccessToken() {
-  const refreshToken =
-    useAuthStore.getState().refreshToken ||
-    readPersistedRefreshToken();
+  const refreshUrl = buildApiUrl('/auth/refresh');
+  if (!refreshUrl) {
+    throw new Error('No API base configured; cannot refresh session.');
+  }
 
-  const res = await safeFetchApi('/auth/refresh', {
+  const refreshToken = getStoredRefreshTokenForRequest();
+
+  const res = await fetch(refreshUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+    },
     credentials: 'include',
-    body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+    body: JSON.stringify({
+      refreshToken,
+    }),
   });
   const data = await parseApiResponse(res);
-  useAuthStore.getState().setAccessToken(data?.accessToken || null);
-  useAuthStore.getState().setRefreshToken(data?.refreshToken || refreshToken || null);
+  persistAuthTokens({
+    accessToken: data?.accessToken || null,
+    refreshToken: data?.refreshToken || refreshToken || null,
+  });
   return data;
 }
 
@@ -367,7 +405,12 @@ export const userAPI = {
       credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
-    return parseApiResponse(res);
+    const data = await parseApiResponse(res);
+    persistAuthTokens({
+      accessToken: data?.accessToken || null,
+      refreshToken: data?.refreshToken || null,
+    });
+    return data;
   },
 
   async getSession() {
@@ -379,29 +422,39 @@ export const userAPI = {
   },
 
   async refresh() {
-    const refreshToken =
-      useAuthStore.getState().refreshToken ||
-      readPersistedRefreshToken();
+    const refreshUrl = buildApiUrl('/auth/refresh');
+    if (!refreshUrl) {
+      throw new Error('No API base configured; cannot refresh session.');
+    }
 
-    const res = await safeFetchApi('/auth/refresh', {
+    const refreshToken = getStoredRefreshTokenForRequest();
+
+    const res = await fetch(refreshUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       credentials: 'include',
-      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+      body: JSON.stringify({
+        refreshToken,
+      }),
     });
-    return parseApiResponse(res);
+    const data = await parseApiResponse(res);
+    persistAuthTokens({
+      accessToken: data?.accessToken || null,
+      refreshToken: data?.refreshToken || refreshToken || null,
+    });
+    return data;
   },
 
   async logout() {
-    const refreshToken =
-      useAuthStore.getState().refreshToken ||
-      readPersistedRefreshToken();
+    const refreshToken = getStoredRefreshTokenForRequest();
 
     const res = await fetchWithAuthRetry('/auth/logout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+      body: JSON.stringify({ refreshToken }),
     });
     return parseApiResponse(res);
   },

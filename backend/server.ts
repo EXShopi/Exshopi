@@ -613,9 +613,9 @@ const resolveRefreshToken = (req: Request) => {
   const bodyToken =
     typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '';
   return (
+    bodyToken ||
     req.cookies?.refresh_token ||
     req.cookies?.refreshToken ||
-    bodyToken ||
     ''
   );
 };
@@ -1523,6 +1523,9 @@ app.get('/api/auth/session', authMiddleware, async (req: Request, res: Response)
 
 app.post('/api/auth/refresh', async (req: Request, res: Response) => {
   try {
+    console.log('REFRESH BODY:', req.body);
+    console.log('REFRESH COOKIE:', req.cookies);
+
     const token = resolveRefreshToken(req);
     if (!token) {
       return res.status(401).json({ error: 'Missing refresh token' });
