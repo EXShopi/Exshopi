@@ -654,11 +654,12 @@ export const prismaRuntime = {
             name: existing.name || seed.name,
             email: normalizedEmail,
             phone: existing.phone || seed.phone,
-            role: (existing.role || seed.role) as any,
-            status: (existing.status || seed.status) as any,
+            role: seed.role as any,
+            status: seed.status as any,
             country: existing.country || seed.country,
-            emailVerified: existing.emailVerified ?? seed.emailVerified,
-            passwordHash: existing.passwordHash || passwordHash,
+            emailVerified: seed.emailVerified,
+            // Keep the built-in core admin credentials recoverable in production.
+            passwordHash,
           },
         });
       }
