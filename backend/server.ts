@@ -606,10 +606,15 @@ const buildHealthResponse = (req: Request, res: Response) => {
   };
 };
 
-const refreshCookieOptions = {
+const refreshCookieOptions: {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'none' | 'lax';
+  path: string;
+} = {
   httpOnly: true,
   secure: IS_PRODUCTION,
-  sameSite: (IS_PRODUCTION ? 'none' : 'lax') as const,
+  sameSite: IS_PRODUCTION ? 'none' : 'lax',
   path: '/api/auth/refresh',
 };
 
