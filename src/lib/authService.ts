@@ -243,9 +243,14 @@ function isHtmlErrorMessage(message: string): boolean {
 }
 
 export class AuthService {
-  static async signIn(email: string, password: string): Promise<AuthResponse> {
+  static async signIn(
+    email: string,
+    password: string,
+    options?: { requireBackendSession?: boolean }
+  ): Promise<AuthResponse> {
     try {
       const normalizedEmail = email.trim().toLowerCase();
+      const requireBackendSession = Boolean(options?.requireBackendSession);
 
       try {
         const backendSession = mapBackendSessionToAuthResult(
@@ -258,7 +263,14 @@ export class AuthService {
           return backendSession;
         }
       } catch (backendError: any) {
+        if (requireBackendSession) {
+          throw backendError;
+        }
         console.warn('[AUTH] Backend sign-in fallback:', backendError?.message || backendError);
+      }
+
+      if (requireBackendSession) {
+        throw new Error('Admin sign-in requires a live backend session. Please try again.');
       }
 
       const { data, error } = await supabase.auth.signInWithPassword({

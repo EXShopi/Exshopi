@@ -24,7 +24,9 @@ export function AdminLogin() {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      const result = await AuthService.signIn(normalizedEmail, password);
+      const result = await AuthService.signIn(normalizedEmail, password, {
+        requireBackendSession: true,
+      });
       const backendAdminRoles = ['admin', 'super_admin', 'finance_manager', 'support_agent'];
 
       if (!result.accessToken || !backendAdminRoles.includes(String(result.role || '').toLowerCase())) {
