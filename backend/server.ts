@@ -1550,14 +1550,35 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/auth/session', authMiddleware, async (req: Request, res: Response) => {
+app.get('/api/auth/session', async (req: Request, res: Response) => {
   try {
-    const session = await buildSessionPayloadAsync(req.user!.id);
+    const accessUser = tryAuthenticateRequest(req);
+    let userId = accessUser?.id || '';
+    let userRole = accessUser?.role || null;
+
+    if (!userId) {
+      const token = resolveRefreshToken(req);
+      if (!token) {
+        return res.status(401).json({ error: 'Missing refresh token' });
+      }
+
+      const payload = verifyRefreshToken(token);
+      userId = String(payload.sub);
+      userRole = String(payload.role) as any;
+
+      const nextRefreshToken = signRefreshToken({
+        id: userId,
+        role: userRole as any,
+      });
+      setRefreshCookies(res, nextRefreshToken);
+    }
+
+    const session = await buildSessionPayloadAsync(userId);
     if (!session) return res.status(404).json({ error: 'Session user not found' });
     res.json(session);
   } catch (error) {
-    console.error('[admin/dashboard] error:', error);
-    res.status(500).json({ error: String(error) });
+    clearRefreshCookies(res);
+    res.status(401).json({ error: 'Invalid or expired session' });
   }
 });
 

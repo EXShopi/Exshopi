@@ -94,16 +94,6 @@ function isPersistedAdminEmail(email?: string | null): boolean {
   return Boolean(saved && current && saved === current);
 }
 
-function isProfilePermissionError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes('permission denied') ||
-    normalized.includes('schema public') ||
-    normalized.includes('row-level security') ||
-    normalized.includes('not allowed')
-  );
-}
-
 function buildProfileFromAuthUser(authUser: {
   id?: string;
   email?: string | null;
@@ -152,27 +142,6 @@ function mapBackendSessionToAuthResult(session: BackendSessionResponse): AuthRes
     sellerApplication: session.sellerApplication || null,
     isDevMode: false,
   };
-}
-
-async function getProfileByEmail(email: string): Promise<PublicUserRow | null> {
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!normalizedEmail) return null;
-
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .ilike('email', normalizedEmail)
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    if (!isProfilePermissionError(error.message || '')) {
-      console.warn('[AUTH] Could not load public.users profile:', error.message);
-    }
-    return null;
-  }
-
-  return (data as PublicUserRow | null) || null;
 }
 
 async function getCurrentAccessToken(): Promise<string | null> {
@@ -281,29 +250,7 @@ export class AuthService {
       if (error) throw new Error(error.message || 'Invalid credentials');
       if (!data.user?.id) throw new Error('Invalid login response. Missing user data.');
 
-      let profile: PublicUserRow | null = null;
-      // Prefer fetching profile by user id (works with RLS policies that allow users to read their own row)
-      try {
-        const { data: p, error: pErr } = await supabase.from('users').select('*').eq('id', data.user.id).maybeSingle();
-        if (pErr) {
-          if (!isProfilePermissionError(pErr.message || '')) {
-            console.warn('[AUTH] Could not load users profile by id:', pErr.message);
-          }
-        } else {
-          profile = (p as PublicUserRow) || null;
-        }
-      } catch (e) {
-        console.warn('[AUTH] Error fetching profile by id:', e);
-      }
-
-      // Fallback to email lookup (older deployments); may be restricted by RLS
-      if (!profile) {
-        profile = await getProfileByEmail(normalizedEmail);
-      }
-
-      if (!profile) {
-        profile = buildProfileFromAuthUser(data.user as any);
-      }
+      const profile = buildProfileFromAuthUser(data.user as any);
 
       const accessToken = data.session?.access_token || null;
 
@@ -494,27 +441,7 @@ export class AuthService {
 
       const authUser = data.session.user;
       const accessToken = data.session.access_token || null;
-      let profile: PublicUserRow | null = null;
-      try {
-        const { data: p, error: pErr } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
-        if (pErr) {
-          if (!isProfilePermissionError(pErr.message || '')) {
-            console.warn('[AUTH] Could not load users profile by id:', pErr.message);
-          }
-        } else {
-          profile = (p as PublicUserRow) || null;
-        }
-      } catch (e) {
-        console.warn('[AUTH] Error fetching profile by id:', e);
-      }
-
-      if (!profile) {
-        profile = await getProfileByEmail(authUser.email || '');
-      }
-
-      if (!profile) {
-        profile = buildProfileFromAuthUser(authUser as any);
-      }
+      const profile = buildProfileFromAuthUser(authUser as any);
 
       useAuthStore.getState().setAccessToken(accessToken);
       useAuthStore.getState().setRefreshToken(null);
