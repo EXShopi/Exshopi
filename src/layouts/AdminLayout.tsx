@@ -39,7 +39,7 @@ export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { user, role, setUser, setRole, setAccessToken, setSellerApplication, resetAuth } =
+  const { user, role, setUser, setRole, setAccessToken, setRefreshToken, setSellerApplication, resetAuth } =
     useAuthStore();
 
   const runtimeRole = String(role || '').toLowerCase();
@@ -57,7 +57,7 @@ export function AdminLayout() {
 
         if (!mounted) return;
 
-        if (restored?.user) {
+        if (restored?.user && restored.refreshToken && restored.role && ADMIN_ROLES.includes(restored.role)) {
           const persistedAdminEmail =
             typeof window !== 'undefined'
               ? (localStorage.getItem('adminEmail') || '').trim().toLowerCase()
@@ -91,7 +91,12 @@ export function AdminLayout() {
 
           setRole((effectiveRole as any) || null);
           setAccessToken(restored.accessToken || null);
+          setRefreshToken(restored.refreshToken || null);
           setSellerApplication((restored.sellerApplication as any) || null);
+        } else {
+          localStorage.removeItem('adminId');
+          localStorage.removeItem('adminEmail');
+          resetAuth();
         }
       } catch (error) {
         console.error('[ADMIN_LAYOUT] Failed to restore session:', error);
@@ -105,7 +110,7 @@ export function AdminLayout() {
     return () => {
       mounted = false;
     };
-  }, [setAccessToken, setRole, setSellerApplication, setUser]);
+  }, [resetAuth, setAccessToken, setRefreshToken, setRole, setSellerApplication, setUser]);
 
   useEffect(() => {
     if (!bootChecked) return;

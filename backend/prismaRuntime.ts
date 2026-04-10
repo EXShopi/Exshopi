@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import bcrypt from 'bcryptjs';
 import type {
   Banner,
   Category,
@@ -38,6 +39,44 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'store';
+
+const normalizeEmail = (value: string) => String(value || '').trim().toLowerCase();
+
+const CORE_SUPER_ADMIN = {
+  id: 'user_super_admin',
+  name: 'ExShopi Admin',
+  email: 'ahsansajid295@gmail.com',
+  password: 'T7&fD!2q',
+  phone: '+971522608063',
+  role: 'super_admin' as UserRole,
+  status: 'active' as UserStatus,
+  country: 'AE',
+  emailVerified: true,
+};
+
+const CORE_OFFICIAL_USER = {
+  id: 'user_exshopi_official',
+  name: 'ExShopi Official',
+  email: 'official@exshopi.com',
+  password: 'exshopi-official',
+  phone: '+971522608063',
+  role: 'admin' as UserRole,
+  status: 'active' as UserStatus,
+  country: 'AE',
+  emailVerified: true,
+};
+
+const CORE_OFFICIAL_STORE_ID = 'exshopi_official';
+
+async function hashSeedPasswordIfNeeded(password: string) {
+  const value = String(password || '');
+  if (!value) return value;
+
+  const looksHashed =
+    value.startsWith('$2a$') || value.startsWith('$2b$') || value.startsWith('$2y$');
+
+  return looksHashed ? value : bcrypt.hash(value, 12);
+}
 
 function mapUser(user: any): User {
   return {
@@ -402,7 +441,14 @@ export const prismaRuntime = {
 
   async getUserByEmail(email: string) {
     if (!enabled) return null;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizeEmail(email),
+          mode: 'insensitive',
+        },
+      },
+    });
     return user ? mapUser(user) : null;
   },
 
@@ -568,7 +614,7 @@ export const prismaRuntime = {
     const user = await prisma.user.create({
       data: {
         name: input.name,
-        email: input.email,
+        email: normalizeEmail(input.email),
         passwordHash: input.password,
         phone: input.phone,
         role: input.role as any,
@@ -579,6 +625,116 @@ export const prismaRuntime = {
       },
     });
     return mapUser(user);
+  },
+
+  async ensureCoreAuthRecords() {
+    if (!enabled) return;
+
+    const ensureUser = async (seed: typeof CORE_SUPER_ADMIN | typeof CORE_OFFICIAL_USER) => {
+      const normalizedEmail = normalizeEmail(seed.email);
+      const passwordHash = await hashSeedPasswordIfNeeded(seed.password);
+      const existing = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { id: seed.id },
+            {
+              email: {
+                equals: normalizedEmail,
+                mode: 'insensitive',
+              },
+            },
+          ],
+        },
+      });
+
+      if (existing) {
+        return prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            name: existing.name || seed.name,
+            email: normalizedEmail,
+            phone: existing.phone || seed.phone,
+            role: (existing.role || seed.role) as any,
+            status: (existing.status || seed.status) as any,
+            country: existing.country || seed.country,
+            emailVerified: existing.emailVerified ?? seed.emailVerified,
+            passwordHash: existing.passwordHash || passwordHash,
+          },
+        });
+      }
+
+      return prisma.user.create({
+        data: {
+          id: seed.id,
+          name: seed.name,
+          email: normalizedEmail,
+          passwordHash,
+          phone: seed.phone,
+          role: seed.role as any,
+          status: seed.status as any,
+          country: seed.country,
+          emailVerified: seed.emailVerified,
+        },
+      });
+    };
+
+    const officialUser = await ensureUser(CORE_OFFICIAL_USER);
+    await ensureUser(CORE_SUPER_ADMIN);
+
+    const existingOfficialStore = await prisma.store.findFirst({
+      where: {
+        OR: [
+          { id: CORE_OFFICIAL_STORE_ID },
+          { sellerUserId: officialUser.id },
+          { slug: 'exshopi-official' },
+        ],
+      },
+    });
+
+    if (existingOfficialStore) {
+      await prisma.store.update({
+        where: { id: existingOfficialStore.id },
+        data: {
+          sellerUserId: officialUser.id,
+          storeName: existingOfficialStore.storeName || 'ExShopi Official',
+          slug: existingOfficialStore.slug || 'exshopi-official',
+          description:
+            existingOfficialStore.description ||
+            'Official ExShopi storefront for first-party marketplace products and curated launches.',
+          supportEmail: existingOfficialStore.supportEmail || 'exshopi@exshopi.com',
+          supportPhone: existingOfficialStore.supportPhone || CORE_OFFICIAL_USER.phone,
+          email: existingOfficialStore.email || 'exshopi@exshopi.com',
+          city: existingOfficialStore.city || 'Dubai',
+          country: existingOfficialStore.country || 'UAE',
+          warehouseAddress: existingOfficialStore.warehouseAddress || '',
+          verified: existingOfficialStore.verified ?? true,
+          isOfficial: true,
+          status: existingOfficialStore.status || 'active',
+        },
+      });
+      return;
+    }
+
+    await prisma.store.create({
+      data: {
+        id: CORE_OFFICIAL_STORE_ID,
+        sellerUserId: officialUser.id,
+        storeName: 'ExShopi Official',
+        slug: 'exshopi-official',
+        description: 'Official ExShopi storefront for first-party marketplace products and curated launches.',
+        logoUrl: '/logo.png',
+        bannerUrl: '/hero/hero-1.png',
+        supportEmail: 'exshopi@exshopi.com',
+        supportPhone: CORE_OFFICIAL_USER.phone,
+        email: 'exshopi@exshopi.com',
+        city: 'Dubai',
+        country: 'UAE',
+        warehouseAddress: '',
+        verified: true,
+        isOfficial: true,
+        status: 'active',
+      },
+    });
   },
 
   async updateUser(id: string, data: Partial<User>) {
