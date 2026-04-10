@@ -6,7 +6,7 @@ import { useAuthStore } from '../../store/auth';
 
 export function AdminLogin() {
   const navigate = useNavigate();
-  const { setRole, setUser, setAccessToken, setSellerApplication } = useAuthStore();
+  const { setRole, setUser, setAccessToken, setRefreshToken, setSellerApplication, resetAuth } = useAuthStore();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,6 +25,14 @@ export function AdminLogin() {
       const normalizedEmail = email.trim().toLowerCase();
 
       const result = await AuthService.signIn(normalizedEmail, password);
+      const backendAdminRoles = ['admin', 'super_admin', 'finance_manager', 'support_agent'];
+
+      if (!result.accessToken || !backendAdminRoles.includes(String(result.role || '').toLowerCase())) {
+        localStorage.removeItem('adminId');
+        localStorage.removeItem('adminEmail');
+        resetAuth();
+        throw new Error('Admin sign-in did not create a valid backend session. Please sign in again.');
+      }
 
       const forcedRole =
         result.role === 'admin' ||
@@ -50,6 +58,7 @@ export function AdminLogin() {
       setUser(userData);
       setRole(forcedRole as any);
       setAccessToken((result as any).accessToken || null);
+      setRefreshToken(null);
       setSellerApplication((result as any).sellerApplication || null);
 
       localStorage.setItem('adminId', result.user.id);

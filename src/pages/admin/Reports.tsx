@@ -51,12 +51,15 @@ export function AdminReports() {
         <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-black text-slate-900">Top Search Keywords</h3>
           <div className="mt-5 space-y-3">
-            {(analytics?.topSearches || []).map((entry: any) => (
-              <div key={entry.query} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="font-bold text-slate-900">{entry.query}</span>
-                <span className="text-sm font-black text-violet-600">{entry.count}</span>
-              </div>
-            ))}
+            {(analytics?.topSearches || []).map((entry: any, index: number) => {
+              const queryLabel = String(entry?.query || 'Unknown search');
+              return (
+                <div key={`${queryLabel}-${index}`} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <span className="font-bold text-slate-900">{queryLabel}</span>
+                  <span className="text-sm font-black text-violet-600">{Number(entry?.count || 0)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 

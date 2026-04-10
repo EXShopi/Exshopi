@@ -937,13 +937,15 @@ export class Database {
   }
 
   getUserByEmail(email: string): User | undefined {
-    return this.data.users.find(u => u.email === email);
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    return this.data.users.find(u => String(u.email || '').trim().toLowerCase() === normalizedEmail);
   }
 
   createUser(user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): User {
     const newUser: User = {
       ...user,
       id: `user_${Date.now()}`,
+      email: String(user.email || '').trim().toLowerCase(),
       role: (user.role || 'customer') as UserRole,
       status: user.status || 'active',
       emailVerified: user.emailVerified ?? true,

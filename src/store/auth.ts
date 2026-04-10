@@ -51,11 +51,7 @@ function syncLegacyAccessToken(accessToken: string | null) {
 function syncLegacyRefreshToken(refreshToken: string | null) {
   if (typeof window === 'undefined') return;
 
-  if (refreshToken) {
-    localStorage.setItem('refreshToken', refreshToken);
-  } else {
-    localStorage.removeItem('refreshToken');
-  }
+  localStorage.removeItem('refreshToken');
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -95,6 +91,18 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        user: state.user,
+        role: state.role,
+        accessToken: state.accessToken,
+        refreshToken: null,
+        sellerApplication: state.sellerApplication,
+        isLoading: state.isLoading,
+      }),
+      onRehydrateStorage: () => () => {
+        syncLegacyRefreshToken(null);
+        useAuthStore.getState().setRefreshToken(null);
+      },
     }
   )
 );

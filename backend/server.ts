@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
-import cors, { CorsOptions } from 'cors';
+import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -45,6 +45,7 @@ import { getPrismaEnvDiagnostics, probePrismaConnection } from './prisma';
 
 const app: Express = express();
 app.set('trust proxy', 1);
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const SERVER_ENTRY = 'backend/server.ts';
 const STARTED_AT = new Date().toISOString();
@@ -81,6 +82,17 @@ const defaultAllowedHeaders = [
   'Cache-Control',
 ];
 
+const addAllowedOrigin = (value?: string | null) => {
+  String(value || '')
+    .split(',')
+    .map((entry) => normalizeOrigin(entry))
+    .filter(Boolean)
+    .forEach((origin) => {
+      defaultAllowedOrigins.add(origin);
+      console.log(`[CORS] Added origin from env: ${origin}`);
+    });
+};
+
 const isAllowedOrigin = (origin?: string) => {
   if (!origin) return true;
   const normalized = normalizeOrigin(origin);
@@ -107,21 +119,13 @@ const applyCorsHeaders = (req: Request, res: Response) => {
   res.setHeader('Access-Control-Max-Age', '86400');
 };
 
-// Allow additional origins via environment variable CORS_ORIGIN (comma-separated)
-if (process.env.CORS_ORIGIN) {
-  process.env.CORS_ORIGIN
-    .split(',')
-    .map((s) => normalizeOrigin(s))
-    .filter(Boolean)
-    .forEach((o) => {
-      defaultAllowedOrigins.add(o);
-      console.log(`[CORS] Added origin from env: ${o}`);
-    });
-}
+addAllowedOrigin(process.env.APP_URL);
+addAllowedOrigin(process.env.FRONTEND_URL);
+addAllowedOrigin(process.env.CORS_ORIGIN);
 
 console.log(`[CORS] Configured allowed origins:`, Array.from(defaultAllowedOrigins));
 
-const corsOptions: CorsOptions = {
+const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) {
       return callback(null, true);
@@ -604,9 +608,24 @@ const buildHealthResponse = (req: Request, res: Response) => {
 
 const refreshCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: IS_PRODUCTION,
+  sameSite: (IS_PRODUCTION ? 'none' : 'lax') as const,
   path: '/api/auth/refresh',
+};
+
+const clearRefreshCookieOptions = {
+  ...refreshCookieOptions,
+  maxAge: 0,
+};
+
+const setRefreshCookies = (res: Response, refreshToken: string) => {
+  res.cookie('refresh_token', refreshToken, refreshCookieOptions);
+  res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+};
+
+const clearRefreshCookies = (res: Response) => {
+  res.clearCookie('refresh_token', clearRefreshCookieOptions);
+  res.clearCookie('refreshToken', clearRefreshCookieOptions);
 };
 
 const resolveRefreshToken = (req: Request) => {
@@ -1292,7 +1311,11 @@ const buildSessionPayloadAsync = async (userId: string) => {
     return buildSessionPayload(userId);
   }
 
-  const user = await prismaRuntime.getUser(userId);
+  let user = await prismaRuntime.getUser(userId);
+  if (!user) {
+    await prismaRuntime.ensureCoreAuthRecords();
+    user = await prismaRuntime.getUser(userId);
+  }
   if (!user) return null;
   const seller = await prismaRuntime.getSellerByUserId(userId);
   const sellerApplication = await prismaRuntime.getSellerApplicationByUserId(userId);
@@ -1371,7 +1394,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
     const schema = z.object({
       name: z.string().min(2),
-      email: z.string().email(),
+      email: z.string().email().transform((value) => value.trim().toLowerCase()),
       password: z.string().min(8),
       phone: z.string().optional().default(''),
       role: z.enum(['customer', 'seller']).optional().default('customer'),
@@ -1416,8 +1439,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 
     const refreshToken = signRefreshToken({ id: user.id, role: user.role as any });
-    res.cookie('refresh_token', refreshToken, refreshCookieOptions);
-    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+    setRefreshCookies(res, refreshToken);
 
     const session = await buildSessionPayloadAsync(user.id);
     if (role === 'customer') {
@@ -1457,13 +1479,18 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
     const schema = z.object({
-      email: z.string().email(),
+      email: z.string().email().transform((value) => value.trim().toLowerCase()),
       password: z.string().min(1),
     });
     const { email, password } = await schema.parseAsync(req.body);
-    const user = prismaRuntime.enabled
+    let user = prismaRuntime.enabled
       ? await prismaRuntime.getUserByEmail(email)
       : db.getUserByEmail(email);
+
+    if (!user && prismaRuntime.enabled) {
+      await prismaRuntime.ensureCoreAuthRecords();
+      user = await prismaRuntime.getUserByEmail(email);
+    }
 
     if (!user || !(await verifyPassword(password, user.password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -1485,8 +1512,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 
     const refreshToken = signRefreshToken({ id: user.id, role: user.role as any });
-    res.cookie('refresh_token', refreshToken, refreshCookieOptions);
-    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+    setRefreshCookies(res, refreshToken);
 
     const session = await buildSessionPayloadAsync(user.id);
     res.json({
@@ -1524,10 +1550,10 @@ app.post('/api/auth/refresh', async (req: Request, res: Response) => {
       id: String(payload.sub),
       role: String(payload.role) as any,
     });
-    res.cookie('refresh_token', nextRefreshToken, refreshCookieOptions);
-    res.cookie('refreshToken', nextRefreshToken, refreshCookieOptions);
+    setRefreshCookies(res, nextRefreshToken);
     const session = await buildSessionPayloadAsync(String(payload.sub));
     if (!session) {
+      clearRefreshCookies(res);
       return res.status(401).json({ error: 'Invalid refresh session' });
     }
 
@@ -1536,13 +1562,13 @@ app.post('/api/auth/refresh', async (req: Request, res: Response) => {
       refreshToken: nextRefreshToken,
     });
   } catch (error) {
+    clearRefreshCookies(res);
     res.status(401).json({ error: 'Refresh token expired or invalid' });
   }
 });
 
 app.post('/api/auth/logout', (_req: Request, res: Response) => {
-  res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
-  res.clearCookie('refreshToken', { path: '/api/auth/refresh' });
+  clearRefreshCookies(res);
   res.json({ success: true });
 });
 
@@ -1967,6 +1993,10 @@ app.post('/api/seller-applications', authMiddleware, async (req: Request, res: R
           status: 'pending_review',
         });
 
+    if (!application) {
+      return res.status(500).json({ error: 'Failed to create seller application' });
+    }
+
     const isResubmission = Boolean(existingApplication);
     pushNotification({
       audience: 'admin',
@@ -2233,7 +2263,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         stock: Number(payload.stock) || 0,
         rating: 0,
         reviews: 0,
-        sku: payload.sku,
+        sku: payload.sku || '',
         specs: payload.specs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -2266,7 +2296,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         stock: Number(payload.stock) || 0,
         rating: 0,
         reviews: 0,
-        sku: payload.sku,
+        sku: payload.sku || '',
         specs: payload.specs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -2301,7 +2331,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         stock: Number(payload.stock) || 0,
         rating: 0,
         reviews: 0,
-        sku: payload.sku,
+        sku: payload.sku || '',
         specs: payload.specs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -2376,7 +2406,8 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
         : supabaseRuntime.enabled
         ? await supabaseRuntime.getAllProducts()
         : db.getAllProducts();
-      product = all.find((p) => String((p as any).id) === param || String((p as any).slug || (p as any).id) === param) || null;
+      product =
+        all.find((p: any) => String(p.id) === param || String(p.slug || p.id) === param) || null;
     }
 
     if (!product) {
@@ -4534,6 +4565,10 @@ app.post('/api/payout-requests', authMiddleware, async (req: Request, res: Respo
       bankDetails: seller ? { bankName: seller.bankName, accountHolder: seller.accountHolder, accountNumber: seller.bankAccount } : {},
     });
 
+    if (!pr) {
+      return res.status(500).json({ error: 'Failed to create payout request' });
+    }
+
     pushNotification({
       audience: 'admin',
       title: 'New payout request submitted',
@@ -5859,37 +5894,59 @@ app.use((req: Request, res: Response) => {
 });
 
 // ==================== START SERVER ====================
-app.listen(PORT, () => {
-  console.log(`[BOOT] ExShopi API entry: ${SERVER_ENTRY}`);
-  console.log(`[BOOT] Node env: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`[BOOT] Port binding: ${PORT}`);
-  console.log(`[BOOT] Started at: ${STARTED_AT}`);
-  console.log(`[BOOT] USE_PRISMA_RUNTIME: ${prismaEnvDiagnostics.usePrismaRuntime || 'unset'}`);
-  console.log(`[BOOT] EXSHOPI_DB_MODE: ${prismaEnvDiagnostics.exshopiDbMode || 'unset'}`);
-  console.log(`[BOOT] Connection mode: ${connectionMode}`);
-  console.log(`[BOOT] DATABASE_URL host: ${prismaEnvDiagnostics.databaseUrlHost}`);
-  console.log(`[BOOT] DIRECT_URL host: ${prismaEnvDiagnostics.directUrlHost}`);
-  console.log(`[BOOT] Frontend URL: ${APP_URL}`);
-  console.log(`[BOOT] CORS origins: ${Array.from(defaultAllowedOrigins).join(', ')}`);
-  console.log(`✅ Backend server running on http://localhost:${PORT}`);
-  console.log(`📚 API Base: http://localhost:${PORT}/api`);
-  console.log(`👤 Frontend on http://localhost:5173`);
-
+const startServer = async () => {
   if (prismaRuntime.enabled) {
-    void probePrismaConnection().then((result) => {
-      if (result.ok) {
-        console.log('[DB] Prisma connection probe succeeded');
-        return;
-      }
-
-      console.error(
-        `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
-      );
-      console.error(
-        '[DB] Verify Render DATABASE_URL uses the Supabase transaction pooler host:6543 and DIRECT_URL uses the direct database host:5432.'
-      );
-    });
+    try {
+      await prismaRuntime.ensureCoreAuthRecords();
+      console.log('[BOOT] Prisma core auth records verified');
+    } catch (error) {
+      console.error('[BOOT] Failed to verify Prisma core auth records:', error);
+    }
   }
-});
+
+  app.listen(PORT, () => {
+    console.log(`[BOOT] ExShopi API entry: ${SERVER_ENTRY}`);
+    console.log(`[BOOT] Node env: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`[BOOT] Port binding: ${PORT}`);
+    console.log(`[BOOT] Started at: ${STARTED_AT}`);
+    console.log(`[BOOT] USE_PRISMA_RUNTIME: ${prismaEnvDiagnostics.usePrismaRuntime || 'unset'}`);
+    console.log(`[BOOT] EXSHOPI_DB_MODE: ${prismaEnvDiagnostics.exshopiDbMode || 'unset'}`);
+    console.log(`[BOOT] Connection mode: ${connectionMode}`);
+    console.log(`[BOOT] DATABASE_URL host: ${prismaEnvDiagnostics.databaseUrlHost}`);
+    console.log(`[BOOT] DIRECT_URL host: ${prismaEnvDiagnostics.directUrlHost}`);
+    console.log(
+      `[BOOT] DB config summary: mode=${connectionMode} databaseHost=${prismaEnvDiagnostics.databaseUrlHost} directHost=${prismaEnvDiagnostics.directUrlHost}`
+    );
+    console.log(`[BOOT] Frontend URL: ${APP_URL}`);
+    console.log(`[BOOT] CORS origins: ${Array.from(defaultAllowedOrigins).join(', ')}`);
+    console.log(`✅ Backend server running on http://localhost:${PORT}`);
+    console.log(`📚 API Base: http://localhost:${PORT}/api`);
+    console.log(`👤 Frontend on http://localhost:5173`);
+
+    if (prismaRuntime.enabled) {
+      void probePrismaConnection().then((result) => {
+        if (result.ok) {
+          console.log('[DB] Prisma connection probe succeeded');
+          return;
+        }
+
+        console.error(
+          `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
+        );
+        if (prismaEnvDiagnostics.databaseUrlIssues.length) {
+          console.error(`[DB] DATABASE_URL issues: ${prismaEnvDiagnostics.databaseUrlIssues.join(' | ')}`);
+        }
+        if (prismaEnvDiagnostics.directUrlIssues.length) {
+          console.error(`[DB] DIRECT_URL issues: ${prismaEnvDiagnostics.directUrlIssues.join(' | ')}`);
+        }
+        console.error(
+          '[DB] Expected format: DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@<region>.pooler.supabase.com:6543/postgres?pgbouncer=true and DIRECT_URL=postgresql://postgres:<db-password>@db.<project-ref>.supabase.co:5432/postgres'
+        );
+      });
+    }
+  });
+};
+
+void startServer();
 
 export default app;
