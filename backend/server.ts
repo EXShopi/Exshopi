@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
-import cors, { CorsOptions } from 'cors';
+import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -121,7 +121,7 @@ if (process.env.CORS_ORIGIN) {
 
 console.log(`[CORS] Configured allowed origins:`, Array.from(defaultAllowedOrigins));
 
-const corsOptions: CorsOptions = {
+const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) {
       return callback(null, true);
@@ -1979,6 +1979,10 @@ app.post('/api/seller-applications', authMiddleware, async (req: Request, res: R
           status: 'pending_review',
         });
 
+    if (!application) {
+      return res.status(500).json({ error: 'Failed to create seller application' });
+    }
+
     const isResubmission = Boolean(existingApplication);
     pushNotification({
       audience: 'admin',
@@ -2245,7 +2249,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         stock: Number(payload.stock) || 0,
         rating: 0,
         reviews: 0,
-        sku: payload.sku,
+        sku: payload.sku || '',
         specs: payload.specs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -2278,7 +2282,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         stock: Number(payload.stock) || 0,
         rating: 0,
         reviews: 0,
-        sku: payload.sku,
+        sku: payload.sku || '',
         specs: payload.specs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -2313,7 +2317,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         stock: Number(payload.stock) || 0,
         rating: 0,
         reviews: 0,
-        sku: payload.sku,
+        sku: payload.sku || '',
         specs: payload.specs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -2388,7 +2392,8 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
         : supabaseRuntime.enabled
         ? await supabaseRuntime.getAllProducts()
         : db.getAllProducts();
-      product = all.find((p) => String((p as any).id) === param || String((p as any).slug || (p as any).id) === param) || null;
+      product =
+        all.find((p: any) => String(p.id) === param || String(p.slug || p.id) === param) || null;
     }
 
     if (!product) {
@@ -4545,6 +4550,10 @@ app.post('/api/payout-requests', authMiddleware, async (req: Request, res: Respo
       notes: notes || '',
       bankDetails: seller ? { bankName: seller.bankName, accountHolder: seller.accountHolder, accountNumber: seller.bankAccount } : {},
     });
+
+    if (!pr) {
+      return res.status(500).json({ error: 'Failed to create payout request' });
+    }
 
     pushNotification({
       audience: 'admin',
