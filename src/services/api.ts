@@ -4,6 +4,9 @@ import { supabase } from '../supabaseClient';
 function readPersistedAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
 
+  const explicitAccessToken = localStorage.getItem('accessToken');
+  if (explicitAccessToken) return explicitAccessToken;
+
   const legacyToken = localStorage.getItem('token');
   if (legacyToken) return legacyToken;
 
@@ -97,7 +100,26 @@ export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
 function persistAuthTokens(data: { accessToken?: string | null; refreshToken?: string | null }) {
   const accessToken = typeof data?.accessToken === 'string' ? data.accessToken : null;
 
+  if (typeof window !== 'undefined') {
+    if (accessToken) {
+      localStorage.setItem('accessToken', accessToken);
+    } else {
+      localStorage.removeItem('accessToken');
+    }
+  }
+
   useAuthStore.getState().setAccessToken(accessToken);
+  useAuthStore.getState().setRefreshToken(null);
+}
+
+function clearPersistedAuthState() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+  }
+
+  useAuthStore.getState().setAccessToken(null);
   useAuthStore.getState().setRefreshToken(null);
 }
 
@@ -203,59 +225,63 @@ async function refreshAccessToken() {
   }
 }
 
-async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
-  const resolved = buildApiUrl(input);
+export async function authFetch(path: string, options: RequestInit = {}) {
+  const resolved = buildApiUrl(path);
   if (!resolved) {
-    throw new Error(
-      'No API base configured; cannot perform authenticated request in this runtime.'
-    );
+    throw new Error('No API base configured; cannot perform authenticated request in this runtime.');
   }
 
-  const runRequest = async () => {
-    try {
-      return await fetchWithTimeout(resolved, {
-        ...init,
-        headers: {
-          ...(init.headers || {}),
-          ...getAuthHeaders(),
-        },
-        credentials: init.credentials || 'include',
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`Network error while fetching ${resolved}: ${msg}`);
-    }
-  };
+  const makeRequest = async (bearer?: string) =>
+    fetchWithTimeout(resolved, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+      },
+    });
 
-  if (!getAuthHeaders().Authorization) {
-    try {
-      await refreshAccessToken();
-    } catch {
-      // If cookie-based restore is unavailable, let the protected request run and surface its real response.
-    }
-  }
+  let token = readPersistedAccessToken() || useAuthStore.getState().accessToken || '';
+  let response = await makeRequest(token || undefined);
 
-  let response = await runRequest();
-  if (response.status !== 401) {
-    return response;
-  }
-
-  try {
-    await refreshAccessToken();
-  } catch {
-    useAuthStore.getState().setAccessToken(null);
-    useAuthStore.getState().setRefreshToken(null);
-    throw new Error('Session expired. Please sign in again.');
-  }
-
-  response = await runRequest();
   if (response.status === 401) {
-    useAuthStore.getState().setAccessToken(null);
-    useAuthStore.getState().setRefreshToken(null);
-    throw new Error('Session expired. Please sign in again.');
+    let refreshData: any = null;
+
+    try {
+      refreshData = await refreshAccessToken();
+    } catch {
+      clearPersistedAuthState();
+      throw new Error('Session expired. Please sign in again.');
+    }
+
+    const newToken =
+      typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : null;
+
+    if (!newToken) {
+      clearPersistedAuthState();
+      throw new Error('Session expired. Please sign in again.');
+    }
+
+    token = newToken;
+    response = await makeRequest(newToken);
+
+    if (response.status === 401) {
+      clearPersistedAuthState();
+      throw new Error('Session expired. Please sign in again.');
+    }
   }
 
   return response;
+}
+
+async function fetchWithAuthRetry(input: string, init: RequestInit = {}) {
+  try {
+    return await authFetch(input, init);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(msg);
+  }
 }
 
 async function uploadWithRetry(

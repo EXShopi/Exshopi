@@ -623,9 +623,9 @@ const refreshCookieOptions: {
   path: string;
 } = {
   httpOnly: true,
-  secure: IS_PRODUCTION,
-  sameSite: IS_PRODUCTION ? 'none' : 'lax',
-  path: '/api/auth/refresh',
+  secure: true,
+  sameSite: 'none',
+  path: '/',
 };
 
 const clearRefreshCookieOptions = {

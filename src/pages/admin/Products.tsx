@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { adminProductAPI, invalidateProductCaches } from '../../services/api';
+import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
 import { AlertCircle, CheckCircle2, Copy, Eye, Package2, Pencil, Search, Store, Trash2, XCircle } from 'lucide-react';
 import { formatAED } from '../../lib/currency';
 import { useNavigate } from 'react-router-dom';
@@ -36,9 +36,9 @@ export function AdminProducts() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkReason, setBulkReason] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // load initially via the reload helper so params (search/status) are respected
     reloadProducts();
   }, []);
 
@@ -55,28 +55,37 @@ export function AdminProducts() {
     };
   }, [loading]);
 
-  const reloadProducts = () => {
-    setLoading(true);
-    (async () => {
-      try {
-        const params: any = {};
-        if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
-        if (search && String(search).trim()) params.search = String(search).trim();
-        const data = await adminProductAPI.getAll(params);
-        setProducts(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load admin products:', err);
-        setProducts([]);
-      } finally {
-        setLoading(false);
+  const reloadProducts = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const params = new URLSearchParams();
+      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+      if (search && String(search).trim()) params.set('search', String(search).trim());
+
+      const res = await authFetch(`/admin/products${params.toString() ? `?${params.toString()}` : ''}`);
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to load admin products');
       }
-    })();
+
+      const items = Array.isArray(data) ? data : data?.products || data?.items || [];
+      setProducts(Array.isArray(items) ? items : []);
+    } catch (err: any) {
+      console.error('Failed to load admin products:', err);
+      setError(err?.message || 'Failed to load admin products');
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Debounce search input to avoid excessive API calls
   useEffect(() => {
     const t = window.setTimeout(() => {
-      reloadProducts();
+      void reloadProducts();
     }, 450);
     return () => window.clearTimeout(t);
   }, [search, statusFilter]);
@@ -207,6 +216,11 @@ export function AdminProducts() {
       </div>
 
       <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+        {error ? (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+            {error}
+          </div>
+        ) : null}
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap gap-3">
             {[

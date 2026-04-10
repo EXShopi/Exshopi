@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { adminProductAPI } from '../../services/api';
+import { authFetch } from '../../services/api';
 import { AlertCircle, Boxes, CheckCircle2, Loader2, Search, TrendingDown, Warehouse } from 'lucide-react';
 
 const statusTone: Record<string, string> = {
@@ -12,26 +12,63 @@ const statusTone: Record<string, string> = {
 };
 
 export function AdminInventory() {
-  const [products, setProducts] = useState<any[]>([]);
+  const [inventoryRows, setInventoryRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
+  const [error, setError] = useState('');
+  const [stats, setStats] = useState({
+    totalSkus: 0,
+    totalUnits: 0,
+    lowStock: 0,
+    outOfStock: 0,
+  });
 
   useEffect(() => {
-    adminProductAPI
-      .getAll()
-      .then((data) => setProducts(Array.isArray(data) ? data : []))
-      .catch((error) => {
-        console.error('Failed to load inventory:', error);
-        setProducts([]);
-      })
-      .finally(() => setLoading(false));
+    const loadInventory = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const res = await authFetch('/admin/products');
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          throw new Error(data?.message || data?.error || 'Failed to load inventory');
+        }
+
+        const adminProducts = Array.isArray(data) ? data : data?.products || data?.items || [];
+        const rows = adminProducts.map(mapProductToInventoryRow);
+
+        setInventoryRows(rows);
+        setStats({
+          totalSkus: rows.length,
+          totalUnits: rows.reduce((sum: number, row: any) => sum + (row.stock ?? 0), 0),
+          lowStock: rows.filter((row: any) => (row.stock ?? 0) > 0 && (row.stock ?? 0) <= 5).length,
+          outOfStock: rows.filter((row: any) => (row.stock ?? 0) <= 0).length,
+        });
+      } catch (err: any) {
+        console.error('Failed to load inventory:', err);
+        setError(err?.message || 'Failed to load inventory');
+        setInventoryRows([]);
+        setStats({
+          totalSkus: 0,
+          totalUnits: 0,
+          lowStock: 0,
+          outOfStock: 0,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadInventory();
   }, []);
 
   const lowStockThreshold = 5;
 
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
+    return inventoryRows.filter((product) => {
       const matchesSearch = [product.title, product.sku, product.brand, product.category]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(search.toLowerCase()));
@@ -42,16 +79,7 @@ export function AdminInventory() {
         (filter === 'out' && stock === 0);
       return matchesSearch && matchesFilter;
     });
-  }, [filter, products, search]);
-
-  const summary = useMemo(() => {
-    return {
-      totalSkus: products.length,
-      totalUnits: products.reduce((sum, product) => sum + Number(product.stock || 0), 0),
-      lowStock: products.filter((product) => Number(product.stock || 0) > 0 && Number(product.stock || 0) <= lowStockThreshold).length,
-      outOfStock: products.filter((product) => Number(product.stock || 0) === 0).length,
-    };
-  }, [products]);
+  }, [filter, inventoryRows, search]);
 
   return (
     <div className="space-y-6">
@@ -75,10 +103,10 @@ export function AdminInventory() {
 
       <div className="grid gap-4 md:grid-cols-4">
         {[
-          ['Total SKUs', summary.totalSkus, Boxes, 'text-blue-600 bg-blue-50'],
-          ['Total Units', summary.totalUnits, Warehouse, 'text-violet-600 bg-violet-50'],
-          ['Low Stock', summary.lowStock, TrendingDown, 'text-amber-600 bg-amber-50'],
-          ['Out of Stock', summary.outOfStock, AlertCircle, 'text-rose-600 bg-rose-50'],
+          ['Total SKUs', stats.totalSkus, Boxes, 'text-blue-600 bg-blue-50'],
+          ['Total Units', stats.totalUnits, Warehouse, 'text-violet-600 bg-violet-50'],
+          ['Low Stock', stats.lowStock, TrendingDown, 'text-amber-600 bg-amber-50'],
+          ['Out of Stock', stats.outOfStock, AlertCircle, 'text-rose-600 bg-rose-50'],
         ].map(([label, value, Icon, tone]: any) => (
           <div key={label} className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
             <div className={`mb-4 inline-flex rounded-2xl p-3 ${tone}`}>
@@ -111,6 +139,11 @@ export function AdminInventory() {
       </div>
 
       <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+        {error ? (
+          <div className="border-b border-rose-200 bg-rose-50 px-6 py-4 text-sm font-bold text-rose-700">
+            {error}
+          </div>
+        ) : null}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -199,6 +232,13 @@ export function AdminInventory() {
       </div>
     </div>
   );
+}
+
+function mapProductToInventoryRow(product: any) {
+  return {
+    ...product,
+    stock: Number(product?.stock || 0),
+  };
 }
 
 function safeDate(value: any) {

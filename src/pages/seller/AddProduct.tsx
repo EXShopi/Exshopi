@@ -964,6 +964,8 @@ return {
   };
 
   const saveDraft = async () => {
+    if (loading) return;
+
     const payload = buildPayload();
     if (mode === 'admin' && payload) {
       try {
@@ -1021,6 +1023,7 @@ return {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
 
     const validationError = validateForm();
