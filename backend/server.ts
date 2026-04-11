@@ -60,7 +60,10 @@ const connectionMode = prismaRuntime.enabled
 const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '');
 const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 const defaultAllowedOrigins = new Set([
+  'https://exshopi-frontend.onrender.com',
   'https://exshopi.onrender.com',
+  'https://exshopi.com',
+  'https://www.exshopi.com',
   'https://exshopi-api.onrender.com',
   'http://localhost:5173',
   'http://localhost:5174',
