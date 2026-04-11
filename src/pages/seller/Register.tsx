@@ -15,9 +15,9 @@ import { sellerApplicationAPI } from '../../services/api';
 import { UAE_EMIRATES } from '../../lib/marketplaceTemplates';
 import { uploadDocumentFile, uploadImageFile } from '../../lib/uploadClient';
 import {
+  canAttemptFirebasePhoneVerification,
   getReadableFirebasePhoneVerificationError,
   getFirebasePhoneVerificationRuntimeInfo,
-  isFirebasePhoneVerificationEnabled,
   isValidUaePhone,
   normalizeUaePhone,
   resetFirebasePhoneVerification,
@@ -273,7 +273,7 @@ export function SellerRegister() {
         setError('Enter a valid UAE mobile number before requesting verification.');
         return;
       }
-      if (!isFirebasePhoneVerificationEnabled()) {
+      if (!canAttemptFirebasePhoneVerification()) {
         setError('Firebase phone verification is not configured yet for this environment.');
         return;
       }

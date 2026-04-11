@@ -192,7 +192,7 @@ function prepareRecaptchaContainer(containerId: string) {
 }
 
 async function ensureRecaptcha(containerId: string, forceRefresh = false) {
-  if (!firebaseAuth || !isFirebasePhoneVerificationEnabled()) {
+  if (!canAttemptFirebasePhoneVerification() || !firebaseAuth) {
     throw new Error('Firebase phone verification is not configured.');
   }
 

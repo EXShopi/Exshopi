@@ -1,12 +1,6 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
-console.log('FIREBASE ENV CHECK', {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.slice(0, 8),
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-});
-
 const LIVE_PHONE_VERIFICATION_HOSTS = new Set([
   'exshopi-frontend.onrender.com',
   'exshopi.onrender.com',
@@ -24,11 +18,6 @@ function getRuntimeHostname() {
 
 function logFirebaseRuntime(label: string, details: Record<string, unknown>) {
   console.info(`[firebase] ${label}`, details);
-}
-
-function getRuntimeOrigin() {
-  if (typeof window === 'undefined') return '';
-  return (window.location.origin || '').trim();
 }
 
 export function isLivePhoneVerificationRuntime() {
@@ -59,17 +48,35 @@ export function isLocalPhoneVerificationRuntime() {
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD0xyGjeDV9GWShRhE7L6I_gKwWnmLBTFo",
-  authDomain: "exshopi-ec718.firebaseapp.com",
-  projectId: "exshopi-ec718",
-  storageBucket: "exshopi-ec718.firebasestorage.app",
-  messagingSenderId: "58717827364",
-  appId: "1:58717827364:web:cd5de7f1b00c94f7943b1",
+  apiKey: String(import.meta.env.VITE_FIREBASE_API_KEY || '').trim(),
+  authDomain: String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '').trim(),
+  projectId: String(import.meta.env.VITE_FIREBASE_PROJECT_ID || '').trim(),
+  storageBucket: String(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '').trim(),
+  messagingSenderId: String(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '').trim(),
+  appId: String(import.meta.env.VITE_FIREBASE_APP_ID || '').trim(),
+  measurementId: String(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '').trim(),
 };
 
-const hasFirebaseConfig = true;
+const hasFirebasePhoneConfig =
+  !!firebaseConfig.apiKey &&
+  !!firebaseConfig.authDomain &&
+  !!firebaseConfig.projectId &&
+  !!firebaseConfig.appId &&
+  !!firebaseConfig.messagingSenderId;
 
 if (typeof window !== 'undefined') {
+  console.log('FIREBASE ENV CHECK', {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+    hostname: window.location.hostname,
+    origin: window.location.origin,
+  });
+
   logFirebaseRuntime('config', {
     hostname: getRuntimeHostname(),
     origin: window.location.origin,
@@ -77,12 +84,13 @@ if (typeof window !== 'undefined') {
     projectId: firebaseConfig.projectId,
     authDomain: firebaseConfig.authDomain,
     appId: firebaseConfig.appId,
+    messagingSenderId: firebaseConfig.messagingSenderId,
     liveRuntime: isLivePhoneVerificationRuntime(),
-    hasFirebaseConfig,
+    hasFirebasePhoneConfig,
   });
 }
 
-export const firebaseApp = hasFirebaseConfig
+export const firebaseApp = hasFirebasePhoneConfig
   ? getApps().length
     ? getApp()
     : initializeApp(firebaseConfig)
@@ -97,18 +105,22 @@ if (firebaseAuth) {
 }
 
 export function isFirebasePhoneVerificationEnabled() {
-  return Boolean(
-    import.meta.env.VITE_FIREBASE_API_KEY &&
-    import.meta.env.VITE_FIREBASE_PROJECT_ID
-  );
+  return hasFirebasePhoneConfig;
 }
 
 export function isFirebasePhoneVerificationSupportedOnCurrentOrigin() {
-  return true;
+  const hostname = getRuntimeHostname();
+  const isKnownHost = LIVE_PHONE_VERIFICATION_HOSTS.has(hostname);
+  const isLocalhost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1';
+
+  return Boolean(hostname) && (isLocalhost || (window.location.protocol === 'https:' && isKnownHost));
 }
 
 export function canAttemptFirebasePhoneVerification() {
-  return Boolean(firebaseAuth);
+  return Boolean(firebaseAuth) && hasFirebasePhoneConfig && isFirebasePhoneVerificationSupportedOnCurrentOrigin();
 }
 
 export function isDevelopmentPhoneOtpFallbackAllowed() {
