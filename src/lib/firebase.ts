@@ -59,13 +59,12 @@ export function isLocalPhoneVerificationRuntime() {
 }
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "AIzaSyD0xyGjeDV9GWShRhE7L6I_gKwWnmLBTFo",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "exshopi-ec718.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "exshopi-ec718",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "exshopi-ec718.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "58717827364",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:58717827364:web:cd5de7f1b00c94f7943b1",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID ?? "",
+  apiKey: "AIzaSyD0xyGjeDV9GWShRhE7L6I_gKwWnmLBTFo",
+  authDomain: "exshopi-ec718.firebaseapp.com",
+  projectId: "exshopi-ec718",
+  storageBucket: "exshopi-ec718.firebasestorage.app",
+  messagingSenderId: "58717827364",
+  appId: "1:58717827364:web:cd5de7f1b00c94f7943b1",
 };
 
 const hasFirebaseConfig = true;
