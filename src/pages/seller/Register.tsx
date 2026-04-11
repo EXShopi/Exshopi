@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -95,6 +95,12 @@ export function SellerRegister() {
   const { setUser, setRole, setSellerApplication } = useAuthStore();
 
   const [formData, setFormData] = useState<SellerRegisterForm>(initialFormData);
+
+  useEffect(() => {
+    return () => {
+      resetFirebasePhoneVerification();
+    };
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -232,6 +238,9 @@ export function SellerRegister() {
     }
     if (raw.includes('auth/too-many-requests')) {
       return 'Too many verification attempts. Please wait and try again.';
+    }
+    if (raw.includes('auth/captcha-check-failed') || raw.includes('auth/internal-error') || raw.includes('recaptchaparams')) {
+      return 'Phone verification could not start securely. Refresh the page and try again.';
     }
     if (raw.includes('auth/invalid-verification-code')) {
       return 'The verification code is incorrect. Please try again.';
@@ -621,7 +630,7 @@ export function SellerRegister() {
                         <input
                           type="text"
                           value={phoneCode}
-                          onChange={(event) => setPhoneCode(event.target.value)}
+                          onChange={(event) => setPhoneCode(event.target.value.replace(/\D/g, ''))}
                           inputMode="numeric"
                           maxLength={6}
                           placeholder="Enter 6-digit code"
@@ -631,7 +640,7 @@ export function SellerRegister() {
                       <button
                         type="button"
                         onClick={handleVerifyPhoneCode}
-                        disabled={verifyingPhoneCode || !phoneVerificationSession}
+                        disabled={verifyingPhoneCode || !phoneVerificationSession || phoneCode.trim().length < 6}
                         className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
                       >
                         {verifyingPhoneCode ? 'Verifying...' : 'Verify Code'}

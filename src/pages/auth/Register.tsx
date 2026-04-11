@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -57,6 +57,12 @@ const Register = () => {
   const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
   const useDevOtpFallback = !useFirebaseOtp && import.meta.env.DEV;
 
+  useEffect(() => {
+    return () => {
+      resetFirebasePhoneVerification();
+    };
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (e.target.name === 'phone') {
       setOtp('');
@@ -77,6 +83,9 @@ const Register = () => {
     if (raw.includes('auth/too-many-requests')) return 'Too many verification attempts. Please wait and try again.';
     if (raw.includes('auth/unauthorized-domain')) return 'This domain is not authorized for Firebase phone verification yet.';
     if (raw.includes('auth/captcha-check-failed')) return 'Phone verification could not start. Refresh the page and try again.';
+    if (raw.includes('auth/internal-error') || raw.includes('recaptchaparams') || raw.includes('app verification')) {
+      return 'Phone verification could not start securely. Refresh the page and try again.';
+    }
     if (raw.includes('auth/network-request-failed')) return 'Network error while contacting phone verification. Please try again.';
     if (raw.includes('requires localhost or https')) return 'Phone verification requires localhost or a secure HTTPS domain.';
     if (raw.includes('not configured')) return 'Firebase phone verification is not configured for this environment.';
@@ -518,14 +527,15 @@ const Register = () => {
                     </div>
                   ) : null}
 
-                  <div id="register-firebase-recaptcha" />
                 </motion.div>
               )}
             </AnimatePresence>
 
+            <div id="register-firebase-recaptcha" />
+
             <button
               type="submit"
-              disabled={loading || success || sendingOtp || verifyingOtp}
+              disabled={loading || success || sendingOtp || verifyingOtp || (step === 3 && otp.trim().length < 6)}
               className="w-full bg-slate-950 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-900 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-slate-950/20"
             >
               {loading || verifyingOtp ? (

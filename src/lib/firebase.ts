@@ -20,11 +20,17 @@ export function isLivePhoneVerificationRuntime() {
   const host = getRuntimeHostname();
   if (!host) return false;
 
-  return (
-    host === 'exshopi.onrender.com' ||
-    host === 'exshopi.com' ||
-    host === 'www.exshopi.com'
-  );
+  if (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1'
+  ) {
+    return false;
+  }
+
+  if (typeof window === 'undefined') return false;
+
+  return window.location.protocol === 'https:';
 }
 
 export function isLocalPhoneVerificationRuntime() {

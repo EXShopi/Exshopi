@@ -87,6 +87,12 @@ export default function Checkout() {
   const useBackendOtp = otpProvider === "backend" && allowDevOtpFallback;
 
   useEffect(() => {
+    return () => {
+      resetFirebasePhoneVerification();
+    };
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
 
     const ensureCustomerSession = async () => {
@@ -268,6 +274,13 @@ export default function Checkout() {
     }
     if (normalized.includes("auth/captcha-check-failed")) {
       return "Phone verification could not start. Refresh the page and try again.";
+    }
+    if (
+      normalized.includes("auth/internal-error") ||
+      normalized.includes("recaptchaparams") ||
+      normalized.includes("app verification")
+    ) {
+      return "Phone verification could not start securely. Refresh the page and try again.";
     }
     if (normalized.includes("auth/invalid-app-credential")) {
       return "Phone verification could not start. Please refresh the page and try again.";
@@ -852,7 +865,7 @@ export default function Checkout() {
                         <div className="flex gap-3">
                           <input
                             value={otpCode}
-                            onChange={(event) => setOtpCode(event.target.value)}
+                            onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ''))}
                             inputMode="numeric"
                             maxLength={6}
                             placeholder="Enter 6-digit code"
@@ -861,7 +874,7 @@ export default function Checkout() {
                           <button
                             type="button"
                             onClick={handleVerifyOtp}
-                            disabled={verifyingOtp || !otpSessionId || otpCode.trim().length < 4}
+                            disabled={verifyingOtp || !otpSessionId || otpCode.trim().length < 6}
                             className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                           >
                             {verifyingOtp ? "Verifying..." : "Verify Code"}

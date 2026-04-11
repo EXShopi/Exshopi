@@ -11,6 +11,7 @@ export { isFirebasePhoneVerificationEnabled };
 let recaptchaVerifier: RecaptchaVerifier | null = null;
 let confirmationResult: ConfirmationResult | null = null;
 let activeContainerId = '';
+let recaptchaRenderPromise: Promise<number> | null = null;
 
 function extractErrorCode(error: unknown) {
   const code =
@@ -34,6 +35,14 @@ export function describeFirebasePhoneVerificationError(error: unknown) {
       : '';
 
   return [code, message].filter(Boolean).join(' ').trim() || 'Unknown Firebase phone verification error';
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+    ? error
+    : '';
 }
 
 export function shouldFallbackToBackendOtp(error: unknown) {
@@ -79,7 +88,27 @@ export function isValidUaePhone(phone: string) {
   return /^\+971(5\d{8}|[234679]\d{7,8})$/.test(normalizeUaePhone(phone));
 }
 
-async function ensureRecaptcha(containerId: string) {
+function resetRecaptchaState() {
+  recaptchaRenderPromise = null;
+  recaptchaVerifier?.clear();
+  recaptchaVerifier = null;
+  activeContainerId = '';
+}
+
+function prepareRecaptchaContainer(containerId: string) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    throw new Error('Phone verification widget is not ready yet.');
+  }
+
+  // Firebase reCAPTCHA can fail with stale iframe/script state when the same
+  // container is reused after retries or step transitions, so we always start
+  // from a clean container before creating the next verifier.
+  container.innerHTML = '';
+  return container;
+}
+
+async function ensureRecaptcha(containerId: string, forceRefresh = false) {
   if (!firebaseAuth || !isFirebasePhoneVerificationEnabled()) {
     throw new Error('Firebase phone verification is not configured.');
   }
@@ -93,36 +122,68 @@ async function ensureRecaptcha(containerId: string) {
     throw new Error('Phone verification widget is not ready yet.');
   }
 
-  if (!recaptchaVerifier || activeContainerId !== containerId) {
-    recaptchaVerifier?.clear();
-    confirmationResult = null;
+  if (forceRefresh || !recaptchaVerifier || activeContainerId !== containerId) {
+    resetRecaptchaState();
+    prepareRecaptchaContainer(containerId);
     recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, containerId, {
       size: 'invisible',
+      callback: () => {
+        if (import.meta.env.DEV) {
+          console.debug('[Firebase Phone Verification] reCAPTCHA solved.');
+        }
+      },
+      'expired-callback': () => {
+        if (import.meta.env.DEV) {
+          console.debug('[Firebase Phone Verification] reCAPTCHA expired. Resetting verifier.');
+        }
+        resetRecaptchaState();
+      },
+      'error-callback': () => {
+        if (import.meta.env.DEV) {
+          console.debug('[Firebase Phone Verification] reCAPTCHA errored. Resetting verifier.');
+        }
+        resetRecaptchaState();
+      },
     });
     activeContainerId = containerId;
-    await recaptchaVerifier.render();
+    recaptchaRenderPromise = recaptchaVerifier.render();
   }
 
+  if (!recaptchaRenderPromise) {
+    throw new Error('Phone verification widget could not be prepared.');
+  }
+
+  await recaptchaRenderPromise;
   return recaptchaVerifier;
 }
 
 export async function sendFirebasePhoneCode(phone: string, containerId: string) {
   const normalizedPhone = normalizeUaePhone(phone);
   try {
-    const verifier = await ensureRecaptcha(containerId);
+    const verifier = await ensureRecaptcha(containerId, true);
+    confirmationResult = null;
     confirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
     return {
       phone: normalizedPhone,
     };
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.error('[Firebase Phone Verification] sendFirebasePhoneCode failed:', describeFirebasePhoneVerificationError(error));
+      console.error(
+        '[Firebase Phone Verification] sendFirebasePhoneCode failed:',
+        describeFirebasePhoneVerificationError(error),
+        error
+      );
     }
-    recaptchaVerifier?.clear();
-    recaptchaVerifier = null;
-    activeContainerId = '';
+    resetRecaptchaState();
     confirmationResult = null;
-    throw error;
+    const errorCode = extractErrorCode(error);
+    const errorMessage = getErrorMessage(error);
+
+    if (errorCode === 'auth/internal-error' && /recaptcha|app verification|app credential/i.test(errorMessage)) {
+      throw new Error('auth/invalid-app-credential Firebase reCAPTCHA app verification failed.');
+    }
+
+    throw error instanceof Error ? error : new Error(String(error || 'Unknown phone verification error'));
   }
 }
 
@@ -140,7 +201,5 @@ export async function verifyFirebasePhoneCode(code: string) {
 
 export function resetFirebasePhoneVerification() {
   confirmationResult = null;
-  recaptchaVerifier?.clear();
-  recaptchaVerifier = null;
-  activeContainerId = '';
+  resetRecaptchaState();
 }
