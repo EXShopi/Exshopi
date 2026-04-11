@@ -15,12 +15,21 @@ import {
   User,
   Phone,
   ArrowLeft,
-  ShieldCheck,
-  Loader2
+  ShieldCheck
 } from 'lucide-react';
 import { userAPI, sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import { auth, googleProvider, signInWithPopup } from '../../supabaseClient';
+import {
+  describeFirebasePhoneVerificationError,
+  isFirebasePhoneVerificationEnabled,
+  isFirebasePhoneVerificationSupportedOnCurrentOrigin,
+  isValidUaePhone,
+  normalizeUaePhone,
+  resetFirebasePhoneVerification,
+  sendFirebasePhoneCode,
+  verifyFirebasePhoneCode,
+} from '../../lib/firebasePhoneVerification';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -36,21 +45,85 @@ const Register = () => {
   });
   const [otp, setOtp] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
+  const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
+  const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
+  const useDevOtpFallback = !useFirebaseOtp && import.meta.env.DEV;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (e.target.name === 'phone') {
+      setOtp('');
+      setGeneratedOtp('');
+      setOtpMessage(null);
+      setPhoneVerified(false);
+      setError(null);
+      resetFirebasePhoneVerification();
+    }
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSendOtp = () => {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(code);
-    setStep(3);
-    // In a real app, you'd call an API to send SMS here
-    alert(`[MOCK SMS] Your Exshopi verification code is: ${code}`);
+  const mapPhoneVerificationError = (error: unknown) => {
+    const raw = describeFirebasePhoneVerificationError(error).toLowerCase();
+
+    if (!raw) return 'We could not send the verification code right now. Please try again.';
+    if (raw.includes('auth/invalid-phone-number')) return 'Enter a valid UAE phone number before requesting verification.';
+    if (raw.includes('auth/too-many-requests')) return 'Too many verification attempts. Please wait and try again.';
+    if (raw.includes('auth/unauthorized-domain')) return 'This domain is not authorized for Firebase phone verification yet.';
+    if (raw.includes('auth/captcha-check-failed')) return 'Phone verification could not start. Refresh the page and try again.';
+    if (raw.includes('auth/network-request-failed')) return 'Network error while contacting phone verification. Please try again.';
+    if (raw.includes('requires localhost or https')) return 'Phone verification requires localhost or a secure HTTPS domain.';
+    if (raw.includes('not configured')) return 'Firebase phone verification is not configured for this environment.';
+
+    return error instanceof Error && error.message
+      ? error.message
+      : 'We could not complete phone verification right now. Please try again.';
+  };
+
+  const handleSendOtp = async () => {
+    if (!formData.phone || !isValidUaePhone(formData.phone)) {
+      setError('Enter a valid UAE phone number before requesting verification.');
+      return;
+    }
+
+    setSendingOtp(true);
+    setError(null);
+    setOtpMessage(null);
+    setPhoneVerified(false);
+    setOtp('');
+
+    try {
+      const normalizedPhone = normalizeUaePhone(formData.phone);
+
+      if (useFirebaseOtp) {
+        const response = await sendFirebasePhoneCode(normalizedPhone, 'register-firebase-recaptcha');
+        setGeneratedOtp('');
+        setStep(3);
+        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to finish creating your account.`);
+        return;
+      }
+
+      if (useDevOtpFallback) {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedOtp(code);
+        setStep(3);
+        setOtpMessage(`Development verification code: ${code}`);
+        return;
+      }
+
+      throw new Error('Phone verification is unavailable right now. Please try again later.');
+    } catch (sendError) {
+      console.error('[Register Phone Verification] send failed:', describeFirebasePhoneVerificationError(sendError), sendError);
+      setError(mapPhoneVerificationError(sendError));
+    } finally {
+      setSendingOtp(false);
+    }
   };
 
   const handleAuthSuccess = async (sessionOrUser: any, role: 'customer' | 'seller' = 'customer', name?: string) => {
@@ -106,26 +179,39 @@ const Register = () => {
     }
 
     if (step === 2) {
-      handleSendOtp();
+      await handleSendOtp();
       return;
     }
 
     if (step === 3) {
-      if (otp !== generatedOtp) {
-        setError('Invalid OTP code. Please try again.');
-        return;
-      }
-
-      setLoading(true);
       setError(null);
+      setVerifyingOtp(true);
       
       try {
+        if (useFirebaseOtp) {
+          const response = await verifyFirebasePhoneCode(otp);
+          const verifiedPhone = normalizeUaePhone(response.phone);
+          if (verifiedPhone !== normalizeUaePhone(formData.phone)) {
+            throw new Error('Verified phone does not match the registration number.');
+          }
+        } else if (useDevOtpFallback) {
+          if (otp !== generatedOtp) {
+            throw new Error('Invalid OTP code. Please try again.');
+          }
+        } else {
+          throw new Error('Phone verification is unavailable right now. Please try again later.');
+        }
+
+        setPhoneVerified(true);
+        setVerifyingOtp(false);
+        setLoading(true);
+
         // Register via backend API
-        const registered = await userAPI.register({
+        await userAPI.register({
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          phone: formData.phone,
+          phone: normalizeUaePhone(formData.phone),
           role: formData.role,
         });
 
@@ -134,8 +220,10 @@ const Register = () => {
         await handleAuthSuccess(logged, formData.role, formData.name);
       } catch (err: any) {
         console.error('Registration error:', err);
-        setError(err.message || 'Failed to create account');
+        setPhoneVerified(false);
+        setError(mapPhoneVerificationError(err));
       } finally {
+        setVerifyingOtp(false);
         setLoading(false);
       }
     }
@@ -397,7 +485,9 @@ const Register = () => {
                       <ShieldCheck size={32} />
                     </div>
                     <h3 className="text-xl font-black text-slate-900">Verify Phone</h3>
-                    <p className="text-xs text-slate-500 font-medium">We've sent a 6-digit code to {formData.phone}</p>
+                    <p className="text-xs text-slate-500 font-medium">
+                      {otpMessage || `Enter the 6-digit code sent to ${normalizeUaePhone(formData.phone)}`}
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -416,23 +506,39 @@ const Register = () => {
                   <button 
                     type="button"
                     onClick={handleSendOtp}
+                    disabled={sendingOtp}
                     className="w-full text-xs font-black text-violet-600 uppercase tracking-widest hover:text-violet-700 transition-colors"
                   >
-                    Resend Code
+                    {sendingOtp ? 'Sending Code...' : 'Resend Code'}
                   </button>
+
+                  {phoneVerified ? (
+                    <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm font-bold text-emerald-700 text-center">
+                      Phone number verified successfully.
+                    </div>
+                  ) : null}
+
+                  <div id="register-firebase-recaptcha" />
                 </motion.div>
               )}
             </AnimatePresence>
 
             <button
               type="submit"
-              disabled={loading || success}
+              disabled={loading || success || sendingOtp || verifyingOtp}
               className="w-full bg-slate-950 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-900 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-slate-950/20"
             >
-              {loading ? (
+              {loading || verifyingOtp ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
-                <>{step === 1 ? 'Next Step' : step === 2 ? 'Send Code' : 'Verify & Create Account'} <ArrowRight size={18} /></>
+                <>
+                  {step === 1
+                    ? 'Next Step'
+                    : step === 2
+                    ? 'Send Code'
+                    : 'Verify & Create Account'}{' '}
+                  <ArrowRight size={18} />
+                </>
               )}
             </button>
         </form>

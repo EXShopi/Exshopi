@@ -7,6 +7,45 @@ let recaptchaVerifier: RecaptchaVerifier | null = null;
 let confirmationResult: ConfirmationResult | null = null;
 let activeContainerId = '';
 
+function extractErrorCode(error: unknown) {
+  const code =
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : '';
+
+  return code.trim();
+}
+
+export function describeFirebasePhoneVerificationError(error: unknown) {
+  const code = extractErrorCode(error);
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+      ? error
+      : '';
+
+  return [code, message].filter(Boolean).join(' ').trim() || 'Unknown Firebase phone verification error';
+}
+
+export function shouldFallbackToBackendOtp(error: unknown) {
+  const normalized = describeFirebasePhoneVerificationError(error).toLowerCase();
+
+  return (
+    normalized.includes('firebase phone verification is not configured') ||
+    normalized.includes('requires localhost or https') ||
+    normalized.includes('auth/unauthorized-domain') ||
+    normalized.includes('auth/invalid-app-credential') ||
+    normalized.includes('auth/app-not-authorized') ||
+    normalized.includes('auth/captcha-check-failed') ||
+    normalized.includes('auth/operation-not-supported-in-this-environment') ||
+    normalized.includes('phone verification widget is not ready yet')
+  );
+}
+
 export function isFirebasePhoneVerificationSupportedOnCurrentOrigin() {
   if (typeof window === 'undefined') return true;
   const hostname = window.location.hostname;
@@ -47,6 +86,7 @@ async function ensureRecaptcha(containerId: string) {
 
   if (!recaptchaVerifier || activeContainerId !== containerId) {
     recaptchaVerifier?.clear();
+    confirmationResult = null;
     recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, containerId, {
       size: 'invisible',
     });
@@ -59,11 +99,20 @@ async function ensureRecaptcha(containerId: string) {
 
 export async function sendFirebasePhoneCode(phone: string, containerId: string) {
   const normalizedPhone = normalizeUaePhone(phone);
-  const verifier = await ensureRecaptcha(containerId);
-  confirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
-  return {
-    phone: normalizedPhone,
-  };
+  try {
+    const verifier = await ensureRecaptcha(containerId);
+    confirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
+    return {
+      phone: normalizedPhone,
+    };
+  } catch (error) {
+    console.error('[Firebase Phone Verification] sendFirebasePhoneCode failed:', describeFirebasePhoneVerificationError(error));
+    recaptchaVerifier?.clear();
+    recaptchaVerifier = null;
+    activeContainerId = '';
+    confirmationResult = null;
+    throw error;
+  }
 }
 
 export async function verifyFirebasePhoneCode(code: string) {
@@ -80,4 +129,7 @@ export async function verifyFirebasePhoneCode(code: string) {
 
 export function resetFirebasePhoneVerification() {
   confirmationResult = null;
+  recaptchaVerifier?.clear();
+  recaptchaVerifier = null;
+  activeContainerId = '';
 }

@@ -32,6 +32,7 @@ const Login = () => {
   const [success, setSuccess] = useState(false);
 
   const from = (location.state as any)?.from?.pathname || '/';
+  const loginReason = (location.state as any)?.reason || '';
 
   const handleAuthSuccess = async (user: any, authResult?: any) => {
     try {
@@ -167,6 +168,18 @@ const Login = () => {
           </div>
 
           <AnimatePresence mode="wait">
+            {!error && loginReason === 'checkout_requires_customer_login' && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-center gap-3 text-blue-700 text-sm font-bold"
+              >
+                <CheckCircle2 size={18} />
+                Sign in to your customer account to continue checkout and phone verification.
+              </motion.div>
+            )}
+
             {error && (
               <motion.div 
                 initial={{ opacity: 0, y: -10 }}
