@@ -19,10 +19,8 @@ import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
 import {
   describeFirebasePhoneVerificationError,
-  isDevelopmentPhoneOtpFallbackAllowed,
   isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
-  isLivePhoneVerificationRuntime,
   isValidUaePhone,
   normalizeUaePhone,
   resetFirebasePhoneVerification,
@@ -45,7 +43,7 @@ export default function Checkout() {
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
   const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
-  const allowDevOtpFallback = isDevelopmentPhoneOtpFallbackAllowed() && !isLivePhoneVerificationRuntime();
+  const allowDevOtpFallback = import.meta.env.DEV;
   const [authChecked, setAuthChecked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [otpSessionId, setOtpSessionId] = useState("");
