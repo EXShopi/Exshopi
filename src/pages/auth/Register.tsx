@@ -21,10 +21,10 @@ import { userAPI, sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import { auth, googleProvider, signInWithPopup } from '../../supabaseClient';
 import {
+  canAttemptFirebasePhoneVerification,
   describeFirebasePhoneVerificationError,
   getFirebasePhoneVerificationRuntimeInfo,
   getReadableFirebasePhoneVerificationError,
-  isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isValidUaePhone,
   normalizeUaePhone,
@@ -56,8 +56,8 @@ const Register = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
-  const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
-  const useDevOtpFallback = !useFirebaseOtp && import.meta.env.DEV;
+  const useFirebaseOtp = canAttemptFirebasePhoneVerification();
+  const useDevOtpFallback = import.meta.env.DEV && !useFirebaseOtp;
 
   useEffect(() => {
     console.info('[register] mounted', getFirebasePhoneVerificationRuntimeInfo());
@@ -83,18 +83,18 @@ const Register = () => {
 
     if (!raw) return 'We could not send the verification code right now. Please try again.';
     if (raw.includes('auth/invalid-phone-number')) return 'Enter a valid UAE phone number before requesting verification.';
-    if (raw.includes('auth/too-many-requests')) return 'Too many verification attempts. Please wait and try again.';
-    if (raw.includes('auth/billing-not-enabled')) return 'SMS verification is not available yet because Firebase billing is not enabled for this project. Enable billing in Firebase to send real OTP messages.';
+    if (raw.includes('auth/too-many-requests')) return 'Too many attempts. Please wait.';
+    if (raw.includes('auth/billing-not-enabled')) return 'Firebase billing issue. Contact support.';
     if (raw.includes('auth/operation-not-allowed')) return 'Firebase phone sign-in is not enabled for this project yet.';
     if (raw.includes('auth/unauthorized-domain')) return 'This domain is not authorized for Firebase phone verification yet.';
-    if (raw.includes('auth/captcha-check-failed')) return 'Phone verification could not start. Refresh the page and try again.';
+    if (raw.includes('auth/captcha-check-failed')) return 'Refresh the page and try again.';
     if (raw.includes('auth/invalid-app-credential') || raw.includes('auth/app-not-authorized')) {
       return 'Firebase phone verification is blocked for this app right now. Check the Firebase project settings and authorized domains.';
     }
     if (raw.includes('auth/internal-error') || raw.includes('recaptchaparams') || raw.includes('app verification')) {
       return 'Phone verification could not start securely. Refresh the page and try again.';
     }
-    if (raw.includes('auth/network-request-failed')) return 'Network error while contacting phone verification. Please try again.';
+    if (raw.includes('auth/network-request-failed')) return 'Check your internet connection.';
     if (raw.includes('requires localhost or https')) return 'Phone verification requires localhost or a secure HTTPS domain.';
     if (raw.includes('not configured')) return 'Firebase phone verification is not configured for this environment.';
 
@@ -116,14 +116,6 @@ const Register = () => {
     try {
       const normalizedPhone = normalizeUaePhone(formData.phone);
 
-      if (useFirebaseOtp) {
-        const response = await sendFirebasePhoneCode(normalizedPhone, 'register-firebase-recaptcha');
-        setGeneratedOtp('');
-        setStep(3);
-        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to finish creating your account.`);
-        return;
-      }
-
       if (useDevOtpFallback) {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         setGeneratedOtp(code);
@@ -132,7 +124,10 @@ const Register = () => {
         return;
       }
 
-      throw new Error('Phone verification is unavailable right now. Please try again later.');
+      const response = await sendFirebasePhoneCode(normalizedPhone, 'recaptcha-container');
+      setGeneratedOtp('');
+      setStep(3);
+      setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to finish creating your account.`);
     } catch (sendError) {
       console.error('[Register Phone Verification] send failed:', describeFirebasePhoneVerificationError(sendError), sendError);
       setError(mapPhoneVerificationError(sendError));
@@ -536,8 +531,7 @@ const Register = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-
-            <div id="register-firebase-recaptcha" />
+            <div id="recaptcha-container" />
 
             <button
               type="submit"

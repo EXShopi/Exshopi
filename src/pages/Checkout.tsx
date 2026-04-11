@@ -18,10 +18,10 @@ import { formatAED } from "../lib/currency";
 import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
 import {
+  canAttemptFirebasePhoneVerification,
   describeFirebasePhoneVerificationError,
   getFirebasePhoneVerificationRuntimeInfo,
   getReadableFirebasePhoneVerificationError,
-  isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isValidUaePhone,
   normalizeUaePhone,
@@ -43,7 +43,7 @@ export default function Checkout() {
   const setRole = useAuthStore((state) => state.setRole);
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
-  const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
+  const useFirebaseOtp = canAttemptFirebasePhoneVerification();
   const [authChecked, setAuthChecked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [otpSessionId, setOtpSessionId] = useState("");
@@ -266,13 +266,13 @@ export default function Checkout() {
       return "Firebase phone verification is not configured yet for this environment.";
     }
     if (normalized.includes("auth/invalid-phone-number")) {
-      return "Enter a valid UAE mobile number before requesting verification.";
+      return "Enter a valid UAE phone number.";
     }
     if (normalized.includes("auth/too-many-requests")) {
-      return "Too many verification attempts. Please wait and try again.";
+      return "Too many attempts. Please wait.";
     }
     if (normalized.includes("auth/billing-not-enabled")) {
-      return "SMS verification is not available yet because Firebase billing is not enabled for this project. Enable billing in Firebase to send real OTP messages.";
+      return "Firebase billing issue. Contact support.";
     }
     if (normalized.includes("auth/operation-not-allowed")) {
       return "Firebase phone sign-in is not enabled for this project yet.";
@@ -293,7 +293,7 @@ export default function Checkout() {
       return "The verification code expired. Request a new code and try again.";
     }
     if (normalized.includes("auth/captcha-check-failed")) {
-      return "Phone verification could not start. Refresh the page and try again.";
+      return "Refresh the page and try again.";
     }
     if (normalized.includes("auth/internal-error")) {
       return "Firebase phone verification failed internally. Refresh the page and try again.";
@@ -308,7 +308,7 @@ export default function Checkout() {
       return "Phone verification could not start. Please refresh the page and try again.";
     }
     if (normalized.includes("auth/network-request-failed")) {
-      return "Network error while contacting phone verification. Check your connection and try again.";
+      return "Check your internet connection.";
     }
     if (
       normalized.includes("requires localhost or https") ||
@@ -384,11 +384,6 @@ export default function Checkout() {
       }
       if (!form.email || !isValidUaePhone(form.phone)) {
         setOtpError("Enter a valid UAE phone number and email before requesting verification.");
-        return;
-      }
-
-      if (!useFirebaseOtp) {
-        setOtpError("Firebase phone verification is unavailable for this checkout session.");
         return;
       }
 

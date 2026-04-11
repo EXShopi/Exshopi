@@ -9,6 +9,12 @@ import {
 
 export { isFirebasePhoneVerificationEnabled };
 
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier;
+  }
+}
+
 let recaptchaVerifier: RecaptchaVerifier | null = null;
 let confirmationResult: ConfirmationResult | null = null;
 let activeContainerId = '';
@@ -81,13 +87,13 @@ export function getReadableFirebasePhoneVerificationError(error: unknown) {
   const normalized = describeFirebasePhoneVerificationError(error).toLowerCase();
 
   if (isBillingNotEnabledError(error)) {
-    return 'SMS verification is not available yet because Firebase billing is not enabled for this project. Enable billing or upgrade the Firebase plan to send real OTP messages.';
+    return 'Firebase billing issue. Contact support.';
   }
   if (normalized.includes('auth/invalid-phone-number')) {
-    return 'Enter a valid UAE phone number before requesting verification.';
+    return 'Enter a valid UAE phone number';
   }
   if (normalized.includes('auth/too-many-requests')) {
-    return 'Too many verification attempts. Please wait and try again.';
+    return 'Too many attempts. Please wait.';
   }
   if (normalized.includes('auth/operation-not-allowed')) {
     return 'Phone Authentication is not enabled in Firebase Authentication for this project.';
@@ -96,13 +102,13 @@ export function getReadableFirebasePhoneVerificationError(error: unknown) {
     return 'This domain is not authorized for Firebase phone verification yet.';
   }
   if (normalized.includes('auth/captcha-check-failed')) {
-    return 'Phone verification could not start because the reCAPTCHA check failed. Refresh the page and try again.';
+    return 'Refresh the page and try again';
   }
   if (normalized.includes('auth/invalid-app-credential') || normalized.includes('auth/app-not-authorized')) {
     return 'Firebase phone verification is blocked for this app right now. Check the Firebase app config and authorized domains.';
   }
   if (normalized.includes('auth/network-request-failed')) {
-    return 'Network error while contacting Firebase phone verification. Please try again.';
+    return 'Check your internet connection';
   }
   if (
     normalized.includes('recaptcha enterprise') ||
@@ -164,11 +170,15 @@ export function isValidUaePhone(phone: string) {
 
 function resetRecaptchaState() {
   logPhoneVerification('verifier-reset', {
-    hadVerifier: Boolean(recaptchaVerifier),
+    hadVerifier: Boolean(recaptchaVerifier || (typeof window !== 'undefined' && window.recaptchaVerifier)),
     activeContainerId,
   });
   recaptchaRenderPromise = null;
   recaptchaVerifier?.clear();
+  if (typeof window !== 'undefined' && window.recaptchaVerifier) {
+    window.recaptchaVerifier.clear();
+    delete window.recaptchaVerifier;
+  }
   recaptchaVerifier = null;
   activeContainerId = '';
 }
@@ -224,6 +234,9 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
         resetRecaptchaState();
       },
     });
+    if (typeof window !== 'undefined') {
+      window.recaptchaVerifier = recaptchaVerifier;
+    }
     activeContainerId = containerId;
     recaptchaRenderPromise = recaptchaVerifier
       .render()
@@ -301,6 +314,10 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
 
     throw error instanceof Error ? error : new Error(String(error || 'Unknown phone verification error'));
   }
+}
+
+export function canAttemptFirebasePhoneVerification() {
+  return Boolean(firebaseAuth) && isFirebasePhoneVerificationSupportedOnCurrentOrigin();
 }
 
 export async function verifyFirebasePhoneCode(code: string) {
