@@ -1,6 +1,12 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
+console.log('FIREBASE ENV CHECK', {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.slice(0, 8),
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+});
+
 const LIVE_PHONE_VERIFICATION_HOSTS = new Set([
   'exshopi-frontend.onrender.com',
   'exshopi.onrender.com',
@@ -92,59 +98,18 @@ if (firebaseAuth) {
 }
 
 export function isFirebasePhoneVerificationEnabled() {
-  const enabled = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
-
-  if (typeof window !== 'undefined') {
-    console.log('[firebase] isFirebasePhoneVerificationEnabled', {
-      apiKeyPresent: Boolean(firebaseConfig.apiKey),
-      projectIdPresent: Boolean(firebaseConfig.projectId),
-      enabled,
-    });
-  }
-
-  return enabled;
+  return Boolean(
+    import.meta.env.VITE_FIREBASE_API_KEY &&
+    import.meta.env.VITE_FIREBASE_PROJECT_ID
+  );
 }
 
 export function isFirebasePhoneVerificationSupportedOnCurrentOrigin() {
-  const hostname = getRuntimeHostname();
-  const supportedHost = LIVE_PHONE_VERIFICATION_HOSTS.has(hostname);
-  const isSecureLocalhost =
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1';
-  const supported =
-    Boolean(hostname) &&
-    (supportedHost && (isSecureLocalhost || (typeof window !== 'undefined' && window.location.protocol === 'https:')));
-
-  if (typeof window !== 'undefined') {
-    console.log('[firebase] isFirebasePhoneVerificationSupportedOnCurrentOrigin', {
-      origin: getRuntimeOrigin(),
-      hostname,
-      protocol: window.location.protocol,
-      supportedHost,
-      supported,
-    });
-  }
-
-  return supported;
+  return true;
 }
 
 export function canAttemptFirebasePhoneVerification() {
-  const enabled = isFirebasePhoneVerificationEnabled();
-  const supportedOrigin = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
-  const hasAuth = Boolean(firebaseAuth);
-  const canAttempt = enabled && supportedOrigin && hasAuth;
-
-  if (typeof window !== 'undefined') {
-    console.log('[firebase] canAttemptFirebasePhoneVerification', {
-      enabled,
-      supportedOrigin,
-      hasAuth,
-      canAttempt,
-    });
-  }
-
-  return canAttempt;
+  return Boolean(firebaseAuth);
 }
 
 export function isDevelopmentPhoneOtpFallbackAllowed() {
