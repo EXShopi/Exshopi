@@ -22,6 +22,7 @@ import { useAuthStore } from '../../store/auth';
 import { auth, googleProvider, signInWithPopup } from '../../supabaseClient';
 import {
   describeFirebasePhoneVerificationError,
+  getFirebasePhoneVerificationRuntimeInfo,
   isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isValidUaePhone,
@@ -58,6 +59,7 @@ const Register = () => {
   const useDevOtpFallback = !useFirebaseOtp && import.meta.env.DEV;
 
   useEffect(() => {
+    console.info('[register] mounted', getFirebasePhoneVerificationRuntimeInfo());
     return () => {
       resetFirebasePhoneVerification();
     };
@@ -81,8 +83,12 @@ const Register = () => {
     if (!raw) return 'We could not send the verification code right now. Please try again.';
     if (raw.includes('auth/invalid-phone-number')) return 'Enter a valid UAE phone number before requesting verification.';
     if (raw.includes('auth/too-many-requests')) return 'Too many verification attempts. Please wait and try again.';
+    if (raw.includes('auth/operation-not-allowed')) return 'Firebase phone sign-in is not enabled for this project yet.';
     if (raw.includes('auth/unauthorized-domain')) return 'This domain is not authorized for Firebase phone verification yet.';
     if (raw.includes('auth/captcha-check-failed')) return 'Phone verification could not start. Refresh the page and try again.';
+    if (raw.includes('auth/invalid-app-credential') || raw.includes('auth/app-not-authorized')) {
+      return 'Firebase phone verification is blocked for this app right now. Check the Firebase project settings and authorized domains.';
+    }
     if (raw.includes('auth/internal-error') || raw.includes('recaptchaparams') || raw.includes('app verification')) {
       return 'Phone verification could not start securely. Refresh the page and try again.';
     }

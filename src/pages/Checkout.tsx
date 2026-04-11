@@ -19,6 +19,7 @@ import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
 import {
   describeFirebasePhoneVerificationError,
+  getFirebasePhoneVerificationRuntimeInfo,
   isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isValidUaePhone,
@@ -92,6 +93,7 @@ export default function Checkout() {
       itemCount: items.length,
       phoneVerificationSupported,
       useFirebaseOtp,
+      ...getFirebasePhoneVerificationRuntimeInfo(),
     });
   }, [items.length, phoneVerificationSupported, useFirebaseOtp]);
 
@@ -272,8 +274,11 @@ export default function Checkout() {
     if (normalized.includes("auth/too-many-requests")) {
       return "Too many verification attempts. Please wait and try again.";
     }
+    if (normalized.includes("auth/operation-not-allowed")) {
+      return "Firebase phone sign-in is not enabled for this project yet.";
+    }
     if (normalized.includes("auth/unauthorized-domain")) {
-      return "This domain is not authorized in Firebase yet. Add localhost, exshopi.com, and www.exshopi.com in Firebase Authentication settings.";
+      return "This domain is not authorized in Firebase yet. Add exshopi-frontend.onrender.com, exshopi.onrender.com, exshopi.com, www.exshopi.com, and localhost in Firebase Authentication settings.";
     }
     if (normalized.includes("auth/invalid-app-credential") || normalized.includes("auth/app-not-authorized")) {
       return "Firebase phone verification is blocked for this app right now. Restart the frontend and check your Firebase app config and authorized domains.";

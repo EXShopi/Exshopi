@@ -15,6 +15,7 @@ import { sellerApplicationAPI } from '../../services/api';
 import { UAE_EMIRATES } from '../../lib/marketplaceTemplates';
 import { uploadDocumentFile, uploadImageFile } from '../../lib/uploadClient';
 import {
+  getFirebasePhoneVerificationRuntimeInfo,
   isFirebasePhoneVerificationEnabled,
   isValidUaePhone,
   normalizeUaePhone,
@@ -97,6 +98,7 @@ export function SellerRegister() {
   const [formData, setFormData] = useState<SellerRegisterForm>(initialFormData);
 
   useEffect(() => {
+    console.info('[seller-register] mounted', getFirebasePhoneVerificationRuntimeInfo());
     return () => {
       resetFirebasePhoneVerification();
     };
@@ -238,6 +240,15 @@ export function SellerRegister() {
     }
     if (raw.includes('auth/too-many-requests')) {
       return 'Too many verification attempts. Please wait and try again.';
+    }
+    if (raw.includes('auth/operation-not-allowed')) {
+      return 'Firebase phone sign-in is not enabled for this project yet.';
+    }
+    if (raw.includes('auth/unauthorized-domain')) {
+      return 'This domain is not authorized for Firebase phone verification yet.';
+    }
+    if (raw.includes('auth/invalid-app-credential') || raw.includes('auth/app-not-authorized')) {
+      return 'Firebase phone verification is blocked for this app right now. Check the Firebase project settings and authorized domains.';
     }
     if (raw.includes('auth/captcha-check-failed') || raw.includes('auth/internal-error') || raw.includes('recaptchaparams')) {
       return 'Phone verification could not start securely. Refresh the page and try again.';

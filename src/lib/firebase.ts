@@ -16,6 +16,10 @@ function getRuntimeHostname() {
   return (window.location.hostname || '').trim().toLowerCase();
 }
 
+function logFirebaseRuntime(label: string, details: Record<string, unknown>) {
+  console.info(`[firebase] ${label}`, details);
+}
+
 export function isLivePhoneVerificationRuntime() {
   const host = getRuntimeHostname();
   if (!host) return false;
@@ -53,12 +57,24 @@ const envFirebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
 };
 
+const envMatchesExshopiProject = envFirebaseConfig.projectId === EXSHOPI_FIREBASE_CONFIG.projectId;
+
 const firebaseConfig =
-  isLivePhoneVerificationRuntime() || envFirebaseConfig.projectId !== EXSHOPI_FIREBASE_CONFIG.projectId
+  isLivePhoneVerificationRuntime() || !envMatchesExshopiProject
     ? { ...EXSHOPI_FIREBASE_CONFIG }
     : envFirebaseConfig;
 
 const hasFirebaseConfig = Object.values(firebaseConfig).slice(0, 6).every(Boolean);
+
+if (typeof window !== 'undefined') {
+  logFirebaseRuntime('config', {
+    hostname: getRuntimeHostname(),
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    liveRuntime: isLivePhoneVerificationRuntime(),
+    hasFirebaseConfig,
+  });
+}
 
 export const firebaseApp = hasFirebaseConfig
   ? getApps().length

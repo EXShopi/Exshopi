@@ -1,5 +1,6 @@
 import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import {
+  firebaseApp,
   firebaseAuth,
   isDevelopmentPhoneOtpFallbackAllowed,
   isFirebasePhoneVerificationEnabled,
@@ -12,6 +13,17 @@ let recaptchaVerifier: RecaptchaVerifier | null = null;
 let confirmationResult: ConfirmationResult | null = null;
 let activeContainerId = '';
 let recaptchaRenderPromise: Promise<number> | null = null;
+
+function logPhoneVerification(label: string, details: Record<string, unknown> = {}) {
+  if (typeof window === 'undefined') return;
+
+  console.info(`[firebase-phone] ${label}`, {
+    hostname: window.location.hostname || '',
+    projectId: firebaseApp?.options?.projectId || '',
+    authDomain: firebaseApp?.options?.authDomain || '',
+    ...details,
+  });
+}
 
 function extractErrorCode(error: unknown) {
   const code =
@@ -35,6 +47,16 @@ export function describeFirebasePhoneVerificationError(error: unknown) {
       : '';
 
   return [code, message].filter(Boolean).join(' ').trim() || 'Unknown Firebase phone verification error';
+}
+
+export function getFirebasePhoneVerificationRuntimeInfo() {
+  return {
+    hostname: typeof window === 'undefined' ? '' : window.location.hostname || '',
+    projectId: firebaseApp?.options?.projectId || '',
+    authDomain: firebaseApp?.options?.authDomain || '',
+    liveRuntime: isLivePhoneVerificationRuntime(),
+    enabled: isFirebasePhoneVerificationEnabled(),
+  };
 }
 
 function getErrorMessage(error: unknown) {
@@ -89,6 +111,10 @@ export function isValidUaePhone(phone: string) {
 }
 
 function resetRecaptchaState() {
+  logPhoneVerification('verifier-reset', {
+    hadVerifier: Boolean(recaptchaVerifier),
+    activeContainerId,
+  });
   recaptchaRenderPromise = null;
   recaptchaVerifier?.clear();
   recaptchaVerifier = null;
@@ -119,34 +145,51 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
 
   const container = document.getElementById(containerId);
   if (!container) {
+    logPhoneVerification('verifier-missing-container', { containerId });
     throw new Error('Phone verification widget is not ready yet.');
   }
 
   if (forceRefresh || !recaptchaVerifier || activeContainerId !== containerId) {
+    logPhoneVerification('verifier-create-start', {
+      containerId,
+      forceRefresh,
+      hadVerifier: Boolean(recaptchaVerifier),
+      activeContainerId,
+    });
     resetRecaptchaState();
     prepareRecaptchaContainer(containerId);
     recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, containerId, {
       size: 'invisible',
       callback: () => {
-        if (import.meta.env.DEV) {
-          console.debug('[Firebase Phone Verification] reCAPTCHA solved.');
-        }
+        logPhoneVerification('verifier-callback', { containerId });
       },
       'expired-callback': () => {
-        if (import.meta.env.DEV) {
-          console.debug('[Firebase Phone Verification] reCAPTCHA expired. Resetting verifier.');
-        }
+        logPhoneVerification('verifier-expired', { containerId });
         resetRecaptchaState();
       },
       'error-callback': () => {
-        if (import.meta.env.DEV) {
-          console.debug('[Firebase Phone Verification] reCAPTCHA errored. Resetting verifier.');
-        }
+        logPhoneVerification('verifier-error-callback', { containerId });
         resetRecaptchaState();
       },
     });
     activeContainerId = containerId;
-    recaptchaRenderPromise = recaptchaVerifier.render();
+    recaptchaRenderPromise = recaptchaVerifier
+      .render()
+      .then((widgetId) => {
+        logPhoneVerification('verifier-create-success', {
+          containerId,
+          widgetId,
+        });
+        return widgetId;
+      })
+      .catch((error) => {
+        logPhoneVerification('verifier-create-failure', {
+          containerId,
+          error: describeFirebasePhoneVerificationError(error),
+        });
+        resetRecaptchaState();
+        throw error;
+      });
   }
 
   if (!recaptchaRenderPromise) {
@@ -160,20 +203,31 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
 export async function sendFirebasePhoneCode(phone: string, containerId: string) {
   const normalizedPhone = normalizeUaePhone(phone);
   try {
+    logPhoneVerification('send-code-start', {
+      phone: normalizedPhone,
+      containerId,
+    });
     const verifier = await ensureRecaptcha(containerId, true);
     confirmationResult = null;
     confirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
+    logPhoneVerification('send-code-success', {
+      phone: normalizedPhone,
+      containerId,
+    });
     return {
       phone: normalizedPhone,
     };
   } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error(
-        '[Firebase Phone Verification] sendFirebasePhoneCode failed:',
-        describeFirebasePhoneVerificationError(error),
-        error
-      );
-    }
+    console.error(
+      '[Firebase Phone Verification] sendFirebasePhoneCode failed:',
+      describeFirebasePhoneVerificationError(error),
+      error
+    );
+    logPhoneVerification('send-code-failure', {
+      phone: normalizedPhone,
+      containerId,
+      error: describeFirebasePhoneVerificationError(error),
+    });
     resetRecaptchaState();
     confirmationResult = null;
     const errorCode = extractErrorCode(error);
@@ -192,7 +246,13 @@ export async function verifyFirebasePhoneCode(code: string) {
     throw new Error('Request a verification code first.');
   }
 
+  logPhoneVerification('verify-code-start', {
+    codeLength: String(code || '').trim().length,
+  });
   const result = await confirmationResult.confirm(String(code || '').trim());
+  logPhoneVerification('verify-code-success', {
+    phone: result.user.phoneNumber || '',
+  });
   return {
     uid: result.user.uid,
     phone: result.user.phoneNumber || '',
