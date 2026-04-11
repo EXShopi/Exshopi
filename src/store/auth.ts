@@ -42,8 +42,10 @@ function syncLegacyAccessToken(accessToken: string | null) {
   if (typeof window === 'undefined') return;
 
   if (accessToken) {
+    localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('token', accessToken);
   } else {
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('token');
   }
 }

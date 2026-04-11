@@ -246,7 +246,9 @@ export async function authFetch(path: string, options: RequestInit = {}) {
     throw new Error('No API base configured; cannot perform authenticated request in this runtime.');
   }
 
-  let token = localStorage.getItem('accessToken');
+  let token =
+    useAuthStore.getState().accessToken ||
+    readPersistedAccessToken();
 
   const makeRequest = async (bearer?: string) =>
     fetchWithTimeout(resolved, {
@@ -283,7 +285,6 @@ export async function authFetch(path: string, options: RequestInit = {}) {
       throw new Error('Session expired. Please sign in again.');
     }
 
-    localStorage.setItem('accessToken', newToken);
     useAuthStore.getState().setAccessToken(newToken);
 
     token = newToken;
