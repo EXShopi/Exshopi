@@ -3,6 +3,7 @@ import {
   canAttemptFirebasePhoneVerification,
   firebaseApp,
   firebaseAuth,
+  getMissingFirebasePhoneEnvVars,
   isDevelopmentPhoneOtpFallbackAllowed,
   isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
@@ -193,7 +194,12 @@ function prepareRecaptchaContainer(containerId: string) {
 
 async function ensureRecaptcha(containerId: string, forceRefresh = false) {
   if (!canAttemptFirebasePhoneVerification() || !firebaseAuth) {
-    throw new Error('Firebase phone verification is not configured.');
+    const missingEnvVars = getMissingFirebasePhoneEnvVars();
+    throw new Error(
+      missingEnvVars.length
+        ? `Firebase phone verification is not configured. Missing env vars: ${missingEnvVars.join(', ')}`
+        : 'Firebase phone verification is not configured.'
+    );
   }
 
   if (!isFirebasePhoneVerificationSupportedOnCurrentOrigin()) {
@@ -267,7 +273,7 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
       phone: normalizedPhone,
       containerId,
     });
-    const verifier = await ensureRecaptcha(containerId, true);
+    const verifier = await ensureRecaptcha(containerId, false);
     confirmationResult = null;
     confirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
     logPhoneVerification('send-code-success', {

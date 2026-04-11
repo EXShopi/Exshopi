@@ -121,6 +121,10 @@ export function isFirebasePhoneVerificationEnabled() {
   return hasFirebasePhoneConfig;
 }
 
+export function getMissingFirebasePhoneEnvVars() {
+  return [...missingFirebaseEnvVars];
+}
+
 export function isFirebasePhoneVerificationSupportedOnCurrentOrigin() {
   const hostname = getRuntimeHostname();
   const isKnownHost = LIVE_PHONE_VERIFICATION_HOSTS.has(hostname);

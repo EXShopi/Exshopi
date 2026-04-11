@@ -82,6 +82,9 @@ const Register = () => {
     const raw = describeFirebasePhoneVerificationError(error).toLowerCase();
 
     if (!raw) return 'We could not send the verification code right now. Please try again.';
+    if (raw.includes('missing env vars:')) {
+      return error instanceof Error ? error.message : String(error || '').trim();
+    }
     if (raw.includes('auth/invalid-phone-number')) return 'Enter a valid UAE phone number before requesting verification.';
     if (raw.includes('auth/too-many-requests')) return 'Too many attempts. Please wait.';
     if (raw.includes('auth/billing-not-enabled')) return 'Firebase billing issue. Contact support.';

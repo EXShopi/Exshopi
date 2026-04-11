@@ -235,6 +235,9 @@ export default function Checkout() {
     if (!raw || normalized === "not found" || normalized.includes("/api/cod/otp")) {
       return "Phone verification is temporarily unavailable. Refresh the page and try again.";
     }
+    if (normalized.includes("missing env vars:")) {
+      return raw;
+    }
     if (normalized.includes("customer only") || normalized.includes("unauthorized") || normalized.includes("forbidden")) {
       return "Please sign in to your customer account to continue COD verification.";
     }
