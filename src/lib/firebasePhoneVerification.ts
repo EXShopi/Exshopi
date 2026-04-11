@@ -1,13 +1,19 @@
 import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import {
+  canAttemptFirebasePhoneVerification,
   firebaseApp,
   firebaseAuth,
   isDevelopmentPhoneOtpFallbackAllowed,
   isFirebasePhoneVerificationEnabled,
+  isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isLivePhoneVerificationRuntime,
 } from './firebase';
 
-export { isFirebasePhoneVerificationEnabled };
+export {
+  canAttemptFirebasePhoneVerification,
+  isFirebasePhoneVerificationEnabled,
+  isFirebasePhoneVerificationSupportedOnCurrentOrigin,
+};
 
 declare global {
   interface Window {
@@ -142,17 +148,6 @@ export function shouldFallbackToBackendOtp(error: unknown) {
     normalized.includes('auth/operation-not-supported-in-this-environment') ||
     normalized.includes('phone verification widget is not ready yet')
   );
-}
-
-export function isFirebasePhoneVerificationSupportedOnCurrentOrigin() {
-  if (typeof window === 'undefined') return true;
-  const hostname = window.location.hostname;
-  const isLocalhost =
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1';
-
-  return isLocalhost || window.isSecureContext;
 }
 
 export function normalizeUaePhone(phone: string) {
@@ -314,10 +309,6 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
 
     throw error instanceof Error ? error : new Error(String(error || 'Unknown phone verification error'));
   }
-}
-
-export function canAttemptFirebasePhoneVerification() {
-  return Boolean(firebaseAuth) && isFirebasePhoneVerificationSupportedOnCurrentOrigin();
 }
 
 export async function verifyFirebasePhoneCode(code: string) {
