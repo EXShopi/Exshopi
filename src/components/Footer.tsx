@@ -87,8 +87,8 @@ export default function Footer() {
               title: storefrontT(lang, "company"),
               links: [
                 { name: storefrontT(lang, "about"), to: "/about" },
-                { name: storefrontT(lang, "privacy"), to: "/privacy-policy" },
-                { name: storefrontT(lang, "terms"), to: "/terms-conditions" },
+                { name: "Privacy Policy", to: "/privacy" },
+                { name: "Terms of Service", to: "/terms" },
                 { name: storefrontT(lang, "faq"), to: "/faq" },
               ],
             },
@@ -166,8 +166,8 @@ export default function Footer() {
           <div>© 2026 Exshopi</div>
 
           <div className="flex gap-4">
-            <Link to="/terms-conditions">Terms</Link>
-            <Link to="/privacy-policy">Privacy</Link>
+            <Link to="/terms" className="transition-colors hover:text-white">Terms of Service</Link>
+            <Link to="/privacy" className="transition-colors hover:text-white">Privacy Policy</Link>
             <Link to="/faq">FAQ</Link>
           </div>
 

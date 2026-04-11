@@ -1,7 +1,12 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { LockKeyhole, ShieldCheck, Database, BellRing } from "lucide-react";
 
 export default function PrivacyPolicy() {
+  useEffect(() => {
+    document.title = "Privacy Policy | ExShopi";
+  }, []);
+
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-10 md:px-6">
       <div className="mb-8 text-sm text-slate-500">
@@ -22,9 +27,10 @@ export default function PrivacyPolicy() {
               Privacy Policy
             </h1>
             <p className="mt-3 max-w-3xl text-slate-500">
-              ExShopi respects your privacy and protects your personal data.
-              This page explains what information we collect, how we use it,
-              and how we keep it secure across the marketplace.
+              ExShopi collects user information such as name, email, and phone number for
+              order processing, account management, support, and secure marketplace operations.
+              We do not share your data with third parties without consent except when needed
+              for fulfillment, compliance, or trusted platform operations.
             </p>
           </div>
 
@@ -39,8 +45,9 @@ export default function PrivacyPolicy() {
           <Database className="h-6 w-6 text-slate-900" />
           <h2 className="mt-4 text-xl font-black text-slate-900">Information We Collect</h2>
           <p className="mt-2 text-slate-500">
-            We may collect account details, delivery information, order history,
-            and support messages required to operate the marketplace.
+            We may collect your name, email address, phone number, delivery details,
+            order history, account activity, and customer support messages required
+            to operate ExShopi safely and efficiently.
           </p>
         </div>
 
@@ -48,8 +55,8 @@ export default function PrivacyPolicy() {
           <ShieldCheck className="h-6 w-6 text-slate-900" />
           <h2 className="mt-4 text-xl font-black text-slate-900">How We Protect It</h2>
           <p className="mt-2 text-slate-500">
-            We apply access controls, secure infrastructure, and operational
-            safeguards to reduce unauthorized access and data misuse.
+            We use access controls, secure infrastructure, and operational safeguards
+            to help reduce unauthorized access, misuse, or accidental exposure of personal data.
           </p>
         </div>
 
@@ -68,18 +75,18 @@ export default function PrivacyPolicy() {
 
         <div className="mt-6 space-y-5 text-slate-600">
           <p>
-            Personal information is used to process orders, arrange deliveries,
-            support buyer and seller communication, prevent fraud, and improve
-            the marketplace experience.
+            ExShopi uses personal information to process orders, manage customer accounts,
+            send order updates, support buyer and seller communication, prevent fraud,
+            and improve the overall marketplace experience.
           </p>
           <p>
             ExShopi may use technical data such as device, browser, and session
             information to keep the platform secure and improve performance.
           </p>
           <p>
-            We do not sell customer personal information. Data may be shared
-            only when required for payment processing, order fulfillment,
-            platform operations, or legal compliance.
+            We do not sell customer personal information. Data may be shared only
+            when required for order fulfillment, platform operations, legal compliance,
+            or trusted service providers acting on our behalf.
           </p>
         </div>
 
