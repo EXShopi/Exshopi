@@ -19,8 +19,10 @@ import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
 import {
   describeFirebasePhoneVerificationError,
+  isDevelopmentPhoneOtpFallbackAllowed,
   isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
+  isLivePhoneVerificationRuntime,
   isValidUaePhone,
   normalizeUaePhone,
   resetFirebasePhoneVerification,
@@ -43,6 +45,7 @@ export default function Checkout() {
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
   const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
+  const allowDevOtpFallback = isDevelopmentPhoneOtpFallbackAllowed() && !isLivePhoneVerificationRuntime();
   const [authChecked, setAuthChecked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [otpSessionId, setOtpSessionId] = useState("");
@@ -83,7 +86,7 @@ export default function Checkout() {
   const shippingFee = form.shippingMethod === "express" ? 25 : 12;
   const vatAmount = Math.round(total * 0.05);
   const totalPayable = total + shippingFee + vatAmount;
-  const useBackendOtp = otpProvider === "backend";
+  const useBackendOtp = otpProvider === "backend" && allowDevOtpFallback;
 
   useEffect(() => {
     let mounted = true;
@@ -268,6 +271,9 @@ export default function Checkout() {
     if (normalized.includes("auth/captcha-check-failed")) {
       return "Phone verification could not start. Refresh the page and try again.";
     }
+    if (normalized.includes("auth/invalid-app-credential")) {
+      return "Phone verification could not start. Please refresh the page and try again.";
+    }
     if (normalized.includes("auth/network-request-failed")) {
       return "Network error while contacting phone verification. Check your connection and try again.";
     }
@@ -294,7 +300,7 @@ export default function Checkout() {
       setOtpError("");
       setOtpResendAvailableAt("");
       setOtpCooldownSeconds(0);
-      setOtpProvider(useFirebaseOtp ? "firebase" : "backend");
+      setOtpProvider(useFirebaseOtp ? "firebase" : allowDevOtpFallback ? "backend" : "firebase");
       resetFirebasePhoneVerification();
     }
     setForm((prev) => ({
@@ -351,14 +357,20 @@ export default function Checkout() {
           return;
         } catch (firebaseError) {
           const firebaseDetails = describeFirebasePhoneVerificationError(firebaseError);
-          console.error("[Checkout OTP] Firebase send failed:", firebaseDetails, firebaseError);
+          if (import.meta.env.DEV) {
+            console.error("[Checkout OTP] Firebase send failed:", firebaseDetails, firebaseError);
+          }
 
           if (!shouldFallbackToBackendOtp(firebaseError)) {
             throw firebaseError;
           }
 
-          setOtpMessage("Firebase phone verification is unavailable right now. Switching to ExShopi backup OTP for this checkout.");
+          setOtpMessage("Switching to development OTP verification for this local checkout session.");
         }
+      }
+
+      if (!allowDevOtpFallback) {
+        throw new Error("Phone verification is unavailable right now. Please try again later.");
       }
 
       const response = await codAPI.sendOtp({
@@ -368,7 +380,7 @@ export default function Checkout() {
       setOtpProvider("backend");
       setOtpSessionId(response.sessionId);
       setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
-      const fallbackOtpHint = response.otpCode ? ` Verification code: ${response.otpCode}.` : "";
+      const fallbackOtpHint = import.meta.env.DEV && response.otpCode ? ` Verification code: ${response.otpCode}.` : "";
       setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.${fallbackOtpHint}`);
     } catch (error: any) {
       setOtpError(mapOtpError(error, "send"));
@@ -822,7 +834,7 @@ export default function Checkout() {
                     )}
                     {authChecked && authUser?.id && authRole === "customer" && useBackendOtp && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                        Using ExShopi backup OTP verification for this checkout session. This appears when Firebase phone verification is unavailable or not supported in the current environment.
+                        Using development OTP verification for this local checkout session.
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-6">

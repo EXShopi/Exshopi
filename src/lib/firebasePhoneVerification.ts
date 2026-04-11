@@ -1,5 +1,10 @@
 import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
-import { firebaseAuth, isFirebasePhoneVerificationEnabled } from './firebase';
+import {
+  firebaseAuth,
+  isDevelopmentPhoneOtpFallbackAllowed,
+  isFirebasePhoneVerificationEnabled,
+  isLivePhoneVerificationRuntime,
+} from './firebase';
 
 export { isFirebasePhoneVerificationEnabled };
 
@@ -32,6 +37,10 @@ export function describeFirebasePhoneVerificationError(error: unknown) {
 }
 
 export function shouldFallbackToBackendOtp(error: unknown) {
+  if (!isDevelopmentPhoneOtpFallbackAllowed() || isLivePhoneVerificationRuntime()) {
+    return false;
+  }
+
   const normalized = describeFirebasePhoneVerificationError(error).toLowerCase();
 
   return (
@@ -106,7 +115,9 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
       phone: normalizedPhone,
     };
   } catch (error) {
-    console.error('[Firebase Phone Verification] sendFirebasePhoneCode failed:', describeFirebasePhoneVerificationError(error));
+    if (import.meta.env.DEV) {
+      console.error('[Firebase Phone Verification] sendFirebasePhoneCode failed:', describeFirebasePhoneVerificationError(error));
+    }
     recaptchaVerifier?.clear();
     recaptchaVerifier = null;
     activeContainerId = '';
