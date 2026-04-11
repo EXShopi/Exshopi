@@ -1,16 +1,6 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
-const EXSHOPI_FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyDa8n-OTSLEQW5UITFRUqPY7NKZz__RJEE',
-  authDomain: 'exshopi-ec718.firebaseapp.com',
-  projectId: 'exshopi-ec718',
-  storageBucket: 'exshopi-ec718.firebasestorage.app',
-  messagingSenderId: '58717827364',
-  appId: '1:58717827364:web:cd5de7f1b00c94f7943b1',
-  measurementId: 'G-PG08TBT74Q',
-};
-
 const LIVE_PHONE_VERIFICATION_HOSTS = new Set([
   'exshopi-frontend.onrender.com',
   'exshopi.onrender.com',
@@ -54,22 +44,15 @@ export function isLocalPhoneVerificationRuntime() {
   );
 }
 
-const envFirebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
+const firebaseConfig = {
+  apiKey: String(import.meta.env.VITE_FIREBASE_API_KEY || '').trim(),
+  authDomain: String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '').trim(),
+  projectId: String(import.meta.env.VITE_FIREBASE_PROJECT_ID || '').trim(),
+  storageBucket: String(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '').trim(),
+  messagingSenderId: String(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '').trim(),
+  appId: String(import.meta.env.VITE_FIREBASE_APP_ID || '').trim(),
+  measurementId: String(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '').trim(),
 };
-
-const envMatchesExshopiProject = envFirebaseConfig.projectId === EXSHOPI_FIREBASE_CONFIG.projectId;
-
-const firebaseConfig =
-  isLivePhoneVerificationRuntime() || !envMatchesExshopiProject
-    ? { ...EXSHOPI_FIREBASE_CONFIG }
-    : envFirebaseConfig;
 
 const hasFirebaseConfig = Object.values(firebaseConfig).slice(0, 6).every(Boolean);
 
@@ -77,8 +60,10 @@ if (typeof window !== 'undefined') {
   logFirebaseRuntime('config', {
     hostname: getRuntimeHostname(),
     origin: window.location.origin,
+    apiKey: firebaseConfig.apiKey,
     projectId: firebaseConfig.projectId,
     authDomain: firebaseConfig.authDomain,
+    appId: firebaseConfig.appId,
     liveRuntime: isLivePhoneVerificationRuntime(),
     hasFirebaseConfig,
   });
