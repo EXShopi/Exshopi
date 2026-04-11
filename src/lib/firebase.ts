@@ -77,6 +77,12 @@ export const firebaseApp = hasFirebaseConfig
 
 export const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
 
+if (firebaseAuth) {
+  // Keep Firebase phone auth in real-verification mode on live environments.
+  // Local development can still opt into Firebase's testing behavior when needed.
+  firebaseAuth.settings.appVerificationDisabledForTesting = import.meta.env.DEV && isLocalPhoneVerificationRuntime();
+}
+
 export function isFirebasePhoneVerificationEnabled() {
   return Boolean(firebaseAuth);
 }

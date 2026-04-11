@@ -15,6 +15,7 @@ import { sellerApplicationAPI } from '../../services/api';
 import { UAE_EMIRATES } from '../../lib/marketplaceTemplates';
 import { uploadDocumentFile, uploadImageFile } from '../../lib/uploadClient';
 import {
+  getReadableFirebasePhoneVerificationError,
   getFirebasePhoneVerificationRuntimeInfo,
   isFirebasePhoneVerificationEnabled,
   isValidUaePhone,
@@ -241,6 +242,9 @@ export function SellerRegister() {
     if (raw.includes('auth/too-many-requests')) {
       return 'Too many verification attempts. Please wait and try again.';
     }
+    if (raw.includes('auth/billing-not-enabled')) {
+      return 'SMS verification is not available yet because Firebase billing is not enabled for this project. Enable billing in Firebase to send real OTP messages.';
+    }
     if (raw.includes('auth/operation-not-allowed')) {
       return 'Firebase phone sign-in is not enabled for this project yet.';
     }
@@ -259,7 +263,7 @@ export function SellerRegister() {
     if (raw.includes('auth/code-expired')) {
       return 'The verification code expired. Request a new code and try again.';
     }
-    return 'Phone verification failed. Please try again.';
+    return getReadableFirebasePhoneVerificationError(errorValue);
   };
 
   const handleSendPhoneCode = async () => {

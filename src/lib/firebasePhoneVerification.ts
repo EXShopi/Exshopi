@@ -68,6 +68,56 @@ function getErrorMessage(error: unknown) {
     : '';
 }
 
+function isBillingNotEnabledError(error: unknown) {
+  const normalized = describeFirebasePhoneVerificationError(error).toLowerCase();
+  return (
+    normalized.includes('auth/billing-not-enabled') ||
+    normalized.includes('billing-not-enabled') ||
+    normalized.includes('billing not enabled')
+  );
+}
+
+export function getReadableFirebasePhoneVerificationError(error: unknown) {
+  const normalized = describeFirebasePhoneVerificationError(error).toLowerCase();
+
+  if (isBillingNotEnabledError(error)) {
+    return 'SMS verification is not available yet because Firebase billing is not enabled for this project. Enable billing or upgrade the Firebase plan to send real OTP messages.';
+  }
+  if (normalized.includes('auth/invalid-phone-number')) {
+    return 'Enter a valid UAE phone number before requesting verification.';
+  }
+  if (normalized.includes('auth/too-many-requests')) {
+    return 'Too many verification attempts. Please wait and try again.';
+  }
+  if (normalized.includes('auth/operation-not-allowed')) {
+    return 'Phone Authentication is not enabled in Firebase Authentication for this project.';
+  }
+  if (normalized.includes('auth/unauthorized-domain')) {
+    return 'This domain is not authorized for Firebase phone verification yet.';
+  }
+  if (normalized.includes('auth/captcha-check-failed')) {
+    return 'Phone verification could not start because the reCAPTCHA check failed. Refresh the page and try again.';
+  }
+  if (normalized.includes('auth/invalid-app-credential') || normalized.includes('auth/app-not-authorized')) {
+    return 'Firebase phone verification is blocked for this app right now. Check the Firebase app config and authorized domains.';
+  }
+  if (normalized.includes('auth/network-request-failed')) {
+    return 'Network error while contacting Firebase phone verification. Please try again.';
+  }
+  if (
+    normalized.includes('recaptcha enterprise') ||
+    normalized.includes('recaptcha v2') ||
+    normalized.includes('recaptchaparams') ||
+    normalized.includes('app verification')
+  ) {
+    return 'Phone verification could not start securely. Firebase fell back to reCAPTCHA v2 for this session. Refresh the page and try again.';
+  }
+
+  return error instanceof Error && error.message
+    ? error.message
+    : 'We could not complete phone verification right now. Please try again.';
+}
+
 export function shouldFallbackToBackendOtp(error: unknown) {
   if (!isDevelopmentPhoneOtpFallbackAllowed() || isLivePhoneVerificationRuntime()) {
     return false;
@@ -76,6 +126,7 @@ export function shouldFallbackToBackendOtp(error: unknown) {
   const normalized = describeFirebasePhoneVerificationError(error).toLowerCase();
 
   return (
+    isBillingNotEnabledError(error) ||
     normalized.includes('firebase phone verification is not configured') ||
     normalized.includes('requires localhost or https') ||
     normalized.includes('auth/unauthorized-domain') ||
@@ -233,6 +284,12 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
     confirmationResult = null;
     const errorCode = extractErrorCode(error);
     const errorMessage = getErrorMessage(error);
+
+    if (isBillingNotEnabledError(error)) {
+      throw new Error(
+        'auth/billing-not-enabled Firebase phone verification requires billing to be enabled before real SMS OTP can be sent from this project.'
+      );
+    }
 
     if (errorCode === 'auth/internal-error' && /recaptcha|app verification|app credential/i.test(errorMessage)) {
       throw new Error('auth/invalid-app-credential Firebase reCAPTCHA app verification failed.');

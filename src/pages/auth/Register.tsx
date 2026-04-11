@@ -23,6 +23,7 @@ import { auth, googleProvider, signInWithPopup } from '../../supabaseClient';
 import {
   describeFirebasePhoneVerificationError,
   getFirebasePhoneVerificationRuntimeInfo,
+  getReadableFirebasePhoneVerificationError,
   isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isValidUaePhone,
@@ -83,6 +84,7 @@ const Register = () => {
     if (!raw) return 'We could not send the verification code right now. Please try again.';
     if (raw.includes('auth/invalid-phone-number')) return 'Enter a valid UAE phone number before requesting verification.';
     if (raw.includes('auth/too-many-requests')) return 'Too many verification attempts. Please wait and try again.';
+    if (raw.includes('auth/billing-not-enabled')) return 'SMS verification is not available yet because Firebase billing is not enabled for this project. Enable billing in Firebase to send real OTP messages.';
     if (raw.includes('auth/operation-not-allowed')) return 'Firebase phone sign-in is not enabled for this project yet.';
     if (raw.includes('auth/unauthorized-domain')) return 'This domain is not authorized for Firebase phone verification yet.';
     if (raw.includes('auth/captcha-check-failed')) return 'Phone verification could not start. Refresh the page and try again.';
@@ -96,9 +98,7 @@ const Register = () => {
     if (raw.includes('requires localhost or https')) return 'Phone verification requires localhost or a secure HTTPS domain.';
     if (raw.includes('not configured')) return 'Firebase phone verification is not configured for this environment.';
 
-    return error instanceof Error && error.message
-      ? error.message
-      : 'We could not complete phone verification right now. Please try again.';
+    return getReadableFirebasePhoneVerificationError(error);
   };
 
   const handleSendOtp = async () => {

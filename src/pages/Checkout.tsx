@@ -20,6 +20,7 @@ import AuthService from "../lib/authService";
 import {
   describeFirebasePhoneVerificationError,
   getFirebasePhoneVerificationRuntimeInfo,
+  getReadableFirebasePhoneVerificationError,
   isFirebasePhoneVerificationEnabled,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isValidUaePhone,
@@ -270,6 +271,9 @@ export default function Checkout() {
     if (normalized.includes("auth/too-many-requests")) {
       return "Too many verification attempts. Please wait and try again.";
     }
+    if (normalized.includes("auth/billing-not-enabled")) {
+      return "SMS verification is not available yet because Firebase billing is not enabled for this project. Enable billing in Firebase to send real OTP messages.";
+    }
     if (normalized.includes("auth/operation-not-allowed")) {
       return "Firebase phone sign-in is not enabled for this project yet.";
     }
@@ -311,6 +315,11 @@ export default function Checkout() {
       normalized.includes("operation-not-supported-in-this-environment")
     ) {
       return "Phone verification works only on localhost or an HTTPS domain. Your current LAN HTTP URL is not supported by Firebase phone auth.";
+    }
+
+    const readable = getReadableFirebasePhoneVerificationError(raw);
+    if (readable && readable !== raw) {
+      return readable;
     }
 
     return phase === "send"
