@@ -57,12 +57,15 @@ const firebaseConfig = {
   measurementId: String(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '').trim(),
 };
 
-const hasFirebasePhoneConfig =
-  !!firebaseConfig.apiKey &&
-  !!firebaseConfig.authDomain &&
-  !!firebaseConfig.projectId &&
-  !!firebaseConfig.appId &&
-  !!firebaseConfig.messagingSenderId;
+const missingFirebaseEnvVars = [
+  !firebaseConfig.apiKey ? 'VITE_FIREBASE_API_KEY' : '',
+  !firebaseConfig.authDomain ? 'VITE_FIREBASE_AUTH_DOMAIN' : '',
+  !firebaseConfig.projectId ? 'VITE_FIREBASE_PROJECT_ID' : '',
+  !firebaseConfig.appId ? 'VITE_FIREBASE_APP_ID' : '',
+  !firebaseConfig.messagingSenderId ? 'VITE_FIREBASE_MESSAGING_SENDER_ID' : '',
+].filter(Boolean);
+
+const hasFirebasePhoneConfig = missingFirebaseEnvVars.length === 0;
 
 if (typeof window !== 'undefined') {
   console.log('FIREBASE ENV CHECK', {
@@ -77,6 +80,15 @@ if (typeof window !== 'undefined') {
     origin: window.location.origin,
   });
 
+  if (!hasFirebasePhoneConfig) {
+    console.error('[firebase] Missing required Firebase env vars for Phone Auth', {
+      missingFirebaseEnvVars,
+      firebaseConfig,
+      hostname: window.location.hostname,
+      origin: window.location.origin,
+    });
+  }
+
   logFirebaseRuntime('config', {
     hostname: getRuntimeHostname(),
     origin: window.location.origin,
@@ -87,6 +99,7 @@ if (typeof window !== 'undefined') {
     messagingSenderId: firebaseConfig.messagingSenderId,
     liveRuntime: isLivePhoneVerificationRuntime(),
     hasFirebasePhoneConfig,
+    missingFirebaseEnvVars,
   });
 }
 
