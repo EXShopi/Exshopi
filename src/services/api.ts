@@ -1,6 +1,9 @@
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
 
+const DEFAULT_PROD_API_BASE = 'https://exshopi-api.onrender.com/api';
+const DEFAULT_DEV_API_BASE = 'http://localhost:3001/api';
+
 function readPersistedAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
 
@@ -33,26 +36,17 @@ export function getAuthHeaders() {
 }
 
 const configuredApiBase =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '';
+  String(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').trim();
 
-// API base URL: prefer explicit env var, fallback to production API host
 export const API_BASE =
-  configuredApiBase || 'https://exshopi-api.onrender.com/api';
+  configuredApiBase ||
+  (import.meta.env.PROD ? DEFAULT_PROD_API_BASE : DEFAULT_DEV_API_BASE);
 
 // Only treat as an explicit API base when an env var was provided
 export const hasExplicitApiBase = Boolean(configuredApiBase);
 
 function isLocalDevRuntime() {
-  if (typeof window === 'undefined') return import.meta.env.DEV;
-  const host = window.location.hostname || '';
-  return (
-    import.meta.env.DEV ||
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host.startsWith('10.') ||
-    host.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-  );
+  return import.meta.env.DEV;
 }
 
 function shouldPreferBackendProductApi() {
@@ -75,6 +69,10 @@ export function buildApiUrl(pathOrUrl: string): string | null {
   return API_BASE.replace(/\/$/, '') + '/' + pathOrUrl;
 }
 
+if (typeof window !== 'undefined') {
+  console.info('[api] API_BASE', API_BASE);
+}
+
 export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
   const url = buildApiUrl(pathOrUrl);
 
@@ -90,7 +88,14 @@ export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
   }
 
   try {
-    return await fetch(url, init);
+    const response = await fetch(url, init);
+    console.info('[api] response', {
+      url,
+      status: response.status,
+      ok: response.ok,
+      contentType: response.headers.get('content-type') || '',
+    });
+    return response;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`Network error while fetching ${url}: ${msg}`);
@@ -130,10 +135,17 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       ...init,
       signal: init.signal || controller.signal,
     });
+    console.info('[api] response', {
+      url,
+      status: response.status,
+      ok: response.ok,
+      contentType: response.headers.get('content-type') || '',
+    });
+    return response;
   } catch (error: any) {
     if (error?.name === 'AbortError') {
       throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);

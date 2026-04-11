@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-ro
 import { ScrollToTop } from "./components/ScrollToTop";
 import { RouteProgressBar } from "./components/ui/RouteProgressBar";
 import { OrbitLoader } from "./components/ui/OrbitLoader";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import { SellerLayout } from "./layouts/SellerLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
@@ -32,6 +33,8 @@ const PopularCollectionPage = lazy(() => import("./pages/PopularCollectionPage")
 const CampaignCollectionPage = lazy(() => import("./pages/CampaignCollectionPage"));
 const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
 const TrackOrder = lazy(() => import("./pages/TrackOrder"));
+const CustomerLogin = lazy(() => import("./pages/auth/Login"));
+const CustomerRegister = lazy(() => import("./pages/auth/Register"));
 
 const SellerDashboard = lazy(() => import("./pages/seller/SellerDashboard"));
 const SellerProducts = lazy(() => import("./pages/seller/SellerProducts"));
@@ -132,6 +135,38 @@ function PasswordRecoveryRedirect() {
   return null;
 }
 
+function RouteDebugLogger() {
+  const location = useLocation();
+
+  useEffect(() => {
+    console.info('[route] navigate', location.pathname, {
+      search: location.search,
+      hash: location.hash,
+    });
+  }, [location.hash, location.pathname, location.search]);
+
+  return null;
+}
+
+function NotFound() {
+  return (
+    <div className="min-h-[70vh] bg-slate-50 flex items-center justify-center px-4">
+      <div className="max-w-xl text-center">
+        <h1 className="text-3xl font-black text-slate-900">Page not found</h1>
+        <p className="mt-4 text-slate-500 font-semibold">
+          The page you requested is unavailable or may have moved.
+        </p>
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-4 font-bold text-white transition hover:bg-blue-700"
+        >
+          Back to Home
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -152,13 +187,18 @@ export default function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <PasswordRecoveryRedirect />
-      <RouteProgressBar />
-      <ScrollToTop />
+    <ErrorBoundary>
+      <BrowserRouter>
+        <PasswordRecoveryRedirect />
+        <RouteDebugLogger />
+        <RouteProgressBar />
+        <ScrollToTop />
 
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/login" element={<CustomerLogin />} />
+            <Route path="/register" element={<CustomerRegister />} />
+
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
             <Route path="/products" element={<ProductListing />} />
@@ -236,8 +276,11 @@ export default function App() {
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/support" element={<AdminSupport />} />
           </Route>
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

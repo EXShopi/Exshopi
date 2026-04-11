@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -33,6 +33,13 @@ const Login = () => {
 
   const from = (location.state as any)?.from?.pathname || '/';
   const loginReason = (location.state as any)?.reason || '';
+
+  useEffect(() => {
+    console.info('[login] mounted', {
+      from,
+      reason: loginReason,
+    });
+  }, [from, loginReason]);
 
   const handleAuthSuccess = async (user: any, authResult?: any) => {
     try {

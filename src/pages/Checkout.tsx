@@ -58,6 +58,7 @@ export default function Checkout() {
   const [otpProvider, setOtpProvider] = useState<"firebase" | "backend">(
     useFirebaseOtp ? "firebase" : "backend"
   );
+  const [pageError, setPageError] = useState("");
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -87,6 +88,14 @@ export default function Checkout() {
   const useBackendOtp = otpProvider === "backend" && allowDevOtpFallback;
 
   useEffect(() => {
+    console.info("[checkout] mounted", {
+      itemCount: items.length,
+      phoneVerificationSupported,
+      useFirebaseOtp,
+    });
+  }, [items.length, phoneVerificationSupported, useFirebaseOtp]);
+
+  useEffect(() => {
     return () => {
       resetFirebasePhoneVerification();
     };
@@ -96,46 +105,52 @@ export default function Checkout() {
     let mounted = true;
 
     const ensureCustomerSession = async () => {
-      const currentUserId = authUser?.id || authUser?.uid || "";
-      const currentRole = authRole || null;
+      try {
+        const currentUserId = authUser?.id || authUser?.uid || "";
+        const currentRole = authRole || null;
 
-      if (currentUserId && currentRole === "customer") {
-        if (mounted) setAuthChecked(true);
-        return;
-      }
-
-      const restored = await AuthService.restoreSession().catch(() => null);
-      if (!mounted) return;
-
-      if (restored?.user?.id) {
-        setUser({
-          id: restored.user.id,
-          uid: restored.user.id,
-          email: restored.user.email || "",
-          name: restored.user.name || restored.user.fullName || restored.user.displayName || "",
-          fullName: restored.user.fullName || restored.user.name || restored.user.displayName || "",
-          displayName: restored.user.displayName || restored.user.name || restored.user.fullName || "",
-          phone: restored.user.phone || "",
-          status: restored.user.status || "active",
-          country: restored.user.country || "AE",
-          sellerApplicationStatus: restored.user.sellerApplicationStatus || null,
-        });
-        setRole((restored.role as any) || "customer");
-        setAccessToken(restored.accessToken || null);
-
-        if (restored.role === "customer") {
-          setAuthChecked(true);
+        if (currentUserId && currentRole === "customer") {
+          if (mounted) setAuthChecked(true);
           return;
         }
-      }
 
-      navigate("/login", {
-        replace: true,
-        state: {
-          from: location,
-          reason: "checkout_requires_customer_login",
-        },
-      });
+        const restored = await AuthService.restoreSession().catch(() => null);
+        if (!mounted) return;
+
+        if (restored?.user?.id) {
+          setUser({
+            id: restored.user.id,
+            uid: restored.user.id,
+            email: restored.user.email || "",
+            name: restored.user.name || restored.user.fullName || restored.user.displayName || "",
+            fullName: restored.user.fullName || restored.user.name || restored.user.displayName || "",
+            displayName: restored.user.displayName || restored.user.name || restored.user.fullName || "",
+            phone: restored.user.phone || "",
+            status: restored.user.status || "active",
+            country: restored.user.country || "AE",
+            sellerApplicationStatus: restored.user.sellerApplicationStatus || null,
+          });
+          setRole((restored.role as any) || "customer");
+          setAccessToken(restored.accessToken || null);
+
+          if (restored.role === "customer") {
+            setAuthChecked(true);
+            return;
+          }
+        }
+
+        navigate("/login", {
+          replace: true,
+          state: {
+            from: location,
+            reason: "checkout_requires_customer_login",
+          },
+        });
+      } catch (sessionError) {
+        console.error("[checkout] session restore failed", sessionError);
+        if (!mounted) return;
+        setPageError("We couldn't restore your checkout session. Please refresh and sign in again.");
+      }
     };
 
     ensureCustomerSession();
@@ -564,6 +579,12 @@ export default function Checkout() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-8 px-4">
       <div className="mx-auto max-w-[1200px]">
+        {pageError ? (
+          <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-700">
+            {pageError}
+          </div>
+        ) : null}
+
         {/* Back Button */}
         <Link
           to="/cart"
