@@ -8,29 +8,50 @@ const cleanEnv = (value: string | undefined) =>
 
 const supabaseUrl = cleanEnv(import.meta.env.VITE_SUPABASE_URL);
 const supabaseAnonKey = cleanEnv(import.meta.env.VITE_SUPABASE_ANON_KEY);
+const missingFrontendEnvVars: string[] = [];
 
 if (!supabaseUrl) {
-  throw new Error("Missing VITE_SUPABASE_URL");
+  missingFrontendEnvVars.push("VITE_SUPABASE_URL");
 }
 
 if (!supabaseAnonKey) {
-  throw new Error("Missing VITE_SUPABASE_ANON_KEY");
+  missingFrontendEnvVars.push("VITE_SUPABASE_ANON_KEY");
 }
 
-try {
-  new URL(supabaseUrl);
-} catch {
-  throw new Error(`Invalid VITE_SUPABASE_URL: ${supabaseUrl}`);
+let resolvedSupabaseUrl = supabaseUrl;
+if (resolvedSupabaseUrl) {
+  try {
+    new URL(resolvedSupabaseUrl);
+  } catch {
+    missingFrontendEnvVars.push(`Invalid VITE_SUPABASE_URL: ${resolvedSupabaseUrl}`);
+    resolvedSupabaseUrl = "";
+  }
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+const hasSupabaseEnv = missingFrontendEnvVars.length === 0;
+
+if (!hasSupabaseEnv && typeof console !== "undefined") {
+  console.error(
+    `[ExShopi Frontend] Missing or invalid public Supabase env: ${missingFrontendEnvVars.join(", ")}. ` +
+      "Set the public Vite env vars on the frontend deployment and redeploy."
+  );
+}
+
+const fallbackSupabaseUrl = "https://placeholder.invalid";
+const fallbackSupabaseAnonKey = "missing-public-supabase-anon-key";
+
+export const supabase = createClient(
+  hasSupabaseEnv ? resolvedSupabaseUrl : fallbackSupabaseUrl,
+  hasSupabaseEnv ? supabaseAnonKey : fallbackSupabaseAnonKey,
+  {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: "pkce",
   },
-});
+  }
+);
 
 export const auth = {
   currentUser: null as any,
