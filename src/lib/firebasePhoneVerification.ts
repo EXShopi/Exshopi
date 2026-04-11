@@ -52,6 +52,7 @@ export function describeFirebasePhoneVerificationError(error: unknown) {
 export function getFirebasePhoneVerificationRuntimeInfo() {
   return {
     hostname: typeof window === 'undefined' ? '' : window.location.hostname || '',
+    origin: typeof window === 'undefined' ? '' : window.location.origin || '',
     projectId: firebaseApp?.options?.projectId || '',
     authDomain: firebaseApp?.options?.authDomain || '',
     liveRuntime: isLivePhoneVerificationRuntime(),
@@ -235,6 +236,10 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
 
     if (errorCode === 'auth/internal-error' && /recaptcha|app verification|app credential/i.test(errorMessage)) {
       throw new Error('auth/invalid-app-credential Firebase reCAPTCHA app verification failed.');
+    }
+
+    if (errorCode === 'auth/internal-error') {
+      throw new Error(`auth/internal-error ${errorMessage || 'Firebase phone verification failed internally.'}`.trim());
     }
 
     throw error instanceof Error ? error : new Error(String(error || 'Unknown phone verification error'));

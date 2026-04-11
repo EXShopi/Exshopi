@@ -11,6 +11,13 @@ const EXSHOPI_FIREBASE_CONFIG = {
   measurementId: 'G-PG08TBT74Q',
 };
 
+const LIVE_PHONE_VERIFICATION_HOSTS = new Set([
+  'exshopi-frontend.onrender.com',
+  'exshopi.onrender.com',
+  'exshopi.com',
+  'www.exshopi.com',
+]);
+
 function getRuntimeHostname() {
   if (typeof window === 'undefined') return '';
   return (window.location.hostname || '').trim().toLowerCase();
@@ -34,7 +41,7 @@ export function isLivePhoneVerificationRuntime() {
 
   if (typeof window === 'undefined') return false;
 
-  return window.location.protocol === 'https:';
+  return window.location.protocol === 'https:' && LIVE_PHONE_VERIFICATION_HOSTS.has(host);
 }
 
 export function isLocalPhoneVerificationRuntime() {
@@ -69,6 +76,7 @@ const hasFirebaseConfig = Object.values(firebaseConfig).slice(0, 6).every(Boolea
 if (typeof window !== 'undefined') {
   logFirebaseRuntime('config', {
     hostname: getRuntimeHostname(),
+    origin: window.location.origin,
     projectId: firebaseConfig.projectId,
     authDomain: firebaseConfig.authDomain,
     liveRuntime: isLivePhoneVerificationRuntime(),

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -26,7 +26,6 @@ import {
   normalizeUaePhone,
   resetFirebasePhoneVerification,
   sendFirebasePhoneCode,
-  shouldFallbackToBackendOtp,
   verifyFirebasePhoneCode,
 } from "../lib/firebasePhoneVerification";
 
@@ -44,7 +43,6 @@ export default function Checkout() {
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
   const useFirebaseOtp = phoneVerificationSupported && isFirebasePhoneVerificationEnabled();
-  const allowDevOtpFallback = import.meta.env.DEV;
   const [authChecked, setAuthChecked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [otpSessionId, setOtpSessionId] = useState("");
@@ -56,10 +54,9 @@ export default function Checkout() {
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [otpResendAvailableAt, setOtpResendAvailableAt] = useState("");
   const [otpCooldownSeconds, setOtpCooldownSeconds] = useState(0);
-  const [otpProvider, setOtpProvider] = useState<"firebase" | "backend">(
-    useFirebaseOtp ? "firebase" : "backend"
-  );
+  const [otpProvider, setOtpProvider] = useState<"firebase" | "backend">("firebase");
   const [pageError, setPageError] = useState("");
+  const sendOtpLockRef = useRef(false);
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -86,7 +83,6 @@ export default function Checkout() {
   const shippingFee = form.shippingMethod === "express" ? 25 : 12;
   const vatAmount = Math.round(total * 0.05);
   const totalPayable = total + shippingFee + vatAmount;
-  const useBackendOtp = otpProvider === "backend" && allowDevOtpFallback;
 
   useEffect(() => {
     console.info("[checkout] mounted", {
@@ -295,8 +291,10 @@ export default function Checkout() {
     if (normalized.includes("auth/captcha-check-failed")) {
       return "Phone verification could not start. Refresh the page and try again.";
     }
+    if (normalized.includes("auth/internal-error")) {
+      return "Firebase phone verification failed internally. Refresh the page and try again.";
+    }
     if (
-      normalized.includes("auth/internal-error") ||
       normalized.includes("recaptchaparams") ||
       normalized.includes("app verification")
     ) {
@@ -331,7 +329,7 @@ export default function Checkout() {
       setOtpError("");
       setOtpResendAvailableAt("");
       setOtpCooldownSeconds(0);
-      setOtpProvider(useFirebaseOtp ? "firebase" : allowDevOtpFallback ? "backend" : "firebase");
+      setOtpProvider("firebase");
       resetFirebasePhoneVerification();
     }
     setForm((prev) => ({
@@ -365,6 +363,11 @@ export default function Checkout() {
   };
 
   const handleSendOtp = async () => {
+    if (sendOtpLockRef.current) {
+      console.info("[checkout] send-code skipped because a request is already in flight");
+      return;
+    }
+
     try {
       if (!authChecked || !authUser?.id || authRole !== "customer") {
         setOtpError("Please sign in to your customer account before phone verification.");
@@ -374,48 +377,34 @@ export default function Checkout() {
         setOtpError("Enter a valid UAE phone number and email before requesting verification.");
         return;
       }
+
+      if (!useFirebaseOtp) {
+        setOtpError("Firebase phone verification is unavailable for this checkout session.");
+        return;
+      }
+
+      sendOtpLockRef.current = true;
       setSendingOtp(true);
       setOtpError("");
+      setOtpMessage("");
       const normalizedPhone = normalizeUaePhone(form.phone);
-
-      if (useFirebaseOtp) {
-        try {
-          const response = await sendFirebasePhoneCode(normalizedPhone, "checkout-firebase-recaptcha");
-          setOtpProvider("firebase");
-          setOtpSessionId(`firebase:${response.phone}`);
-          setOtpResendAvailableAt(new Date(Date.now() + 60 * 1000).toISOString());
-          setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
-          return;
-        } catch (firebaseError) {
-          const firebaseDetails = describeFirebasePhoneVerificationError(firebaseError);
-          if (import.meta.env.DEV) {
-            console.error("[Checkout OTP] Firebase send failed:", firebaseDetails, firebaseError);
-          }
-
-          if (!shouldFallbackToBackendOtp(firebaseError)) {
-            throw firebaseError;
-          }
-
-          setOtpMessage("Switching to development OTP verification for this local checkout session.");
-        }
-      }
-
-      if (!allowDevOtpFallback) {
-        throw new Error("Phone verification is unavailable right now. Please try again later.");
-      }
-
-      const response = await codAPI.sendOtp({
+      console.info("[checkout] send-code requested", {
+        ...getFirebasePhoneVerificationRuntimeInfo(),
         phone: normalizedPhone,
-        email: form.email,
       });
-      setOtpProvider("backend");
-      setOtpSessionId(response.sessionId);
-      setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
-      const fallbackOtpHint = import.meta.env.DEV && response.otpCode ? ` Verification code: ${response.otpCode}.` : "";
-      setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.${fallbackOtpHint}`);
+      const response = await sendFirebasePhoneCode(normalizedPhone, "checkout-firebase-recaptcha");
+      setOtpProvider("firebase");
+      setOtpSessionId(`firebase:${response.phone}`);
+      setOtpResendAvailableAt(new Date(Date.now() + 60 * 1000).toISOString());
+      setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
     } catch (error: any) {
+      console.error("[checkout] send-code failed", {
+        ...getFirebasePhoneVerificationRuntimeInfo(),
+        error: describeFirebasePhoneVerificationError(error),
+      });
       setOtpError(mapOtpError(error, "send"));
     } finally {
+      sendOtpLockRef.current = false;
       setSendingOtp(false);
     }
   };
@@ -867,11 +856,6 @@ export default function Checkout() {
                     {authChecked && (!authUser?.id || authRole !== "customer") && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
                         Sign in first. COD verification and order placement require a customer account.
-                      </div>
-                    )}
-                    {authChecked && authUser?.id && authRole === "customer" && useBackendOtp && (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                        Using development OTP verification for this local checkout session.
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-6">
