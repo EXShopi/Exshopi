@@ -321,8 +321,8 @@ export default function MegaCategoryCarousel() {
   };
 
   return (
-    <section className="mx-auto mt-10 max-w-[1800px] px-4 md:px-6">
-      <div className="relative overflow-hidden">
+    <section className="mx-auto mt-10 max-w-[1800px] overflow-x-hidden px-4 md:px-6">
+      <div className="relative max-w-full overflow-hidden">
         <button
           type="button"
           onClick={() => scroll("left")}
@@ -343,14 +343,14 @@ export default function MegaCategoryCarousel() {
 
         <div
           ref={scrollRef}
-          className="overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory scroll-px-1"
+          className="max-w-full overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory scroll-px-1"
         >
-          <div className="flex w-max gap-5 pb-2">
+          <div className="flex w-max gap-4 pb-2 sm:gap-5">
             {megaCategories.map((item) => (
               <a
                 key={item.title}
                 href={item.link}
-                className="group min-w-[156px] max-w-[156px] snap-start text-center"
+                className="group min-w-[132px] max-w-[132px] snap-start text-center sm:min-w-[144px] sm:max-w-[144px] md:min-w-[156px] md:max-w-[156px]"
               >
                 <div className="relative overflow-hidden rounded-[26px] border border-[#efc7b7] bg-[linear-gradient(180deg,#f7cbbd_0%,#f8d4c8_58%,#ffffff_100%)] shadow-[0_6px_18px_rgba(15,23,42,0.10)] transition-shadow duration-300 hover:shadow-[0_14px_28px_rgba(15,23,42,0.14)]">
                   {item.badge ? (
@@ -359,16 +359,16 @@ export default function MegaCategoryCarousel() {
                     </div>
                   ) : null}
 
-                  <div className="relative flex h-[172px] items-center justify-center overflow-visible px-4">
+                  <div className="relative flex h-[150px] items-center justify-center overflow-visible px-3 sm:h-[162px] sm:px-4 md:h-[172px]">
                     <img
                       src={item.image}
                       alt={item.title}
-                      className="relative h-[120px] w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                      className="relative h-[102px] w-auto object-contain transition-transform duration-300 group-hover:scale-105 sm:h-[112px] md:h-[120px]"
                     />
                   </div>
                 </div>
 
-                <h3 className="mx-auto mt-4 max-w-[145px] text-[17px] font-semibold leading-6 text-slate-800">
+                <h3 className="mx-auto mt-3 max-w-[124px] text-[15px] font-semibold leading-5 text-slate-800 sm:max-w-[138px] sm:text-[16px] md:mt-4 md:max-w-[145px] md:text-[17px] md:leading-6">
                   {item.title}
                 </h3>
               </a>

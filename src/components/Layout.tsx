@@ -16,12 +16,12 @@ export default function Layout() {
   }, [direction, lang]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-slate-50 text-slate-900">
       <TopBar />
       <Navbar />
       <PremiumCategoryNav />
 
-      <main>
+      <main className="max-w-full overflow-x-hidden">
         <Outlet />
       </main>
 

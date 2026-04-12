@@ -150,14 +150,14 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-[80] border-b border-slate-200 bg-white/98 backdrop-blur-xl shadow-sm">
+      <header className="sticky top-0 z-[80] max-w-full overflow-x-clip border-b border-slate-200 bg-white/98 backdrop-blur-xl shadow-sm">
         {/* Premium accent line under header */}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent opacity-60"></div>
         
         <div className="mx-auto max-w-[1800px] px-3 md:px-6">
           <div className="flex flex-col gap-2 py-1.5 md:gap-4 md:py-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2 md:gap-4">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-4">
                 <button
                   onClick={() => setSidebarOpen(true)}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-50 md:h-12 md:w-12 md:rounded-2xl"
@@ -166,14 +166,14 @@ export default function Navbar() {
                   <Menu className="h-3.5 w-3.5 md:h-5 md:w-5" />
                 </button>
 
-                <Link to="/" className="flex min-w-0 items-center">
+                <Link to="/" className="flex min-w-0 max-w-full items-center overflow-hidden">
                   <img
                     src="/logo.png"
                     alt="Exshopi"
-                    className="h-7.5 w-auto object-contain md:h-16"
+                    className="h-7 w-auto shrink-0 object-contain sm:h-8 md:h-16"
                   />
                   <div className="-ml-1 min-w-0 leading-tight">
-                    <div className="truncate text-[16px] font-black tracking-tight text-slate-900 md:text-2xl">
+                    <div className="truncate text-[15px] font-black tracking-tight text-slate-900 sm:text-[16px] md:text-2xl">
                       Exshopi
                     </div>
                     <div className="hidden text-[10px] uppercase tracking-[0.2em] text-slate-500 md:block">
@@ -183,7 +183,7 @@ export default function Navbar() {
                 </Link>
               </div>
 
-              <div className="flex shrink-0 items-center gap-0.5 md:gap-3 xl:hidden">
+              <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-3 xl:hidden">
                 <NavbarWishlistIcon />
                 <PremiumAccountButton
                   isLoggedIn={Boolean(authUser?.id || authUser?.uid)}
@@ -215,8 +215,8 @@ export default function Navbar() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex flex-1 flex-col gap-2 xl:mx-8 xl:max-w-5xl xl:flex-row xl:items-center xl:gap-4">
+            <div className="flex min-w-0 flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-2 xl:mx-8 xl:max-w-5xl xl:flex-row xl:items-center xl:gap-4">
                 <div className="relative hidden xl:block">
                   <button
                     onClick={() => setMegaOpen((prev) => !prev)}
@@ -306,7 +306,7 @@ export default function Navbar() {
                   )}
                 </div>
 
-                <div className="relative group flex h-[44px] w-full items-center overflow-visible rounded-[15px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,250,255,0.92))] pl-2.5 pr-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur-2xl transition-all duration-300 hover:border-slate-300 hover:shadow-[0_22px_50px_rgba(15,23,42,0.12)] focus-within:border-slate-300 focus-within:bg-white focus-within:shadow-[0_22px_50px_rgba(15,23,42,0.12)] md:h-[70px] md:rounded-[24px] md:pl-5 xl:flex-1">
+                <div className="relative group flex h-[44px] min-w-0 w-full max-w-full items-center overflow-visible rounded-[15px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,250,255,0.92))] pl-2.5 pr-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur-2xl transition-all duration-300 hover:border-slate-300 hover:shadow-[0_22px_50px_rgba(15,23,42,0.12)] focus-within:border-slate-300 focus-within:bg-white focus-within:shadow-[0_22px_50px_rgba(15,23,42,0.12)] md:h-[70px] md:rounded-[24px] md:pl-5 xl:flex-1">
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-white shadow-inner md:h-11 md:w-11">
                     <Search className="h-4 w-4 text-blue-600 font-semibold md:h-5 md:w-5" />
                   </div>
@@ -322,7 +322,7 @@ export default function Navbar() {
                       }
                     }}
                     placeholder={storefrontT(lang, "search_placeholder")}
-                    className="h-full min-w-0 w-full bg-transparent px-2 text-[10.5px] font-medium text-slate-900 outline-none ring-0 border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-slate-400 md:px-4 md:text-[16px]"
+                    className="h-full min-w-0 w-full flex-1 bg-transparent px-2 text-[10.5px] font-medium text-slate-900 outline-none ring-0 border-0 shadow-none focus:outline-none focus:ring-0 focus:border-0 placeholder:text-slate-400 md:px-4 md:text-[16px]"
                   />
 
                   <button
@@ -347,7 +347,7 @@ export default function Navbar() {
                   </button>
 
                   {quickSuggestions.length > 0 && (
-                    <div className="absolute left-0 right-0 top-[calc(100%+12px)] z-[95] overflow-hidden rounded-[24px] border border-white/60 bg-white/92 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
+                    <div className="absolute left-0 right-0 top-[calc(100%+12px)] z-[95] max-w-full overflow-hidden rounded-[24px] border border-white/60 bg-white/92 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
                       <div className="border-b border-slate-100 px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                         {storefrontT(lang, "search")}
                       </div>

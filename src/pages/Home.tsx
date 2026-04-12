@@ -49,7 +49,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f7f9]">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-[#f6f7f9]">
       <UAEPrideStrip {...settings.homepage.uaeStrip} />
       <HeroSection />
       <CategorySection />

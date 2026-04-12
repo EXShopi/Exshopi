@@ -55,14 +55,14 @@ export default function PremiumCategoryNav() {
   };
 
   return (
-    <nav className="sticky top-[96px] z-[70] bg-transparent md:top-[96px]">
+    <nav className="sticky top-[96px] z-[70] max-w-full overflow-x-clip bg-transparent md:top-[96px]">
       <div className="mx-auto max-w-[1800px] px-3 pt-2 md:px-6 md:pt-2">
-        <div className="rounded-[22px] border border-slate-200/85 bg-white/95 px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.07)] backdrop-blur-2xl md:rounded-[22px] md:border md:bg-white/95 md:px-2 md:py-2 md:shadow-[0_10px_24px_rgba(15,23,42,0.06)] overflow-visible">
-        <div className="flex items-center gap-2 overflow-x-auto py-0.5 no-scrollbar md:flex-wrap md:justify-center md:overflow-visible">
+        <div className="max-w-full overflow-hidden rounded-[22px] border border-slate-200/85 bg-white/95 px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.07)] backdrop-blur-2xl md:rounded-[22px] md:border md:bg-white/95 md:px-2 md:py-2 md:shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto py-0.5 no-scrollbar md:flex-wrap md:justify-center md:overflow-visible">
           {/* Departments with Departments Mega Menu */}
           <div
             ref={departmentsRef}
-            className="relative"
+            className="relative shrink-0"
             onMouseEnter={() => setDepartmentsOpen(true)}
             onMouseLeave={() => setDepartmentsOpen(false)}
           >

@@ -16,7 +16,7 @@ export default function UAEPrideStrip({
   if (!show) return null;
 
   return (
-    <section className="mb-0 mt-0 w-full px-3 md:px-0">
+    <section className="mb-0 mt-0 w-full max-w-full overflow-x-hidden px-3 md:px-0">
       <style>{`
         @keyframes uaeColorFlow {
           0% {
@@ -51,11 +51,11 @@ export default function UAEPrideStrip({
         }
       `}</style>
 
-      <div className="relative h-[58px] w-full overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-sm md:h-[64px] md:rounded-none md:border-x-0 md:border-y">
+      <div className="relative h-[58px] w-full max-w-full overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-sm md:h-[64px] md:rounded-none md:border-x-0 md:border-y">
         <div className="uae-strip-glow absolute inset-0" />
 
-        <div className="relative flex h-full items-center justify-center gap-4 px-4 md:gap-10 md:px-12">
-          <div className="flex-shrink-0 text-center">
+        <div className="relative flex h-full items-center justify-center gap-3 px-3 sm:gap-4 sm:px-4 md:gap-10 md:px-12">
+          <div className="min-w-0 shrink text-center">
             <p className="text-[11px] font-semibold tracking-[0.16em] text-slate-800 md:text-base">{leftTitle}</p>
             <p className="text-[9px] font-medium tracking-[0.12em] text-slate-600 md:text-sm">{leftSubtitle}</p>
           </div>
@@ -71,7 +71,7 @@ export default function UAEPrideStrip({
             </div>
           </div>
 
-          <div className="flex-shrink-0 text-center">
+          <div className="min-w-0 shrink text-center">
             <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-800 md:text-base">{rightTitle}</p>
             <p className="text-[9px] font-medium tracking-[0.08em] text-slate-600 md:text-sm">{rightSubtitle}</p>
           </div>

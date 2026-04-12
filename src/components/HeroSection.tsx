@@ -147,10 +147,10 @@ export default function HeroSection() {
   };
 
   return (
-    <section className="relative mx-auto mt-2.5 max-w-[1800px] px-3 md:mt-6 md:px-6">
+    <section className="relative mx-auto mt-2.5 max-w-[1800px] overflow-x-hidden px-3 md:mt-6 md:px-6">
       {/* Dynamic glow effect layer - positioned outside hero */}
       <div
-        className="absolute -inset-12 rounded-[40px] blur-2xl opacity-70 transition-all duration-700 ease-in-out pointer-events-none"
+        className="pointer-events-none absolute inset-x-0 -top-10 bottom-0 rounded-[40px] blur-2xl opacity-70 transition-all duration-700 ease-in-out"
         style={{
           background: `radial-gradient(ellipse at center, ${translatedSlides[current].glowColor} 0%, transparent 50%)`,
           zIndex: 0,
@@ -213,8 +213,8 @@ export default function HeroSection() {
                     </div>
                   </div>
 
-                  <div className="pointer-events-none absolute -right-10 -top-10 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
-                  <div className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-emerald-400/20 blur-3xl" />
+                  <div className="pointer-events-none absolute right-0 top-0 h-44 w-44 translate-x-1/4 -translate-y-1/4 rounded-full bg-white/10 blur-3xl md:h-56 md:w-56" />
+                  <div className="pointer-events-none absolute bottom-0 right-0 h-52 w-52 translate-x-1/4 translate-y-1/4 rounded-full bg-emerald-400/20 blur-3xl md:h-72 md:w-72" />
                 </div>
               </div>
             ))}
