@@ -1,5 +1,13 @@
-import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import {
+  ConfirmationResult,
+  PhoneAuthProvider,
+  RecaptchaVerifier,
+  signOut,
+  signInWithCredential,
+  signInWithPhoneNumber,
+} from 'firebase/auth';
+import {
+  EXPECTED_FIREBASE_AUTHORIZED_DOMAINS,
   canAttemptFirebasePhoneVerification,
   firebaseApp,
   firebaseAuth,
@@ -19,13 +27,81 @@ export {
 declare global {
   interface Window {
     recaptchaVerifier?: RecaptchaVerifier;
+    __exshopiFirebasePhoneState?: {
+      recaptchaVerifier: RecaptchaVerifier | null;
+      confirmationResult: ConfirmationResult | null;
+      activeContainerId: string;
+      recaptchaRenderPromise: Promise<number> | null;
+    };
   }
 }
 
-let recaptchaVerifier: RecaptchaVerifier | null = null;
-let confirmationResult: ConfirmationResult | null = null;
-let activeContainerId = '';
-let recaptchaRenderPromise: Promise<number> | null = null;
+type PersistedPhoneOtpSession = {
+  phone: string;
+  verificationId: string;
+  createdAt: string;
+};
+
+const OTP_SESSION_STORAGE_KEY = 'exshopi:firebase-phone-otp-session:v1';
+
+function getGlobalState() {
+  if (typeof window === 'undefined') {
+    return {
+      recaptchaVerifier: null,
+      confirmationResult: null,
+      activeContainerId: '',
+      recaptchaRenderPromise: null,
+    };
+  }
+
+  if (!window.__exshopiFirebasePhoneState) {
+    window.__exshopiFirebasePhoneState = {
+      recaptchaVerifier: null,
+      confirmationResult: null,
+      activeContainerId: '',
+      recaptchaRenderPromise: null,
+    };
+  }
+
+  return window.__exshopiFirebasePhoneState;
+}
+
+function readPersistedOtpSession(): PersistedPhoneOtpSession | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(OTP_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      typeof parsed.phone !== 'string' ||
+      typeof parsed.verificationId !== 'string'
+    ) {
+      return null;
+    }
+
+    return {
+      phone: parsed.phone,
+      verificationId: parsed.verificationId,
+      createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistOtpSession(session: PersistedPhoneOtpSession | null) {
+  if (typeof window === 'undefined') return;
+
+  if (!session) {
+    window.sessionStorage.removeItem(OTP_SESSION_STORAGE_KEY);
+    return;
+  }
+
+  window.sessionStorage.setItem(OTP_SESSION_STORAGE_KEY, JSON.stringify(session));
+}
 
 function logPhoneVerification(label: string, details: Record<string, unknown> = {}) {
   if (typeof window === 'undefined') return;
@@ -63,6 +139,8 @@ export function describeFirebasePhoneVerificationError(error: unknown) {
 }
 
 export function getFirebasePhoneVerificationRuntimeInfo() {
+  const state = getGlobalState();
+  const persistedSession = readPersistedOtpSession();
   return {
     hostname: typeof window === 'undefined' ? '' : window.location.hostname || '',
     origin: typeof window === 'undefined' ? '' : window.location.origin || '',
@@ -70,6 +148,12 @@ export function getFirebasePhoneVerificationRuntimeInfo() {
     authDomain: firebaseApp?.options?.authDomain || '',
     liveRuntime: isLivePhoneVerificationRuntime(),
     enabled: isFirebasePhoneVerificationEnabled(),
+    supportedOrigin: isFirebasePhoneVerificationSupportedOnCurrentOrigin(),
+    hasRecaptchaVerifier: Boolean(state.recaptchaVerifier),
+    hasConfirmationResult: Boolean(state.confirmationResult),
+    activeContainerId: state.activeContainerId,
+    persistedOtpPhone: persistedSession?.phone || '',
+    persistedOtpCreatedAt: persistedSession?.createdAt || '',
   };
 }
 
@@ -102,11 +186,17 @@ export function getReadableFirebasePhoneVerificationError(error: unknown) {
   if (normalized.includes('auth/too-many-requests')) {
     return 'Too many attempts. Please wait.';
   }
+  if (normalized.includes('auth/invalid-verification-code')) {
+    return 'The verification code is incorrect.';
+  }
+  if (normalized.includes('auth/code-expired') || normalized.includes('auth/session-expired')) {
+    return 'The verification code expired. Please request a new code.';
+  }
   if (normalized.includes('auth/operation-not-allowed')) {
     return 'Phone Authentication is not enabled in Firebase Authentication for this project.';
   }
   if (normalized.includes('auth/unauthorized-domain')) {
-    return 'This domain is not authorized for Firebase phone verification yet.';
+    return `This domain is not authorized for Firebase phone verification yet. Add ${EXPECTED_FIREBASE_AUTHORIZED_DOMAINS.join(', ')} to Firebase Authorized Domains.`;
   }
   if (normalized.includes('auth/captcha-check-failed')) {
     return 'Refresh the page and try again';
@@ -165,18 +255,19 @@ export function isValidUaePhone(phone: string) {
 }
 
 function resetRecaptchaState() {
+  const state = getGlobalState();
   logPhoneVerification('verifier-reset', {
-    hadVerifier: Boolean(recaptchaVerifier || (typeof window !== 'undefined' && window.recaptchaVerifier)),
-    activeContainerId,
+    hadVerifier: Boolean(state.recaptchaVerifier || (typeof window !== 'undefined' && window.recaptchaVerifier)),
+    activeContainerId: state.activeContainerId,
   });
-  recaptchaRenderPromise = null;
-  recaptchaVerifier?.clear();
+  state.recaptchaRenderPromise = null;
+  state.recaptchaVerifier?.clear();
   if (typeof window !== 'undefined' && window.recaptchaVerifier) {
     window.recaptchaVerifier.clear();
     delete window.recaptchaVerifier;
   }
-  recaptchaVerifier = null;
-  activeContainerId = '';
+  state.recaptchaVerifier = null;
+  state.activeContainerId = '';
 }
 
 function prepareRecaptchaContainer(containerId: string) {
@@ -193,6 +284,7 @@ function prepareRecaptchaContainer(containerId: string) {
 }
 
 async function ensureRecaptcha(containerId: string, forceRefresh = false) {
+  const state = getGlobalState();
   if (!canAttemptFirebasePhoneVerification() || !firebaseAuth) {
     const missingEnvVars = getMissingFirebasePhoneEnvVars();
     throw new Error(
@@ -212,16 +304,18 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
     throw new Error('Phone verification widget is not ready yet.');
   }
 
-  if (forceRefresh || !recaptchaVerifier || activeContainerId !== containerId) {
+  if (forceRefresh || !state.recaptchaVerifier || state.activeContainerId !== containerId) {
     logPhoneVerification('verifier-create-start', {
       containerId,
       forceRefresh,
-      hadVerifier: Boolean(recaptchaVerifier),
-      activeContainerId,
+      hadVerifier: Boolean(state.recaptchaVerifier),
+      activeContainerId: state.activeContainerId,
     });
-    resetRecaptchaState();
-    prepareRecaptchaContainer(containerId);
-    recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, containerId, {
+    if (forceRefresh || state.activeContainerId !== containerId) {
+      resetRecaptchaState();
+      prepareRecaptchaContainer(containerId);
+    }
+    state.recaptchaVerifier = new RecaptchaVerifier(firebaseAuth, containerId, {
       size: 'invisible',
       callback: () => {
         logPhoneVerification('verifier-callback', { containerId });
@@ -236,10 +330,10 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
       },
     });
     if (typeof window !== 'undefined') {
-      window.recaptchaVerifier = recaptchaVerifier;
+      window.recaptchaVerifier = state.recaptchaVerifier;
     }
-    activeContainerId = containerId;
-    recaptchaRenderPromise = recaptchaVerifier
+    state.activeContainerId = containerId;
+    state.recaptchaRenderPromise = state.recaptchaVerifier
       .render()
       .then((widgetId) => {
         logPhoneVerification('verifier-create-success', {
@@ -258,15 +352,29 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
       });
   }
 
-  if (!recaptchaRenderPromise) {
+  if (!state.recaptchaRenderPromise) {
     throw new Error('Phone verification widget could not be prepared.');
   }
 
-  await recaptchaRenderPromise;
-  return recaptchaVerifier;
+  await state.recaptchaRenderPromise;
+  return state.recaptchaVerifier;
+}
+
+export function getActiveFirebasePhoneOtpSession() {
+  return readPersistedOtpSession();
+}
+
+function clearPhoneConfirmationState(options?: { resetRecaptcha?: boolean }) {
+  const state = getGlobalState();
+  state.confirmationResult = null;
+  persistOtpSession(null);
+  if (options?.resetRecaptcha) {
+    resetRecaptchaState();
+  }
 }
 
 export async function sendFirebasePhoneCode(phone: string, containerId: string) {
+  const state = getGlobalState();
   const normalizedPhone = normalizeUaePhone(phone);
   try {
     logPhoneVerification('send-code-start', {
@@ -274,14 +382,22 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
       containerId,
     });
     const verifier = await ensureRecaptcha(containerId, false);
-    confirmationResult = null;
-    confirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
+    state.confirmationResult = null;
+    const nextConfirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
+    state.confirmationResult = nextConfirmationResult;
+    persistOtpSession({
+      phone: normalizedPhone,
+      verificationId: nextConfirmationResult.verificationId,
+      createdAt: new Date().toISOString(),
+    });
     logPhoneVerification('send-code-success', {
       phone: normalizedPhone,
       containerId,
+      verificationId: nextConfirmationResult.verificationId,
     });
     return {
       phone: normalizedPhone,
+      verificationId: nextConfirmationResult.verificationId,
     };
   } catch (error) {
     console.error(
@@ -294,8 +410,12 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
       containerId,
       error: describeFirebasePhoneVerificationError(error),
     });
-    resetRecaptchaState();
-    confirmationResult = null;
+    clearPhoneConfirmationState({
+      resetRecaptcha:
+        extractErrorCode(error) === 'auth/captcha-check-failed' ||
+        extractErrorCode(error) === 'auth/invalid-app-credential' ||
+        extractErrorCode(error) === 'auth/internal-error',
+    });
     const errorCode = extractErrorCode(error);
     const errorMessage = getErrorMessage(error);
 
@@ -318,24 +438,57 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
 }
 
 export async function verifyFirebasePhoneCode(code: string) {
-  if (!confirmationResult) {
+  const state = getGlobalState();
+  const normalizedCode = String(code || '').trim();
+  const persistedSession = readPersistedOtpSession();
+  const verificationId =
+    state.confirmationResult?.verificationId || persistedSession?.verificationId || '';
+
+  if (!verificationId) {
     throw new Error('Request a verification code first.');
   }
 
   logPhoneVerification('verify-code-start', {
-    codeLength: String(code || '').trim().length,
+    codeLength: normalizedCode.length,
+    hasInMemoryConfirmationResult: Boolean(state.confirmationResult),
+    hasPersistedVerificationId: Boolean(persistedSession?.verificationId),
   });
-  const result = await confirmationResult.confirm(String(code || '').trim());
-  logPhoneVerification('verify-code-success', {
-    phone: result.user.phoneNumber || '',
-  });
-  return {
-    uid: result.user.uid,
-    phone: result.user.phoneNumber || '',
-  };
+
+  try {
+    const result = state.confirmationResult
+      ? await state.confirmationResult.confirm(normalizedCode)
+      : await signInWithCredential(
+          firebaseAuth!,
+          PhoneAuthProvider.credential(verificationId, normalizedCode)
+        );
+
+    logPhoneVerification('verify-code-success', {
+      phone: result.user.phoneNumber || '',
+      verificationId,
+    });
+
+    clearPhoneConfirmationState();
+    await signOut(firebaseAuth!);
+
+    return {
+      uid: result.user.uid,
+      phone: result.user.phoneNumber || persistedSession?.phone || '',
+      verificationId,
+    };
+  } catch (error) {
+    console.error(
+      '[Firebase Phone Verification] verifyFirebasePhoneCode failed:',
+      describeFirebasePhoneVerificationError(error),
+      error
+    );
+    logPhoneVerification('verify-code-failure', {
+      verificationId,
+      error: describeFirebasePhoneVerificationError(error),
+    });
+    throw error instanceof Error ? error : new Error(String(error || 'Unknown phone verification error'));
+  }
 }
 
-export function resetFirebasePhoneVerification() {
-  confirmationResult = null;
-  resetRecaptchaState();
+export function resetFirebasePhoneVerification(options?: { resetRecaptcha?: boolean }) {
+  clearPhoneConfirmationState(options);
 }

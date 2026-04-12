@@ -11,6 +11,10 @@ const LIVE_PHONE_VERIFICATION_HOSTS = new Set([
   '::1',
 ]);
 
+export const EXPECTED_FIREBASE_AUTHORIZED_DOMAINS = Array.from(LIVE_PHONE_VERIFICATION_HOSTS).filter(
+  (host) => !['localhost', '127.0.0.1', '::1'].includes(host)
+);
+
 function getRuntimeHostname() {
   if (typeof window === 'undefined') return '';
   return (window.location.hostname || '').trim().toLowerCase();
@@ -100,6 +104,7 @@ if (typeof window !== 'undefined') {
     liveRuntime: isLivePhoneVerificationRuntime(),
     hasFirebasePhoneConfig,
     missingFirebaseEnvVars,
+    expectedAuthorizedDomains: EXPECTED_FIREBASE_AUTHORIZED_DOMAINS,
   });
 }
 

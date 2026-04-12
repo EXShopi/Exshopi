@@ -23,6 +23,7 @@ import { auth, googleProvider, signInWithPopup } from '../../supabaseClient';
 import {
   canAttemptFirebasePhoneVerification,
   describeFirebasePhoneVerificationError,
+  getActiveFirebasePhoneOtpSession,
   getFirebasePhoneVerificationRuntimeInfo,
   getReadableFirebasePhoneVerificationError,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
@@ -32,6 +33,8 @@ import {
   sendFirebasePhoneCode,
   verifyFirebasePhoneCode,
 } from '../../lib/firebasePhoneVerification';
+
+const REGISTER_FLOW_STORAGE_KEY = 'exshopi:register-flow:v1';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -61,10 +64,49 @@ const Register = () => {
 
   useEffect(() => {
     console.info('[register] mounted', getFirebasePhoneVerificationRuntimeInfo());
-    return () => {
-      resetFirebasePhoneVerification();
-    };
+    try {
+      const raw = window.sessionStorage.getItem(REGISTER_FLOW_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.formData && typeof parsed.formData === 'object') {
+        setFormData((current) => ({ ...current, ...parsed.formData }));
+      }
+      if (typeof parsed?.otp === 'string') setOtp(parsed.otp);
+      if (typeof parsed?.generatedOtp === 'string') setGeneratedOtp(parsed.generatedOtp);
+      if (typeof parsed?.otpMessage === 'string') setOtpMessage(parsed.otpMessage);
+      if (typeof parsed?.phoneVerified === 'boolean') setPhoneVerified(parsed.phoneVerified);
+      const persistedPhoneSession = getActiveFirebasePhoneOtpSession();
+      if (persistedPhoneSession?.phone && !parsed?.phoneVerified) {
+        setStep(3);
+        setOtpMessage(
+          parsed?.otpMessage ||
+            `Verification code sent to ${persistedPhoneSession.phone}. Enter the 6-digit code to finish creating your account.`
+        );
+      } else if (typeof parsed?.step === 'number') {
+        setStep(parsed.step);
+      }
+    } catch (error) {
+      console.warn('[Register Phone Verification] failed to restore register flow:', error);
+    }
   }, []);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(
+        REGISTER_FLOW_STORAGE_KEY,
+        JSON.stringify({
+          step,
+          formData,
+          otp,
+          generatedOtp,
+          otpMessage,
+          phoneVerified,
+        })
+      );
+    } catch (error) {
+      console.warn('[Register Phone Verification] failed to persist register flow:', error);
+    }
+  }, [formData, generatedOtp, otp, otpMessage, phoneVerified, step]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (e.target.name === 'phone') {
@@ -128,6 +170,11 @@ const Register = () => {
       }
 
       const response = await sendFirebasePhoneCode(normalizedPhone, 'recaptcha-container');
+      console.info('[Register Phone Verification] send success', {
+        phone: response.phone,
+        verificationId: response.verificationId,
+        runtime: getFirebasePhoneVerificationRuntimeInfo(),
+      });
       setGeneratedOtp('');
       setStep(3);
       setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to finish creating your account.`);
@@ -202,11 +249,20 @@ const Register = () => {
       
       try {
         if (useFirebaseOtp) {
+          console.info('[Register Phone Verification] verify start', {
+            phone: normalizeUaePhone(formData.phone),
+            otpLength: otp.trim().length,
+            runtime: getFirebasePhoneVerificationRuntimeInfo(),
+          });
           const response = await verifyFirebasePhoneCode(otp);
           const verifiedPhone = normalizeUaePhone(response.phone);
           if (verifiedPhone !== normalizeUaePhone(formData.phone)) {
             throw new Error('Verified phone does not match the registration number.');
           }
+          console.info('[Register Phone Verification] verify success', {
+            phone: verifiedPhone,
+            verificationId: response.verificationId,
+          });
         } else if (useDevOtpFallback) {
           if (otp !== generatedOtp) {
             throw new Error('Invalid OTP code. Please try again.');
@@ -216,23 +272,39 @@ const Register = () => {
         }
 
         setPhoneVerified(true);
-        setVerifyingOtp(false);
         setLoading(true);
 
-        // Register via backend API
-        await userAPI.register({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          phone: normalizeUaePhone(formData.phone),
-          role: formData.role,
-        });
+        try {
+          console.info('[Register Phone Verification] profile creation start', {
+            email: formData.email,
+            phone: normalizeUaePhone(formData.phone),
+          });
 
-        // Auto-login after register to set localStorage and session
-        const logged = await userAPI.login(formData.email, formData.password);
-        await handleAuthSuccess(logged, formData.role, formData.name);
+          await userAPI.register({
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+            phone: normalizeUaePhone(formData.phone),
+            role: formData.role,
+          });
+
+          const logged = await userAPI.login(formData.email, formData.password);
+          await handleAuthSuccess(logged, formData.role, formData.name);
+          window.sessionStorage.removeItem(REGISTER_FLOW_STORAGE_KEY);
+        } catch (postVerificationError) {
+          console.error(
+            '[Register Phone Verification] post-verification profile creation failed:',
+            postVerificationError
+          );
+          setError(
+            postVerificationError instanceof Error && postVerificationError.message
+              ? `Phone verified successfully, but account creation failed: ${postVerificationError.message}`
+              : 'Phone verified successfully, but account creation failed. Please try signing up again or contact support.'
+          );
+          return;
+        }
       } catch (err: any) {
-        console.error('Registration error:', err);
+        console.error('[Register Phone Verification] verification failed:', describeFirebasePhoneVerificationError(err), err);
         setPhoneVerified(false);
         setError(mapPhoneVerificationError(err));
       } finally {
