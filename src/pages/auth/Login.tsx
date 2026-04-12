@@ -12,8 +12,6 @@ import {
   EyeOff, 
   AlertCircle,
   CheckCircle2,
-  ArrowLeft,
-  Loader2
 } from 'lucide-react';
 import AuthService from '../../lib/authService';
 import { userAPI } from '../../services/api';
@@ -108,7 +106,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
+    <div className="min-h-screen bg-white flex flex-col lg:flex-row overflow-x-hidden">
       {/* Left Side - Visual/Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-950 relative items-center justify-center p-12 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(139,92,246,0.15),transparent)] animate-pulse"></div>
@@ -158,20 +156,24 @@ const Login = () => {
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="flex-1 flex flex-col justify-center p-6 md:p-12 lg:p-24 bg-white relative">
-        <div className="lg:hidden absolute top-8 left-8">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-slate-950 rounded-xl flex items-center justify-center">
-              <span className="text-xl font-black text-white">E</span>
+      <div className="flex-1 flex flex-col bg-white px-4 pb-6 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pb-8 sm:pt-[max(1.25rem,env(safe-area-inset-top))] md:px-12 md:py-12 lg:justify-center lg:px-24 lg:py-16">
+        <div className="lg:hidden flex justify-center pt-3 sm:pt-4">
+          <Link to="/" className="inline-flex max-w-full items-center gap-2.5 rounded-2xl px-2 py-1">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 sm:h-11 sm:w-11">
+              <span className="text-lg font-black text-white sm:text-xl">E</span>
             </div>
-            <span className="text-2xl font-black text-slate-950 tracking-tighter uppercase">Exshopi</span>
+            <span className="truncate text-[1.65rem] font-black uppercase tracking-tighter text-slate-950 sm:text-[1.85rem]">
+              Exshopi
+            </span>
           </Link>
         </div>
 
-        <div className="max-w-md w-full mx-auto space-y-10">
-          <div className="space-y-2">
-            <h2 className="text-4xl font-black text-slate-950 tracking-tight">Sign In</h2>
-            <p className="text-slate-500 font-medium">Enter your credentials to access your account</p>
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center space-y-6 pt-8 sm:space-y-8 sm:pt-10 md:space-y-10 lg:pt-0">
+          <div className="space-y-2 text-center sm:text-left">
+            <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Sign In</h2>
+            <p className="max-w-sm text-sm font-medium leading-6 text-slate-500 sm:text-base sm:leading-7">
+              Enter your credentials to access your account
+            </p>
           </div>
 
           <AnimatePresence mode="wait">
@@ -180,10 +182,10 @@ const Login = () => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-center gap-3 text-blue-700 text-sm font-bold"
+                className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-700 sm:items-center"
               >
-                <CheckCircle2 size={18} />
-                Sign in to your customer account to continue checkout and phone verification.
+                <CheckCircle2 size={18} className="mt-0.5 shrink-0 sm:mt-0" />
+                <span>Sign in to your customer account to continue checkout and phone verification.</span>
               </motion.div>
             )}
 
@@ -192,10 +194,10 @@ const Login = () => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="p-4 rounded-2xl bg-red-50 border border-red-100 flex items-center gap-3 text-red-600 text-sm font-bold"
+                className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold leading-6 text-red-600 sm:items-center"
               >
-                <AlertCircle size={18} />
-                {error}
+                <AlertCircle size={18} className="mt-0.5 shrink-0 sm:mt-0" />
+                <span>{error}</span>
               </motion.div>
             )}
 
@@ -203,21 +205,21 @@ const Login = () => {
               <motion.div 
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-2xl bg-green-50 border border-green-100 flex items-center gap-3 text-green-600 text-sm font-bold"
+                className="flex items-start gap-3 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm font-bold leading-6 text-green-600 sm:items-center"
               >
-                <CheckCircle2 size={18} />
-                Success! Redirecting you...
+                <CheckCircle2 size={18} className="mt-0.5 shrink-0 sm:mt-0" />
+                <span>Success! Redirecting you...</span>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+            <div className="space-y-4 sm:space-y-5">
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                 <div className="relative group">
-                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-violet-600 transition-colors">
-                    <Mail size={20} />
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-violet-600 sm:left-5">
+                    <Mail size={18} className="sm:h-5 sm:w-5" />
                   </div>
                   <input
                     type="email"
@@ -225,19 +227,19 @@ const Login = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all font-bold text-slate-900 placeholder:text-slate-300"
+                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 py-3.5 pl-12 pr-4 text-sm font-bold text-slate-900 transition-all placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 sm:py-4 sm:pl-14 sm:pr-6"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between ml-1">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Password</label>
-                  <Link to="/forgot-password" title="Reset password" className="text-xs font-black text-violet-600 hover:text-violet-700 uppercase tracking-widest">Forgot?</Link>
+                <div className="ml-1 flex items-center justify-between gap-3">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Password</label>
+                  <Link to="/forgot-password" title="Reset password" className="shrink-0 text-[11px] font-black uppercase tracking-widest text-violet-600 hover:text-violet-700 sm:text-xs">Forgot?</Link>
                 </div>
                 <div className="relative group">
-                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-violet-600 transition-colors">
-                    <Lock size={20} />
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-violet-600 sm:left-5">
+                    <Lock size={18} className="sm:h-5 sm:w-5" />
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
@@ -245,14 +247,14 @@ const Login = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-14 pr-14 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all font-bold text-slate-900 placeholder:text-slate-300"
+                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 py-3.5 pl-12 pr-12 text-sm font-bold text-slate-900 transition-all placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 sm:py-4 sm:pl-14 sm:pr-14"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600 sm:right-5"
                   >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    {showPassword ? <EyeOff size={18} className="sm:h-5 sm:w-5" /> : <Eye size={18} className="sm:h-5 sm:w-5" />}
                   </button>
                 </div>
               </div>
@@ -261,17 +263,17 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading || success}
-              className="w-full bg-slate-950 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-900 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-slate-950/20"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-950 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl shadow-slate-950/20 transition-all hover:bg-slate-900 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 sm:py-5"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
               ) : (
                 <>Sign In <ArrowRight size={18} /></>
               )}
             </button>
           </form>
 
-          <div className="relative py-4">
+          <div className="relative py-2 sm:py-4">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-100"></div>
             </div>
@@ -280,36 +282,36 @@ const Login = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <button 
               onClick={() => handleSocialLogin('google')}
-              className="flex items-center justify-center py-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-all group"
+              className="group flex items-center justify-center rounded-2xl border border-slate-100 py-3.5 transition-all hover:bg-slate-50 sm:py-4"
             >
               <Chrome size={20} className="text-slate-900 group-hover:scale-110 transition-transform" />
             </button>
             <button 
               onClick={() => handleSocialLogin('apple')}
-              className="flex items-center justify-center py-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-all group"
+              className="group flex items-center justify-center rounded-2xl border border-slate-100 py-3.5 transition-all hover:bg-slate-50 sm:py-4"
             >
               <Apple size={20} className="text-slate-900 group-hover:scale-110 transition-transform" />
             </button>
             <button 
               onClick={() => handleSocialLogin('github')}
-              className="flex items-center justify-center py-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-all group"
+              className="group flex items-center justify-center rounded-2xl border border-slate-100 py-3.5 transition-all hover:bg-slate-50 sm:py-4"
             >
               <Github size={20} className="text-slate-900 group-hover:scale-110 transition-transform" />
             </button>
           </div>
 
-          <p className="text-center text-sm font-medium text-slate-500">
+          <p className="text-center text-sm font-medium leading-6 text-slate-500">
             Don't have an account?{' '}
             <Link to="/register" className="text-violet-600 font-black hover:underline">Create Account</Link>
           </p>
         </div>
 
-        <div className="mt-auto pt-12 flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+        <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-slate-100 pt-6 text-[10px] font-black uppercase tracking-widest text-slate-400 sm:mt-10 sm:flex-row sm:gap-4 sm:pt-8 lg:mt-auto lg:pt-12">
           <span>© 2026 Exshopi UAE</span>
-          <div className="flex gap-6">
+          <div className="flex items-center gap-5 sm:gap-6">
             <Link to="/privacy" className="hover:text-slate-900 transition-colors">Privacy</Link>
             <Link to="/terms" className="hover:text-slate-900 transition-colors">Terms</Link>
           </div>
