@@ -2905,6 +2905,7 @@ app.get('/api/admin/products/pending', authMiddleware, async (req: Request, res:
     }
     const pendingProducts = allProducts
       .filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index)
+      .filter((product) => !isSoftDeletedProduct(product))
       .filter((product) => product.approvalStatus === 'pending' || product.status === 'pending' || product.productStatus === 'pending_approval');
     const serialized = await Promise.all(pendingProducts.map((product) => serializeMarketplaceProductAsync(product)));
     res.json(serialized.map((product) => ({
@@ -2936,6 +2937,7 @@ app.get('/api/admin/products', authMiddleware, async (req: Request, res: Respons
     }
 
     products = products.filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index);
+    products = products.filter((product) => !isSoftDeletedProduct(product));
 
     if (status && status !== 'all') {
       products = products.filter((product) => resolveEffectiveProductStatus(product) === status);

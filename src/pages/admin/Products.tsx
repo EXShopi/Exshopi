@@ -27,6 +27,11 @@ const getEffectiveStatus = (product: any) => {
   return 'pending';
 };
 
+const isSoftDeletedAdminProduct = (product: any) => {
+  const deletionMeta = product?.specs?.__deletion || {};
+  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta?.isDeleted || deletionMeta?.deletedAt);
+};
+
 export function AdminProducts() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<any[]>([]);
@@ -72,7 +77,7 @@ export function AdminProducts() {
       }
 
       const items = Array.isArray(data) ? data : data?.products || data?.items || [];
-      setProducts(Array.isArray(items) ? items : []);
+      setProducts((Array.isArray(items) ? items : []).filter((item) => !isSoftDeletedAdminProduct(item)));
     } catch (err: any) {
       console.error('Failed to load admin products:', err);
       setError(err?.message || 'Failed to load admin products');
@@ -146,24 +151,24 @@ export function AdminProducts() {
   const handleBulkDelete = async () => {
     if (!selectedIds.length) return;
     try {
-      await Promise.all(selectedIds.map((id) => adminProductAPI.delete(id)));
-      try { invalidateProductCaches(selectedIds); } catch (e) { console.warn('Failed to invalidate product caches', e); }
-      try { localStorage.setItem('exshopi:product-deleted', JSON.stringify({ ids: selectedIds, ts: Date.now() })); } catch (e) { /* ignore */ }
+      const deletedIds = [...selectedIds];
+      await Promise.all(deletedIds.map((id) => adminProductAPI.delete(id)));
+      setProducts((current) => current.filter((product) => !deletedIds.includes(product.id)));
       setSelectedIds([]);
-      reloadProducts();
+      try { invalidateProductCaches(deletedIds); } catch (e) { console.warn('Failed to invalidate product caches', e); }
+      try { localStorage.setItem('exshopi:product-deleted', JSON.stringify({ ids: deletedIds, ts: Date.now() })); } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Failed to bulk delete products', error);
     }
   };
 
   const handleDeleteProduct = async (id: string) => {
-    // Immediate permanent delete on click (no prompt)
     try {
       await adminProductAPI.delete(id);
+      setProducts((current) => current.filter((product) => product.id !== id));
+      setSelectedIds((current) => current.filter((entry) => entry !== id));
       try { invalidateProductCaches(id); } catch (e) { console.warn('Failed to invalidate product caches', e); }
       try { localStorage.setItem('exshopi:product-deleted', JSON.stringify({ id, ts: Date.now() })); } catch (e) { /* ignore */ }
-      setSelectedIds((current) => current.filter((entry) => entry !== id));
-      reloadProducts();
     } catch (error) {
       console.error('Failed to delete product', error);
     }
