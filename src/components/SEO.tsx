@@ -1,5 +1,4 @@
-import React from "react";
-import { Helmet } from "react-helmet-async";
+import React, { useEffect } from "react";
 import type { ProductSeoFields } from "../types/seo";
 import { buildAbsoluteUrl, generateProductSeo } from "../utils/seo";
 
@@ -40,33 +39,129 @@ export default function SEO({
   });
 
   const canonicalUrl = seo.canonicalUrl || buildAbsoluteUrl(pathname);
+  const resolvedImage = seo.ogImage || image || "";
 
-  return (
-    <Helmet prioritizeSeoTags>
-      <title>{seo.metaTitle}</title>
-      <meta name="description" content={seo.metaDescription} />
-      {seo.metaKeywords ? <meta name="keywords" content={seo.metaKeywords} /> : null}
-      <meta
-        name="robots"
-        content={noindex ? "noindex,nofollow" : "index,follow,max-image-preview:large"}
-      />
-      <link rel="canonical" href={canonicalUrl} />
+  useEffect(() => {
+    if (typeof document === "undefined") return;
 
-      <meta property="og:type" content={type} />
-      <meta property="og:title" content={seo.ogTitle || seo.metaTitle || ""} />
-      <meta property="og:description" content={seo.ogDescription || seo.metaDescription || ""} />
-      <meta property="og:url" content={canonicalUrl} />
-      <meta property="og:site_name" content="ExShopi" />
-      {(seo.ogImage || image) ? <meta property="og:image" content={seo.ogImage || image || ""} /> : null}
+    document.title = seo.metaTitle || "ExShopi";
 
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={seo.ogTitle || seo.metaTitle || ""} />
-      <meta name="twitter:description" content={seo.ogDescription || seo.metaDescription || ""} />
-      {(seo.ogImage || image) ? <meta name="twitter:image" content={seo.ogImage || image || ""} /> : null}
+    const managedNodes: Element[] = [];
 
-      {jsonLd ? (
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      ) : null}
-    </Helmet>
-  );
+    const upsertTag = (
+      selector: string,
+      create: () => HTMLElement,
+      apply: (element: HTMLElement) => void
+    ) => {
+      let element = document.head.querySelector(selector) as HTMLElement | null;
+      if (!element) {
+        element = create();
+        element.setAttribute("data-exshopi-seo", "true");
+        document.head.appendChild(element);
+      }
+      apply(element);
+      managedNodes.push(element);
+    };
+
+    const setMetaName = (name: string, content?: string) => {
+      if (!content) return;
+      upsertTag(
+        `meta[name="${name}"]`,
+        () => {
+          const meta = document.createElement("meta");
+          meta.setAttribute("name", name);
+          return meta;
+        },
+        (element) => {
+          element.setAttribute("content", content);
+        }
+      );
+    };
+
+    const setMetaProperty = (property: string, content?: string) => {
+      if (!content) return;
+      upsertTag(
+        `meta[property="${property}"]`,
+        () => {
+          const meta = document.createElement("meta");
+          meta.setAttribute("property", property);
+          return meta;
+        },
+        (element) => {
+          element.setAttribute("content", content);
+        }
+      );
+    };
+
+    upsertTag(
+      'link[rel="canonical"]',
+      () => {
+        const link = document.createElement("link");
+        link.setAttribute("rel", "canonical");
+        return link;
+      },
+      (element) => {
+        element.setAttribute("href", canonicalUrl);
+      }
+    );
+
+    setMetaName(
+      "robots",
+      noindex ? "noindex,nofollow" : "index,follow,max-image-preview:large"
+    );
+    setMetaName("description", seo.metaDescription || "");
+    setMetaName("keywords", seo.metaKeywords || "");
+
+    setMetaProperty("og:type", type);
+    setMetaProperty("og:title", seo.ogTitle || seo.metaTitle || "");
+    setMetaProperty("og:description", seo.ogDescription || seo.metaDescription || "");
+    setMetaProperty("og:url", canonicalUrl);
+    setMetaProperty("og:site_name", "ExShopi");
+    setMetaProperty("og:image", resolvedImage);
+
+    setMetaName("twitter:card", "summary_large_image");
+    setMetaName("twitter:title", seo.ogTitle || seo.metaTitle || "");
+    setMetaName("twitter:description", seo.ogDescription || seo.metaDescription || "");
+    setMetaName("twitter:image", resolvedImage);
+
+    if (jsonLd) {
+      upsertTag(
+        'script[data-exshopi-jsonld="true"]',
+        () => {
+          const script = document.createElement("script");
+          script.setAttribute("type", "application/ld+json");
+          script.setAttribute("data-exshopi-jsonld", "true");
+          return script;
+        },
+        (element) => {
+          element.textContent = JSON.stringify(jsonLd);
+        }
+      );
+    }
+
+    return () => {
+      for (const node of managedNodes) {
+        if (node.getAttribute("data-exshopi-seo") === "true") {
+          node.remove();
+        }
+      }
+    };
+  }, [
+    canonicalUrl,
+    image,
+    jsonLd,
+    noindex,
+    pathname,
+    resolvedImage,
+    seo.canonicalUrl,
+    seo.metaDescription,
+    seo.metaKeywords,
+    seo.metaTitle,
+    seo.ogDescription,
+    seo.ogImage,
+    seo.ogTitle,
+    type,
+  ]);
+
+  return null;
 }
