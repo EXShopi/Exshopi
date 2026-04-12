@@ -10,6 +10,11 @@ export type LiveMarketplaceProduct = ProductCardProps & {
 export function isLiveMarketplaceProduct(product: any) {
   if (!product) return false;
 
+  const deletionMeta = product.specs?.__deletion || {};
+  if (product.isDeleted || product.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt) {
+    return false;
+  }
+
   const status = String(
     product.status || product.productStatus || product.product_status || ''
   ).toLowerCase();

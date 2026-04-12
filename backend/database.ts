@@ -159,6 +159,8 @@ export interface Product {
   rejectedAt?: string;
   views?: number;
   wishlistCount?: number;
+  isDeleted?: boolean;
+  deletedAt?: string;
   badges: string[];
   createdAt: string;
   updatedAt: string;
@@ -1263,17 +1265,25 @@ export class Database {
     return this.data.products.find(p => p.id === id);
   }
 
+  private isSoftDeletedProduct(product?: Product | null): boolean {
+    if (!product) return false;
+    return Boolean(product.isDeleted || product.deletedAt);
+  }
+
   getProductsByStatus(status: string): Product[] {
     return this.data.products.filter(
       (p) =>
-        p.status === status ||
-        p.approvalStatus === status ||
-        p.productStatus === status
+        !this.isSoftDeletedProduct(p) &&
+        (
+          p.status === status ||
+          p.approvalStatus === status ||
+          p.productStatus === status
+        )
     );
   }
 
   getSellerProducts(sellerId: string): Product[] {
-    return this.data.products.filter(p => p.sellerId === sellerId);
+    return this.data.products.filter(p => p.sellerId === sellerId && !this.isSoftDeletedProduct(p));
   }
 
   createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Product {
@@ -1292,6 +1302,8 @@ export class Database {
       rejectedAt: product.rejectedAt || '',
       views: Number(product.views || 0),
       wishlistCount: Number(product.wishlistCount || 0),
+      isDeleted: Boolean(product.isDeleted),
+      deletedAt: product.deletedAt || '',
       brand: product.brand || product.specs?.attributes?.brand || '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1429,13 +1441,25 @@ export class Database {
   }
 
   getAllProducts(): Product[] {
-    return this.data.products.filter(p => p.status === 'live');
+    return this.data.products.filter(p => p.status === 'live' && !this.isSoftDeletedProduct(p));
+  }
+
+  getAllProductsForAdmin(): Product[] {
+    return [...this.data.products];
   }
 
   deleteProduct(id: string): boolean {
-    const idx = this.data.products.findIndex(p => p.id === id);
-    if (idx >= 0) {
-      this.data.products.splice(idx, 1);
+    const product = this.data.products.find(p => p.id === id);
+    if (product) {
+      const deletedAt = new Date().toISOString();
+      Object.assign(product, {
+        isDeleted: true,
+        deletedAt,
+        status: 'draft',
+        productStatus: 'archived',
+        visibilityStatus: 'hidden',
+        updatedAt: deletedAt,
+      });
       this.save();
       return true;
     }

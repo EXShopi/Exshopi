@@ -12,9 +12,10 @@ import {
   Heart,
   Edit2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCartStore } from "../store/cart";
 import { formatAED, formatAEDPlain } from "../lib/currency";
+import { productAPI } from "../services/api";
 
 const EMIRATES = [
   "Dubai",
@@ -49,6 +50,46 @@ export default function Cart() {
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
+  const [cartNotice, setCartNotice] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const syncUnavailableItems = async () => {
+      try {
+        const liveProducts = await productAPI.getAll();
+        if (!active) return;
+
+        const liveIds = new Set(
+          (liveProducts || []).flatMap((product: any) => [String(product.id || ''), String(product.slug || '')]).filter(Boolean)
+        );
+
+        const unavailableItems = items.filter(
+          (item) => !liveIds.has(String(item.id)) && !liveIds.has(String(item.slug || ''))
+        );
+
+        if (!unavailableItems.length) {
+          setCartNotice("");
+          return;
+        }
+
+        unavailableItems.forEach((item) => removeItem(item.id));
+        setCartNotice("Some unavailable products were removed from your cart.");
+      } catch {
+        if (active) {
+          setCartNotice("");
+        }
+      }
+    };
+
+    if (items.length) {
+      syncUnavailableItems();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [items, removeItem]);
 
   const deliveryType = getDeliveryType(selectedEmirate);
   const subtotal = getCartTotal();
@@ -105,6 +146,11 @@ export default function Cart() {
           <p className="text-slate-600 font-semibold">
             {getCartCount()} items • Review before checkout
           </p>
+          {cartNotice ? (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+              {cartNotice}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Heart,
   ShoppingCart,
@@ -19,6 +19,7 @@ import {
 import { Link } from "react-router-dom";
 import { useWishlistStore } from "../store/wishlist";
 import { formatAEDPlain } from "../lib/currency";
+import { productAPI } from "../services/api";
 
 function formatAED(value?: number) {
   if (value === undefined || value === null) return "—";
@@ -44,6 +45,7 @@ export default function Wishlist() {
   const [newWishlistName, setNewWishlistName] = useState("");
   const [makeDefault, setMakeDefault] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [wishlistNotice, setWishlistNotice] = useState("");
 
   const activeCollection =
     collections.find((c) => c.id === activeCollectionId) || collections[0];
@@ -77,6 +79,45 @@ export default function Wishlist() {
       return sum + Math.max((item.oldPrice || 0) - (item.price || 0), 0);
     }, 0);
   }, [activeItems]);
+
+  useEffect(() => {
+    let active = true;
+
+    const syncUnavailableWishlistItems = async () => {
+      try {
+        const liveProducts = await productAPI.getAll();
+        if (!active) return;
+
+        const liveIds = new Set(
+          (liveProducts || []).flatMap((product: any) => [String(product.id || ''), String(product.slug || '')]).filter(Boolean)
+        );
+
+        const unavailableItems = items.filter(
+          (item) => !liveIds.has(String(item.id)) && !liveIds.has(String(item.slug || ''))
+        );
+
+        if (!unavailableItems.length) {
+          setWishlistNotice("");
+          return;
+        }
+
+        unavailableItems.forEach((item) => removeItem(item.id));
+        setWishlistNotice("Unavailable products were removed from your wishlist.");
+      } catch {
+        if (active) {
+          setWishlistNotice("");
+        }
+      }
+    };
+
+    if (items.length) {
+      syncUnavailableWishlistItems();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [items, removeItem]);
 
   const handleCreateWishlist = () => {
     if (!newWishlistName.trim()) return;
@@ -176,6 +217,11 @@ export default function Wishlist() {
                   <p className="text-sm text-slate-500">
                     {activeItems.length} products in your wishlist
                   </p>
+                  {wishlistNotice ? (
+                    <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                      {wishlistNotice}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 

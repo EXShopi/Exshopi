@@ -221,6 +221,7 @@ function mapProduct(product: any): Product {
 
   // Merge explicit DB slug fields into the specs object for compatibility
   const specs = (product.specsJson as Record<string, any>) || {};
+  const deletionMeta = (specs.__deletion as Record<string, any>) || {};
   if (!specs.parentCategorySlug && product.parentCategorySlug) specs.parentCategorySlug = product.parentCategorySlug;
   if (!specs.categorySlug && product.categorySlug) specs.categorySlug = product.categorySlug;
   if (!specs.subcategorySlug && product.subcategorySlug) specs.subcategorySlug = product.subcategorySlug;
@@ -261,10 +262,28 @@ function mapProduct(product: any): Product {
     rejectedAt: product.rejectedAt?.toISOString?.() || product.rejectedAt || '',
     views: Number(product.views || 0),
     wishlistCount: Number(product.wishlistCount || 0),
+    isDeleted: Boolean(deletionMeta.isDeleted),
+    deletedAt: deletionMeta.deletedAt ? String(deletionMeta.deletedAt) : '',
     badges: Array.isArray(product.badgesJson) ? product.badgesJson : [],
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
   };
+}
+
+function withDeletionMeta(specs: Record<string, any> | undefined, nextMeta: Record<string, any>) {
+  return {
+    ...(specs || {}),
+    __deletion: {
+      ...(((specs || {}).__deletion as Record<string, any>) || {}),
+      ...nextMeta,
+    },
+  };
+}
+
+function isSoftDeletedProduct(product: any) {
+  const specs = (product?.specs || product?.specsJson || {}) as Record<string, any>;
+  const deletionMeta = (specs.__deletion as Record<string, any>) || {};
+  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt);
 }
 
 function mapOrderItem(item: any): OrderLineItem {
@@ -993,13 +1012,17 @@ export const prismaRuntime = {
 
   const imageList = [input.image, ...(input.images || [])].filter(Boolean);
     const categoryExtras: any = {};
-    if (input.specs) {
-      categoryExtras.parentCategorySlug = input.specs?.parentCategorySlug || input.specs?.categorySlug || undefined;
-      categoryExtras.categorySlug = input.specs?.categorySlug || undefined;
-      categoryExtras.subcategorySlug = input.specs?.subcategorySlug || undefined;
-      categoryExtras.childCategorySlug = input.specs?.childCategorySlug || undefined;
-      categoryExtras.categoryPathJson = input.specs?.categoryPath
-        ? (Array.isArray(input.specs.categoryPath) ? input.specs.categoryPath : String(input.specs.categoryPath).split('/').filter(Boolean))
+    const baseSpecs = withDeletionMeta(input.specs || {}, {
+      isDeleted: Boolean(input.isDeleted),
+      deletedAt: input.deletedAt || '',
+    });
+    if (baseSpecs) {
+      categoryExtras.parentCategorySlug = baseSpecs?.parentCategorySlug || baseSpecs?.categorySlug || undefined;
+      categoryExtras.categorySlug = baseSpecs?.categorySlug || undefined;
+      categoryExtras.subcategorySlug = baseSpecs?.subcategorySlug || undefined;
+      categoryExtras.childCategorySlug = baseSpecs?.childCategorySlug || undefined;
+      categoryExtras.categoryPathJson = baseSpecs?.categoryPath
+        ? (Array.isArray(baseSpecs.categoryPath) ? baseSpecs.categoryPath : String(baseSpecs.categoryPath).split('/').filter(Boolean))
         : undefined;
     }
 
@@ -1027,7 +1050,7 @@ export const prismaRuntime = {
     stock: input.stock,
     rating: input.rating || 0,
     reviewsCount: input.reviews || 0,
-    specsJson: input.specs as any,
+    specsJson: baseSpecs as any,
     ...categoryExtras,
     badgesJson: input.badges as any,
     views: input.views || 0,
@@ -1099,7 +1122,7 @@ export const prismaRuntime = {
     orderBy: { createdAt: 'desc' },
   });
 
-  return products.map(mapProduct);
+  return products.map(mapProduct).filter((product) => !isSoftDeletedProduct(product));
 },
 
   async getProductsByCategorySlugs(parentSlug?: string | null, categorySlug?: string | null, subcategorySlug?: string | null) {
@@ -1133,7 +1156,7 @@ export const prismaRuntime = {
       include: { images: true },
       orderBy: { createdAt: 'desc' },
     });
-    return products.map(mapProduct);
+    return products.map(mapProduct).filter((product) => !isSoftDeletedProduct(product));
   },
 
   async getSellerProducts(sellerId: string) {
@@ -1148,7 +1171,7 @@ export const prismaRuntime = {
       include: { images: true },
       orderBy: { createdAt: 'desc' },
     });
-    return products.map(mapProduct);
+    return products.map(mapProduct).filter((product) => !isSoftDeletedProduct(product));
   },
 
   async getAllProductsForAdmin() {
@@ -1162,17 +1185,32 @@ export const prismaRuntime = {
 
   async updateProduct(id: string, updates: Partial<Product>) {
     if (!enabled) return null;
+    const current = await prisma.product.findUnique({
+      where: { id },
+      include: { images: true },
+    });
+    if (!current) return null;
     if (updates.image || updates.images) {
       await prisma.productImage.deleteMany({ where: { productId: id } });
     }
     const updateExtras: any = {};
-    if (updates.specs) {
-      updateExtras.parentCategorySlug = updates.specs?.parentCategorySlug || updates.specs?.categorySlug || undefined;
-      updateExtras.categorySlug = updates.specs?.categorySlug || undefined;
-      updateExtras.subcategorySlug = updates.specs?.subcategorySlug || undefined;
-      updateExtras.childCategorySlug = updates.specs?.childCategorySlug || undefined;
-      updateExtras.categoryPathJson = updates.specs?.categoryPath
-        ? (Array.isArray(updates.specs.categoryPath) ? updates.specs.categoryPath : String(updates.specs.categoryPath).split('/').filter(Boolean))
+    const nextSpecs = withDeletionMeta(
+      {
+        ...(((current.specsJson as Record<string, any>) || {})),
+        ...(updates.specs || {}),
+      },
+      {
+        isDeleted: updates.isDeleted ?? (((current.specsJson as Record<string, any>) || {}).__deletion?.isDeleted) ?? false,
+        deletedAt: updates.deletedAt ?? (((current.specsJson as Record<string, any>) || {}).__deletion?.deletedAt) ?? '',
+      }
+    );
+    if (nextSpecs) {
+      updateExtras.parentCategorySlug = nextSpecs?.parentCategorySlug || nextSpecs?.categorySlug || undefined;
+      updateExtras.categorySlug = nextSpecs?.categorySlug || undefined;
+      updateExtras.subcategorySlug = nextSpecs?.subcategorySlug || undefined;
+      updateExtras.childCategorySlug = nextSpecs?.childCategorySlug || undefined;
+      updateExtras.categoryPathJson = nextSpecs?.categoryPath
+        ? (Array.isArray(nextSpecs.categoryPath) ? nextSpecs.categoryPath : String(nextSpecs.categoryPath).split('/').filter(Boolean))
         : undefined;
     }
     const product = await prisma.product.update({
@@ -1190,7 +1228,7 @@ export const prismaRuntime = {
         stock: updates.stock,
           // keep explicit canonical slug columns in sync with specs
           ...updateExtras,
-        specsJson: updates.specs as any,
+        specsJson: nextSpecs as any,
         badgesJson: updates.badges as any,
         views: updates.views,
         wishlistCount: updates.wishlistCount,
@@ -1224,7 +1262,20 @@ export const prismaRuntime = {
 
   async deleteProduct(id: string) {
     if (!enabled) return false;
-    await prisma.product.delete({ where: { id } });
+    const current = await prisma.product.findUnique({ where: { id } });
+    if (!current) return false;
+    const specs = withDeletionMeta((current.specsJson as Record<string, any>) || {}, {
+      isDeleted: true,
+      deletedAt: new Date().toISOString(),
+    });
+    await prisma.product.update({
+      where: { id },
+      data: {
+        status: 'archived',
+        visibilityStatus: 'hidden',
+        specsJson: specs as any,
+      },
+    });
     return true;
   },
 

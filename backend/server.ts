@@ -422,6 +422,33 @@ const resolveEffectiveProductStatus = (product: any) => {
   return baseStatus || 'pending';
 };
 
+const isSoftDeletedProduct = (product: any) => {
+  const specs = (product?.specs || product?.specsJson || {}) as Record<string, any>;
+  const deletionMeta = (specs.__deletion as Record<string, any>) || {};
+  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt);
+};
+
+const buildSoftDeleteProductPayload = (product: any) => {
+  const deletedAt = new Date().toISOString();
+  const specs = (product?.specs || product?.specsJson || {}) as Record<string, any>;
+
+  return {
+    status: 'archived',
+    productStatus: 'archived',
+    visibilityStatus: 'hidden',
+    isDeleted: true,
+    deletedAt,
+    specs: {
+      ...specs,
+      __deletion: {
+        ...((specs.__deletion as Record<string, any>) || {}),
+        isDeleted: true,
+        deletedAt,
+      },
+    },
+  } as const;
+};
+
 const deriveAdminLifecycle = (payload: any) => {
   const requestedStatus = String(payload?.status || payload?.productStatus || payload?.approvalStatus || 'live');
   const normalizedStatus =
@@ -993,6 +1020,8 @@ const serializeMarketplaceProduct = (product: any) => {
 
   return {
     ...product,
+    isDeleted: isSoftDeletedProduct(product),
+    deletedAt: product.deletedAt || product.specs?.__deletion?.deletedAt || '',
     seller,
     sellerName,
     sellerStoreSlug,
@@ -1371,6 +1400,8 @@ const serializeMarketplaceProductAsync = async (product: any) => {
 
   return {
     ...product,
+    isDeleted: isSoftDeletedProduct(product),
+    deletedAt: product.deletedAt || product.specs?.__deletion?.deletedAt || '',
     seller,
     sellerName,
     sellerStoreSlug,
@@ -2457,7 +2488,7 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
         all.find((p: any) => String(p.id) === param || String(p.slug || p.id) === param) || null;
     }
 
-    if (!product) {
+    if (!product || isSoftDeletedProduct(product)) {
       console.debug('[api] product not found after fallbacks for', param);
       return res.status(404).json({ error: 'Product not found' });
     }
@@ -2704,6 +2735,13 @@ app.delete('/api/products/:id', authMiddleware, async (req: Request, res: Respon
         : supabaseRuntime.enabled
         ? await supabaseRuntime.deleteProduct(req.params.id)
         : db.deleteProduct(req.params.id);
+      if (ok) {
+        try {
+          sendSseEvent('product-deleted', { id: req.params.id, ts: new Date().toISOString() });
+        } catch (e) {
+          /* ignore SSE errors */
+        }
+      }
       return ok ? res.json({ success: true }) : res.status(500).json({ error: 'Failed to delete' });
     }
 
@@ -2717,6 +2755,13 @@ app.delete('/api/products/:id', authMiddleware, async (req: Request, res: Respon
         : supabaseRuntime.enabled
         ? await supabaseRuntime.deleteProduct(req.params.id)
         : db.deleteProduct(req.params.id);
+      if (ok) {
+        try {
+          sendSseEvent('product-deleted', { id: req.params.id, ts: new Date().toISOString() });
+        } catch (e) {
+          /* ignore SSE errors */
+        }
+      }
       return ok ? res.json({ success: true }) : res.status(500).json({ error: 'Failed to delete' });
     }
 
@@ -2832,12 +2877,7 @@ app.get('/api/admin/products/pending', authMiddleware, async (req: Request, res:
     } else if (supabaseRuntime.enabled) {
       allProducts = await supabaseRuntime.getAllProductsForAdmin();
     } else {
-      allProducts = [
-        ...db.getAllProducts(),
-        ...db.getProductsByStatus('pending'),
-        ...db.getProductsByStatus('approved'),
-        ...db.getProductsByStatus('rejected'),
-      ];
+      allProducts = db.getAllProductsForAdmin();
     }
     const pendingProducts = allProducts
       .filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index)
@@ -2868,12 +2908,7 @@ app.get('/api/admin/products', authMiddleware, async (req: Request, res: Respons
     } else if (supabaseRuntime.enabled) {
       products = await supabaseRuntime.getAllProductsForAdmin();
     } else {
-      products = [
-        ...db.getAllProducts(),
-        ...db.getProductsByStatus('pending'),
-        ...db.getProductsByStatus('approved'),
-        ...db.getProductsByStatus('rejected'),
-      ];
+      products = db.getAllProductsForAdmin();
     }
 
     products = products.filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index);
@@ -3260,12 +3295,23 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
 app.delete('/api/admin/products/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const ok = prismaRuntime.enabled
-      ? await prismaRuntime.deleteProduct(req.params.id)
+    let existing: any = null;
+    if (prismaRuntime.enabled) {
+      existing = await prismaRuntime.getProduct(req.params.id);
+    } else if (supabaseRuntime.enabled) {
+      existing = await supabaseRuntime.getProduct(req.params.id);
+    } else {
+      existing = db.getProduct(req.params.id);
+    }
+    if (!existing) return res.status(404).json({ error: 'Product not found' });
+
+    const updates = buildSoftDeleteProductPayload(existing);
+    const deleted = prismaRuntime.enabled
+      ? await prismaRuntime.updateProduct(req.params.id, updates as any)
       : supabaseRuntime.enabled
-      ? await supabaseRuntime.deleteProduct(req.params.id)
-      : db.deleteProduct(req.params.id);
-    if (!ok) return res.status(404).json({ error: 'Product not found' });
+      ? await supabaseRuntime.updateProduct(req.params.id, updates as any)
+      : db.updateProduct(req.params.id, updates as any);
+    if (!deleted) return res.status(404).json({ error: 'Product not found' });
     try {
       sendSseEvent('product-deleted', { id: req.params.id, ts: new Date().toISOString() });
     } catch (e) {

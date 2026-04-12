@@ -69,6 +69,21 @@ export function buildApiUrl(pathOrUrl: string): string | null {
   return API_BASE.replace(/\/$/, '') + '/' + pathOrUrl;
 }
 
+function isDeletedMarketplaceProduct(product: any) {
+  const deletionMeta = product?.specs?.__deletion || {};
+  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt);
+}
+
+function isPubliclyVisibleMarketplaceProduct(product: any) {
+  if (!product || isDeletedMarketplaceProduct(product)) return false;
+
+  const status = String(product.status || product.productStatus || '').toLowerCase();
+  const approval = String(product.approval_status || product.approvalStatus || '').toLowerCase();
+  const visibility = String(product.visibility_status || product.visibilityStatus || '').toLowerCase();
+
+  return status === 'live' && approval === 'approved' && visibility === 'live';
+}
+
 if (typeof window !== 'undefined') {
   console.info('[api] API_BASE', API_BASE);
 }
@@ -443,7 +458,43 @@ async function updateSupabaseProduct(id: string, data: any) {
 }
 
 async function deleteSupabaseProduct(id: string) {
-  const { error } = await supabase.from('products').delete().eq('id', id);
+  const { data: existing, error: fetchError } = await supabase
+    .from('products')
+    .select('specs')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (fetchError) {
+    throw new Error(fetchError.message);
+  }
+
+  if (!existing) {
+    throw new Error('Product not found');
+  }
+
+  const deletedAt = new Date().toISOString();
+  const nextSpecs = {
+    ...((existing.specs as Record<string, any>) || {}),
+    __deletion: {
+      ...((((existing.specs as Record<string, any>) || {}).__deletion as Record<string, any>) || {}),
+      isDeleted: true,
+      deletedAt,
+    },
+  };
+
+  const { error } = await supabase
+    .from('products')
+    .update({
+      status: 'archived',
+      productStatus: 'archived',
+      visibilityStatus: 'hidden',
+      isDeleted: true,
+      deletedAt,
+      specs: nextSpecs,
+      updated_at: deletedAt,
+      updatedAt: deletedAt,
+    })
+    .eq('id', id);
 
   if (error) {
     throw new Error(error.message);
@@ -727,7 +778,7 @@ export const productAPI = {
           const approval = data.approval_status || data.approvalStatus || data.approvalStatus;
           const visibility = data.visibility_status || data.visibilityStatus || data.visibilityStatus;
 
-          if (
+          if (!isDeletedMarketplaceProduct(data) &&
             String(status) === 'live' &&
             String(approval) === 'approved' &&
             String(visibility) === 'live'
@@ -749,7 +800,7 @@ export const productAPI = {
           const approval = bySlug.approval_status || bySlug.approvalStatus || bySlug.approvalStatus;
           const visibility = bySlug.visibility_status || bySlug.visibilityStatus || bySlug.visibilityStatus;
 
-          if (
+          if (!isDeletedMarketplaceProduct(bySlug) &&
             String(status) === 'live' &&
             String(approval) === 'approved' &&
             String(visibility) === 'live'
@@ -801,7 +852,7 @@ export const productAPI = {
             const res = await safeFetchApi('/products', { signal: options?.signal });
             return parseApiResponse(res);
           }
-          return safeData;
+          return safeData.filter((product: any) => !isDeletedMarketplaceProduct(product));
         } catch (err) {
           console.warn('Filtered supabase query failed, falling back to client-side filter:', err);
 
@@ -812,17 +863,7 @@ export const productAPI = {
 
           if (error) throw error;
 
-          const filtered = (data || []).filter((r: any) => {
-            const status = r.status || r.productStatus || r.status;
-            const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
-            const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
-
-            return (
-              String(status) === 'live' &&
-              String(approval) === 'approved' &&
-              String(visibility) === 'live'
-            );
-          });
+          const filtered = (data || []).filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
 
           return filtered;
         }
@@ -882,17 +923,7 @@ export const productAPI = {
             .filter(
               (p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId
             )
-            .filter((r: any) => {
-              const status = r.status || r.productStatus || r.status;
-              const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
-              const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
-
-              return (
-                String(status) === 'live' &&
-                String(approval) === 'approved' &&
-                String(visibility) === 'live'
-              );
-            });
+            .filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
         }
       } catch (e) {
         console.warn('Supabase category fetch failed:', e);
@@ -978,17 +1009,7 @@ export const productAPI = {
                 specs.subcategorySlug === categorySlug
               );
             })
-            .filter((r: any) => {
-              const status = r.status || r.productStatus || r.status;
-              const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
-              const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
-
-              return (
-                String(status) === 'live' &&
-                String(approval) === 'approved' &&
-                String(visibility) === 'live'
-              );
-            });
+            .filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
         }
       } catch (e) {
         console.warn('Supabase slug fetch failed:', e);

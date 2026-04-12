@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useCartStore } from "../store/cart";
 import { useOrderStore } from "../store/orders";
-import { codAPI, orderAPI, userAPI } from "../services/api";
+import { codAPI, orderAPI, productAPI, userAPI } from "../services/api";
 import { formatAED } from "../lib/currency";
 import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
@@ -36,6 +36,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { items, getCartTotal, clearCart } = useCartStore();
+  const removeCartItem = useCartStore((state) => state.removeItem);
   const { createOrder } = useOrderStore();
   const authUser = useAuthStore((state) => state.user);
   const authRole = useAuthStore((state) => state.role);
@@ -93,6 +94,40 @@ export default function Checkout() {
       ...getFirebasePhoneVerificationRuntimeInfo(),
     });
   }, [items.length, phoneVerificationSupported, useFirebaseOtp]);
+
+  useEffect(() => {
+    let active = true;
+
+    const syncUnavailableCheckoutItems = async () => {
+      if (!items.length) return;
+
+      try {
+        const liveProducts = await productAPI.getAll();
+        if (!active) return;
+
+        const liveIds = new Set(
+          (liveProducts || []).flatMap((product: any) => [String(product.id || ''), String(product.slug || '')]).filter(Boolean)
+        );
+
+        const unavailableItems = items.filter(
+          (item) => !liveIds.has(String(item.id)) && !liveIds.has(String(item.slug || ''))
+        );
+
+        if (!unavailableItems.length) return;
+
+        unavailableItems.forEach((item) => removeCartItem(item.id));
+        setPageError("Some unavailable products were removed from your cart before checkout.");
+      } catch (error) {
+        console.warn("[checkout] unavailable item sync failed", error);
+      }
+    };
+
+    syncUnavailableCheckoutItems();
+
+    return () => {
+      active = false;
+    };
+  }, [items, removeCartItem]);
 
   useEffect(() => {
     return () => {

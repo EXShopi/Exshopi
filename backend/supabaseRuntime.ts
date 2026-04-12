@@ -16,6 +16,8 @@ if (enabled) {
 
 const mapRowToProduct = (row: any): Product => {
   if (!row) return row;
+  const specs = row.specs || row.specsJson || {};
+  const deletionMeta = specs.__deletion || {};
   return {
     id: row.id,
     sellerId: row.sellerId,
@@ -33,7 +35,7 @@ const mapRowToProduct = (row: any): Product => {
     reviews: Number(row.reviews || 0),
     sku: row.sku || '',
     brand: row.brand || '',
-    specs: row.specs || row.specsJson || {},
+    specs,
     status: row.status || 'pending',
     approvalStatus: row.approvalStatus || 'pending',
     productStatus: row.productStatus || 'pending_approval',
@@ -47,11 +49,29 @@ const mapRowToProduct = (row: any): Product => {
     rejectedAt: row.rejectedAt || '',
     views: Number(row.views || 0),
     wishlistCount: Number(row.wishlistCount || 0),
+    isDeleted: Boolean(row.isDeleted || deletionMeta.isDeleted),
+    deletedAt: row.deletedAt || deletionMeta.deletedAt || '',
     badges: Array.isArray(row.badges) ? row.badges : [],
     createdAt: row.createdAt || row.created_at || new Date().toISOString(),
     updatedAt: row.updatedAt || row.updated_at || new Date().toISOString(),
   } as Product;
 };
+
+const isSoftDeletedProduct = (product: any) =>
+  Boolean(
+    product?.isDeleted ||
+      product?.deletedAt ||
+      product?.specs?.__deletion?.isDeleted ||
+      product?.specs?.__deletion?.deletedAt
+  );
+
+const withDeletionMeta = (specs: Record<string, any> | undefined, nextMeta: Record<string, any>) => ({
+  ...(specs || {}),
+  __deletion: {
+    ...(((specs || {}).__deletion as Record<string, any>) || {}),
+    ...nextMeta,
+  },
+});
 
 export const supabaseRuntime = {
   enabled,
@@ -91,6 +111,8 @@ export const supabaseRuntime = {
       rejectionReason: input.rejectionReason || '',
       views: input.views || 0,
       wishlistCount: input.wishlistCount || 0,
+      isDeleted: Boolean(input.isDeleted),
+      deletedAt: input.deletedAt || '',
       badges: Array.isArray(input.badges) ? input.badges : [],
       createdAt: now,
       updatedAt: now,
@@ -129,7 +151,7 @@ export const supabaseRuntime = {
       if (error) throw error;
       const rows = data || [];
       console.log('[supabaseRuntime] getAllProducts fetched', rows.length);
-      return rows.map(mapRowToProduct);
+      return rows.map(mapRowToProduct).filter((product) => !isSoftDeletedProduct(product));
     } catch (err) {
       // Fallback: query unfiltered then apply strict AND filter client-side (handle camelCase columns)
       console.warn('[supabaseRuntime] filtered query failed, falling back to client-side filter', err);
@@ -142,7 +164,7 @@ export const supabaseRuntime = {
         const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
         return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
       });
-      return filtered.map(mapRowToProduct);
+      return filtered.map(mapRowToProduct).filter((product) => !isSoftDeletedProduct(product));
     }
   },
 
@@ -180,7 +202,7 @@ export const supabaseRuntime = {
           return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
         }
         return false;
-      });
+      }).filter((product) => !isSoftDeletedProduct(product));
     } catch (err) {
       console.warn('[supabaseRuntime] filtered category query failed, falling back to client-side filter', err);
       const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
@@ -208,7 +230,7 @@ export const supabaseRuntime = {
           return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
         }
         return false;
-      });
+      }).filter((product) => !isSoftDeletedProduct(product));
     }
   },
 
@@ -216,7 +238,7 @@ export const supabaseRuntime = {
     if (!enabled) return [];
     const { data, error } = await supabase.from('products').select('*').eq('sellerId', sellerId).order('createdAt', { ascending: false });
     if (error) throw error;
-    return (data || []).map(mapRowToProduct);
+    return (data || []).map(mapRowToProduct).filter((product) => !isSoftDeletedProduct(product));
   },
 
   async getAllProductsForAdmin() {
@@ -230,7 +252,17 @@ export const supabaseRuntime = {
     if (!enabled) return null;
     const now = new Date().toISOString();
     const rowUpdates: any = { ...updates, updatedAt: now };
-    if ((updates as any).specs) rowUpdates.specs = (updates as any).specs;
+    if ((updates as any).specs || updates.isDeleted !== undefined || updates.deletedAt !== undefined) {
+      const { data: existing, error: fetchError } = await supabase.from('products').select('specs').eq('id', id).maybeSingle();
+      if (fetchError) throw fetchError;
+      rowUpdates.specs = withDeletionMeta(
+        { ...((existing?.specs as Record<string, any>) || {}), ...(((updates as any).specs as Record<string, any>) || {}) },
+        {
+          isDeleted: updates.isDeleted ?? Boolean(existing?.specs?.__deletion?.isDeleted),
+          deletedAt: updates.deletedAt ?? existing?.specs?.__deletion?.deletedAt ?? '',
+        }
+      );
+    }
     if ((updates as any).images) rowUpdates.images = (updates as any).images;
     const { data, error } = await supabase.from('products').update(rowUpdates).eq('id', id).select().maybeSingle();
     if (error) throw error;
@@ -239,7 +271,25 @@ export const supabaseRuntime = {
 
   async deleteProduct(id: string) {
     if (!enabled) return false;
-    const { error } = await supabase.from('products').delete().eq('id', id);
+    const { data: existing, error: fetchError } = await supabase.from('products').select('specs').eq('id', id).maybeSingle();
+    if (fetchError) throw fetchError;
+    if (!existing) return false;
+    const deletedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('products')
+      .update({
+        status: 'archived',
+        productStatus: 'archived',
+        visibilityStatus: 'hidden',
+        isDeleted: true,
+        deletedAt,
+        specs: withDeletionMeta((existing.specs as Record<string, any>) || {}, {
+          isDeleted: true,
+          deletedAt,
+        }),
+        updatedAt: deletedAt,
+      })
+      .eq('id', id);
     if (error) throw error;
     return true;
   },
