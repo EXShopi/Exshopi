@@ -608,10 +608,10 @@ const deriveAdminLifecycle = (payload: any) => {
       } as const;
     case 'approved':
       return {
-        status: 'approved',
+        status: 'live',
         approvalStatus: 'approved',
-        productStatus: 'approved',
-        visibilityStatus: 'hidden',
+        productStatus: 'live',
+        visibilityStatus: 'live',
       } as const;
     case 'rejected':
       return {

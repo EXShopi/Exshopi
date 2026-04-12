@@ -25,8 +25,11 @@ export function isLiveMarketplaceProduct(product: any) {
     product.visibility_status || product.visibilityStatus || ''
   ).toLowerCase();
 
+  if (['draft', 'pending', 'pending_approval', 'rejected', 'archived'].includes(status)) return false;
+  if (approval === 'rejected' || visibility === 'archived') return false;
+
   if (status === 'live') return true;
-  if (approval === 'approved' && visibility === 'live') return true;
+  if (approval === 'approved' && (!visibility || visibility === 'live' || status === 'approved')) return true;
   return false;
 }
 
