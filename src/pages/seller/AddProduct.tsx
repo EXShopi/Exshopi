@@ -17,6 +17,14 @@ import { useAuthStore } from '../../store/auth';
 import AuthService from '../../lib/authService';
 import { fileToDataUrl, uploadImageDataUrl } from '../../lib/uploadClient';
 import { compressImage } from '../../lib/imageUtils';
+import {
+  getEnabledSpecificationFields,
+  getMissingRequiredSpecificationLabels,
+  getSpecificationTemplate,
+  normalizeSpecificationValues,
+  type SpecificationTemplate,
+  type VariantDimensionKey,
+} from '../../lib/productSpecifications';
 
 type FormState = {
   title: string;
@@ -150,6 +158,7 @@ type ProductRecord = {
     whatsInTheBox?: string[];
     searchTags?: string[];
     variants?: ProductVariantRecord[];
+    specifications?: Record<string, string>;
     attributes?: {
       brand?: string;
       subcategory?: string | null;
@@ -176,6 +185,7 @@ type ProductPayload = {
     templateName: string;
     shortDescription: string;
     longDescription: string;
+    specifications: Record<string, string>;
     attributes: Record<string, string>;
     variants: Array<{
       id: string;
@@ -525,6 +535,7 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   const [formData, setFormData] = useState<FormState>(initialFormState);
   const [images, setImages] = useState<string[]>([]);
   const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [specificationValues, setSpecificationValues] = useState<Record<string, string>>({});
   const [defaultVariantId, setDefaultVariantId] = useState<string | null>(null);
   const [categories, setCategories] = useState<LiveCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -556,6 +567,21 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
         (subcategory) => subcategory.slug === selectedSubcategorySlug
       ) || null,
     [selectedParentCategory, selectedSubcategorySlug]
+  );
+
+  const specificationTemplate = useMemo<SpecificationTemplate>(
+    () => getSpecificationTemplate(selectedParentSlug, selectedSubcategorySlug, selectedSubcategory?.name || ''),
+    [selectedParentSlug, selectedSubcategorySlug, selectedSubcategory?.name]
+  );
+
+  const enabledSpecificationFields = useMemo(
+    () => getEnabledSpecificationFields(specificationTemplate),
+    [specificationTemplate]
+  );
+
+  const enabledVariantDimensions = useMemo<VariantDimensionKey[]>(
+    () => specificationTemplate.variantDimensions || [],
+    [specificationTemplate]
   );
 
   const draftStorageKey = `product-draft:${mode}:${editingId || copyingId || 'new'}`;
@@ -644,6 +670,7 @@ useEffect(() => {
       setFormData((prev) => ({ ...prev, ...(draft.formData || {}) }));
       setImages(Array.isArray(draft.images) ? draft.images : []);
       setVariants(Array.isArray(draft.variants) ? draft.variants : []);
+      setSpecificationValues(draft.specificationValues && typeof draft.specificationValues === 'object' ? draft.specificationValues : {});
       setDefaultVariantId(draft.defaultVariantId || null);
       setCurrentStep(draft.currentStep || 'category');
       setSelectedCategoryId(draft.selectedCategoryId || null);
@@ -724,6 +751,11 @@ useEffect(() => {
               }))
             : []
         );
+        const incomingSpecifications = {
+          ...(product.specs?.specifications || {}),
+          ...((product.specs?.attributes as Record<string, string> | undefined) || {}),
+        };
+        setSpecificationValues(incomingSpecifications);
         setDefaultVariantId(product.specs?.defaultVariantId || null);
         setCurrentStep('basic');
       } catch {
@@ -747,6 +779,7 @@ useEffect(() => {
           formData,
           images,
           variants,
+          specificationValues,
           defaultVariantId,
           currentStep,
           selectedCategoryId,
@@ -766,6 +799,7 @@ useEffect(() => {
     formData,
     images,
     variants,
+    specificationValues,
     defaultVariantId,
     currentStep,
     selectedCategoryId,
@@ -773,6 +807,21 @@ useEffect(() => {
     selectedSubcategorySlug,
     success,
   ]);
+
+  useEffect(() => {
+    setSpecificationValues((current) => {
+      const next = normalizeSpecificationValues(
+        {
+          ...current,
+          ...(formData.brand.trim() ? { brand: formData.brand.trim() } : {}),
+        },
+        specificationTemplate
+      );
+
+      if (JSON.stringify(current) === JSON.stringify(next)) return current;
+      return next;
+    });
+  }, [specificationTemplate, formData.brand]);
 
   const titleWords = formData.title.trim().split(/\s+/).filter(Boolean).length;
   const titleQuality =
@@ -785,6 +834,11 @@ useEffect(() => {
     [variants]
   );
 
+  const missingRequiredSpecifications = useMemo(
+    () => getMissingRequiredSpecificationLabels(specificationValues, specificationTemplate),
+    [specificationValues, specificationTemplate]
+  );
+
   const listingCompleteness = useMemo(() => {
     const checkpoints = [
       formData.title.trim() ? 12 : 0,
@@ -794,6 +848,7 @@ useEffect(() => {
       formData.stock.trim() || hasVariantPricing ? 10 : 0,
       images.length >= 3 ? 15 : images.length > 0 ? 8 : 0,
       formData.brand.trim() ? 10 : 0,
+      missingRequiredSpecifications.length === 0 && enabledSpecificationFields.length > 0 ? 10 : 0,
       formData.metaTitle.trim() ? 5 : 0,
       formData.metaDescription.trim() ? 5 : 0,
       formData.shippingWeight.trim() || formData.packageSize.trim() ? 5 : 0,
@@ -808,6 +863,8 @@ useEffect(() => {
     formData.price,
     formData.stock,
     formData.brand,
+    missingRequiredSpecifications.length,
+    enabledSpecificationFields.length,
     formData.metaTitle,
     formData.metaDescription,
     formData.shippingWeight,
@@ -844,6 +901,10 @@ useEffect(() => {
         label: 'Brand and shipping details added',
         done: Boolean(formData.brand.trim() && (formData.shippingWeight.trim() || formData.packageSize.trim())),
       },
+      {
+        label: 'Product specifications completed',
+        done: enabledSpecificationFields.length > 0 && missingRequiredSpecifications.length === 0,
+      },
     ],
     [
       formData.brand,
@@ -855,6 +916,8 @@ useEffect(() => {
       formData.title,
       hasVariantPricing,
       images.length,
+      enabledSpecificationFields.length,
+      missingRequiredSpecifications.length,
       selectedParentSlug,
       selectedSubcategorySlug,
     ]
@@ -866,7 +929,7 @@ useEffect(() => {
   if (formData.title.trim() && formData.shortDescription.trim()) completed.add(1);
   if (images.length > 0) completed.add(2);
   if ((formData.price.trim() && formData.stock.trim()) || hasVariantPricing) completed.add(3);
-  if (formData.keyFeatures.trim() || formData.whatsInTheBox.trim()) completed.add(4);
+  if ((formData.keyFeatures.trim() || formData.whatsInTheBox.trim()) && missingRequiredSpecifications.length === 0) completed.add(4);
   if (formData.returnPolicy.trim() && (formData.shippingWeight.trim() || formData.packageSize.trim())) completed.add(5);
   if (formData.metaTitle.trim() || formData.metaDescription.trim() || formData.searchTags.trim()) completed.add(6);
   if (validationChecklist.every((item) => item.done)) completed.add(7);
@@ -882,6 +945,7 @@ useEffect(() => {
   hasVariantPricing,
   formData.keyFeatures,
   formData.whatsInTheBox,
+  missingRequiredSpecifications.length,
   formData.returnPolicy,
   formData.shippingWeight,
   formData.packageSize,
@@ -896,6 +960,7 @@ useEffect(() => {
       formData,
       images,
       variants,
+      specificationValues,
       selectedCategoryId,
       selectedParentSlug,
       selectedSubcategorySlug,
@@ -905,10 +970,21 @@ useEffect(() => {
     } catch {
       return 0;
     }
-  }, [formData, images, variants, selectedCategoryId, selectedParentSlug, selectedSubcategorySlug]);
+  }, [formData, images, variants, specificationValues, selectedCategoryId, selectedParentSlug, selectedSubcategorySlug]);
 
   const updateVariant = (id: string, key: keyof VariantRow, value: string) => {
     setVariants((prev) => prev.map((variant) => (variant.id === id ? { ...variant, [key]: value } : variant)));
+  };
+
+  const updateSpecificationValue = (key: string, value: string) => {
+    setSpecificationValues((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+
+    if (key === 'brand') {
+      setFormData((prev) => ({ ...prev, brand: value }));
+    }
   };
 
   const addVariant = () => setVariants((prev) => [...prev, createVariantRow()]);
@@ -999,6 +1075,7 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setFormData(initialFormState);
     setImages([]);
     setVariants([]);
+    setSpecificationValues({});
     setDefaultVariantId(null);
     setCurrentStep('category');
     setSelectedCategoryId(null);
@@ -1016,11 +1093,11 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const normalizedVariants = variants
       .map((variant, index) => ({
         id: variant.id || `variant-${index + 1}`,
-        color: variant.color.trim(),
-        size: variant.size.trim(),
-        storage: variant.storage.trim(),
-        ram: variant.ram.trim(),
-        processor: variant.processor.trim(),
+        color: enabledVariantDimensions.includes('color') ? variant.color.trim() : '',
+        size: enabledVariantDimensions.includes('size') ? variant.size.trim() : '',
+        storage: enabledVariantDimensions.includes('storage') ? variant.storage.trim() : '',
+        ram: enabledVariantDimensions.includes('ram') ? variant.ram.trim() : '',
+        processor: enabledVariantDimensions.includes('processor') ? variant.processor.trim() : '',
         price: variant.price.trim() ? parseFloat(variant.price) : null,
         originalPrice: variant.originalPrice.trim() ? parseFloat(variant.originalPrice) : null,
         stock: variant.stock.trim() ? parseInt(variant.stock, 10) || 0 : null,
@@ -1052,6 +1129,18 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean);
+    const structuredSpecifications = normalizeSpecificationValues(
+      {
+        ...specificationValues,
+        brand: formData.brand.trim() || specificationValues.brand || '',
+        ...(primaryVariant?.color ? { color: primaryVariant.color } : {}),
+        ...(primaryVariant?.size ? { size: primaryVariant.size } : {}),
+        ...(primaryVariant?.storage ? { storage: primaryVariant.storage } : {}),
+        ...(primaryVariant?.ram ? { ram: primaryVariant.ram } : {}),
+        ...(primaryVariant?.processor ? { processor: primaryVariant.processor } : {}),
+      },
+      specificationTemplate
+    );
 
     const descriptionParts = [
       formData.shortDescription.trim(),
@@ -1087,14 +1176,11 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         templateName: selectedSubcategory?.name || selectedSubcategorySlug,
         shortDescription: formData.shortDescription.trim(),
         longDescription: formData.longDescription.trim(),
+        specifications: structuredSpecifications,
         attributes: {
+          ...structuredSpecifications,
           brand: formData.brand.trim(),
           subcategory: selectedSubcategorySlug,
-          ...(primaryVariant?.color ? { color: primaryVariant.color } : {}),
-          ...(primaryVariant?.size ? { size: primaryVariant.size } : {}),
-          ...(primaryVariant?.storage ? { storage: primaryVariant.storage } : {}),
-          ...(primaryVariant?.ram ? { ram: primaryVariant.ram } : {}),
-          ...(primaryVariant?.processor ? { processor: primaryVariant.processor } : {}),
         },
         variants: normalizedVariants,
         defaultVariantId: defaultVariantId || normalizedVariants[0]?.id || undefined,
@@ -1142,14 +1228,17 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!formData.stock.trim() && !hasVariantPricing) return 'Stock quantity is required.';
     if (images.length === 0) return 'Please upload at least one product image.';
     if (!formData.brand.trim()) return 'Brand is required.';
+    if (missingRequiredSpecifications.length > 0) {
+      return `Complete Product Specifications before publishing: ${missingRequiredSpecifications.join(', ')}.`;
+    }
     if (
       variants.some(
         (variant) =>
-          (variant.color.trim() ||
-            variant.size.trim() ||
-            variant.storage.trim() ||
-            variant.ram.trim() ||
-            variant.processor.trim() ||
+          ((enabledVariantDimensions.includes('color') && variant.color.trim()) ||
+            (enabledVariantDimensions.includes('size') && variant.size.trim()) ||
+            (enabledVariantDimensions.includes('storage') && variant.storage.trim()) ||
+            (enabledVariantDimensions.includes('ram') && variant.ram.trim()) ||
+            (enabledVariantDimensions.includes('processor') && variant.processor.trim()) ||
             variant.price.trim() ||
             variant.stock.trim() ||
             variant.sku.trim()) &&
@@ -1190,6 +1279,7 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
           formData,
           images,
           variants,
+          specificationValues,
           defaultVariantId,
           currentStep,
           selectedCategoryId,
@@ -1216,7 +1306,9 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
-      setCurrentStep('category');
+      setCurrentStep(
+        validationError.toLowerCase().includes('specification') ? 'specs' : 'category'
+      );
       return;
     }
 
@@ -1621,7 +1713,10 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-3">
-                      {VARIANT_FIELD_OPTIONS.map(({ key, label }) => (
+                      {VARIANT_FIELD_OPTIONS.filter(({ key }) => {
+                        if (['price', 'originalPrice', 'stock', 'sku'].includes(key)) return true;
+                        return enabledVariantDimensions.includes(key as VariantDimensionKey);
+                      }).map(({ key, label }) => (
                         <div key={key}>
                           <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                             {label}
@@ -1682,13 +1777,92 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
   return (
     <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 md:p-6">
       <div className="mb-5">
-        <h2 className="text-2xl font-black text-slate-900">Specifications & Highlights</h2>
+        <h2 className="text-2xl font-black text-slate-900">Product Specifications</h2>
         <p className="mt-2 text-sm text-slate-500">
-          Add product highlights that build trust and help customers understand the item.
+          This section is mandatory before publish. Fields change automatically with the selected category so customers only see relevant details.
         </p>
       </div>
 
+      <div className="mb-6 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Active Template</p>
+              <h3 className="mt-2 text-lg font-black text-slate-900">{specificationTemplate.title}</h3>
+            </div>
+            <div className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] ${
+              missingRequiredSpecifications.length === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+            }`}>
+              {missingRequiredSpecifications.length === 0 ? 'Ready to publish' : `${missingRequiredSpecifications.length} required missing`}
+            </div>
+          </div>
+          <p className="mt-3 text-sm font-medium text-slate-600">
+            If this listing is copied and moved to another category, ExShopi automatically keeps only matching specification fields.
+          </p>
+        </div>
+
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Variant Dimensions</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {enabledVariantDimensions.length > 0 ? enabledVariantDimensions.map((dimension) => (
+              <span key={dimension} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
+                {dimension}
+              </span>
+            )) : (
+              <span className="text-sm font-medium text-slate-500">This category uses single-SKU inventory.</span>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
+        {enabledSpecificationFields.map((field) => (
+          <div key={field.key}>
+            <label className="mb-2 block text-sm font-bold text-slate-700">
+              {field.label} {field.required ? '*' : null}
+            </label>
+            {field.type === 'textarea' ? (
+              <textarea
+                value={specificationValues[field.key] || ''}
+                onChange={(event) => updateSpecificationValue(field.key, event.target.value)}
+                rows={4}
+                placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-7 font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              />
+            ) : field.type === 'select' ? (
+              <select
+                value={specificationValues[field.key] || ''}
+                onChange={(event) => updateSpecificationValue(field.key, event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              >
+                <option value="">Select {field.label}</option>
+                {(field.options || []).map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type={field.type === 'number' ? 'number' : 'text'}
+                value={specificationValues[field.key] || ''}
+                onChange={(event) => updateSpecificationValue(field.key, event.target.value)}
+                placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              />
+            )}
+            {field.helpText ? <p className="mt-2 text-xs font-medium text-slate-500">{field.helpText}</p> : null}
+          </div>
+        ))}
+      </div>
+
+      {missingRequiredSpecifications.length > 0 ? (
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-700">
+          Missing required specifications: {missingRequiredSpecifications.join(', ')}
+        </div>
+      ) : null}
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div>
           <label className="mb-2 block text-sm font-bold text-slate-700">Key Features</label>
           <textarea
@@ -1957,6 +2131,7 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                 `Brand: ${formData.brand || 'Not set'}`,
                 `SKU: ${variants[0]?.sku || formData.sku || 'Auto-generate on submit'}`,
                 `Options: ${variants.length ? `${variants.length} saved combinations` : 'No variants added'}`,
+                `Specifications: ${enabledSpecificationFields.length - missingRequiredSpecifications.length}/${enabledSpecificationFields.length} completed`,
                 `Search tags: ${formData.searchTags || 'No tags added'}`,
                 `Images: ${images.length} uploaded`,
               ].map((item) => (

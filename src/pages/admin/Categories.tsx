@@ -8,6 +8,12 @@ import {
 import { categoryAPI } from '../../services/api';
 import { motion, AnimatePresence } from 'motion/react';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
+import {
+  DEFAULT_SPECIFICATION_TEMPLATES,
+  mergeSpecificationTemplate,
+  writeSpecificationTemplateOverride,
+  type SpecificationFieldDefinition,
+} from '../../lib/productSpecifications';
 
 const ICON_OPTIONS = [
   { id: 'Headphones', icon: Headphones },
@@ -77,6 +83,9 @@ export function AdminCategories() {
     customFields: [],
     order: 0
   });
+  const defaultTemplate = DEFAULT_SPECIFICATION_TEMPLATES[0]!;
+  const [selectedTemplateId, setSelectedTemplateId] = useState(defaultTemplate?.id || 'mobiles');
+  const [templateDraft, setTemplateDraft] = useState(() => mergeSpecificationTemplate(defaultTemplate));
 
   useEffect(() => {
     const fetch = async () => {
@@ -91,6 +100,13 @@ export function AdminCategories() {
     };
     fetch();
   }, []);
+
+  useEffect(() => {
+    const fallback = DEFAULT_SPECIFICATION_TEMPLATES[0]!;
+    const selected =
+      DEFAULT_SPECIFICATION_TEMPLATES.find((template) => template.id === selectedTemplateId) || fallback;
+    setTemplateDraft(mergeSpecificationTemplate(selected));
+  }, [selectedTemplateId]);
 
   const handleSave = async () => {
     if (!currentCategory.name) return;
@@ -144,6 +160,27 @@ export function AdminCategories() {
         ]
       });
     }
+  };
+
+  const updateTemplateField = (
+    fieldKey: string,
+    patch: Partial<SpecificationFieldDefinition>
+  ) => {
+    setTemplateDraft((current) => ({
+      ...current,
+      fields: (current.fields || []).map((field) =>
+        field.key === fieldKey ? { ...field, ...patch } : field
+      ),
+    }));
+  };
+
+  const saveSpecificationTemplate = () => {
+    writeSpecificationTemplateOverride(templateDraft.id, {
+      id: templateDraft.id,
+      title: templateDraft.title,
+      fields: templateDraft.fields,
+      variantDimensions: templateDraft.variantDimensions,
+    });
   };
 
   return (
@@ -420,6 +457,74 @@ export function AdminCategories() {
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      <div className="rounded-[32px] border border-slate-100 bg-white p-8 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h3 className="text-2xl font-black tracking-tight text-slate-900">Specification Templates</h3>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              Control which product specification fields show for each listing type, and decide which ones are required before publish.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={selectedTemplateId}
+              onChange={(event) => setSelectedTemplateId(event.target.value)}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-violet-500/10"
+            >
+              {DEFAULT_SPECIFICATION_TEMPLATES.filter((template) => template.id !== 'general').map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.title}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={saveSpecificationTemplate}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+            >
+              <Save size={16} />
+              Save Template Rules
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4">
+          {(templateDraft.fields || []).map((field) => (
+            <div key={field.key} className="grid gap-4 rounded-[24px] border border-slate-200 bg-slate-50 p-5 lg:grid-cols-[1.2fr_0.8fr]">
+              <div>
+                <p className="text-base font-black text-slate-900">{field.label}</p>
+                <p className="mt-1 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  {field.key} • {field.type}
+                </p>
+                {field.options?.length ? (
+                  <p className="mt-3 text-sm font-medium text-slate-500">
+                    Options: {field.options.join(', ')}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={field.enabled !== false}
+                    onChange={(event) => updateTemplateField(field.key, { enabled: event.target.checked })}
+                  />
+                  Enabled
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={field.required}
+                    onChange={(event) => updateTemplateField(field.key, { required: event.target.checked })}
+                  />
+                  Required
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

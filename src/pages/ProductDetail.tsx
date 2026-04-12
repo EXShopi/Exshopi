@@ -28,6 +28,7 @@ import { useAuthStore } from "../store/auth";
 import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
 import { formatAED, formatAEDPlain } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
+import { buildSpecificationTableRows, getSpecificationTemplate } from "../lib/productSpecifications";
 
 
 const productDetailCache = new Map<string, any>();
@@ -417,7 +418,11 @@ export default function ProductDetail() {
   }, [product?.id]);
 
   const productSpecs = product?.specs || {};
-  const baseAttributes = productSpecs?.attributes || product?.specifications || {};
+  const baseSpecifications = productSpecs?.specifications || product?.specifications || {};
+  const baseAttributes = {
+    ...(productSpecs?.attributes || {}),
+    ...(baseSpecifications || {}),
+  };
   const variants = useMemo<ProductVariant[]>(
     () => (Array.isArray(productSpecs?.variants) ? productSpecs.variants : []),
     [productSpecs]
@@ -626,9 +631,16 @@ export default function ProductDetail() {
   .toLowerCase();
 
 const template = LISTING_TEMPLATE_MAP[templateKey];
+const structuredTemplate = getSpecificationTemplate(
+  productSpecs?.parentCategorySlug || product?.category || "",
+  productSpecs?.subcategorySlug || productSpecs?.templateId || product?.subcategory || "",
+  productSpecs?.subcategoryName || productSpecs?.templateName || product?.subcategory || ""
+);
 
 const specs = useMemo(() => {
-  if (!template || !Array.isArray(template.fields)) return {};
+  if (!template || !Array.isArray(template.fields)) {
+    return baseSpecifications || baseAttributes || {};
+  }
 
   const base = baseAttributes || {};
   const result: Record<string, any> = {};
@@ -653,6 +665,7 @@ const specs = useMemo(() => {
   return result;
 }, [
   template,
+  baseSpecifications,
   baseAttributes,
   product,
   selectedColorLabel,
@@ -661,6 +674,15 @@ const specs = useMemo(() => {
   selectedRam,
   selectedProcessorLabel,
 ]);
+
+  const specificationRows = useMemo(
+    () =>
+      buildSpecificationTableRows(
+        Object.keys(specs || {}).length ? specs : baseSpecifications || baseAttributes || {},
+        structuredTemplate
+      ),
+    [specs, baseSpecifications, baseAttributes, structuredTemplate]
+  );
   const productImages = useMemo(
     () => getProductImages(activeVariant?.image || product?.image, product?.images || product?.gallery || product?.media),
     [product?.gallery, product?.image, product?.images, product?.media, activeVariant?.image]
@@ -1350,14 +1372,56 @@ const specs = useMemo(() => {
                     Built for UAE marketplace buyers
                   </div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {Object.entries(specs).map(([label, value], idx) => (
-                    <div key={label} className={`rounded-[24px] border border-slate-200 p-5 ${idx % 2 === 0 ? "bg-slate-50" : "bg-white"}`}>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-                      <p className="mt-2 text-base font-semibold text-slate-900">{String(value)}</p>
+                {specificationRows.length > 0 ? (
+                  <div className="overflow-hidden rounded-[28px] border border-slate-200">
+                    <div className="grid grid-cols-[0.42fr_0.58fr] bg-slate-950 px-6 py-4 text-[11px] font-black uppercase tracking-[0.22em] text-white/75">
+                      <span>Specification</span>
+                      <span>Details</span>
                     </div>
-                  ))}
-                </div>
+                    {specificationRows.map((row, index) => (
+                      <div
+                        key={row.key}
+                        className={`grid grid-cols-1 gap-2 border-t border-slate-200 px-6 py-4 md:grid-cols-[0.42fr_0.58fr] ${
+                          index % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+                        }`}
+                      >
+                        <p className="text-sm font-bold text-slate-500">{row.label}</p>
+                        <p className="text-sm font-semibold text-slate-900">{row.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-sm font-medium text-slate-600">
+                    Specifications will appear here once the seller completes the structured product specification section.
+                  </div>
+                )}
+
+                {variants.length > 0 && (
+                  <div className="rounded-[28px] border border-blue-100 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-6">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Available Variants</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      {variants.map((variant, index) => (
+                        <div key={variant.id || index} className="rounded-[22px] border border-white/70 bg-white/85 px-4 py-4 shadow-sm">
+                          <p className="text-sm font-black text-slate-900">
+                            {[variant.color, variant.size, variant.storage, variant.ram, variant.processor]
+                              .map((value) => String(value || "").trim())
+                              .filter(Boolean)
+                              .join(" / ") || `Variant ${index + 1}`}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                            {variant.sku ? <span className="rounded-full bg-slate-100 px-2.5 py-1">SKU {variant.sku}</span> : null}
+                            {variant.stock !== undefined && variant.stock !== null ? (
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Stock {variant.stock}</span>
+                            ) : null}
+                            {variant.price !== undefined && variant.price !== null ? (
+                              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{formatAEDPlain(Number(variant.price || 0))}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

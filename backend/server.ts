@@ -1072,6 +1072,11 @@ const serializeMarketplaceProduct = (product: any) => {
     views: Number(product.views || 0),
     wishlistCount: Number(product.wishlistCount || 0),
     brand: product.brand || product.specs?.attributes?.brand || '',
+    specifications:
+      product.specifications ||
+      product.specs?.specifications ||
+      product.specs?.attributes ||
+      {},
   };
 };
 
@@ -1459,6 +1464,11 @@ const serializeMarketplaceProductAsync = async (product: any) => {
     views: Number(product.views || 0),
     wishlistCount: Number(product.wishlistCount || 0),
     brand: product.brand || product.specs?.attributes?.brand || '',
+    specifications:
+      product.specifications ||
+      product.specs?.specifications ||
+      product.specs?.attributes ||
+      {},
   };
 };
 
