@@ -256,6 +256,24 @@ export interface SiteSettings {
     metaTitle: string;
     metaDescription: string;
     keywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    ogImage: string;
+    homepage: {
+      metaTitle: string;
+      metaDescription: string;
+      keywords: string;
+      ogTitle: string;
+      ogDescription: string;
+      ogImage: string;
+    };
+    blog: {
+      metaTitle: string;
+      metaDescription: string;
+      keywords: string;
+      slug: string;
+      ogImage: string;
+    };
   };
 }
 
@@ -434,6 +452,12 @@ export interface Category {
   icon: string;
   specs: Record<string, string[]>; // Category-specific spec options
   subcategories: { name: string; arabicName: string; slug: string }[];
+  seo?: {
+    metaTitle?: string;
+    metaDescription?: string;
+    keywords?: string;
+    introText?: string;
+  };
   active?: boolean;
   comingSoonMessage?: string;
   bannerImage?: string;
@@ -571,6 +595,24 @@ function defaultSiteSettings(): SiteSettings {
       metaTitle: 'ExShopi | Premium UAE Marketplace',
       metaDescription: 'Shop electronics, daily-use products, and trusted sellers across ExShopi in the UAE.',
       keywords: 'ExShopi, UAE marketplace, electronics, mobiles, laptops, deals',
+      ogTitle: 'ExShopi | Premium UAE Marketplace',
+      ogDescription: 'Shop electronics, daily-use products, and trusted sellers across ExShopi in the UAE.',
+      ogImage: '',
+      homepage: {
+        metaTitle: 'Buy Electronics in UAE | Refurbished Laptops, iPhones & COD | ExShopi',
+        metaDescription: 'Shop refurbished laptops, used MacBook deals, cheap iPhones, and premium electronics in UAE with COD checkout and fast delivery.',
+        keywords: 'buy electronics UAE, refurbished laptops UAE, used MacBook Dubai, cheap iPhone UAE, ExShopi',
+        ogTitle: 'Buy Electronics in UAE | ExShopi',
+        ogDescription: 'Premium UAE marketplace for electronics, mobiles, laptops, and COD-friendly deals.',
+        ogImage: '',
+      },
+      blog: {
+        metaTitle: 'ExShopi Blog | Shopping Guides for UAE Buyers',
+        metaDescription: 'Read ExShopi buying guides, marketplace tips, and product advice tailored for UAE and GCC shoppers.',
+        keywords: 'ExShopi blog, UAE shopping guide, electronics buying guide UAE',
+        slug: 'blog',
+        ogImage: '',
+      },
     },
   };
 }
@@ -606,6 +648,12 @@ function defaultCategories(): Category[] {
         'Laptops': ['brand', 'model', 'processor', 'ram', 'storage', 'screen_size', 'graphics', 'os', 'condition', 'warranty'],
         'Tablets': ['brand', 'model', 'storage', 'ram', 'screen_size', 'processor', 'os'],
       },
+      seo: {
+        metaTitle: 'Buy Electronics in UAE | Best Prices | ExShopi',
+        metaDescription: 'Shop mobiles, laptops, tablets, and more electronics in UAE with premium marketplace listings and trusted product details.',
+        keywords: 'electronics UAE, mobiles Dubai, laptops UAE, ExShopi electronics',
+        introText: 'Explore electronics on ExShopi with structured specifications, trusted offers, and marketplace-ready detail pages built for UAE shoppers.',
+      },
       subcategories: [
         { name: 'Mobiles', arabicName: 'موبايلات', slug: 'mobiles' },
         { name: 'Laptops', arabicName: 'لابتوبات', slug: 'laptops' },
@@ -622,6 +670,12 @@ function defaultCategories(): Category[] {
         'Shirts': ['brand', 'gender', 'size', 'color', 'fabric_type', 'sleeve_type', 'fit', 'pattern', 'care_instructions'],
         'Pants': ['brand', 'gender', 'size', 'color', 'fit', 'material', 'style'],
       },
+      seo: {
+        metaTitle: 'Buy Fashion in UAE | Best Prices | ExShopi',
+        metaDescription: 'Shop fashion, footwear, and wardrobe essentials in UAE with premium marketplace listings on ExShopi.',
+        keywords: 'fashion UAE, clothing Dubai, shoes UAE, ExShopi fashion',
+        introText: 'Discover fashion categories with cleaner content, stronger search visibility, and premium category presentation for UAE shoppers.',
+      },
       subcategories: [
         { name: 'Shirts', arabicName: 'قمصان', slug: 'shirts' },
         { name: 'Pants', arabicName: 'بنطلونات', slug: 'pants' },
@@ -637,6 +691,12 @@ function defaultCategories(): Category[] {
       specs: {
         'Kitchen Appliances': ['brand', 'type', 'capacity', 'material', 'color', 'warranty', 'energy_rating'],
         'Furniture': ['type', 'material', 'color', 'dimensions', 'style', 'assembly_required'],
+      },
+      seo: {
+        metaTitle: 'Buy Home and Kitchen in UAE | Best Prices | ExShopi',
+        metaDescription: 'Shop home and kitchen products in UAE with curated marketplace listings, trusted details, and premium product discovery.',
+        keywords: 'home and kitchen UAE, furniture Dubai, kitchen appliances UAE, ExShopi',
+        introText: 'Browse home and kitchen products with structured details, buyer-friendly category intros, and SEO-ready content for the ExShopi marketplace.',
       },
       subcategories: [
         { name: 'Kitchen Appliances', arabicName: 'أجهزة المطبخ', slug: 'kitchen-appliances' },
@@ -1225,6 +1285,14 @@ export class Database {
       seo: {
         ...this.data.siteSettings.seo,
         ...(settings.seo || {}),
+        homepage: {
+          ...this.data.siteSettings.seo.homepage,
+          ...(settings.seo?.homepage || {}),
+        },
+        blog: {
+          ...this.data.siteSettings.seo.blog,
+          ...(settings.seo?.blog || {}),
+        },
       },
     };
     this.save();

@@ -115,6 +115,24 @@ export interface SiteSettings {
     metaTitle: string;
     metaDescription: string;
     keywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    ogImage: string;
+    homepage: {
+      metaTitle: string;
+      metaDescription: string;
+      keywords: string;
+      ogTitle: string;
+      ogDescription: string;
+      ogImage: string;
+    };
+    blog: {
+      metaTitle: string;
+      metaDescription: string;
+      keywords: string;
+      slug: string;
+      ogImage: string;
+    };
   };
 }
 
@@ -246,6 +264,24 @@ export const defaultSettings: SiteSettings = {
     metaTitle: 'ExShopi | Premium UAE Marketplace',
     metaDescription: 'Shop electronics, daily-use products, and trusted sellers across ExShopi in the UAE.',
     keywords: 'ExShopi, UAE marketplace, electronics, mobiles, laptops, deals',
+    ogTitle: 'ExShopi | Premium UAE Marketplace',
+    ogDescription: 'Shop electronics, daily-use products, and trusted sellers across ExShopi in the UAE.',
+    ogImage: '',
+    homepage: {
+      metaTitle: 'Buy Electronics in UAE | Refurbished Laptops, iPhones & COD | ExShopi',
+      metaDescription: 'Shop refurbished laptops, used MacBook deals, cheap iPhones, and premium electronics in UAE with COD checkout and fast delivery.',
+      keywords: 'buy electronics UAE, refurbished laptops UAE, used MacBook Dubai, cheap iPhone UAE, ExShopi',
+      ogTitle: 'Buy Electronics in UAE | ExShopi',
+      ogDescription: 'Premium UAE marketplace for electronics, mobiles, laptops, and COD-friendly deals.',
+      ogImage: '',
+    },
+    blog: {
+      metaTitle: 'ExShopi Blog | Shopping Guides for UAE Buyers',
+      metaDescription: 'Read ExShopi buying guides, marketplace tips, and product advice tailored for UAE and GCC shoppers.',
+      keywords: 'ExShopi blog, UAE shopping guide, electronics buying guide UAE',
+      slug: 'blog',
+      ogImage: '',
+    },
   },
 };
 
@@ -311,7 +347,18 @@ export async function getSiteSettings(): Promise<SiteSettings> {
         ...(remote?.footer || {}),
         socialLinks: { ...defaultSettings.footer.socialLinks, ...(remote?.footer?.socialLinks || {}) },
       },
-      seo: { ...defaultSettings.seo, ...(remote?.seo || {}) },
+      seo: {
+        ...defaultSettings.seo,
+        ...(remote?.seo || {}),
+        homepage: {
+          ...defaultSettings.seo.homepage,
+          ...(remote?.seo?.homepage || {}),
+        },
+        blog: {
+          ...defaultSettings.seo.blog,
+          ...(remote?.seo?.blog || {}),
+        },
+      },
     };
   } catch (error) {
     console.error('Settings fetch error:', error);

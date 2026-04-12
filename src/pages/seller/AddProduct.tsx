@@ -11,7 +11,7 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { authFetch, parseJsonSafe, categoryAPI, productAPI } from '../../services/api';
+import { authFetch, parseJsonSafe, adminProductAPI, categoryAPI, productAPI } from '../../services/api';
 import { sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import AuthService from '../../lib/authService';
@@ -25,7 +25,13 @@ import {
   type SpecificationTemplate,
   type VariantDimensionKey,
 } from '../../lib/productSpecifications';
-import { slugifySeo } from '../../lib/seo';
+import {
+  generateAdminSeoFields,
+  getSeoLengthStatus,
+  normalizeSeoText,
+  slugifySeo,
+  trimSeoKeywords,
+} from '../../lib/seo';
 
 type FormState = {
   title: string;
@@ -43,6 +49,10 @@ type FormState = {
   metaTitle: string;
   metaDescription: string;
   metaKeywords: string;
+  canonicalUrl: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
   shippingWeight: string;
   packageSize: string;
   returnPolicy: string;
@@ -152,6 +162,10 @@ type ProductRecord = {
     metaTitle?: string;
     metaDescription?: string;
     metaKeywords?: string;
+    canonicalUrl?: string;
+    ogTitle?: string;
+    ogDescription?: string;
+    ogImage?: string;
     shippingWeight?: string;
     packageSize?: string;
     returnPolicy?: string;
@@ -212,6 +226,10 @@ type ProductPayload = {
     metaTitle: string;
     metaDescription: string;
     metaKeywords: string;
+    canonicalUrl: string;
+    ogTitle: string;
+    ogDescription: string;
+    ogImage: string;
     shippingWeight: string;
     packageSize: string;
     returnPolicy: string;
@@ -384,6 +402,10 @@ const initialFormState: FormState = {
   metaTitle: '',
   metaDescription: '',
   metaKeywords: '',
+  canonicalUrl: '',
+  ogTitle: '',
+  ogDescription: '',
+  ogImage: '',
   shippingWeight: '',
   packageSize: '',
   returnPolicy: '7-day return policy. Product must remain in original condition.',
@@ -556,6 +578,8 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [slugCheckState, setSlugCheckState] = useState<'idle' | 'checking' | 'available' | 'duplicate'>('idle');
+  const [slugCheckMessage, setSlugCheckMessage] = useState('');
 
 
   const categoryOptions = useMemo(
@@ -576,6 +600,39 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       ) || null,
     [selectedParentCategory, selectedSubcategorySlug]
   );
+
+  const generatedSeoDefaults = useMemo(
+    () =>
+      generateAdminSeoFields({
+        title: formData.title,
+        shortDescription: formData.shortDescription,
+        category: selectedSubcategory?.name || selectedParentCategory?.name || '',
+        slugBase: formData.slug || formData.title,
+        canonicalBasePath:
+          selectedParentSlug && selectedSubcategorySlug
+            ? `/${selectedParentSlug}/${selectedSubcategorySlug}`
+            : '',
+      }),
+    [
+      formData.title,
+      formData.shortDescription,
+      formData.slug,
+      selectedParentCategory?.name,
+      selectedParentSlug,
+      selectedSubcategory?.name,
+      selectedSubcategorySlug,
+    ]
+  );
+
+  const seoPreviewTitle = formData.metaTitle.trim() || generatedSeoDefaults.metaTitle;
+  const seoPreviewDescription =
+    formData.metaDescription.trim() || generatedSeoDefaults.metaDescription;
+  const seoPreviewSlug = slugifySeo(formData.slug.trim() || generatedSeoDefaults.slug);
+  const seoPreviewUrl =
+    formData.canonicalUrl.trim() ||
+    (selectedParentSlug && selectedSubcategorySlug
+      ? `https://exshopi.com/${selectedParentSlug}/${selectedSubcategorySlug}/${seoPreviewSlug}`
+      : `https://exshopi.com/product/${seoPreviewSlug}`);
 
   const specificationTemplate = useMemo<SpecificationTemplate>(
     () => getSpecificationTemplate(selectedParentSlug, selectedSubcategorySlug, selectedSubcategory?.name || ''),
@@ -732,6 +789,10 @@ useEffect(() => {
           metaTitle: product.specs?.metaTitle || '',
           metaDescription: product.specs?.metaDescription || '',
           metaKeywords: product.specs?.metaKeywords || '',
+          canonicalUrl: product.specs?.canonicalUrl || '',
+          ogTitle: product.specs?.ogTitle || '',
+          ogDescription: product.specs?.ogDescription || '',
+          ogImage: product.specs?.ogImage || '',
           shippingWeight: product.specs?.shippingWeight || '',
           packageSize: product.specs?.packageSize || '',
           returnPolicy: product.specs?.returnPolicy || initialFormState.returnPolicy,
@@ -840,6 +901,56 @@ useEffect(() => {
     setFormData((current) => (current.slug.trim() ? current : { ...current, slug: nextSlug }));
   }, [formData.title, formData.slug]);
 
+  useEffect(() => {
+    if (!formData.slug.trim()) {
+      setSlugCheckState('idle');
+      setSlugCheckMessage('');
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        setSlugCheckState('checking');
+        setSlugCheckMessage('Checking slug availability...');
+        const matches = mode === 'admin' ? await adminProductAPI.getAll({ search: formData.slug.trim() }) : [];
+        const duplicate = Array.isArray(matches)
+          ? matches.some(
+              (product: any) =>
+                String(product.slug || '').trim() === formData.slug.trim() &&
+                String(product.id || '') !== String(editingId || '')
+            )
+          : false;
+
+        setSlugCheckState(duplicate ? 'duplicate' : 'available');
+        setSlugCheckMessage(
+          duplicate ? 'This slug is already being used by another product.' : 'Slug looks available.'
+        );
+      } catch {
+        setSlugCheckState('idle');
+        setSlugCheckMessage('');
+      }
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [editingId, formData.slug, mode]);
+
+  const applyGeneratedSeo = () => {
+    setFormData((current) => ({
+      ...current,
+      slug: current.slug.trim() || generatedSeoDefaults.slug,
+      metaTitle: generatedSeoDefaults.metaTitle,
+      metaDescription: generatedSeoDefaults.metaDescription,
+      metaKeywords: generatedSeoDefaults.metaKeywords,
+      canonicalUrl:
+        current.canonicalUrl.trim() ||
+        generatedSeoDefaults.canonicalUrl ||
+        seoPreviewUrl,
+      ogTitle: generatedSeoDefaults.ogTitle,
+      ogDescription: generatedSeoDefaults.ogDescription,
+      ogImage: current.ogImage.trim(),
+    }));
+  };
+
   const titleWords = formData.title.trim().split(/\s+/).filter(Boolean).length;
   const titleQuality =
     titleWords >= 6 && formData.title.trim().length >= 35 ? 'Strong' : titleWords >= 4 ? 'Good' : 'Needs Work';
@@ -894,12 +1005,13 @@ useEffect(() => {
 
   const seoScore = useMemo(() => {
     let score = 0;
-    if (formData.metaTitle.trim().length >= 30) score += 35;
-    if (formData.metaDescription.trim().length >= 80) score += 35;
+    if (getSeoLengthStatus(formData.metaTitle || generatedSeoDefaults.metaTitle, 50, 60) === 'good') score += 30;
+    if (getSeoLengthStatus(formData.metaDescription || generatedSeoDefaults.metaDescription, 150, 160) === 'good') score += 30;
     if (formData.searchTags.split(',').map((tag) => tag.trim()).filter(Boolean).length >= 3) score += 20;
-    if (formData.title.trim().length >= 35) score += 10;
+    if ((formData.ogTitle.trim() || formData.metaTitle.trim() || generatedSeoDefaults.ogTitle).length >= 30) score += 10;
+    if (seoPreviewSlug.length >= 8) score += 10;
     return score;
-  }, [formData.metaTitle, formData.metaDescription, formData.searchTags, formData.title]);
+  }, [formData.metaTitle, formData.metaDescription, formData.searchTags, formData.ogTitle, generatedSeoDefaults.metaDescription, generatedSeoDefaults.metaTitle, generatedSeoDefaults.ogTitle, seoPreviewSlug]);
 
   const validationChecklist = useMemo(
     () => [
@@ -922,6 +1034,13 @@ useEffect(() => {
         label: 'Product specifications completed',
         done: enabledSpecificationFields.length > 0 && missingRequiredSpecifications.length === 0,
       },
+      {
+        label: 'SEO title and description ready',
+        done: Boolean(
+          normalizeSeoText(formData.metaTitle || generatedSeoDefaults.metaTitle) &&
+            normalizeSeoText(formData.metaDescription || generatedSeoDefaults.metaDescription)
+        ),
+      },
     ],
     [
       formData.brand,
@@ -933,7 +1052,11 @@ useEffect(() => {
       formData.title,
       hasVariantPricing,
       images.length,
+      formData.metaTitle,
+      formData.metaDescription,
       enabledSpecificationFields.length,
+      generatedSeoDefaults.metaDescription,
+      generatedSeoDefaults.metaTitle,
       missingRequiredSpecifications.length,
       selectedParentSlug,
       selectedSubcategorySlug,
@@ -1010,7 +1133,12 @@ useEffect(() => {
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
+    let { value } = e.target;
+
+    if (name === 'slug') value = slugifySeo(value);
+    if (name === 'metaKeywords') value = value.replace(/\s*,\s*/g, ', ');
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -1205,9 +1333,13 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         keyFeatures,
         whatsInTheBox,
         searchTags,
-        metaTitle: formData.metaTitle.trim() || formData.title.trim(),
-        metaDescription: formData.metaDescription.trim() || formData.shortDescription.trim(),
-        metaKeywords: formData.metaKeywords.trim() || searchTags.join(', '),
+        metaTitle: normalizeSeoText(formData.metaTitle || generatedSeoDefaults.metaTitle),
+        metaDescription: normalizeSeoText(formData.metaDescription || generatedSeoDefaults.metaDescription),
+        metaKeywords: trimSeoKeywords(formData.metaKeywords || generatedSeoDefaults.metaKeywords || searchTags.join(', ')),
+        canonicalUrl: normalizeSeoText(formData.canonicalUrl || generatedSeoDefaults.canonicalUrl || seoPreviewUrl),
+        ogTitle: normalizeSeoText(formData.ogTitle || formData.metaTitle || generatedSeoDefaults.ogTitle),
+        ogDescription: normalizeSeoText(formData.ogDescription || formData.metaDescription || generatedSeoDefaults.ogDescription),
+        ogImage: normalizeSeoText(formData.ogImage),
         shippingWeight: formData.shippingWeight.trim(),
         packageSize: formData.packageSize.trim(),
         returnPolicy: formData.returnPolicy.trim(),
@@ -1247,6 +1379,8 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!formData.stock.trim() && !hasVariantPricing) return 'Stock quantity is required.';
     if (images.length === 0) return 'Please upload at least one product image.';
     if (!formData.brand.trim()) return 'Brand is required.';
+    if (!slugifySeo(formData.slug.trim() || formData.title.trim())) return 'SEO slug is required.';
+    if (slugCheckState === 'duplicate') return 'SEO slug must be unique. Please choose another slug.';
     if (missingRequiredSpecifications.length > 0) {
       return `Complete Product Specifications before publishing: ${missingRequiredSpecifications.join(', ')}.`;
     }
@@ -1265,6 +1399,12 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       )
     ) {
       return 'Each variant row needs at least a price and stock quantity.';
+    }
+    if (!normalizeSeoText(formData.metaTitle || generatedSeoDefaults.metaTitle)) {
+      return 'SEO title is required before publishing.';
+    }
+    if (!normalizeSeoText(formData.metaDescription || generatedSeoDefaults.metaDescription)) {
+      return 'SEO description is required before publishing.';
     }
     return null;
   };
@@ -1989,7 +2129,22 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       return (
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6 rounded-[1.75rem] border border-slate-200 bg-white p-6">
-            <h2 className="text-xl font-black text-slate-900">SEO, Search Tags & Visibility</h2>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">SEO Settings</h2>
+                <p className="mt-2 text-sm font-medium text-slate-500">
+                  Control how this product appears in Google, social previews, and ExShopi’s SEO-friendly URLs.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={applyGeneratedSeo}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-violet-600"
+              >
+                <Sparkles size={14} />
+                Generate SEO Automatically
+              </button>
+            </div>
 
             <div className="space-y-5">
               <div>
@@ -2002,6 +2157,20 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                   placeholder="macbook-pro-2015-a1502"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] font-black uppercase tracking-[0.18em]">
+                  <span className="text-slate-400">Live URL path</span>
+                  <span
+                    className={
+                      slugCheckState === 'duplicate'
+                        ? 'text-rose-600'
+                        : slugCheckState === 'available'
+                        ? 'text-emerald-600'
+                        : 'text-slate-400'
+                    }
+                  >
+                    {slugCheckMessage || `/${selectedParentSlug || 'category'}/${selectedSubcategorySlug || 'item'}/${seoPreviewSlug || 'product-slug'}`}
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -2026,6 +2195,9 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                   placeholder="SEO meta title"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
+                <p className={`mt-2 text-[11px] font-black uppercase tracking-[0.18em] ${getSeoLengthStatus(formData.metaTitle || generatedSeoDefaults.metaTitle, 50, 60) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {(formData.metaTitle || generatedSeoDefaults.metaTitle).trim().length}/60 characters
+                </p>
               </div>
 
               <div>
@@ -2038,6 +2210,9 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                   placeholder="SEO meta description"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
+                <p className={`mt-2 text-[11px] font-black uppercase tracking-[0.18em] ${getSeoLengthStatus(formData.metaDescription || generatedSeoDefaults.metaDescription, 150, 160) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {(formData.metaDescription || generatedSeoDefaults.metaDescription).trim().length}/160 characters
+                </p>
               </div>
 
               <div>
@@ -2048,6 +2223,58 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                   value={formData.metaKeywords}
                   onChange={handleInputChange}
                   placeholder="refurbished laptops UAE, used MacBook Dubai"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+                <p className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                  Comma separated keywords for search intent and internal content planning.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">Canonical URL</label>
+                <input
+                  type="text"
+                  name="canonicalUrl"
+                  value={formData.canonicalUrl}
+                  onChange={handleInputChange}
+                  placeholder={generatedSeoDefaults.canonicalUrl || seoPreviewUrl}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">OG Title</label>
+                  <input
+                    type="text"
+                    name="ogTitle"
+                    value={formData.ogTitle}
+                    onChange={handleInputChange}
+                    placeholder="Social share title"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">OG Image</label>
+                  <input
+                    type="text"
+                    name="ogImage"
+                    value={formData.ogImage}
+                    onChange={handleInputChange}
+                    placeholder="https://..."
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">OG Description</label>
+                <textarea
+                  name="ogDescription"
+                  value={formData.ogDescription}
+                  onChange={handleInputChange}
+                  rows={4}
+                  placeholder="Social share description"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </div>
@@ -2067,6 +2294,17 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
           </div>
 
           <aside className="space-y-5 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Google Preview</p>
+              <div className="mt-4 space-y-1">
+                <p className="text-lg font-medium leading-6 text-[#1a0dab]">
+                  {seoPreviewTitle}
+                </p>
+                <p className="text-sm font-medium text-emerald-700">{seoPreviewUrl}</p>
+                <p className="text-sm leading-6 text-slate-600">{seoPreviewDescription}</p>
+              </div>
+            </div>
+
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">SEO Score</p>
               <div className="mt-2 flex items-center justify-between">
@@ -2094,6 +2332,15 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                   </span>
                 </div>
               ))}
+            </div>
+
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Publishing Rules</p>
+              <div className="mt-4 space-y-3 text-sm font-medium text-slate-600">
+                <p>Meta title and meta description are required before publishing.</p>
+                <p>SEO slug must stay unique and category-aware for clean marketplace URLs.</p>
+                <p>Canonical and OG fields are optional, but they help search engines and social previews stay consistent.</p>
+              </div>
             </div>
           </aside>
         </section>

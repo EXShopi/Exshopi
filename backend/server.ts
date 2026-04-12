@@ -439,6 +439,43 @@ const clampSeoText = (value: string, limit: number) => {
 const uniqueSeoKeywords = (values: string[]) =>
   Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
 
+const normalizeSeoValue = (value: string) => String(value || '').replace(/\s+/g, ' ').trim();
+
+const normalizeCategoryPayload = (payload: any) => {
+  const slug = seoSlugify(payload?.slug || payload?.name || 'category');
+  return {
+    ...payload,
+    slug,
+    seo: {
+      metaTitle: normalizeSeoValue(payload?.seo?.metaTitle || ''),
+      metaDescription: normalizeSeoValue(payload?.seo?.metaDescription || ''),
+      keywords: uniqueSeoKeywords(String(payload?.seo?.keywords || '').split(',')).join(', '),
+      introText: normalizeSeoValue(payload?.seo?.introText || ''),
+    },
+  };
+};
+
+const ensureUniqueProductSlug = async (slugValue: string, currentId?: string) => {
+  const desiredSlug = seoSlugify(slugValue || 'product');
+  const products = prismaRuntime.enabled
+    ? await prismaRuntime.getAllProducts()
+    : supabaseRuntime.enabled
+    ? await supabaseRuntime.getAllProducts()
+    : db.getAllProducts();
+
+  const duplicate = (products || []).find(
+    (product: any) =>
+      seoSlugify(product?.slug || product?.title || '') === desiredSlug &&
+      String(product?.id || '') !== String(currentId || '')
+  );
+
+  if (duplicate) {
+    throw new Error('SEO slug must be unique. Please choose another slug.');
+  }
+
+  return desiredSlug;
+};
+
 const getProductSeoMeta = (product: any) => {
   const title = String(product?.title || 'Marketplace Product').trim();
   const brand = String(product?.brand || product?.specs?.attributes?.brand || '').trim();
@@ -2439,6 +2476,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
     }
     const payload = productPayloadSchema.parse(req.body);
     const isDraft = payload.status === 'draft';
+    const nextSlug = await ensureUniqueProductSlug(payload.slug || payload.title);
     
     let product: any = null;
     if (supabaseRuntime.enabled) {
@@ -2446,7 +2484,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
-        slug: payload.slug || seoSlugify(payload.title),
+        slug: nextSlug,
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2480,7 +2518,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
-        slug: payload.slug || seoSlugify(payload.title),
+        slug: nextSlug,
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2516,7 +2554,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
-        slug: payload.slug || seoSlugify(payload.title),
+        slug: nextSlug,
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2756,6 +2794,12 @@ app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response)
       payload.ownership = 'seller';
       payload.storeId = current.storeId || current.sellerId;
       payload.brand = payload.brand || payload.specs?.attributes?.brand || current.brand || '';
+    }
+    if (payload.title || payload.slug) {
+      payload.slug = await ensureUniqueProductSlug(
+        payload.slug || current.slug || payload.title || current.title || 'product',
+        req.params.id
+      );
     }
 
     let product: any = null;
@@ -3299,11 +3343,13 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
       return res.status(400).json({ error: 'ExShopi Official seller profile is missing. Please seed the official store first.' });
     }
 
+    const nextSlug = await ensureUniqueProductSlug(payload.slug || payload.title || 'untitled');
+
     const productInput = {
       sellerId: assignedSeller.id,
       storeId: assignedSeller.id,
       categoryId,
-      slug: payload.slug || seoSlugify(payload.title || 'untitled'),
+      slug: nextSlug,
       title: payload.title || 'Untitled',
       description: payload.description || '',
       price: Number(payload.price || 0),
@@ -3361,7 +3407,10 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
     const nextPayload = { ...(await adminProductPayloadSchema.partial().parseAsync(req.body)) } as any;
     if (nextPayload.title || nextPayload.slug) {
-      nextPayload.slug = nextPayload.slug || seoSlugify(nextPayload.title || '');
+      nextPayload.slug = await ensureUniqueProductSlug(
+        nextPayload.slug || nextPayload.title || 'product',
+        req.params.id
+      );
     }
 
     if (nextPayload.categoryId) {
@@ -5605,7 +5654,12 @@ app.get('/api/categories/:id', (req: Request, res: Response) => {
 app.post('/api/categories', authMiddleware, (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const cat = db.createCategory(req.body);
+    const normalized = normalizeCategoryPayload(req.body || {});
+    const existing = db.getCategories().find((category) => category.slug === normalized.slug);
+    if (existing) {
+      return res.status(400).json({ error: 'Category slug must be unique.' });
+    }
+    const cat = db.createCategory(normalized);
     res.json(cat);
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -5615,7 +5669,14 @@ app.post('/api/categories', authMiddleware, (req: Request, res: Response) => {
 app.put('/api/categories/:id', authMiddleware, (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const updated = db.updateCategory(req.params.id, req.body as any);
+    const normalized = normalizeCategoryPayload(req.body || {});
+    const duplicate = db
+      .getCategories()
+      .find((category) => category.slug === normalized.slug && category.id !== req.params.id);
+    if (duplicate) {
+      return res.status(400).json({ error: 'Category slug must be unique.' });
+    }
+    const updated = db.updateCategory(req.params.id, normalized as any);
     if (!updated) return res.status(404).json({ error: 'Category not found' });
     res.json(updated);
   } catch (error) {

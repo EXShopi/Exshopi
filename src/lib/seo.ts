@@ -54,6 +54,75 @@ function uniqueKeywords(values: string[]) {
   );
 }
 
+export function normalizeSeoText(value: string) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+export function trimSeoKeywords(value: string) {
+  return uniqueKeywords(
+    String(value || "")
+      .split(",")
+      .map((item) => normalizeSeoText(item))
+      .filter(Boolean)
+  ).join(", ");
+}
+
+export function getSeoLengthStatus(
+  value: string,
+  minimum: number,
+  maximum: number
+): "short" | "good" | "long" {
+  const length = normalizeSeoText(value).length;
+  if (length === 0 || length < minimum) return "short";
+  if (length > maximum) return "long";
+  return "good";
+}
+
+export function buildSeoTitle(value: string, fallback?: string) {
+  const normalized = normalizeSeoText(value || fallback || DEFAULT_SITE_NAME);
+  return clampText(normalized, 60);
+}
+
+export function buildSeoDescription(value: string, fallback: string) {
+  return clampText(normalizeSeoText(value || fallback), 160);
+}
+
+export function generateAdminSeoFields(input: {
+  title?: string;
+  shortDescription?: string;
+  category?: string;
+  slugBase?: string;
+  canonicalBasePath?: string;
+}) {
+  const title = normalizeSeoText(input.title || "Marketplace Product");
+  const category = normalizeSeoText(input.category || "electronics");
+  const slug = slugifySeo(input.slugBase || title);
+  const metaTitle = buildSeoTitle(`${title} | Buy in UAE | ${DEFAULT_SITE_NAME}`);
+  const metaDescription = buildSeoDescription(
+    `${normalizeSeoText(input.shortDescription) || title} Shop now on ExShopi with UAE delivery, trusted support, and marketplace-ready product details.`,
+    `${title} available on ExShopi with UAE delivery, trusted support, and premium marketplace service.`
+  );
+  const metaKeywords = trimSeoKeywords(
+    [title, category, `${category} UAE`, "buy electronics UAE", "Dubai", "ExShopi"]
+      .filter(Boolean)
+      .join(", ")
+  );
+  const canonicalUrl = input.canonicalBasePath
+    ? buildAbsoluteUrl(`${input.canonicalBasePath.replace(/\/$/, "")}/${slug}`.replace(/\/+/g, "/"))
+    : "";
+
+  return {
+    slug,
+    metaTitle,
+    metaDescription,
+    metaKeywords,
+    canonicalUrl,
+    ogTitle: metaTitle,
+    ogDescription: metaDescription,
+    ogImage: "",
+  };
+}
+
 export function getSiteUrl() {
   return DEFAULT_SITE_URL.replace(/\/$/, "");
 }

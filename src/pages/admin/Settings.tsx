@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Save, Globe, Palette, Home, Layout, List, Search, Share2, Info, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, Loader2, Video, Play, ShieldCheck, Upload, Settings2, Sparkles, LayoutPanelTop } from 'lucide-react';
 import { getSiteSettings, updateSiteSettings, SiteSettings, defaultSettings } from '../../services/settingsService';
 import { adminOpsAPI } from '../../services/api';
-import { useAuthStore } from '../../store/auth';
 import { uploadImageFile } from '../../lib/uploadClient';
+import { getSeoLengthStatus, normalizeSeoText, trimSeoKeywords } from '../../lib/seo';
 
 export function AdminSettings() {
   const [settings, setSettings] = useState<SiteSettings>(defaultSettings);
@@ -41,10 +41,41 @@ export function AdminSettings() {
     setIsSaving(true);
     setMessage(null);
     try {
+      const cleanedSettings: SiteSettings = {
+        ...settings,
+        seo: {
+          ...settings.seo,
+          metaTitle: normalizeSeoText(settings.seo.metaTitle),
+          metaDescription: normalizeSeoText(settings.seo.metaDescription),
+          keywords: trimSeoKeywords(settings.seo.keywords),
+          ogTitle: normalizeSeoText(settings.seo.ogTitle),
+          ogDescription: normalizeSeoText(settings.seo.ogDescription),
+          ogImage: normalizeSeoText(settings.seo.ogImage),
+          homepage: {
+            ...settings.seo.homepage,
+            metaTitle: normalizeSeoText(settings.seo.homepage.metaTitle),
+            metaDescription: normalizeSeoText(settings.seo.homepage.metaDescription),
+            keywords: trimSeoKeywords(settings.seo.homepage.keywords),
+            ogTitle: normalizeSeoText(settings.seo.homepage.ogTitle),
+            ogDescription: normalizeSeoText(settings.seo.homepage.ogDescription),
+            ogImage: normalizeSeoText(settings.seo.homepage.ogImage),
+          },
+          blog: {
+            ...settings.seo.blog,
+            metaTitle: normalizeSeoText(settings.seo.blog.metaTitle),
+            metaDescription: normalizeSeoText(settings.seo.blog.metaDescription),
+            keywords: trimSeoKeywords(settings.seo.blog.keywords),
+            slug: normalizeSeoText(settings.seo.blog.slug),
+            ogImage: normalizeSeoText(settings.seo.blog.ogImage),
+          },
+        },
+      };
+
       await Promise.all([
-        updateSiteSettings(settings),
+        updateSiteSettings(cleanedSettings),
         adminOpsAPI.updateMarketplaceSettings(marketplaceSettings),
       ]);
+      setSettings(cleanedSettings);
       setMessage({ type: 'success', text: 'Settings updated successfully!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
@@ -1148,32 +1179,105 @@ export function AdminSettings() {
 
             {activeTab === 'seo' && (
               <div className="space-y-8">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Meta Title</label>
-                    <input
-                      type="text"
-                      value={settings.seo.metaTitle}
-                      onChange={e => updateNested('seo.metaTitle', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold"
-                    />
+                <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Global Defaults</p>
+                  <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">Marketplace SEO Identity</h3>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    Set the fallback metadata ExShopi should use across pages where a more specific SEO record is not provided.
+                  </p>
+
+                  <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                    <div className="space-y-5">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Meta Title</label>
+                        <input
+                          type="text"
+                          value={settings.seo.metaTitle}
+                          onChange={e => updateNested('seo.metaTitle', e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold"
+                        />
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${getSeoLengthStatus(settings.seo.metaTitle, 50, 60) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {settings.seo.metaTitle.trim().length}/60 characters
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Meta Description</label>
+                        <textarea
+                          value={settings.seo.metaDescription}
+                          onChange={e => updateNested('seo.metaDescription', e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold min-h-[120px]"
+                        />
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${getSeoLengthStatus(settings.seo.metaDescription, 150, 160) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {settings.seo.metaDescription.trim().length}/160 characters
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Keywords (comma separated)</label>
+                        <input
+                          type="text"
+                          value={settings.seo.keywords}
+                          onChange={e => updateNested('seo.keywords', e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-5">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">OG Title</label>
+                        <input
+                          type="text"
+                          value={settings.seo.ogTitle}
+                          onChange={e => updateNested('seo.ogTitle', e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">OG Description</label>
+                        <textarea
+                          value={settings.seo.ogDescription}
+                          onChange={e => updateNested('seo.ogDescription', e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold min-h-[120px]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">OG Image URL</label>
+                        <input
+                          type="text"
+                          value={settings.seo.ogImage}
+                          onChange={e => updateNested('seo.ogImage', e.target.value)}
+                          placeholder="https://..."
+                          className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Meta Description</label>
-                    <textarea
-                      value={settings.seo.metaDescription}
-                      onChange={e => updateNested('seo.metaDescription', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold min-h-[120px]"
-                    />
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <div className="rounded-[2rem] border border-slate-100 bg-white p-6">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Homepage SEO</p>
+                    <h3 className="mt-2 text-xl font-black text-slate-900">Homepage Search Settings</h3>
+                    <div className="mt-5 space-y-4">
+                      <input value={settings.seo.homepage.metaTitle} onChange={e => updateNested('seo.homepage.metaTitle', e.target.value)} placeholder="Homepage title" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <textarea value={settings.seo.homepage.metaDescription} onChange={e => updateNested('seo.homepage.metaDescription', e.target.value)} placeholder="Homepage meta description" className="w-full min-h-[120px] bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <input value={settings.seo.homepage.keywords} onChange={e => updateNested('seo.homepage.keywords', e.target.value)} placeholder="Homepage keywords" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <input value={settings.seo.homepage.ogTitle} onChange={e => updateNested('seo.homepage.ogTitle', e.target.value)} placeholder="Homepage OG title" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <textarea value={settings.seo.homepage.ogDescription} onChange={e => updateNested('seo.homepage.ogDescription', e.target.value)} placeholder="Homepage OG description" className="w-full min-h-[110px] bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <input value={settings.seo.homepage.ogImage} onChange={e => updateNested('seo.homepage.ogImage', e.target.value)} placeholder="Homepage OG image URL" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Keywords (comma separated)</label>
-                    <input
-                      type="text"
-                      value={settings.seo.keywords}
-                      onChange={e => updateNested('seo.keywords', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold"
-                    />
+
+                  <div className="rounded-[2rem] border border-slate-100 bg-white p-6">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Blog SEO</p>
+                    <h3 className="mt-2 text-xl font-black text-slate-900">Blog Search Defaults</h3>
+                    <div className="mt-5 space-y-4">
+                      <input value={settings.seo.blog.metaTitle} onChange={e => updateNested('seo.blog.metaTitle', e.target.value)} placeholder="Blog title" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <textarea value={settings.seo.blog.metaDescription} onChange={e => updateNested('seo.blog.metaDescription', e.target.value)} placeholder="Blog meta description" className="w-full min-h-[120px] bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <input value={settings.seo.blog.keywords} onChange={e => updateNested('seo.blog.keywords', e.target.value)} placeholder="Blog keywords" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <input value={settings.seo.blog.slug} onChange={e => updateNested('seo.blog.slug', e.target.value)} placeholder="blog" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      <input value={settings.seo.blog.ogImage} onChange={e => updateNested('seo.blog.ogImage', e.target.value)} placeholder="Blog OG image URL" className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                    </div>
                   </div>
                 </div>
               </div>

@@ -14,6 +14,7 @@ import {
   writeSpecificationTemplateOverride,
   type SpecificationFieldDefinition,
 } from '../../lib/productSpecifications';
+import { generateCategorySeo, getSeoLengthStatus, normalizeSeoText, slugifySeo, trimSeoKeywords } from '../../lib/seo';
 
 const ICON_OPTIONS = [
   { id: 'Headphones', icon: Headphones },
@@ -57,9 +58,16 @@ interface CustomField {
 interface Category {
   id: string;
   name: string;
+  slug?: string;
   icon: string;
   color: string;
   bg: string;
+  seo?: {
+    metaTitle?: string;
+    metaDescription?: string;
+    keywords?: string;
+    introText?: string;
+  };
   active?: boolean;
   comingSoonMessage?: string;
   bannerImage?: string;
@@ -74,9 +82,16 @@ export function AdminCategories() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentCategory, setCurrentCategory] = useState<Partial<Category>>({
     name: '',
+    slug: '',
     icon: 'LayoutGrid',
     color: 'text-slate-500',
     bg: 'bg-slate-50',
+    seo: {
+      metaTitle: '',
+      metaDescription: '',
+      keywords: '',
+      introText: '',
+    },
     active: true,
     comingSoonMessage: "We're preparing amazing products in this category",
     bannerImage: '',
@@ -110,23 +125,57 @@ export function AdminCategories() {
 
   const handleSave = async () => {
     if (!currentCategory.name) return;
+
+    const nextSlug = slugifySeo(currentCategory.slug || currentCategory.name || '');
+    const duplicateSlug = categories.some(
+      (category) => category.slug === nextSlug && category.id !== currentCategory.id
+    );
+
+    if (!nextSlug) {
+      window.alert('Category slug is required.');
+      return;
+    }
+
+    if (duplicateSlug) {
+      window.alert('This category slug is already in use. Please choose a unique slug.');
+      return;
+    }
+
+    const generatedSeo = generateCategorySeo(currentCategory.name || '', nextSlug);
+    const payload = {
+      ...currentCategory,
+      slug: nextSlug,
+      seo: {
+        metaTitle: normalizeSeoText(currentCategory.seo?.metaTitle || generatedSeo.metaTitle),
+        metaDescription: normalizeSeoText(currentCategory.seo?.metaDescription || generatedSeo.metaDescription),
+        keywords: trimSeoKeywords(currentCategory.seo?.keywords || generatedSeo.metaKeywords),
+        introText: normalizeSeoText(currentCategory.seo?.introText || ''),
+      },
+    };
     
     try {
-      if (currentCategory.id) {
-        const { id, ...data } = currentCategory as any;
+      if (payload.id) {
+        const { id, ...data } = payload as any;
         await categoryAPI.update(id as string, data);
       } else {
         await categoryAPI.create({
-          ...currentCategory,
+          ...payload,
           order: categories.length
         });
       }
       setIsEditing(false);
         setCurrentCategory({
           name: '',
+          slug: '',
           icon: 'LayoutGrid',
           color: 'text-slate-500',
           bg: 'bg-slate-50',
+          seo: {
+            metaTitle: '',
+            metaDescription: '',
+            keywords: '',
+            introText: '',
+          },
           active: true,
           comingSoonMessage: "We're preparing amazing products in this category",
           bannerImage: '',
@@ -194,9 +243,16 @@ export function AdminCategories() {
           onClick={() => {
             setCurrentCategory({
               name: '',
+              slug: '',
               icon: 'LayoutGrid',
               color: 'text-slate-500',
               bg: 'bg-slate-50',
+              seo: {
+                metaTitle: '',
+                metaDescription: '',
+                keywords: '',
+                introText: '',
+              },
               active: true,
               comingSoonMessage: "We're preparing amazing products in this category",
               bannerImage: '',
@@ -245,6 +301,7 @@ export function AdminCategories() {
                     </div>
                   </div>
                   <h3 className="text-lg font-black text-slate-900 mb-1">{cat.name}</h3>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">/{cat.slug || slugifySeo(cat.name)}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${cat.active === false ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {cat.active === false ? 'Coming Soon' : 'Active'}
@@ -294,6 +351,17 @@ export function AdminCategories() {
                     onChange={e => setCurrentCategory({...currentCategory, name: e.target.value})}
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none transition-all text-sm font-bold"
                     placeholder="e.g. Electronics"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">SEO Slug</label>
+                  <input
+                    type="text"
+                    value={currentCategory.slug || ''}
+                    onChange={e => setCurrentCategory({ ...currentCategory, slug: slugifySeo(e.target.value) })}
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none transition-all text-sm font-bold"
+                    placeholder="electronics"
                   />
                 </div>
 
@@ -370,6 +438,85 @@ export function AdminCategories() {
                 </div>
 
                 <div className="pt-6 border-t border-slate-100">
+                  <div className="mb-6 rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">Category SEO</p>
+                        <h4 className="mt-2 text-lg font-black text-slate-900">Search Visibility Settings</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const generated = generateCategorySeo(currentCategory.name || '', currentCategory.slug || currentCategory.name || '');
+                          setCurrentCategory((prev) => ({
+                            ...prev,
+                            slug: slugifySeo(prev.slug || prev.name || ''),
+                            seo: {
+                              metaTitle: generated.metaTitle,
+                              metaDescription: generated.metaDescription,
+                              keywords: generated.metaKeywords,
+                              introText: prev.seo?.introText || '',
+                            },
+                          }));
+                        }}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-violet-600"
+                      >
+                        <Sparkles size={14} />
+                        Generate SEO
+                      </button>
+                    </div>
+
+                    <div className="mt-5 space-y-4">
+                      <div>
+                        <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-400">Meta Title</label>
+                        <input
+                          type="text"
+                          value={currentCategory.seo?.metaTitle || ''}
+                          onChange={e => setCurrentCategory({ ...currentCategory, seo: { ...(currentCategory.seo || {}), metaTitle: e.target.value } })}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition-all focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                          placeholder="Buy Electronics in UAE | Best Prices | ExShopi"
+                        />
+                        <p className={`mt-2 text-[11px] font-black uppercase tracking-widest ${getSeoLengthStatus(currentCategory.seo?.metaTitle || '', 50, 60) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {(currentCategory.seo?.metaTitle || '').trim().length}/60 characters
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-400">Meta Description</label>
+                        <textarea
+                          value={currentCategory.seo?.metaDescription || ''}
+                          onChange={e => setCurrentCategory({ ...currentCategory, seo: { ...(currentCategory.seo || {}), metaDescription: e.target.value } })}
+                          className="min-h-[110px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition-all focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                          placeholder="Premium category description for Google search results."
+                        />
+                        <p className={`mt-2 text-[11px] font-black uppercase tracking-widest ${getSeoLengthStatus(currentCategory.seo?.metaDescription || '', 150, 160) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {(currentCategory.seo?.metaDescription || '').trim().length}/160 characters
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-400">Keywords</label>
+                        <input
+                          type="text"
+                          value={currentCategory.seo?.keywords || ''}
+                          onChange={e => setCurrentCategory({ ...currentCategory, seo: { ...(currentCategory.seo || {}), keywords: e.target.value } })}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition-all focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                          placeholder="electronics UAE, mobiles Dubai, laptops UAE"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-400">SEO Intro Text</label>
+                        <textarea
+                          value={currentCategory.seo?.introText || ''}
+                          onChange={e => setCurrentCategory({ ...currentCategory, seo: { ...(currentCategory.seo || {}), introText: e.target.value } })}
+                          className="min-h-[140px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition-all focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                          placeholder="Add a 200-300 word SEO-friendly introduction for this category page."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between mb-4">
                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Custom Fields</label>
                     <button 
