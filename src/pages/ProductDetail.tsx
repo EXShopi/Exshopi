@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { LISTING_TEMPLATE_MAP } from "../lib/marketplaceTemplates";
 import {
   Award,
   Check,
@@ -28,10 +27,11 @@ import { useAuthStore } from "../store/auth";
 import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
 import { formatAED, formatAEDPlain } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
-import { buildSpecificationTableRows, getSpecificationTemplate } from "../lib/productSpecifications";
+import { buildDetailedSpecificationGroups, getSpecificationTemplate, humanizeSpecificationValue } from "../lib/productSpecifications";
 import SEO from "../components/SEO";
 import { buildProductPath } from "../lib/seo";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
+import ProductSpecificationTable from "../components/product/ProductSpecificationTable";
 
 
 const productDetailCache = new Map<string, any>();
@@ -686,68 +686,41 @@ export default function ProductDetail() {
     [allProducts, product?.id]
   );
 
-  const templateKey = String(
-  productSpecs?.templateId ||
-  productSpecs?.templateName ||
-  product?.category ||
-  ""
-)
-  .trim()
-  .toLowerCase();
-
-const template = LISTING_TEMPLATE_MAP[templateKey];
 const structuredTemplate = getSpecificationTemplate(
   productSpecs?.parentCategorySlug || product?.category || "",
   productSpecs?.subcategorySlug || productSpecs?.templateId || product?.subcategory || "",
   productSpecs?.subcategoryName || productSpecs?.templateName || product?.subcategory || ""
 );
 
-const specs = useMemo(() => {
-  if (!template || !Array.isArray(template.fields)) {
-    return baseSpecifications || baseAttributes || {};
-  }
-
-  const base = baseAttributes || {};
-  const result: Record<string, any> = {};
-
-  template.fields.forEach((field) => {
-    let value =
-      base[field.key] ??
-      base[field.label] ??
-      product?.[field.key];
-
-    if (field.key === "color") value = selectedColorLabel || value;
-    if (field.key === "size") value = selectedSizeLabel || value;
-    if (field.key === "storage") value = selectedStorage || value;
-    if (field.key === "ram") value = selectedRam || value;
-    if (field.key === "processor") value = selectedProcessorLabel || value;
-
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      result[field.label] = value;
+  const specificationGroups = useMemo(() => {
+    if (Array.isArray(productSpecs?.specificationGroups) && productSpecs.specificationGroups.length) {
+      return productSpecs.specificationGroups
+        .map((group: any) => ({
+          key: String(group?.key || group?.title || ''),
+          title: String(group?.title || group?.key || 'Specifications'),
+          items: Array.isArray(group?.items)
+            ? group.items
+                .map((item: any) => ({
+                  key: String(item?.key || item?.label || ''),
+                  label: String(item?.label || ''),
+                  value: String(item?.value || '').trim(),
+                }))
+                .filter((item: any) => item.label && item.value)
+            : [],
+        }))
+        .filter((group: any) => group.items.length);
     }
-  });
 
-  return result;
-}, [
-  template,
-  baseSpecifications,
-  baseAttributes,
-  product,
-  selectedColorLabel,
-  selectedSizeLabel,
-  selectedStorage,
-  selectedRam,
-  selectedProcessorLabel,
-]);
-
-  const specificationRows = useMemo(
-    () =>
-      buildSpecificationTableRows(
-        Object.keys(specs || {}).length ? specs : baseSpecifications || baseAttributes || {},
-        structuredTemplate
-      ),
-    [specs, baseSpecifications, baseAttributes, structuredTemplate]
-  );
+    const sourceValues = {
+      ...(productSpecs?.specificationValues || {}),
+      ...(baseSpecifications || {}),
+      ...(baseAttributes || {}),
+    };
+    const extraGroups = Array.isArray(productSpecs?.additionalSpecificationGroups)
+      ? productSpecs.additionalSpecificationGroups
+      : [];
+    return buildDetailedSpecificationGroups(sourceValues, structuredTemplate, extraGroups);
+  }, [productSpecs?.specificationGroups, productSpecs?.specificationValues, productSpecs?.additionalSpecificationGroups, baseSpecifications, baseAttributes, structuredTemplate]);
   const productImages = useMemo(
     () => getProductImages(activeVariant?.image || product?.image, product?.images || product?.gallery || product?.media),
     [product?.gallery, product?.image, product?.images, product?.media, activeVariant?.image]
@@ -768,20 +741,22 @@ const specs = useMemo(() => {
   const hasMoreOverview = overviewParagraphs.length > 3;
 
   const overviewBullets = useMemo(() => {
-    const explicitFeatures = Array.isArray(productSpecs?.keyFeatures)
+    const explicitFeatures = Array.isArray(productSpecs?.briefHighlights)
+      ? productSpecs.briefHighlights.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+      : Array.isArray(productSpecs?.keyFeatures)
       ? productSpecs.keyFeatures.map((item: unknown) => String(item || "").trim()).filter(Boolean)
       : [];
 
     const derivedFeatures = Object.entries(baseAttributes || {})
       .slice(0, 6)
-      .map(([label, value]) => `${label}: ${String(value)}`);
+      .map(([label, value]) => `${label}: ${humanizeSpecificationValue(value as any)}`);
 
     const merged = [...explicitFeatures, ...derivedFeatures, ...productHighlights]
       .map((item) => item.replace(/^[•\-\s]+/, "").trim())
       .filter(Boolean);
 
     return Array.from(new Set(merged)).slice(0, 6);
-  }, [baseAttributes, productSpecs?.keyFeatures]);
+  }, [baseAttributes, productSpecs?.briefHighlights, productSpecs?.keyFeatures]);
 
   const reviewAverage = useMemo(() => {
     if (!reviews.length) return Number(product?.rating || 0);
@@ -1454,24 +1429,8 @@ const specs = useMemo(() => {
                     Built for UAE marketplace buyers
                   </div>
                 </div>
-                {specificationRows.length > 0 ? (
-                  <div className="overflow-hidden rounded-[28px] border border-slate-200">
-                    <div className="grid grid-cols-[0.42fr_0.58fr] bg-slate-950 px-6 py-4 text-[11px] font-black uppercase tracking-[0.22em] text-white/75">
-                      <span>Specification</span>
-                      <span>Details</span>
-                    </div>
-                    {specificationRows.map((row, index) => (
-                      <div
-                        key={row.key}
-                        className={`grid grid-cols-1 gap-2 border-t border-slate-200 px-6 py-4 md:grid-cols-[0.42fr_0.58fr] ${
-                          index % 2 === 0 ? "bg-white" : "bg-slate-50/70"
-                        }`}
-                      >
-                        <p className="text-sm font-bold text-slate-500">{row.label}</p>
-                        <p className="text-sm font-semibold text-slate-900">{row.value}</p>
-                      </div>
-                    ))}
-                  </div>
+                {specificationGroups.length > 0 ? (
+                  <ProductSpecificationTable groups={specificationGroups} />
                 ) : (
                   <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-sm font-medium text-slate-600">
                     Specifications will appear here once the seller completes the structured product specification section.

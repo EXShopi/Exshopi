@@ -45,6 +45,7 @@ import { getPrismaEnvDiagnostics, probePrismaConnection } from './prisma';
 import { ensureUniqueSlug, normalizeSlugInput, slugifyProduct } from './utils/slug';
 import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, uniqueSeoKeywords } from './utils/seo';
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
+import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -2503,9 +2504,21 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
     const payload = productPayloadSchema.parse(req.body);
     const isDraft = payload.status === 'draft';
     const seo = await buildPersistedProductSeo(payload);
-    const persistedSpecs = mergeProductSeoIntoSpecs(payload.specs || {}, seo);
+    const normalizedSpecs = normalizeProductSpecifications(payload.specs || {}, {
+      parentCategorySlug: payload.specs?.parentCategorySlug || payload.specs?.categorySlug || '',
+      parentCategoryName: payload.specs?.parentCategoryName || payload.specs?.categoryName || '',
+      categorySlug: payload.specs?.categorySlug || payload.specs?.parentCategorySlug || '',
+      categoryName: payload.specs?.categoryName || payload.specs?.parentCategoryName || '',
+      subcategorySlug: payload.specs?.subcategorySlug || payload.specs?.templateId || '',
+      subcategoryName: payload.specs?.subcategoryName || payload.specs?.templateName || '',
+      title: payload.title,
+    });
+    const persistedSpecs = mergeProductSeoIntoSpecs(normalizedSpecs.specs || {}, seo);
     if (!isDraft) {
       validateSeoForPublish(seo);
+      validateProductSpecificationsForTemplate(persistedSpecs, normalizedSpecs.template, {
+        requireHighlights: true,
+      });
     }
     
     let product: any = null;
@@ -2876,6 +2889,31 @@ app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response)
       payload.ownership = 'seller';
       payload.storeId = current.storeId || current.sellerId;
       payload.brand = payload.brand || payload.specs?.attributes?.brand || current.brand || '';
+    }
+    if (payload.specs || payload.title || payload.categoryId) {
+      const normalizedSpecs = normalizeProductSpecifications(
+        {
+          ...(current.specs || {}),
+          ...(payload.specs || {}),
+        },
+        {
+          parentCategorySlug:
+            payload.specs?.parentCategorySlug || current.specs?.parentCategorySlug || current.specs?.categorySlug || '',
+          parentCategoryName:
+            payload.specs?.parentCategoryName || current.specs?.parentCategoryName || current.specs?.categoryName || '',
+          categorySlug: payload.specs?.categorySlug || current.specs?.categorySlug || current.specs?.parentCategorySlug || '',
+          categoryName: payload.specs?.categoryName || current.specs?.categoryName || current.specs?.parentCategoryName || '',
+          subcategorySlug: payload.specs?.subcategorySlug || current.specs?.subcategorySlug || current.specs?.templateId || '',
+          subcategoryName: payload.specs?.subcategoryName || current.specs?.subcategoryName || current.specs?.templateName || '',
+          title: payload.title || current.title,
+        }
+      );
+      payload.specs = normalizedSpecs.specs;
+      if ((payload.status || current.status) !== 'draft') {
+        validateProductSpecificationsForTemplate(payload.specs, normalizedSpecs.template, {
+          requireHighlights: true,
+        });
+      }
     }
     if (payload.title || payload.slug || payload.metaTitle || payload.metaDescription || payload.metaKeywords) {
       const seo = await buildPersistedProductSeo(
@@ -3451,8 +3489,20 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
     }
 
     const seo = await buildPersistedProductSeo(payload);
+    const normalizedSpecs = normalizeProductSpecifications(payload.specs || {}, {
+      parentCategorySlug: payload.specs?.parentCategorySlug || payload.specs?.categorySlug || '',
+      parentCategoryName: payload.specs?.parentCategoryName || payload.specs?.categoryName || '',
+      categorySlug: payload.specs?.categorySlug || payload.specs?.parentCategorySlug || '',
+      categoryName: payload.specs?.categoryName || payload.specs?.parentCategoryName || '',
+      subcategorySlug: payload.specs?.subcategorySlug || payload.specs?.templateId || '',
+      subcategoryName: payload.specs?.subcategoryName || payload.specs?.templateName || '',
+      title: payload.title || 'Untitled',
+    });
     if (lifecycle.status !== 'draft') {
       validateSeoForPublish(seo);
+      validateProductSpecificationsForTemplate(normalizedSpecs.specs, normalizedSpecs.template, {
+        requireHighlights: true,
+      });
     }
 
     const productInput = {
@@ -3481,7 +3531,7 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
       sku: payload.sku || '',
       brand: payload.brand || payload.specs?.attributes?.brand || '',
       specs: {
-        ...mergeProductSeoIntoSpecs(payload.specs || {}, seo),
+        ...mergeProductSeoIntoSpecs(normalizedSpecs.specs || {}, seo),
         ownership: {
           sellerId: assignedSeller.id,
           sellerName: assignedSeller.storeName,
@@ -3523,12 +3573,44 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
     const nextPayload = { ...(await adminProductPayloadSchema.partial().parseAsync(req.body)) } as any;
+    const currentProduct = prismaRuntime.enabled
+      ? await prismaRuntime.getProduct(req.params.id)
+      : supabaseRuntime.enabled
+      ? await supabaseRuntime.getProduct(req.params.id)
+      : db.getProduct(req.params.id);
+    if (!currentProduct) return res.status(404).json({ error: 'Product not found' });
+
+    if (nextPayload.specs || nextPayload.title || nextPayload.categoryId) {
+      const normalizedSpecs = normalizeProductSpecifications(
+        {
+          ...((currentProduct as any)?.specs || {}),
+          ...(nextPayload.specs || {}),
+        },
+        {
+          parentCategorySlug:
+            nextPayload.specs?.parentCategorySlug || (currentProduct as any)?.specs?.parentCategorySlug || (currentProduct as any)?.specs?.categorySlug || '',
+          parentCategoryName:
+            nextPayload.specs?.parentCategoryName || (currentProduct as any)?.specs?.parentCategoryName || (currentProduct as any)?.specs?.categoryName || '',
+          categorySlug:
+            nextPayload.specs?.categorySlug || (currentProduct as any)?.specs?.categorySlug || (currentProduct as any)?.specs?.parentCategorySlug || '',
+          categoryName:
+            nextPayload.specs?.categoryName || (currentProduct as any)?.specs?.categoryName || (currentProduct as any)?.specs?.parentCategoryName || '',
+          subcategorySlug:
+            nextPayload.specs?.subcategorySlug || (currentProduct as any)?.specs?.subcategorySlug || (currentProduct as any)?.specs?.templateId || '',
+          subcategoryName:
+            nextPayload.specs?.subcategoryName || (currentProduct as any)?.specs?.subcategoryName || (currentProduct as any)?.specs?.templateName || '',
+          title: nextPayload.title || (currentProduct as any)?.title,
+        }
+      );
+      nextPayload.specs = normalizedSpecs.specs;
+      if ((nextPayload.status || (currentProduct as any)?.status) !== 'draft') {
+        validateProductSpecificationsForTemplate(nextPayload.specs, normalizedSpecs.template, {
+          requireHighlights: true,
+        });
+      }
+    }
+
     if (nextPayload.title || nextPayload.slug || nextPayload.metaTitle || nextPayload.metaDescription || nextPayload.metaKeywords) {
-      const currentProduct = prismaRuntime.enabled
-        ? await prismaRuntime.getProduct(req.params.id)
-        : supabaseRuntime.enabled
-        ? await supabaseRuntime.getProduct(req.params.id)
-        : db.getProduct(req.params.id);
       const seo = await buildPersistedProductSeo(
         {
           ...(currentProduct || {}),
