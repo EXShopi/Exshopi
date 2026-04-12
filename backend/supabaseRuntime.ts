@@ -21,6 +21,13 @@ const mapRowToProduct = (row: any): Product => {
   return {
     id: row.id,
     slug: row.slug || '',
+    metaTitle: row.metaTitle || row.meta_title || specs.metaTitle || '',
+    metaDescription: row.metaDescription || row.meta_description || specs.metaDescription || '',
+    metaKeywords: row.metaKeywords || row.meta_keywords || specs.metaKeywords || '',
+    canonicalUrl: row.canonicalUrl || row.canonical_url || specs.canonicalUrl || '',
+    ogTitle: row.ogTitle || row.og_title || specs.ogTitle || '',
+    ogDescription: row.ogDescription || row.og_description || specs.ogDescription || '',
+    ogImage: row.ogImage || row.og_image || specs.ogImage || '',
     sellerId: row.sellerId,
     storeId: row.storeId || row.sellerId,
     categoryId: row.categoryId || row.category || '',
@@ -87,6 +94,13 @@ export const supabaseRuntime = {
       storeId: input.storeId || input.sellerId,
       categoryId: input.categoryId || input.category || '',
       slug: input.slug || '',
+      meta_title: input.metaTitle || input.specs?.metaTitle || '',
+      meta_description: input.metaDescription || input.specs?.metaDescription || '',
+      meta_keywords: input.metaKeywords || input.specs?.metaKeywords || '',
+      canonical_url: input.canonicalUrl || input.specs?.canonicalUrl || '',
+      og_title: input.ogTitle || input.specs?.ogTitle || '',
+      og_description: input.ogDescription || input.specs?.ogDescription || '',
+      og_image: input.ogImage || input.specs?.ogImage || '',
       title: input.title || '',
       description: input.description || '',
       price: input.price || 0,
@@ -254,6 +268,20 @@ export const supabaseRuntime = {
     if (!enabled) return null;
     const now = new Date().toISOString();
     const rowUpdates: any = { ...updates, updatedAt: now };
+    if ((updates as any).metaTitle !== undefined) rowUpdates.meta_title = (updates as any).metaTitle;
+    if ((updates as any).metaDescription !== undefined) rowUpdates.meta_description = (updates as any).metaDescription;
+    if ((updates as any).metaKeywords !== undefined) rowUpdates.meta_keywords = (updates as any).metaKeywords;
+    if ((updates as any).canonicalUrl !== undefined) rowUpdates.canonical_url = (updates as any).canonicalUrl;
+    if ((updates as any).ogTitle !== undefined) rowUpdates.og_title = (updates as any).ogTitle;
+    if ((updates as any).ogDescription !== undefined) rowUpdates.og_description = (updates as any).ogDescription;
+    if ((updates as any).ogImage !== undefined) rowUpdates.og_image = (updates as any).ogImage;
+    delete rowUpdates.metaTitle;
+    delete rowUpdates.metaDescription;
+    delete rowUpdates.metaKeywords;
+    delete rowUpdates.canonicalUrl;
+    delete rowUpdates.ogTitle;
+    delete rowUpdates.ogDescription;
+    delete rowUpdates.ogImage;
     if ((updates as any).specs || updates.isDeleted !== undefined || updates.deletedAt !== undefined) {
       const { data: existing, error: fetchError } = await supabase.from('products').select('specs').eq('id', id).maybeSingle();
       if (fetchError) throw fetchError;

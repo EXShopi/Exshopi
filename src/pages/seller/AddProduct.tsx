@@ -11,12 +11,14 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { authFetch, parseJsonSafe, adminProductAPI, categoryAPI, productAPI } from '../../services/api';
+import { authFetch, parseJsonSafe, categoryAPI, productAPI } from '../../services/api';
 import { sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import AuthService from '../../lib/authService';
 import { fileToDataUrl, uploadImageDataUrl } from '../../lib/uploadClient';
 import { compressImage } from '../../lib/imageUtils';
+import SEOSettingsCard from '../../components/admin/SEOSettingsCard';
+import { checkProductSlugAvailability } from '../../services/seoApi';
 import {
   getEnabledSpecificationFields,
   getMissingRequiredSpecificationLabels,
@@ -26,12 +28,12 @@ import {
   type VariantDimensionKey,
 } from '../../lib/productSpecifications';
 import {
-  generateAdminSeoFields,
-  getSeoLengthStatus,
+  generateProductSeo,
+  getProductSeoPayload,
   normalizeSeoText,
   slugifySeo,
   trimSeoKeywords,
-} from '../../lib/seo';
+} from '../../utils/seo';
 
 type FormState = {
   title: string;
@@ -187,6 +189,13 @@ type ProductRecord = {
 type ProductPayload = {
   categoryId: string;
   slug?: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
+  canonicalUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
   sellerId?: string;
   title: string;
   description: string;
@@ -603,14 +612,15 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
 
   const generatedSeoDefaults = useMemo(
     () =>
-      generateAdminSeoFields({
+      generateProductSeo({
         title: formData.title,
         shortDescription: formData.shortDescription,
         category: selectedSubcategory?.name || selectedParentCategory?.name || '',
-        slugBase: formData.slug || formData.title,
-        canonicalBasePath:
+        subcategory: selectedSubcategory?.name || '',
+        slug: formData.slug || formData.title,
+        canonicalUrl:
           selectedParentSlug && selectedSubcategorySlug
-            ? `/${selectedParentSlug}/${selectedSubcategorySlug}`
+            ? `https://exshopi.com/${selectedParentSlug}/${selectedSubcategorySlug}/${slugifySeo(formData.slug || formData.title || 'product')}`
             : '',
       }),
     [
@@ -623,16 +633,43 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
       selectedSubcategorySlug,
     ]
   );
+  const seoState = useMemo(
+    () =>
+      getProductSeoPayload({
+        title: formData.title,
+        shortDescription: formData.shortDescription,
+        description: formData.longDescription,
+        category: selectedParentCategory?.name || '',
+        subcategory: selectedSubcategory?.name || '',
+        slug: formData.slug,
+        metaTitle: formData.metaTitle,
+        metaDescription: formData.metaDescription,
+        metaKeywords: formData.metaKeywords,
+        canonicalUrl: formData.canonicalUrl,
+        ogTitle: formData.ogTitle,
+        ogDescription: formData.ogDescription,
+        ogImage: formData.ogImage,
+        image: images[0],
+      }),
+    [
+      formData.canonicalUrl,
+      formData.longDescription,
+      formData.metaDescription,
+      formData.metaKeywords,
+      formData.metaTitle,
+      formData.ogDescription,
+      formData.ogImage,
+      formData.ogTitle,
+      formData.shortDescription,
+      formData.slug,
+      formData.title,
+      images,
+      selectedParentCategory?.name,
+      selectedSubcategory?.name,
+    ]
+  );
 
-  const seoPreviewTitle = formData.metaTitle.trim() || generatedSeoDefaults.metaTitle;
-  const seoPreviewDescription =
-    formData.metaDescription.trim() || generatedSeoDefaults.metaDescription;
-  const seoPreviewSlug = slugifySeo(formData.slug.trim() || generatedSeoDefaults.slug);
-  const seoPreviewUrl =
-    formData.canonicalUrl.trim() ||
-    (selectedParentSlug && selectedSubcategorySlug
-      ? `https://exshopi.com/${selectedParentSlug}/${selectedSubcategorySlug}/${seoPreviewSlug}`
-      : `https://exshopi.com/product/${seoPreviewSlug}`);
+  const seoPreviewUrl = seoState.preview.url;
 
   const specificationTemplate = useMemo<SpecificationTemplate>(
     () => getSpecificationTemplate(selectedParentSlug, selectedSubcategorySlug, selectedSubcategory?.name || ''),
@@ -912,18 +949,12 @@ useEffect(() => {
       try {
         setSlugCheckState('checking');
         setSlugCheckMessage('Checking slug availability...');
-        const matches = mode === 'admin' ? await adminProductAPI.getAll({ search: formData.slug.trim() }) : [];
-        const duplicate = Array.isArray(matches)
-          ? matches.some(
-              (product: any) =>
-                String(product.slug || '').trim() === formData.slug.trim() &&
-                String(product.id || '') !== String(editingId || '')
-            )
-          : false;
-
-        setSlugCheckState(duplicate ? 'duplicate' : 'available');
+        const result = await checkProductSlugAvailability(formData.slug.trim(), editingId || undefined);
+        setSlugCheckState(result.available ? 'available' : 'duplicate');
         setSlugCheckMessage(
-          duplicate ? 'This slug is already being used by another product.' : 'Slug looks available.'
+          result.available
+            ? result.message || 'Slug looks available.'
+            : result.message || `Slug taken. Suggested: ${result.suggestedSlug}`
         );
       } catch {
         setSlugCheckState('idle');
@@ -948,6 +979,13 @@ useEffect(() => {
       ogTitle: generatedSeoDefaults.ogTitle,
       ogDescription: generatedSeoDefaults.ogDescription,
       ogImage: current.ogImage.trim(),
+    }));
+  };
+
+  const applyGeneratedSlug = () => {
+    setFormData((current) => ({
+      ...current,
+      slug: slugifySeo(current.title || current.slug || 'product'),
     }));
   };
 
@@ -1005,13 +1043,13 @@ useEffect(() => {
 
   const seoScore = useMemo(() => {
     let score = 0;
-    if (getSeoLengthStatus(formData.metaTitle || generatedSeoDefaults.metaTitle, 50, 60) === 'good') score += 30;
-    if (getSeoLengthStatus(formData.metaDescription || generatedSeoDefaults.metaDescription, 150, 160) === 'good') score += 30;
+    if (seoState.quality.title === 'good') score += 30;
+    if (seoState.quality.description === 'good') score += 30;
     if (formData.searchTags.split(',').map((tag) => tag.trim()).filter(Boolean).length >= 3) score += 20;
     if ((formData.ogTitle.trim() || formData.metaTitle.trim() || generatedSeoDefaults.ogTitle).length >= 30) score += 10;
-    if (seoPreviewSlug.length >= 8) score += 10;
+    if (seoState.quality.slug === 'good') score += 10;
     return score;
-  }, [formData.metaTitle, formData.metaDescription, formData.searchTags, formData.ogTitle, generatedSeoDefaults.metaDescription, generatedSeoDefaults.metaTitle, generatedSeoDefaults.ogTitle, seoPreviewSlug]);
+  }, [formData.metaTitle, formData.metaDescription, formData.searchTags, formData.ogTitle, generatedSeoDefaults.ogTitle, seoState.quality.description, seoState.quality.slug, seoState.quality.title]);
 
   const validationChecklist = useMemo(
     () => [
@@ -1296,6 +1334,13 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     return {
       categoryId: selectedCategoryId,
       slug: slugifySeo(formData.slug.trim() || formData.title.trim()),
+      metaTitle: normalizeSeoText(formData.metaTitle || generatedSeoDefaults.metaTitle),
+      metaDescription: normalizeSeoText(formData.metaDescription || generatedSeoDefaults.metaDescription),
+      metaKeywords: trimSeoKeywords(formData.metaKeywords || generatedSeoDefaults.metaKeywords || searchTags.join(', ')),
+      canonicalUrl: normalizeSeoText(formData.canonicalUrl || generatedSeoDefaults.canonicalUrl || seoPreviewUrl),
+      ogTitle: normalizeSeoText(formData.ogTitle || formData.metaTitle || generatedSeoDefaults.ogTitle),
+      ogDescription: normalizeSeoText(formData.ogDescription || formData.metaDescription || generatedSeoDefaults.ogDescription),
+      ogImage: normalizeSeoText(formData.ogImage),
       sellerId: mode === 'admin' ? 'exshopi_official' : undefined,
       title: formData.title.trim(),
       description: descriptionParts.join('\n\n'),
@@ -2128,183 +2173,18 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (currentStep === 'seo') {
       return (
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-6 rounded-[1.75rem] border border-slate-200 bg-white p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black text-slate-900">SEO Settings</h2>
-                <p className="mt-2 text-sm font-medium text-slate-500">
-                  Control how this product appears in Google, social previews, and ExShopi’s SEO-friendly URLs.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={applyGeneratedSeo}
-                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-violet-600"
-              >
-                <Sparkles size={14} />
-                Generate SEO Automatically
-              </button>
-            </div>
-
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">SEO Slug</label>
-                <input
-                  type="text"
-                  name="slug"
-                  value={formData.slug}
-                  onChange={handleInputChange}
-                  placeholder="macbook-pro-2015-a1502"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] font-black uppercase tracking-[0.18em]">
-                  <span className="text-slate-400">Live URL path</span>
-                  <span
-                    className={
-                      slugCheckState === 'duplicate'
-                        ? 'text-rose-600'
-                        : slugCheckState === 'available'
-                        ? 'text-emerald-600'
-                        : 'text-slate-400'
-                    }
-                  >
-                    {slugCheckMessage || `/${selectedParentSlug || 'category'}/${selectedSubcategorySlug || 'item'}/${seoPreviewSlug || 'product-slug'}`}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Search Tags</label>
-                <input
-                  type="text"
-                  name="searchTags"
-                  value={formData.searchTags}
-                  onChange={handleInputChange}
-                  placeholder="laptop, refurbished, apple, dubai"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Meta Title</label>
-                <input
-                  type="text"
-                  name="metaTitle"
-                  value={formData.metaTitle}
-                  onChange={handleInputChange}
-                  placeholder="SEO meta title"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-                <p className={`mt-2 text-[11px] font-black uppercase tracking-[0.18em] ${getSeoLengthStatus(formData.metaTitle || generatedSeoDefaults.metaTitle, 50, 60) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {(formData.metaTitle || generatedSeoDefaults.metaTitle).trim().length}/60 characters
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Meta Description</label>
-                <textarea
-                  name="metaDescription"
-                  value={formData.metaDescription}
-                  onChange={handleInputChange}
-                  rows={5}
-                  placeholder="SEO meta description"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-                <p className={`mt-2 text-[11px] font-black uppercase tracking-[0.18em] ${getSeoLengthStatus(formData.metaDescription || generatedSeoDefaults.metaDescription, 150, 160) === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {(formData.metaDescription || generatedSeoDefaults.metaDescription).trim().length}/160 characters
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Meta Keywords</label>
-                <input
-                  type="text"
-                  name="metaKeywords"
-                  value={formData.metaKeywords}
-                  onChange={handleInputChange}
-                  placeholder="refurbished laptops UAE, used MacBook Dubai"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-                <p className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                  Comma separated keywords for search intent and internal content planning.
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Canonical URL</label>
-                <input
-                  type="text"
-                  name="canonicalUrl"
-                  value={formData.canonicalUrl}
-                  onChange={handleInputChange}
-                  placeholder={generatedSeoDefaults.canonicalUrl || seoPreviewUrl}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">OG Title</label>
-                  <input
-                    type="text"
-                    name="ogTitle"
-                    value={formData.ogTitle}
-                    onChange={handleInputChange}
-                    placeholder="Social share title"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">OG Image</label>
-                  <input
-                    type="text"
-                    name="ogImage"
-                    value={formData.ogImage}
-                    onChange={handleInputChange}
-                    placeholder="https://..."
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">OG Description</label>
-                <textarea
-                  name="ogDescription"
-                  value={formData.ogDescription}
-                  onChange={handleInputChange}
-                  rows={4}
-                  placeholder="Social share description"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Seller Notes</label>
-                <textarea
-                  name="sellerNotes"
-                  value={formData.sellerNotes}
-                  onChange={handleInputChange}
-                  rows={5}
-                  placeholder="Internal notes for admin review"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
-            </div>
-          </div>
+          <SEOSettingsCard
+            value={formData}
+            onChange={handleInputChange}
+            onGenerateSeo={applyGeneratedSeo}
+            onGenerateSlug={applyGeneratedSlug}
+            preview={seoState.preview}
+            quality={seoState.quality}
+            slugMessage={slugCheckMessage}
+            slugState={slugCheckState}
+          />
 
           <aside className="space-y-5 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Google Preview</p>
-              <div className="mt-4 space-y-1">
-                <p className="text-lg font-medium leading-6 text-[#1a0dab]">
-                  {seoPreviewTitle}
-                </p>
-                <p className="text-sm font-medium text-emerald-700">{seoPreviewUrl}</p>
-                <p className="text-sm leading-6 text-slate-600">{seoPreviewDescription}</p>
-              </div>
-            </div>
-
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">SEO Score</p>
               <div className="mt-2 flex items-center justify-between">

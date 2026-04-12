@@ -29,8 +29,9 @@ import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
 import { formatAED, formatAEDPlain } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
 import { buildSpecificationTableRows, getSpecificationTemplate } from "../lib/productSpecifications";
-import SEOHead from "../components/seo/SEOHead";
-import { buildProductPath, buildProductSchema, generateProductMeta } from "../lib/seo";
+import SEO from "../components/SEO";
+import { buildProductPath } from "../lib/seo";
+import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
 
 
 const productDetailCache = new Map<string, any>();
@@ -431,9 +432,41 @@ export default function ProductDetail() {
   }, [product?.id]);
 
   const productSpecs = product?.specs || {};
-  const productSeo = generateProductMeta(product || {});
+  const productSeo = getProductSeoPayload({
+    title: product?.title,
+    shortDescription: productSpecs?.shortDescription,
+    description: product?.description,
+    category: productSpecs?.parentCategoryName || product?.category,
+    subcategory: productSpecs?.subcategoryName || product?.subcategory,
+    slug: product?.slug || productSpecs?.slug,
+    metaTitle: product?.metaTitle || productSpecs?.metaTitle,
+    metaDescription: product?.metaDescription || productSpecs?.metaDescription,
+    metaKeywords: product?.metaKeywords || productSpecs?.metaKeywords,
+    canonicalUrl: product?.canonicalUrl || productSpecs?.canonicalUrl,
+    ogTitle: product?.ogTitle || productSpecs?.ogTitle,
+    ogDescription: product?.ogDescription || productSpecs?.ogDescription,
+    ogImage: product?.ogImage || productSpecs?.ogImage || product?.image,
+    image: product?.image,
+    price: product?.price,
+    stock: product?.stock,
+    sku: product?.sku,
+    brand: product?.brand,
+  });
   const canonicalProductPath = product ? buildProductPath(product) : `/product/${identifier || ""}`;
-  const productSchema = product ? buildProductSchema(product, canonicalProductPath) : null;
+  const productSchema = product
+    ? buildProductJsonLd({
+        title: product.title,
+        shortDescription: productSpecs?.shortDescription,
+        description: product.description,
+        slug: product.slug,
+        canonicalUrl: productSeo.canonicalUrl,
+        image: product.image,
+        price: product.price,
+        stock: product.stock,
+        sku: product.sku,
+        brand: product.brand,
+      })
+    : null;
   const baseSpecifications = productSpecs?.specifications || product?.specifications || {};
   const baseAttributes = {
     ...(productSpecs?.attributes || {}),
@@ -949,11 +982,17 @@ const specs = useMemo(() => {
   return (
     <>
       {product ? (
-        <SEOHead
-          title={productSeo.metaTitle}
-          description={productSeo.metaDescription}
-          keywords={productSeo.metaKeywords}
+        <SEO
+          title={product.title}
+          description={product.description}
+          metaTitle={productSeo.metaTitle}
+          metaDescription={productSeo.metaDescription}
+          metaKeywords={productSeo.metaKeywords}
           pathname={canonicalProductPath}
+          canonicalUrl={productSeo.canonicalUrl}
+          ogTitle={productSeo.ogTitle}
+          ogDescription={productSeo.ogDescription}
+          ogImage={productSeo.ogImage}
           image={product?.image}
           type="product"
           jsonLd={productSchema || undefined}

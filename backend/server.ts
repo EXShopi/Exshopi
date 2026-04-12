@@ -42,6 +42,9 @@ import {
   tryAuthenticateRequest,
 } from './auth';
 import { getPrismaEnvDiagnostics, probePrismaConnection } from './prisma';
+import { ensureUniqueSlug, normalizeSlugInput, slugifyProduct } from './utils/slug';
+import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, uniqueSeoKeywords } from './utils/seo';
+import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -421,94 +424,95 @@ const sendCustomerNotice = async (
   });
 };
 
-const seoSlugify = (value: string) =>
-  String(value || '')
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 120) || 'product';
-
-const clampSeoText = (value: string, limit: number) => {
-  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-  if (normalized.length <= limit) return normalized;
-  return `${normalized.slice(0, Math.max(0, limit - 1)).trim()}…`;
-};
-
-const uniqueSeoKeywords = (values: string[]) =>
-  Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
-
-const normalizeSeoValue = (value: string) => String(value || '').replace(/\s+/g, ' ').trim();
-
 const normalizeCategoryPayload = (payload: any) => {
-  const slug = seoSlugify(payload?.slug || payload?.name || 'category');
+  const slug = slugifyProduct(payload?.slug || payload?.name || 'category');
   return {
     ...payload,
     slug,
     seo: {
-      metaTitle: normalizeSeoValue(payload?.seo?.metaTitle || ''),
-      metaDescription: normalizeSeoValue(payload?.seo?.metaDescription || ''),
+      metaTitle: normalizeSeoText(payload?.seo?.metaTitle || ''),
+      metaDescription: normalizeSeoText(payload?.seo?.metaDescription || ''),
       keywords: uniqueSeoKeywords(String(payload?.seo?.keywords || '').split(',')).join(', '),
-      introText: normalizeSeoValue(payload?.seo?.introText || ''),
+      introText: normalizeSeoText(payload?.seo?.introText || ''),
     },
   };
 };
 
 const ensureUniqueProductSlug = async (slugValue: string, currentId?: string) => {
-  const desiredSlug = seoSlugify(slugValue || 'product');
   const products = prismaRuntime.enabled
-    ? await prismaRuntime.getAllProducts()
+    ? await prismaRuntime.getAllProductsForAdmin()
     : supabaseRuntime.enabled
-    ? await supabaseRuntime.getAllProducts()
+    ? await supabaseRuntime.getAllProductsForAdmin()
     : db.getAllProducts();
 
-  const duplicate = (products || []).find(
-    (product: any) =>
-      seoSlugify(product?.slug || product?.title || '') === desiredSlug &&
-      String(product?.id || '') !== String(currentId || '')
-  );
+  return ensureUniqueSlug(slugValue || 'product', {
+    currentId,
+    exists: async (candidate) =>
+      (products || []).some(
+        (product: any) =>
+          slugifyProduct(product?.slug || product?.title || '') === candidate &&
+          String(product?.id || '') !== String(currentId || '')
+      ),
+  });
+};
 
-  if (duplicate) {
-    throw new Error('SEO slug must be unique. Please choose another slug.');
-  }
+const buildPersistedProductSeo = async (input: any, currentId?: string) => {
+  const requestedSeo = productSeoSchema.parse({
+    slug: input?.slug,
+    metaTitle: input?.metaTitle,
+    metaDescription: input?.metaDescription,
+    metaKeywords: input?.metaKeywords,
+    canonicalUrl: input?.canonicalUrl,
+    ogTitle: input?.ogTitle,
+    ogDescription: input?.ogDescription,
+    ogImage: input?.ogImage,
+  });
 
-  return desiredSlug;
+  const generated = generateProductSeoPayload({
+    title: input?.title,
+    slug: requestedSeo.slug || input?.slug || input?.title,
+    metaTitle: requestedSeo.metaTitle || input?.specs?.metaTitle,
+    metaDescription: requestedSeo.metaDescription || input?.specs?.metaDescription,
+    metaKeywords: requestedSeo.metaKeywords || input?.specs?.metaKeywords,
+    canonicalUrl: requestedSeo.canonicalUrl || input?.specs?.canonicalUrl,
+    ogTitle: requestedSeo.ogTitle || input?.specs?.ogTitle,
+    ogDescription: requestedSeo.ogDescription || input?.specs?.ogDescription,
+    ogImage: requestedSeo.ogImage || input?.specs?.ogImage || input?.image,
+    shortDescription: input?.specs?.shortDescription,
+    description: input?.description,
+    category: input?.specs?.parentCategoryName || input?.category,
+    subcategory: input?.specs?.subcategoryName || input?.subcategory,
+    image: input?.image,
+  });
+
+  const slug = await ensureUniqueProductSlug(generated.slug || input?.title || 'product', currentId);
+  return { ...generated, slug };
 };
 
 const getProductSeoMeta = (product: any) => {
-  const title = String(product?.title || 'Marketplace Product').trim();
-  const brand = String(product?.brand || product?.specs?.attributes?.brand || '').trim();
-  const slug = seoSlugify(product?.slug || title);
-  const metaTitle = clampSeoText(
-    product?.metaTitle || product?.specs?.metaTitle || `${title} | Buy in UAE | ExShopi`,
-    60
-  );
-  const metaDescription = clampSeoText(
-    product?.metaDescription ||
-      product?.specs?.metaDescription ||
-      `${title} on ExShopi with UAE delivery, secure COD checkout, and trusted marketplace support for Dubai and GCC shoppers.`,
-    160
-  );
-  const metaKeywords = uniqueSeoKeywords([
-    ...String(product?.metaKeywords || product?.specs?.metaKeywords || '')
-      .split(',')
-      .map((keyword) => keyword.trim()),
-    title,
-    brand,
-    'UAE',
-    'Dubai',
-    'buy electronics UAE COD',
-  ]).join(', ');
-
-  return { slug, metaTitle, metaDescription, metaKeywords };
+  return generateProductSeoPayload({
+    title: product?.title,
+    slug: product?.slug || product?.specs?.slug,
+    metaTitle: product?.metaTitle || product?.specs?.metaTitle,
+    metaDescription: product?.metaDescription || product?.specs?.metaDescription,
+    metaKeywords: product?.metaKeywords || product?.specs?.metaKeywords,
+    canonicalUrl: product?.canonicalUrl || product?.specs?.canonicalUrl,
+    ogTitle: product?.ogTitle || product?.specs?.ogTitle,
+    ogDescription: product?.ogDescription || product?.specs?.ogDescription,
+    ogImage: product?.ogImage || product?.specs?.ogImage || product?.image,
+    shortDescription: product?.specs?.shortDescription,
+    description: product?.description,
+    category: product?.specs?.parentCategoryName || product?.category,
+    subcategory: product?.specs?.subcategoryName || product?.subcategory,
+    image: product?.image,
+  });
 };
 
 const getProductCanonicalPath = (product: any) => {
-  const parentSlug = seoSlugify(
+  const parentSlug = slugifyProduct(
     product?.specs?.parentCategorySlug || product?.specs?.categorySlug || product?.category || 'electronics'
   );
-  const subcategorySlug = seoSlugify(
+  const subcategorySlug = slugifyProduct(
     product?.specs?.subcategorySlug || product?.specs?.templateId || product?.subcategory || 'products'
   );
   const seo = getProductSeoMeta(product);
@@ -947,6 +951,13 @@ const stripeCheckoutSchema = z.object({
 const productPayloadSchema = z.object({
   categoryId: z.string().min(1),
   slug: z.string().max(140).optional(),
+  metaTitle: z.string().max(60).optional(),
+  metaDescription: z.string().max(160).optional(),
+  metaKeywords: z.string().max(500).optional(),
+  canonicalUrl: z.string().url().optional().or(z.literal('')),
+  ogTitle: z.string().max(120).optional(),
+  ogDescription: z.string().max(220).optional(),
+  ogImage: z.string().url().optional().or(z.literal('')),
   title: z.string().min(3).max(200),
   description: z.string().min(10).max(20000),
   price: z.coerce.number().nonnegative(),
@@ -976,6 +987,13 @@ const adminProductPayloadSchema = z.object({
   categoryId: z.string().min(1).optional(),
   category: z.string().min(1).optional(),
   slug: z.string().max(140).optional(),
+  metaTitle: z.string().max(60).optional(),
+  metaDescription: z.string().max(160).optional(),
+  metaKeywords: z.string().max(500).optional(),
+  canonicalUrl: z.string().url().optional().or(z.literal('')),
+  ogTitle: z.string().max(120).optional(),
+  ogDescription: z.string().max(220).optional(),
+  ogImage: z.string().url().optional().or(z.literal('')),
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(20000).optional().default(''),
   price: z.coerce.number().nonnegative().optional(),
@@ -1183,6 +1201,10 @@ const serializeMarketplaceProduct = (product: any) => {
     metaTitle: seo.metaTitle,
     metaDescription: seo.metaDescription,
     metaKeywords: seo.metaKeywords,
+    canonicalUrl: seo.canonicalUrl,
+    ogTitle: seo.ogTitle,
+    ogDescription: seo.ogDescription,
+    ogImage: seo.ogImage,
     canonicalPath: getProductCanonicalPath({ ...product, slug: seo.slug }),
     specifications:
       product.specifications ||
@@ -1581,6 +1603,10 @@ const serializeMarketplaceProductAsync = async (product: any) => {
     metaTitle: seo.metaTitle,
     metaDescription: seo.metaDescription,
     metaKeywords: seo.metaKeywords,
+    canonicalUrl: seo.canonicalUrl,
+    ogTitle: seo.ogTitle,
+    ogDescription: seo.ogDescription,
+    ogImage: seo.ogImage,
     canonicalPath: getProductCanonicalPath({ ...product, slug: seo.slug }),
     specifications:
       product.specifications ||
@@ -2476,7 +2502,11 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
     }
     const payload = productPayloadSchema.parse(req.body);
     const isDraft = payload.status === 'draft';
-    const nextSlug = await ensureUniqueProductSlug(payload.slug || payload.title);
+    const seo = await buildPersistedProductSeo(payload);
+    const persistedSpecs = mergeProductSeoIntoSpecs(payload.specs || {}, seo);
+    if (!isDraft) {
+      validateSeoForPublish(seo);
+    }
     
     let product: any = null;
     if (supabaseRuntime.enabled) {
@@ -2484,7 +2514,14 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
-        slug: nextSlug,
+        slug: seo.slug,
+        metaTitle: seo.metaTitle,
+        metaDescription: seo.metaDescription,
+        metaKeywords: seo.metaKeywords,
+        canonicalUrl: seo.canonicalUrl,
+        ogTitle: seo.ogTitle,
+        ogDescription: seo.ogDescription,
+        ogImage: seo.ogImage,
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2496,7 +2533,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         rating: 0,
         reviews: 0,
         sku: payload.sku || '',
-        specs: payload.specs,
+        specs: persistedSpecs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
         approvalStatus: isDraft ? 'pending' : 'pending',
@@ -2518,7 +2555,14 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
-        slug: nextSlug,
+        slug: seo.slug,
+        metaTitle: seo.metaTitle,
+        metaDescription: seo.metaDescription,
+        metaKeywords: seo.metaKeywords,
+        canonicalUrl: seo.canonicalUrl,
+        ogTitle: seo.ogTitle,
+        ogDescription: seo.ogDescription,
+        ogImage: seo.ogImage,
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2530,7 +2574,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         rating: 0,
         reviews: 0,
         sku: payload.sku || '',
-        specs: payload.specs,
+        specs: persistedSpecs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
         approvalStatus: isDraft ? 'pending' : 'pending',
@@ -2554,7 +2598,14 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
-        slug: nextSlug,
+        slug: seo.slug,
+        metaTitle: seo.metaTitle,
+        metaDescription: seo.metaDescription,
+        metaKeywords: seo.metaKeywords,
+        canonicalUrl: seo.canonicalUrl,
+        ogTitle: seo.ogTitle,
+        ogDescription: seo.ogDescription,
+        ogImage: seo.ogImage,
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2566,7 +2617,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         rating: 0,
         reviews: 0,
         sku: payload.sku || '',
-        specs: payload.specs,
+        specs: persistedSpecs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
         approvalStatus: isDraft ? 'pending' : 'pending',
@@ -2608,6 +2659,37 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
     res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/products/check-slug', async (req: Request, res: Response) => {
+  try {
+    const desiredSlug = normalizeSlugInput(String(req.query.slug || ''));
+    const currentId = String(req.query.currentId || '');
+
+    if (!desiredSlug) {
+      return res.status(400).json({
+        available: false,
+        slug: '',
+        message: 'Slug must contain letters or numbers.',
+      });
+    }
+
+    const suggestedSlug = await ensureUniqueProductSlug(desiredSlug, currentId || undefined);
+    const available = suggestedSlug === desiredSlug;
+
+    return res.json({
+      available,
+      slug: desiredSlug,
+      suggestedSlug,
+      message: available ? 'Slug is available.' : 'Slug is already in use.',
+    });
+  } catch (error) {
+    return res.status(500).json({
+      available: false,
+      slug: normalizeSlugInput(String(req.query.slug || '')),
+      message: String(error instanceof Error ? error.message : error),
+    });
   }
 });
 
@@ -2795,11 +2877,36 @@ app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response)
       payload.storeId = current.storeId || current.sellerId;
       payload.brand = payload.brand || payload.specs?.attributes?.brand || current.brand || '';
     }
-    if (payload.title || payload.slug) {
-      payload.slug = await ensureUniqueProductSlug(
-        payload.slug || current.slug || payload.title || current.title || 'product',
+    if (payload.title || payload.slug || payload.metaTitle || payload.metaDescription || payload.metaKeywords) {
+      const seo = await buildPersistedProductSeo(
+        {
+          ...current,
+          ...payload,
+          specs: {
+            ...(current.specs || {}),
+            ...(payload.specs || {}),
+          },
+        },
         req.params.id
       );
+      payload.slug = seo.slug;
+      payload.metaTitle = seo.metaTitle;
+      payload.metaDescription = seo.metaDescription;
+      payload.metaKeywords = seo.metaKeywords;
+      payload.canonicalUrl = seo.canonicalUrl;
+      payload.ogTitle = seo.ogTitle;
+      payload.ogDescription = seo.ogDescription;
+      payload.ogImage = seo.ogImage;
+      payload.specs = mergeProductSeoIntoSpecs(
+        {
+          ...(current.specs || {}),
+          ...(payload.specs || {}),
+        },
+        seo
+      );
+      if (payload.status !== 'draft') {
+        validateSeoForPublish(seo);
+      }
     }
 
     let product: any = null;
@@ -3343,13 +3450,23 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
       return res.status(400).json({ error: 'ExShopi Official seller profile is missing. Please seed the official store first.' });
     }
 
-    const nextSlug = await ensureUniqueProductSlug(payload.slug || payload.title || 'untitled');
+    const seo = await buildPersistedProductSeo(payload);
+    if (lifecycle.status !== 'draft') {
+      validateSeoForPublish(seo);
+    }
 
     const productInput = {
       sellerId: assignedSeller.id,
       storeId: assignedSeller.id,
       categoryId,
-      slug: nextSlug,
+      slug: seo.slug,
+      metaTitle: seo.metaTitle,
+      metaDescription: seo.metaDescription,
+      metaKeywords: seo.metaKeywords,
+      canonicalUrl: seo.canonicalUrl,
+      ogTitle: seo.ogTitle,
+      ogDescription: seo.ogDescription,
+      ogImage: seo.ogImage,
       title: payload.title || 'Untitled',
       description: payload.description || '',
       price: Number(payload.price || 0),
@@ -3364,7 +3481,7 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
       sku: payload.sku || '',
       brand: payload.brand || payload.specs?.attributes?.brand || '',
       specs: {
-        ...(payload.specs || {}),
+        ...mergeProductSeoIntoSpecs(payload.specs || {}, seo),
         ownership: {
           sellerId: assignedSeller.id,
           sellerName: assignedSeller.storeName,
@@ -3406,11 +3523,41 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
     const nextPayload = { ...(await adminProductPayloadSchema.partial().parseAsync(req.body)) } as any;
-    if (nextPayload.title || nextPayload.slug) {
-      nextPayload.slug = await ensureUniqueProductSlug(
-        nextPayload.slug || nextPayload.title || 'product',
+    if (nextPayload.title || nextPayload.slug || nextPayload.metaTitle || nextPayload.metaDescription || nextPayload.metaKeywords) {
+      const currentProduct = prismaRuntime.enabled
+        ? await prismaRuntime.getProduct(req.params.id)
+        : supabaseRuntime.enabled
+        ? await supabaseRuntime.getProduct(req.params.id)
+        : db.getProduct(req.params.id);
+      const seo = await buildPersistedProductSeo(
+        {
+          ...(currentProduct || {}),
+          ...nextPayload,
+          specs: {
+            ...((currentProduct as any)?.specs || {}),
+            ...(nextPayload.specs || {}),
+          },
+        },
         req.params.id
       );
+      nextPayload.slug = seo.slug;
+      nextPayload.metaTitle = seo.metaTitle;
+      nextPayload.metaDescription = seo.metaDescription;
+      nextPayload.metaKeywords = seo.metaKeywords;
+      nextPayload.canonicalUrl = seo.canonicalUrl;
+      nextPayload.ogTitle = seo.ogTitle;
+      nextPayload.ogDescription = seo.ogDescription;
+      nextPayload.ogImage = seo.ogImage;
+      nextPayload.specs = mergeProductSeoIntoSpecs(
+        {
+          ...((currentProduct as any)?.specs || {}),
+          ...(nextPayload.specs || {}),
+        },
+        seo
+      );
+      if ((nextPayload.status || (currentProduct as any)?.status) !== 'draft') {
+        validateSeoForPublish(seo);
+      }
     }
 
     if (nextPayload.categoryId) {

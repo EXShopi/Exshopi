@@ -131,6 +131,13 @@ export interface MarketplaceSettings {
 export interface Product {
   id: string;
   slug?: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
+  canonicalUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
   sellerId: string;
   storeId?: string;
   categoryId: string;

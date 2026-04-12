@@ -222,6 +222,13 @@ function mapProduct(product: any): Product {
   // Merge explicit DB slug fields into the specs object for compatibility
   const specs = (product.specsJson as Record<string, any>) || {};
   const deletionMeta = (specs.__deletion as Record<string, any>) || {};
+  if (!specs.metaTitle && product.metaTitle) specs.metaTitle = product.metaTitle;
+  if (!specs.metaDescription && product.metaDescription) specs.metaDescription = product.metaDescription;
+  if (!specs.metaKeywords && product.metaKeywords) specs.metaKeywords = product.metaKeywords;
+  if (!specs.canonicalUrl && product.canonicalUrl) specs.canonicalUrl = product.canonicalUrl;
+  if (!specs.ogTitle && product.ogTitle) specs.ogTitle = product.ogTitle;
+  if (!specs.ogDescription && product.ogDescription) specs.ogDescription = product.ogDescription;
+  if (!specs.ogImage && product.ogImage) specs.ogImage = product.ogImage;
   if (!specs.parentCategorySlug && product.parentCategorySlug) specs.parentCategorySlug = product.parentCategorySlug;
   if (!specs.categorySlug && product.categorySlug) specs.categorySlug = product.categorySlug;
   if (!specs.subcategorySlug && product.subcategorySlug) specs.subcategorySlug = product.subcategorySlug;
@@ -230,6 +237,14 @@ function mapProduct(product: any): Product {
 
   return {
     id: product.id,
+    slug: product.slug || "",
+    metaTitle: product.metaTitle || specs.metaTitle || "",
+    metaDescription: product.metaDescription || specs.metaDescription || "",
+    metaKeywords: product.metaKeywords || specs.metaKeywords || "",
+    canonicalUrl: product.canonicalUrl || specs.canonicalUrl || "",
+    ogTitle: product.ogTitle || specs.ogTitle || "",
+    ogDescription: product.ogDescription || specs.ogDescription || "",
+    ogImage: product.ogImage || specs.ogImage || "",
     sellerId: product.storeId,
     storeId: product.storeId,
     categoryId: product.categoryId,
@@ -1039,6 +1054,13 @@ export const prismaRuntime = {
     categoryId: input.categoryId,
     title: input.title,
     slug: nextSlug,
+    metaTitle: input.metaTitle || input.specs?.metaTitle || null,
+    metaDescription: input.metaDescription || input.specs?.metaDescription || null,
+    metaKeywords: input.metaKeywords || input.specs?.metaKeywords || null,
+    canonicalUrl: input.canonicalUrl || input.specs?.canonicalUrl || null,
+    ogTitle: input.ogTitle || input.specs?.ogTitle || null,
+    ogDescription: input.ogDescription || input.specs?.ogDescription || null,
+    ogImage: input.ogImage || input.specs?.ogImage || null,
     shortDescription: input.specs?.shortDescription || "",
     description: input.description,
     sku: input.sku,
@@ -1218,6 +1240,14 @@ export const prismaRuntime = {
       data: {
         categoryId: updates.categoryId,
         title: updates.title,
+        slug: updates.slug,
+        metaTitle: updates.metaTitle || updates.specs?.metaTitle,
+        metaDescription: updates.metaDescription || updates.specs?.metaDescription,
+        metaKeywords: updates.metaKeywords || updates.specs?.metaKeywords,
+        canonicalUrl: updates.canonicalUrl || updates.specs?.canonicalUrl,
+        ogTitle: updates.ogTitle || updates.specs?.ogTitle,
+        ogDescription: updates.ogDescription || updates.specs?.ogDescription,
+        ogImage: updates.ogImage || updates.specs?.ogImage,
         shortDescription: updates.specs?.shortDescription,
         description: updates.description,
         sku: updates.sku,
