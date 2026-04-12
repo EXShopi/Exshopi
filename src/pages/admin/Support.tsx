@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Clock3, LifeBuoy, MessageSquareMore, ShieldCheck, Ticket } from 'lucide-react';
 import { adminOpsAPI, orderAPI, supportAPI } from '../../services/api';
 import { formatAED } from '../../lib/currency';
@@ -10,6 +11,7 @@ const formatDateSafe = (value?: string) => {
 };
 
 export function AdminSupport() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -176,17 +178,30 @@ export function AdminSupport() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex min-w-[150px] flex-col gap-2">
-                          <button className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white">
-                            Open case
+                          <button
+                            type="button"
+                            onClick={() => navigate('/admin/orders')}
+                            className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white"
+                          >
+                            Open orders
                           </button>
                           {String(ticket.id).startsWith('ticket_') && (
-                            <button
-                              type="button"
-                              onClick={() => handleTicketUpdate(ticket.id, 'pending')}
-                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700"
-                            >
-                              Mark in progress
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleTicketUpdate(ticket.id, 'pending')}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700"
+                              >
+                                Mark in progress
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleTicketUpdate(ticket.id, 'resolved')}
+                                className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700"
+                              >
+                                Resolve
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>

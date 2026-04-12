@@ -51,30 +51,42 @@ export function AdminReports() {
         <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-black text-slate-900">Top Search Keywords</h3>
           <div className="mt-5 space-y-3">
-            {(analytics?.topSearches || []).map((entry: any, index: number) => {
-              const queryLabel = String(entry?.query || 'Unknown search');
-              return (
-                <div key={`${queryLabel}-${index}`} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                  <span className="font-bold text-slate-900">{queryLabel}</span>
-                  <span className="text-sm font-black text-violet-600">{Number(entry?.count || 0)}</span>
-                </div>
-              );
-            })}
+            {(analytics?.topSearches || []).length ? (
+              (analytics?.topSearches || []).map((entry: any, index: number) => {
+                const queryLabel = String(entry?.query || 'Unknown search');
+                return (
+                  <div key={`${queryLabel}-${index}`} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                    <span className="font-bold text-slate-900">{queryLabel}</span>
+                    <span className="text-sm font-black text-violet-600">{Number(entry?.count || 0)}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-medium text-slate-500">
+                Search trends will appear here after customers generate live marketplace search traffic.
+              </div>
+            )}
           </div>
         </div>
 
         <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-black text-slate-900">Banner Performance</h3>
           <div className="mt-5 space-y-3">
-            {(analytics?.bannerPerformance || []).map((entry: any) => (
-              <div key={entry.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <div>
-                  <p className="font-bold text-slate-900">{entry.title}</p>
-                  <p className="text-xs font-medium text-slate-500">{entry.link}</p>
+            {(analytics?.bannerPerformance || []).length ? (
+              (analytics?.bannerPerformance || []).map((entry: any) => (
+                <div key={entry.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <div>
+                    <p className="font-bold text-slate-900">{entry.title}</p>
+                    <p className="text-xs font-medium text-slate-500">{entry.link}</p>
+                  </div>
+                  <span className="text-sm font-black text-blue-600">{entry.clicks} clicks</span>
                 </div>
-                <span className="text-sm font-black text-blue-600">{entry.clicks} clicks</span>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-medium text-slate-500">
+                Banner performance will populate once active homepage campaigns receive traffic.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -83,54 +95,72 @@ export function AdminReports() {
         <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-black text-slate-900">Most Viewed Products</h3>
           <div className="mt-5 space-y-3">
-            {(analytics?.mostViewedProducts || []).map((entry: any) => (
-              <div key={entry.productId} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="font-bold text-slate-900">{entry.product?.title || entry.productId}</span>
-                <span className="text-sm font-black text-emerald-600">{entry.views} views</span>
+            {(analytics?.mostViewedProducts || []).length ? (
+              (analytics?.mostViewedProducts || []).map((entry: any) => (
+                <div key={entry.productId} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <span className="font-bold text-slate-900">{entry.product?.title || entry.productId}</span>
+                  <span className="text-sm font-black text-emerald-600">{entry.views} views</span>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-medium text-slate-500">
+                Product-view rankings will appear when shoppers browse the live catalog.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
         <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-black text-slate-900">Most Wishlisted Products</h3>
           <div className="mt-5 space-y-3">
-            {(analytics?.mostWishlistedProducts || []).map((entry: any) => (
-              <div key={entry.productId} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="font-bold text-slate-900">{entry.product?.title || entry.productId}</span>
-                <span className="text-sm font-black text-rose-600">{entry.count} wishlists</span>
+            {(analytics?.mostWishlistedProducts || []).length ? (
+              (analytics?.mostWishlistedProducts || []).map((entry: any) => (
+                <div key={entry.productId} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <span className="font-bold text-slate-900">{entry.product?.title || entry.productId}</span>
+                  <span className="text-sm font-black text-rose-600">{entry.count} wishlists</span>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-medium text-slate-500">
+                Wishlist analytics will appear once customers start saving products.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
 
       <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
         <h3 className="text-lg font-black text-slate-900">Seller Performance Ranking</h3>
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left">
-            <thead>
-              <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <th className="pb-3">Seller</th>
-                <th className="pb-3">Orders</th>
-                <th className="pb-3">Gross Sales</th>
-                <th className="pb-3">Commission</th>
-                <th className="pb-3">Return Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {(analytics?.sellerPerformance || []).map((entry: any) => (
-                <tr key={entry.sellerId}>
-                  <td className="py-4 font-bold text-slate-900">{entry.sellerName}</td>
-                  <td className="py-4 font-semibold text-slate-600">{entry.totalOrders}</td>
-                  <td className="py-4 font-semibold text-slate-600">{formatAED(Math.round(entry.grossSales))}</td>
-                  <td className="py-4 font-semibold text-slate-600">{formatAED(Math.round(entry.commission))}</td>
-                  <td className="py-4 font-semibold text-slate-600">{(entry.returnRate * 100).toFixed(1)}%</td>
+        {(analytics?.sellerPerformance || []).length ? (
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left">
+              <thead>
+                <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="pb-3">Seller</th>
+                  <th className="pb-3">Orders</th>
+                  <th className="pb-3">Gross Sales</th>
+                  <th className="pb-3">Commission</th>
+                  <th className="pb-3">Return Rate</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {(analytics?.sellerPerformance || []).map((entry: any) => (
+                  <tr key={entry.sellerId}>
+                    <td className="py-4 font-bold text-slate-900">{entry.sellerName}</td>
+                    <td className="py-4 font-semibold text-slate-600">{entry.totalOrders}</td>
+                    <td className="py-4 font-semibold text-slate-600">{formatAED(Math.round(entry.grossSales))}</td>
+                    <td className="py-4 font-semibold text-slate-600">{formatAED(Math.round(entry.commission))}</td>
+                    <td className="py-4 font-semibold text-slate-600">{(entry.returnRate * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-medium text-slate-500">
+            Seller performance rankings will appear once marketplace order volume is available.
+          </div>
+        )}
       </div>
     </div>
   );
