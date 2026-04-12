@@ -8,10 +8,14 @@ import { categoryData } from "../data/categoryStructure";
 import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
 import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { categoryAPI, productAPI } from "../services/api";
+import SEOHead from "../components/seo/SEOHead";
+import { buildCategorySeoDescription, generateCategorySeo, getCategoryPath } from "../lib/seo";
 
 type CatalogProduct = {
   id: string;
   slug: string;
+  parentCategorySlug?: string;
+  subcategorySlug?: string;
   title: string;
   price: number;
   oldPrice?: number;
@@ -33,17 +37,6 @@ const keywordMap: Record<string, string[]> = {
   accessories: ["earbuds", "headphones", "speaker", "airpods", "buds", "accessories", "charger", "cable"],
   gaming: ["gaming", "predator", "console", "controller"],
   deals: ["sale", "deal", "save", "black friday", "offer"],
-};
-
-const categoryDescriptions: Record<string, string> = {
-  laptops: "Explore premium laptops, used devices, and business machines curated for UAE shoppers.",
-  electronics: "Discover electronics, computing gear, and marketplace essentials from trusted vendors.",
-  mobiles: "Browse smartphones, flagship devices, and mobile accessories with verified seller offers.",
-  tablets: "Find iPads, Android tablets, and portable work-from-anywhere devices.",
-  accessories: "Shop headphones, earbuds, speakers, chargers, and daily-use accessories.",
-  gaming: "Level up with gaming laptops, accessories, and performance gear.",
-  deals: "Today’s strongest offers, flash deals, and savings in one place.",
-  categories: "Browse all marketplace categories and curated product selections.",
 };
 
 function titleFromSlug(value?: string) {
@@ -82,9 +75,13 @@ export default function CategoryPage() {
   const liveCategory = categories.find((entry) => entry.slug === effectiveCategoryKey);
   const isComingSoon = Boolean(category && liveCategory && liveCategory.active === false);
   const displayTitle = subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || titleFromSlug(effectiveCategoryKey);
-  const description =
-    categoryDescriptions[effectiveCategoryKey] ||
-    `Shop ${displayTitle.toLowerCase()} with curated marketplace offers, fast UAE delivery, and trusted vendors.`;
+  const heroDescription =
+    `Shop ${displayTitle.toLowerCase()} with curated marketplace offers, structured product specifications, and trusted UAE seller support.`;
+  const seoDescription =
+    buildCategorySeoDescription(
+      subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || displayTitle
+    );
+  const seo = generateCategorySeo(displayTitle, effectiveSubcategoryKey || effectiveCategoryKey);
 
   useEffect(() => {
     let mounted = true;
@@ -114,6 +111,8 @@ export default function CategoryPage() {
           (product: any): CatalogProduct => ({
             id: String(product.id),
             slug: product.slug || String(product.id),
+            parentCategorySlug: product.specs?.parentCategorySlug || product.specs?.categorySlug,
+            subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
             title: product.title,
             price: Number(product.price || 0),
             oldPrice:
@@ -153,6 +152,8 @@ export default function CategoryPage() {
       return (matched || []).map((product: any): CatalogProduct => ({
         id: String(product.id),
         slug: product.slug || String(product.id),
+        parentCategorySlug: product.specs?.parentCategorySlug || product.specs?.categorySlug,
+        subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
         title: product.title,
         price: Number(product.price || 0),
         oldPrice: Number(product.originalPrice || 0) > Number(product.price || 0) ? Number(product.originalPrice || 0) : undefined,
@@ -180,6 +181,13 @@ export default function CategoryPage() {
 
   return (
     <div className="min-h-screen bg-[#f6f7fb]">
+      <SEOHead
+        title={seo.metaTitle}
+        description={seoDescription}
+        keywords={seo.metaKeywords}
+        pathname={getCategoryPath(effectiveCategoryKey, effectiveSubcategoryKey || undefined)}
+        type="website"
+      />
       <section className="border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_32%),linear-gradient(135deg,#ffffff,#eef4ff)]">
         <div className="mx-auto max-w-7xl px-4 py-10 md:px-6 lg:py-14">
           <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -207,7 +215,7 @@ export default function CategoryPage() {
                 {subcategoryInfo ? "Subcategory Collection" : "Category Collection"}
               </div>
               <h1 className="max-w-3xl text-4xl font-black tracking-tight text-slate-950 md:text-5xl">{displayTitle}</h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">{description}</p>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">{heroDescription}</p>
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link to="/products" className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-600">
@@ -305,7 +313,15 @@ export default function CategoryPage() {
           </div>
         )}
       </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">About This Category</p>
+          <div className="mt-4 text-sm leading-8 text-slate-600">
+            {seoDescription}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
-

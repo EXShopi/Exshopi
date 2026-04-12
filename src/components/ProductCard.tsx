@@ -5,10 +5,13 @@ import { useCartStore } from "../store/cart";
 import WishlistIcon from "./Premium/WishlistIcon";
 import { formatAEDPlain } from "../lib/currency";
 import LazyImage from "./ui/LazyImage";
+import { buildProductPath } from "../lib/seo";
 
 export interface ProductCardProps {
   id?: string;
   slug?: string;
+  parentCategorySlug?: string;
+  subcategorySlug?: string;
   title: string;
   price: number;
   oldPrice?: number;
@@ -26,6 +29,8 @@ export interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({
   id,
   slug,
+  parentCategorySlug,
+  subcategorySlug,
   title,
   price,
   oldPrice,
@@ -45,6 +50,16 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const productId = id ?? slug ?? title;
   const productSlug = slug ?? id ?? title;
+  const productPath = buildProductPath({
+    id: productId,
+    slug: productSlug,
+    title,
+    category: parentCategorySlug || category,
+    specs: {
+      parentCategorySlug: parentCategorySlug || category,
+      subcategorySlug: subcategorySlug || category,
+    },
+  });
   const resolvedBadge = badge ?? badges?.[0];
   const stockLabel = typeof stock === "boolean" ? (stock ? "In Stock" : "Out of Stock") : stock;
 
@@ -69,7 +84,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    navigate(`/product/${productSlug}`);
+    navigate(productPath);
   };
 
   return (

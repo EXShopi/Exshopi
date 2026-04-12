@@ -130,6 +130,7 @@ export interface MarketplaceSettings {
 
 export interface Product {
   id: string;
+  slug?: string;
   sellerId: string;
   storeId?: string;
   categoryId: string;
@@ -814,10 +815,11 @@ export class Database {
         ...product,
         storeId: product.storeId || product.sellerId,
         salePrice: product.salePrice ?? product.price ?? 0,
-        price: Number(product.price || 0),
-        originalPrice: Number(product.originalPrice || product.price || 0),
-        stock: Number(product.stock || 0),
-        rating: Number(product.rating || 0),
+      price: Number(product.price || 0),
+      originalPrice: Number(product.originalPrice || product.price || 0),
+      stock: Number(product.stock || 0),
+      slug: product.slug || '',
+      rating: Number(product.rating || 0),
         reviews: Number(product.reviews || 0),
         approvalStatus:
           product.approvalStatus ||
@@ -1290,6 +1292,7 @@ export class Database {
     const newProduct: Product = {
       ...product,
       id: `prod_${Date.now()}`,
+      slug: product.slug || `product-${Date.now()}`,
       storeId: product.storeId || product.sellerId,
       salePrice: product.salePrice ?? product.price,
       approvalStatus: product.approvalStatus || 'pending',

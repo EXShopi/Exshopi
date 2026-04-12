@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import HeroSection from "../components/HeroSection";
 import CategorySection from "../components/CategorySection";
 import UAEPrideStrip from "../components/UAEPrideStrip";
@@ -11,9 +12,12 @@ import BlackFridaySection from "../components/BlackFridaySection";
 import PromoSection from "../components/PromoSection";
 import AllProductsSection from "../components/AllProductsSection";
 import { useSettingsStore } from "../store/settings";
+import SEOHead from "../components/seo/SEOHead";
+import { generateHomepageSeo } from "../lib/seo";
 
 export default function Home() {
   const { settings, fetchSettings } = useSettingsStore();
+  const homeSeo = generateHomepageSeo();
 
   useEffect(() => {
     fetchSettings();
@@ -50,6 +54,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen max-w-full overflow-x-hidden bg-[#f6f7f9]">
+      <SEOHead
+        title={homeSeo.metaTitle}
+        description={homeSeo.metaDescription}
+        keywords={homeSeo.metaKeywords}
+        pathname="/"
+        image={settings.homepage.hero.productImageUrl}
+      />
       <UAEPrideStrip {...settings.homepage.uaeStrip} />
       <HeroSection />
       <CategorySection />
@@ -57,6 +68,26 @@ export default function Home() {
       <AccessoriesSection />
       {orderedCmsSections.map((section) => renderHomepageSection(section.id))}
       <AllProductsSection />
+      <section className="mx-auto mt-10 max-w-7xl px-4 pb-12 md:px-6">
+        <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">From The Blog</p>
+          <h2 className="mt-3 text-3xl font-black text-slate-950">UAE shopping guides that support SEO and trust</h2>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
+            Explore ExShopi content built around real buyer intent, including refurbished laptops UAE, used MacBook Dubai, and premium electronics buying advice.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link to="/blog/best-laptops-uae" className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600">
+              Best Laptops UAE
+            </Link>
+            <Link to="/blog/macbook-buying-guide" className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+              MacBook Buying Guide
+            </Link>
+            <Link to="/blog" className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+              Visit Blog
+            </Link>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import Layout from "./components/Layout";
 import { SellerLayout } from "./layouts/SellerLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import ProductDetail from "./pages/ProductDetail";
+import GoogleServices from "./components/seo/GoogleServices";
 
 const Home = lazy(() => import("./pages/Home"));
 const ProductListing = lazy(() => import("./pages/ProductListing"));
@@ -33,6 +34,8 @@ const PopularCollectionPage = lazy(() => import("./pages/PopularCollectionPage")
 const CampaignCollectionPage = lazy(() => import("./pages/CampaignCollectionPage"));
 const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
 const TrackOrder = lazy(() => import("./pages/TrackOrder"));
+const BlogIndex = lazy(() => import("./pages/BlogIndex"));
+const BlogPost = lazy(() => import("./pages/BlogPost"));
 const CustomerLogin = lazy(() => import("./pages/auth/Login"));
 const CustomerRegister = lazy(() => import("./pages/auth/Register"));
 
@@ -189,6 +192,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        <GoogleServices />
         <PasswordRecoveryRedirect />
         <RouteDebugLogger />
         <RouteProgressBar />
@@ -203,6 +207,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/products" element={<ProductListing />} />
             <Route path="/product/:identifier" element={<ProductDetail />} />
+            <Route path="/:category/:subcategory/:identifier" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/order-success" element={<OrderSuccess />} />
@@ -228,6 +233,8 @@ export default function App() {
             <Route path="/popular/:slug" element={<PopularCollectionPage />} />
             <Route path="/campaigns/current" element={<CampaignCollectionPage />} />
             <Route path="/promotions" element={<PromotionsPage />} />
+            <Route path="/blog" element={<BlogIndex />} />
+            <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/category/:category" element={<CategoryPage />} />
             <Route path="/category/:category/:subcategory" element={<CategoryPage />} />
             <Route path="/vendors" element={<VendorStorefront />} />

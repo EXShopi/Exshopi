@@ -20,6 +20,7 @@ const mapRowToProduct = (row: any): Product => {
   const deletionMeta = specs.__deletion || {};
   return {
     id: row.id,
+    slug: row.slug || '',
     sellerId: row.sellerId,
     storeId: row.storeId || row.sellerId,
     categoryId: row.categoryId || row.category || '',
@@ -85,6 +86,7 @@ export const supabaseRuntime = {
       sellerId: input.sellerId,
       storeId: input.storeId || input.sellerId,
       categoryId: input.categoryId || input.category || '',
+      slug: input.slug || '',
       title: input.title || '',
       description: input.description || '',
       price: input.price || 0,

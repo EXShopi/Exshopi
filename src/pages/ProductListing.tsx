@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
 import ProductCard from "../components/ProductCard";
 import { productAPI, categoryAPI } from "../services/api";
 import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
 import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
+import SEOHead from "../components/seo/SEOHead";
 
 const isVisibleMarketplaceProduct = (product: any) => {
   const status = String(product?.status || '').toLowerCase();
@@ -21,12 +22,20 @@ const isVisibleMarketplaceProduct = (product: any) => {
 };
 
 export default function ProductListing() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(15);
+
+  useEffect(() => {
+    const categoryParam = searchParams.get('category') || '';
+    if (categoryParam) {
+      navigate(`/category/${categoryParam}`, { replace: true });
+    }
+  }, [navigate, searchParams]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -107,6 +116,12 @@ export default function ProductListing() {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-10 md:px-6">
+      <SEOHead
+        title="All Products in UAE | Electronics, Laptops & Marketplace Deals | ExShopi"
+        description="Browse all live ExShopi marketplace products with trusted sellers, premium electronics, UAE delivery support, and COD-ready checkout."
+        keywords="buy electronics UAE, marketplace UAE, refurbished laptops UAE, cheap iPhone UAE"
+        pathname="/products"
+      />
       <div className="mb-8 text-sm text-slate-500">
         <Link to="/" className="hover:text-slate-900">
           Home
@@ -180,6 +195,8 @@ export default function ProductListing() {
                 key={product.id}
                 id={product.id}
                 slug={product.slug || product.id}
+                parentCategorySlug={product.specs?.parentCategorySlug || product.specs?.categorySlug}
+                subcategorySlug={product.specs?.subcategorySlug || product.specs?.templateId}
                 title={product.title}
                 price={product.price}
                 oldPrice={product.originalPrice}

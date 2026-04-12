@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { LISTING_TEMPLATE_MAP } from "../lib/marketplaceTemplates";
 import {
   Award,
@@ -29,6 +29,8 @@ import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
 import { formatAED, formatAEDPlain } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
 import { buildSpecificationTableRows, getSpecificationTemplate } from "../lib/productSpecifications";
+import SEOHead from "../components/seo/SEOHead";
+import { buildProductPath, buildProductSchema, generateProductMeta } from "../lib/seo";
 
 
 const productDetailCache = new Map<string, any>();
@@ -86,6 +88,7 @@ function mapToCardProduct(item: any) {
   return {
     id: String(item.id),
     slug: item.slug || String(item.id),
+    specs: item.specs || {},
     title: item.title,
     price: item.price,
     oldPrice: item.oldPrice,
@@ -165,10 +168,11 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
 }) => {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const sellerMeta = getSellerProfile(product.seller || "ExShopi Official");
+  const productHref = buildProductPath(product);
 
   return (
     <Link
-      to={`/product/${product.slug}`}
+      to={productHref}
       className="group relative mx-auto block h-full w-full max-w-[236px] overflow-hidden rounded-[16px] border border-slate-200 bg-white p-[11px] shadow-[0_8px_18px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(15,23,42,0.10)]"
     >
       <div className="relative overflow-hidden rounded-[14px] border border-slate-100 bg-[#f8fafc]">
@@ -276,6 +280,7 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
 export default function ProductDetail() {
   const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { addItem } = useCartStore();
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const authRole = useAuthStore((state) => state.role);
@@ -387,6 +392,14 @@ export default function ProductDetail() {
   }, [product?.id]);
 
   useEffect(() => {
+    if (!product?.id) return;
+    const canonicalPath = buildProductPath(product);
+    if (location.pathname !== canonicalPath) {
+      navigate(canonicalPath, { replace: true });
+    }
+  }, [product, location.pathname, navigate]);
+
+  useEffect(() => {
     if (!product?.id) {
       setReviews([]);
       setReviewsLoading(false);
@@ -418,6 +431,9 @@ export default function ProductDetail() {
   }, [product?.id]);
 
   const productSpecs = product?.specs || {};
+  const productSeo = generateProductMeta(product || {});
+  const canonicalProductPath = product ? buildProductPath(product) : `/product/${identifier || ""}`;
+  const productSchema = product ? buildProductSchema(product, canonicalProductPath) : null;
   const baseSpecifications = productSpecs?.specifications || product?.specifications || {};
   const baseAttributes = {
     ...(productSpecs?.attributes || {}),
@@ -604,12 +620,28 @@ export default function ProductDetail() {
   );
 
   const relatedProducts = useMemo(
-    () =>
-      allProducts
-        .filter((item) => String(item.id) !== String(product?.id))
-        .slice(0, 8)
-        .map(mapToCardProduct),
-    [allProducts, product?.id]
+    () => {
+      const currentCategory =
+        product?.specs?.subcategorySlug ||
+        product?.specs?.categorySlug ||
+        product?.category ||
+        "";
+
+      const sameCategory = allProducts.filter(
+        (item) =>
+          String(item.id) !== String(product?.id) &&
+          String(
+            item?.specs?.subcategorySlug ||
+              item?.specs?.categorySlug ||
+              item?.category ||
+              ""
+          ) === String(currentCategory)
+      );
+
+      const source = sameCategory.length ? sameCategory : allProducts.filter((item) => String(item.id) !== String(product?.id));
+      return source.slice(0, 8).map(mapToCardProduct);
+    },
+    [allProducts, product?.category, product?.id, product?.specs?.categorySlug, product?.specs?.subcategorySlug]
   );
 
   const viewedProducts = useMemo(
@@ -916,6 +948,17 @@ const specs = useMemo(() => {
 
   return (
     <>
+      {product ? (
+        <SEOHead
+          title={productSeo.metaTitle}
+          description={productSeo.metaDescription}
+          keywords={productSeo.metaKeywords}
+          pathname={canonicalProductPath}
+          image={product?.image}
+          type="product"
+          jsonLd={productSchema || undefined}
+        />
+      ) : null}
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-[1800px] px-4 py-3 md:px-6">
           <div className="flex items-center gap-2 overflow-x-auto text-sm text-slate-500">

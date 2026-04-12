@@ -25,9 +25,11 @@ import {
   type SpecificationTemplate,
   type VariantDimensionKey,
 } from '../../lib/productSpecifications';
+import { slugifySeo } from '../../lib/seo';
 
 type FormState = {
   title: string;
+  slug: string;
   shortDescription: string;
   longDescription: string;
   price: string;
@@ -40,6 +42,7 @@ type FormState = {
   searchTags: string;
   metaTitle: string;
   metaDescription: string;
+  metaKeywords: string;
   shippingWeight: string;
   packageSize: string;
   returnPolicy: string;
@@ -148,6 +151,7 @@ type ProductRecord = {
     longDescription?: string;
     metaTitle?: string;
     metaDescription?: string;
+    metaKeywords?: string;
     shippingWeight?: string;
     packageSize?: string;
     returnPolicy?: string;
@@ -168,6 +172,7 @@ type ProductRecord = {
 
 type ProductPayload = {
   categoryId: string;
+  slug?: string;
   sellerId?: string;
   title: string;
   description: string;
@@ -206,6 +211,7 @@ type ProductPayload = {
     searchTags: string[];
     metaTitle: string;
     metaDescription: string;
+    metaKeywords: string;
     shippingWeight: string;
     packageSize: string;
     returnPolicy: string;
@@ -364,6 +370,7 @@ const MASTER_CATEGORIES: LiveCategory[] = [
 
 const initialFormState: FormState = {
   title: '',
+  slug: '',
   shortDescription: '',
   longDescription: '',
   price: '',
@@ -376,6 +383,7 @@ const initialFormState: FormState = {
   searchTags: '',
   metaTitle: '',
   metaDescription: '',
+  metaKeywords: '',
   shippingWeight: '',
   packageSize: '',
   returnPolicy: '7-day return policy. Product must remain in original condition.',
@@ -710,6 +718,7 @@ useEffect(() => {
 
         setFormData({
           title: editingId ? product.title || '' : `${product.title || ''} Copy`.trim(),
+          slug: editingId ? String((product as any).slug || '') : '',
           shortDescription: product.specs?.shortDescription || '',
           longDescription: product.specs?.longDescription || product.description || '',
           price: String(product.price ?? ''),
@@ -722,6 +731,7 @@ useEffect(() => {
           searchTags: Array.isArray(product.specs?.searchTags) ? product.specs.searchTags.join(', ') : '',
           metaTitle: product.specs?.metaTitle || '',
           metaDescription: product.specs?.metaDescription || '',
+          metaKeywords: product.specs?.metaKeywords || '',
           shippingWeight: product.specs?.shippingWeight || '',
           packageSize: product.specs?.packageSize || '',
           returnPolicy: product.specs?.returnPolicy || initialFormState.returnPolicy,
@@ -822,6 +832,13 @@ useEffect(() => {
       return next;
     });
   }, [specificationTemplate, formData.brand]);
+
+  useEffect(() => {
+    if (formData.slug.trim()) return;
+    const nextSlug = slugifySeo(formData.title);
+    if (!nextSlug) return;
+    setFormData((current) => (current.slug.trim() ? current : { ...current, slug: nextSlug }));
+  }, [formData.title, formData.slug]);
 
   const titleWords = formData.title.trim().split(/\s+/).filter(Boolean).length;
   const titleQuality =
@@ -1150,6 +1167,7 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 
     return {
       categoryId: selectedCategoryId,
+      slug: slugifySeo(formData.slug.trim() || formData.title.trim()),
       sellerId: mode === 'admin' ? 'exshopi_official' : undefined,
       title: formData.title.trim(),
       description: descriptionParts.join('\n\n'),
@@ -1189,6 +1207,7 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         searchTags,
         metaTitle: formData.metaTitle.trim() || formData.title.trim(),
         metaDescription: formData.metaDescription.trim() || formData.shortDescription.trim(),
+        metaKeywords: formData.metaKeywords.trim() || searchTags.join(', '),
         shippingWeight: formData.shippingWeight.trim(),
         packageSize: formData.packageSize.trim(),
         returnPolicy: formData.returnPolicy.trim(),
@@ -1974,6 +1993,18 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 
             <div className="space-y-5">
               <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">SEO Slug</label>
+                <input
+                  type="text"
+                  name="slug"
+                  value={formData.slug}
+                  onChange={handleInputChange}
+                  placeholder="macbook-pro-2015-a1502"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
                 <label className="mb-2 block text-sm font-bold text-slate-700">Search Tags</label>
                 <input
                   type="text"
@@ -2005,6 +2036,18 @@ const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
                   onChange={handleInputChange}
                   rows={5}
                   placeholder="SEO meta description"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">Meta Keywords</label>
+                <input
+                  type="text"
+                  name="metaKeywords"
+                  value={formData.metaKeywords}
+                  onChange={handleInputChange}
+                  placeholder="refurbished laptops UAE, used MacBook Dubai"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </div>

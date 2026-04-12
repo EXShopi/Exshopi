@@ -421,6 +421,73 @@ const sendCustomerNotice = async (
   });
 };
 
+const seoSlugify = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120) || 'product';
+
+const clampSeoText = (value: string, limit: number) => {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, Math.max(0, limit - 1)).trim()}…`;
+};
+
+const uniqueSeoKeywords = (values: string[]) =>
+  Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+
+const getProductSeoMeta = (product: any) => {
+  const title = String(product?.title || 'Marketplace Product').trim();
+  const brand = String(product?.brand || product?.specs?.attributes?.brand || '').trim();
+  const slug = seoSlugify(product?.slug || title);
+  const metaTitle = clampSeoText(
+    product?.metaTitle || product?.specs?.metaTitle || `${title} | Buy in UAE | ExShopi`,
+    60
+  );
+  const metaDescription = clampSeoText(
+    product?.metaDescription ||
+      product?.specs?.metaDescription ||
+      `${title} on ExShopi with UAE delivery, secure COD checkout, and trusted marketplace support for Dubai and GCC shoppers.`,
+    160
+  );
+  const metaKeywords = uniqueSeoKeywords([
+    ...String(product?.metaKeywords || product?.specs?.metaKeywords || '')
+      .split(',')
+      .map((keyword) => keyword.trim()),
+    title,
+    brand,
+    'UAE',
+    'Dubai',
+    'buy electronics UAE COD',
+  ]).join(', ');
+
+  return { slug, metaTitle, metaDescription, metaKeywords };
+};
+
+const getProductCanonicalPath = (product: any) => {
+  const parentSlug = seoSlugify(
+    product?.specs?.parentCategorySlug || product?.specs?.categorySlug || product?.category || 'electronics'
+  );
+  const subcategorySlug = seoSlugify(
+    product?.specs?.subcategorySlug || product?.specs?.templateId || product?.subcategory || 'products'
+  );
+  const seo = getProductSeoMeta(product);
+  return `/${parentSlug}/${subcategorySlug}/${seo.slug}`;
+};
+
+const escapeXml = (value: string) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+const BLOG_SITEMAP_SLUGS = ['best-laptops-uae', 'macbook-buying-guide'];
+
 const flattenCategoryIds = (categories: Array<any>) => {
   const ids = new Set<string>();
   for (const category of categories || []) {
@@ -842,6 +909,7 @@ const stripeCheckoutSchema = z.object({
 
 const productPayloadSchema = z.object({
   categoryId: z.string().min(1),
+  slug: z.string().max(140).optional(),
   title: z.string().min(3).max(200),
   description: z.string().min(10).max(20000),
   price: z.coerce.number().nonnegative(),
@@ -870,6 +938,7 @@ const adminProductPayloadSchema = z.object({
   sellerId: z.string().min(1).optional(),
   categoryId: z.string().min(1).optional(),
   category: z.string().min(1).optional(),
+  slug: z.string().max(140).optional(),
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(20000).optional().default(''),
   price: z.coerce.number().nonnegative().optional(),
@@ -1041,9 +1110,11 @@ const serializeMarketplaceProduct = (product: any) => {
   const isOfficialStore = Boolean(seller?.isOfficial || product.sellerId === 'exshopi_official');
   const sellerName = seller?.storeName || (isOfficialStore ? 'ExShopi Official' : 'Marketplace Seller');
   const sellerStoreSlug = seller?.storeSlug || (isOfficialStore ? 'exshopi-official' : 'marketplace-seller');
+  const seo = getProductSeoMeta(product);
 
   return {
     ...product,
+    slug: seo.slug,
     isDeleted: isSoftDeletedProduct(product),
     deletedAt: product.deletedAt || product.specs?.__deletion?.deletedAt || '',
     seller,
@@ -1072,6 +1143,10 @@ const serializeMarketplaceProduct = (product: any) => {
     views: Number(product.views || 0),
     wishlistCount: Number(product.wishlistCount || 0),
     brand: product.brand || product.specs?.attributes?.brand || '',
+    metaTitle: seo.metaTitle,
+    metaDescription: seo.metaDescription,
+    metaKeywords: seo.metaKeywords,
+    canonicalPath: getProductCanonicalPath({ ...product, slug: seo.slug }),
     specifications:
       product.specifications ||
       product.specs?.specifications ||
@@ -1426,9 +1501,11 @@ const serializeMarketplaceProductAsync = async (product: any) => {
   const sellerName = seller?.storeName || (isOfficialStore ? 'ExShopi Official' : 'Marketplace Seller');
   const sellerStoreSlug = seller?.storeSlug || (isOfficialStore ? 'exshopi-official' : 'marketplace-seller');
   const effectiveStatus = resolveEffectiveProductStatus(product);
+  const seo = getProductSeoMeta(product);
 
   return {
     ...product,
+    slug: seo.slug,
     isDeleted: isSoftDeletedProduct(product),
     deletedAt: product.deletedAt || product.specs?.__deletion?.deletedAt || '',
     seller,
@@ -1464,6 +1541,10 @@ const serializeMarketplaceProductAsync = async (product: any) => {
     views: Number(product.views || 0),
     wishlistCount: Number(product.wishlistCount || 0),
     brand: product.brand || product.specs?.attributes?.brand || '',
+    metaTitle: seo.metaTitle,
+    metaDescription: seo.metaDescription,
+    metaKeywords: seo.metaKeywords,
+    canonicalPath: getProductCanonicalPath({ ...product, slug: seo.slug }),
     specifications:
       product.specifications ||
       product.specs?.specifications ||
@@ -2365,6 +2446,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
+        slug: payload.slug || seoSlugify(payload.title),
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2398,6 +2480,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
+        slug: payload.slug || seoSlugify(payload.title),
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2433,6 +2516,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         sellerId: seller.id,
         storeId: seller.id,
         categoryId: payload.categoryId,
+        slug: payload.slug || seoSlugify(payload.title),
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
@@ -2658,6 +2742,7 @@ app.put('/api/products/:id', authMiddleware, async (req: Request, res: Response)
     const payload = { ...(validated as any) };
     if (req.user?.role === 'seller') {
       const isDraft = payload.status === 'draft';
+      payload.slug = payload.slug || current.slug || seoSlugify(payload.title || current.title || '');
       payload.status = isDraft ? 'draft' : 'pending';
       payload.approvalStatus = 'pending';
       payload.productStatus = isDraft ? 'draft' : Number(payload.stock ?? current.stock ?? 0) <= 0 ? 'out_of_stock' : 'pending_approval';
@@ -3218,6 +3303,7 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
       sellerId: assignedSeller.id,
       storeId: assignedSeller.id,
       categoryId,
+      slug: payload.slug || seoSlugify(payload.title || 'untitled'),
       title: payload.title || 'Untitled',
       description: payload.description || '',
       price: Number(payload.price || 0),
@@ -3274,6 +3360,9 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
     const nextPayload = { ...(await adminProductPayloadSchema.partial().parseAsync(req.body)) } as any;
+    if (nextPayload.title || nextPayload.slug) {
+      nextPayload.slug = nextPayload.slug || seoSlugify(nextPayload.title || '');
+    }
 
     if (nextPayload.categoryId) {
       const categoryIds = flattenCategoryIds(prismaRuntime.enabled ? await prismaRuntime.getCategories() : db.getCategories());
@@ -5542,6 +5631,68 @@ app.delete('/api/categories/:id', authMiddleware, (req: Request, res: Response) 
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/robots.txt', (_req: Request, res: Response) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+Sitemap: https://exshopi.com/sitemap.xml
+`);
+});
+
+app.get('/sitemap.xml', async (_req: Request, res: Response) => {
+  try {
+    const siteUrl = 'https://exshopi.com';
+    const categories = prismaRuntime.enabled
+      ? await prismaRuntime.getCategories()
+      : db.getCategories();
+    const products = prismaRuntime.enabled
+      ? await prismaRuntime.getAllProducts()
+      : supabaseRuntime.enabled
+      ? await supabaseRuntime.getAllProducts()
+      : db.getAllProducts();
+
+    const urls = new Set<string>([
+      `${siteUrl}/`,
+      `${siteUrl}/products`,
+      `${siteUrl}/blog`,
+    ]);
+
+    for (const category of categories || []) {
+      if (!category?.slug) continue;
+      urls.add(`${siteUrl}/category/${escapeXml(String(category.slug))}`);
+      for (const sub of category?.subcategories || []) {
+        if (!sub?.slug) continue;
+        urls.add(`${siteUrl}/category/${escapeXml(String(category.slug))}/${escapeXml(String(sub.slug))}`);
+      }
+    }
+
+    for (const product of products || []) {
+      if (isSoftDeletedProduct(product)) continue;
+      const status = String(product?.status || product?.productStatus || '').toLowerCase();
+      const approval = String(product?.approvalStatus || '').toLowerCase();
+      const visibility = String(product?.visibilityStatus || '').toLowerCase();
+      if (!(status === 'live' || (approval === 'approved' && visibility === 'live'))) continue;
+      urls.add(`${siteUrl}${escapeXml(getProductCanonicalPath(product))}`);
+    }
+
+    for (const slug of BLOG_SITEMAP_SLUGS) {
+      urls.add(`${siteUrl}/blog/${escapeXml(slug)}`);
+    }
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${Array.from(urls)
+  .map((url) => `  <url><loc>${url}</loc></url>`)
+  .join('\n')}
+</urlset>`;
+
+    res.type('application/xml');
+    res.send(xml);
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
   }
 });
 
