@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, ShoppingCart, TrendingUp, Clock, AlertCircle, CheckCircle, MapPin, Package, Calendar, CreditCard, ShieldAlert, Truck, Wallet } from 'lucide-react';
+import { Search, ShoppingCart, TrendingUp, Clock, AlertCircle, CheckCircle, Package, ShieldAlert, Truck, Wallet } from 'lucide-react';
 import { orderAPI } from '../../services/api';
 import { formatAED } from '../../lib/currency';
+
+type CanonicalOrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'processing'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'refunded';
 
 interface Order {
   id: string;
   customerId: string;
   customerName: string;
   customerEmail: string;
-  customPhone: string;
+  customerPhone: string;
   sellerId: string;
   sellerName: string;
   products: Array<{
@@ -18,9 +27,13 @@ interface Order {
     price: number;
   }>;
   subtotal: number;
+  vatAmount: number;
+  totalAmount: number;
+  paymentMethod: string;
   commission: number;
   sellerAmount: number;
-  status: 'placed' | 'packed' | 'pickup_scheduled' | 'handed_to_partner' | 'in_transit' | 'delivered' | 'cancelled' | 'returned';
+  status: CanonicalOrderStatus;
+  rawStatus: string;
   shippingAddress: string;
   trackingCode: string;
   dispatchSlotDate?: string;
@@ -34,12 +47,125 @@ interface Order {
   deliveredAt?: string;
 }
 
+const ORDER_STATUS_LABELS: Record<CanonicalOrderStatus, string> = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  processing: 'Processing',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+  refunded: 'Refunded',
+};
+
+const ORDER_STATUS_STYLES: Record<
+  CanonicalOrderStatus,
+  { bg: string; text: string; icon: typeof Clock }
+> = {
+  pending: {
+    bg: 'bg-slate-50',
+    text: 'text-slate-700',
+    icon: Clock,
+  },
+  confirmed: {
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
+    icon: CheckCircle,
+  },
+  processing: {
+    bg: 'bg-purple-50',
+    text: 'text-purple-700',
+    icon: Package,
+  },
+  shipped: {
+    bg: 'bg-amber-50',
+    text: 'text-amber-700',
+    icon: Truck,
+  },
+  delivered: {
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
+    icon: CheckCircle,
+  },
+  cancelled: {
+    bg: 'bg-rose-50',
+    text: 'text-rose-700',
+    icon: AlertCircle,
+  },
+  refunded: {
+    bg: 'bg-rose-50',
+    text: 'text-rose-700',
+    icon: ShieldAlert,
+  },
+};
+
+const TIMELINE_STATUSES: CanonicalOrderStatus[] = [
+  'pending',
+  'confirmed',
+  'processing',
+  'shipped',
+  'delivered',
+];
+
+const ORDER_FILTER_OPTIONS: Array<{ value: 'all' | CanonicalOrderStatus; label: string }> = [
+  { value: 'all', label: 'All Status' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'shipped', label: 'Shipped' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'refunded', label: 'Refunded' },
+];
+
+function normalizeOrderStatus(value: unknown, refundStatus?: unknown): CanonicalOrderStatus {
+  const status = String(value || '').toLowerCase();
+  const refund = String(refundStatus || '').toLowerCase();
+
+  if (refund === 'approved' || refund === 'completed' || refund === 'refunded') {
+    return 'refunded';
+  }
+
+  if (['returned', 'return_requested', 'refund_requested', 'refunded'].includes(status)) {
+    return 'refunded';
+  }
+
+  if (['cancelled', 'failed'].includes(status)) {
+    return 'cancelled';
+  }
+
+  if (status === 'delivered') {
+    return 'delivered';
+  }
+
+  if (['handed_to_partner', 'in_transit', 'picked_up', 'shipped', 'out_for_delivery'].includes(status)) {
+    return 'shipped';
+  }
+
+  if (
+    [
+      'packed',
+      'pickup_scheduled',
+      'waiting_for_pickup',
+      'processing',
+      'ready_to_ship',
+    ].includes(status)
+  ) {
+    return 'processing';
+  }
+
+  if (['confirmed', 'approved'].includes(status)) {
+    return 'confirmed';
+  }
+
+  return 'pending';
+}
+
 const normalizeOrder = (order: any): Order => ({
   id: String(order.id || ''),
   customerId: String(order.customerId || ''),
   customerName: order.customerName || 'Customer',
   customerEmail: order.customerEmail || '',
-  customPhone: order.customPhone || '',
+  customerPhone: order.customerPhone || order.customPhone || '',
   sellerId: String(order.sellerId || ''),
   sellerName: order.sellerName || 'ExShopi Official',
   products:
@@ -54,9 +180,13 @@ const normalizeOrder = (order: any): Order => ({
           },
         ],
   subtotal: Number(order.subtotal || 0),
+  vatAmount: Number(order.vatAmount || 0),
+  totalAmount: Number(order.totalAmount || order.total || order.subtotal || 0),
+  paymentMethod: String(order.paymentMethod || 'Unknown'),
   commission: Number(order.commission || 0),
   sellerAmount: Number(order.sellerAmount || Math.max(Number(order.subtotal || 0) - Number(order.commission || 0), 0)),
-  status: order.status || 'placed',
+  status: normalizeOrderStatus(order.operationalStatus || order.status, order.refundStatus),
+  rawStatus: String(order.operationalStatus || order.status || 'pending'),
   shippingAddress: order.shippingAddress || order.address || '',
   trackingCode: order.trackingCode || `TRK-${String(order.id || '').slice(-8)}`,
   dispatchSlotDate: order.dispatchSlotDate || '',
@@ -90,7 +220,7 @@ const AdminOrderMonitoring = () => {
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | Order['status']>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | CanonicalOrderStatus>('all');
   const [sortBy, setSortBy] = useState<'date' | 'value' | 'seller' | 'customer'>('date');
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -115,7 +245,9 @@ const AdminOrderMonitoring = () => {
         const totalRevenue = allOrders.reduce((sum, o) => sum + o.subtotal, 0);
         const totalCommission = allOrders.reduce((sum, o) => sum + o.commission, 0);
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        const pendingOrders = allOrders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'returned').length;
+        const pendingOrders = allOrders.filter(
+          (o) => !['delivered', 'cancelled', 'refunded'].includes(o.status)
+        ).length;
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -239,7 +371,7 @@ const AdminOrderMonitoring = () => {
   }, [selectedOrder]);
 
   const dispatchQueue = useMemo(
-    () => orders.filter((order) => ['placed', 'packed', 'pickup_scheduled'].includes(order.status)).slice(0, 5),
+    () => orders.filter((order) => ['pending', 'confirmed', 'processing'].includes(order.status)).slice(0, 5),
     [orders]
   );
 
@@ -249,15 +381,16 @@ const AdminOrderMonitoring = () => {
         (order) =>
           order.status === 'cancelled' ||
           order.refundStatus === 'requested' ||
-          order.status === 'returned' ||
+          order.status === 'refunded' ||
           Number(order.refundAmount || 0) > Number(order.subtotal || 0) * 0.8
       ),
     [orders]
   );
 
   const syncUpdatedOrder = (updated: any) => {
-    setOrders((prev) => prev.map((order) => (order.id === updated.id ? { ...order, ...updated } : order)));
-    setSelectedOrder((prev) => (prev ? { ...prev, ...updated } : prev));
+    const normalized = normalizeOrder(updated);
+    setOrders((prev) => prev.map((order) => (order.id === normalized.id ? normalized : order)));
+    setSelectedOrder((prev) => (prev && prev.id === normalized.id ? normalized : prev));
   };
 
   const handleScheduleDispatch = async () => {
@@ -287,54 +420,10 @@ const AdminOrderMonitoring = () => {
     }
   };
 
-  const getStatusBadge = (status: Order['status']) => {
-    const styles: Record<string, { bg: string; text: string; icon: any }> = {
-      placed: {
-        bg: 'bg-slate-50',
-        text: 'text-slate-700',
-        icon: Clock,
-      },
-      packed: {
-        bg: 'bg-blue-50',
-        text: 'text-blue-700',
-        icon: Package,
-      },
-      pickup_scheduled: {
-        bg: 'bg-purple-50',
-        text: 'text-purple-700',
-        icon: Calendar,
-      },
-      handed_to_partner: {
-        bg: 'bg-orange-50',
-        text: 'text-orange-700',
-        icon: TrendingUp,
-      },
-      in_transit: {
-        bg: 'bg-amber-50',
-        text: 'text-amber-700',
-        icon: MapPin,
-      },
-      delivered: {
-        bg: 'bg-emerald-50',
-        text: 'text-emerald-700',
-        icon: CheckCircle,
-      },
-      cancelled: {
-        bg: 'bg-rose-50',
-        text: 'text-rose-700',
-        icon: AlertCircle,
-      },
-      returned: {
-        bg: 'bg-rose-50',
-        text: 'text-rose-700',
-        icon: AlertCircle,
-      },
-    };
-
-    const style = styles[status];
+  const getStatusBadge = (status: CanonicalOrderStatus) => {
+    const style = ORDER_STATUS_STYLES[status] || ORDER_STATUS_STYLES.pending;
     const Icon = style.icon;
-
-    const displayStatus = status.replace(/_/g, ' ').split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+    const displayStatus = ORDER_STATUS_LABELS[status] || ORDER_STATUS_LABELS.pending;
 
     return (
       <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${style.bg} ${style.text} text-xs font-medium`}>
@@ -344,13 +433,12 @@ const AdminOrderMonitoring = () => {
     );
   };
 
-  const getStatusTimeline = (status: Order['status']) => {
-    const statuses: Order['status'][] = ['placed', 'packed', 'pickup_scheduled', 'handed_to_partner', 'in_transit', 'delivered'];
-    const currentIndex = statuses.indexOf(status);
+  const getStatusTimeline = (status: CanonicalOrderStatus) => {
+    const currentIndex = TIMELINE_STATUSES.indexOf(status);
 
     return (
       <div className="flex items-center gap-1 flex-wrap">
-        {statuses.map((s, idx) => (
+        {TIMELINE_STATUSES.map((s, idx) => (
           <div key={s} className="flex items-center">
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -359,7 +447,7 @@ const AdminOrderMonitoring = () => {
             >
               {idx + 1}
             </div>
-            {idx < statuses.length - 1 && <div className="w-3 h-0.5 bg-slate-200 mx-0.5"></div>}
+            {idx < TIMELINE_STATUSES.length - 1 && <div className="w-3 h-0.5 bg-slate-200 mx-0.5"></div>}
           </div>
         ))}
       </div>
@@ -502,15 +590,11 @@ const AdminOrderMonitoring = () => {
             onChange={(e) => setStatusFilter(e.target.value as any)}
             className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="all">All Status</option>
-            <option value="placed">Placed</option>
-            <option value="packed">Packed</option>
-            <option value="pickup_scheduled">Pickup Scheduled</option>
-            <option value="handed_to_partner">Handed to Partner</option>
-            <option value="in_transit">In Transit</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="returned">Returned</option>
+            {ORDER_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
 
           <select
@@ -659,7 +743,7 @@ const AdminOrderMonitoring = () => {
                   <p className="font-black text-slate-900">{order.id}</p>
                   <p className="mt-1 text-sm font-medium text-slate-600">{order.customerName} • {order.sellerName}</p>
                   <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-rose-700">
-                    {order.refundStatus === 'requested' ? 'Refund requested' : order.status}
+                    {order.refundStatus === 'requested' ? 'Refund requested' : ORDER_STATUS_LABELS[order.status]}
                   </p>
                 </div>
               ))
@@ -698,6 +782,14 @@ const AdminOrderMonitoring = () => {
                   <p className="text-xs text-slate-600 uppercase tracking-wide">Refund Status</p>
                   <p className="font-semibold text-slate-900">{selectedOrder.refundStatus || 'none'}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-slate-600 uppercase tracking-wide">Payment Method</p>
+                  <p className="font-semibold text-slate-900">{selectedOrder.paymentMethod}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-600 uppercase tracking-wide">Backend Status</p>
+                  <p className="font-semibold text-slate-900">{selectedOrder.rawStatus}</p>
+                </div>
               </div>
             </div>
 
@@ -714,7 +806,7 @@ const AdminOrderMonitoring = () => {
                 <div className="space-y-1">
                   <p className="font-medium text-slate-900">{selectedOrder.customerName}</p>
                   <p className="text-sm text-slate-600">{selectedOrder.customerEmail}</p>
-                  <p className="text-sm text-slate-600">{selectedOrder.customPhone}</p>
+                  <p className="text-sm text-slate-600">{selectedOrder.customerPhone}</p>
                 </div>
               </div>
               <div className="border rounded-lg p-4">
@@ -748,6 +840,14 @@ const AdminOrderMonitoring = () => {
                 <div className="flex justify-between">
                   <p className="text-slate-700">Subtotal:</p>
                   <p className="font-semibold text-slate-900">{formatAED(selectedOrder.subtotal)}</p>
+                </div>
+                <div className="flex justify-between">
+                  <p className="text-slate-700">VAT:</p>
+                  <p className="font-semibold text-slate-900">{formatAED(selectedOrder.vatAmount)}</p>
+                </div>
+                <div className="flex justify-between">
+                  <p className="text-slate-700">Customer Total:</p>
+                  <p className="font-semibold text-slate-900">{formatAED(selectedOrder.totalAmount)}</p>
                 </div>
                 <div className="flex justify-between">
                   <p className="text-slate-700">Commission (6%):</p>

@@ -128,21 +128,17 @@ export default function AdminDashboard() {
     : [];
   const repeatPurchaseRate = Number(dashboardData.repeatPurchaseRate || 0);
 
-  const pendingOrders = Math.max(Math.floor(totalOrders * 0.12), 0);
-  const deliveredOrders = Math.max(Math.floor(totalOrders * 0.64), 0);
-  const returnedOrders = Math.max(returnRequestedOrders, Math.floor(totalOrders * 0.05));
+  const pendingOrders =
+    dashboardData.pendingOrders ?? dashboardData.metrics?.pendingOrders ?? 0;
+  const deliveredOrders =
+    dashboardData.deliveredOrders ?? dashboardData.metrics?.deliveredOrders ?? 0;
+  const returnedOrders =
+    dashboardData.returnedOrders ?? dashboardData.metrics?.returnedOrders ?? returnRequestedOrders;
 
   const salesTrendData =
     Array.isArray(dashboardData.salesTrend) && dashboardData.salesTrend.length
       ? dashboardData.salesTrend
-      : [
-          { month: 'Jan', sales: 0, commission: 0 },
-          { month: 'Feb', sales: 0, commission: 0 },
-          { month: 'Mar', sales: 0, commission: 0 },
-          { month: 'Apr', sales: 0, commission: 0 },
-          { month: 'May', sales: 0, commission: 0 },
-          { month: 'Jun', sales: 0, commission: 0 },
-        ];
+      : [];
 
   const orderStatusData = [
     { name: 'Pending', value: pendingOrders, color: '#f59e0b' },
@@ -511,23 +507,29 @@ export default function AdminDashboard() {
               </p>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={330}>
-            <LineChart data={salesTrendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="month" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip formatter={(value) => formatAEDPlain(Number(value || 0))} />
-              <Legend />
-              <Line type="monotone" dataKey="sales" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
-              <Line
-                type="monotone"
-                dataKey="commission"
-                stroke="#f59e0b"
-                strokeWidth={3}
-                dot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {salesTrendData.length ? (
+            <ResponsiveContainer width="100%" height={330}>
+              <LineChart data={salesTrendData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="month" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip formatter={(value) => formatAEDPlain(Number(value || 0))} />
+                <Legend />
+                <Line type="monotone" dataKey="sales" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
+                <Line
+                  type="monotone"
+                  dataKey="commission"
+                  stroke="#f59e0b"
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[330px] items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50 text-center text-sm font-medium text-slate-500">
+              No real sales trend data is available for the selected range yet.
+            </div>
+          )}
         </div>
 
         <div className="rounded-[34px] border border-slate-200 bg-white p-7 shadow-sm">
