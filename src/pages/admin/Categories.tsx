@@ -620,7 +620,7 @@ export function AdminCategories() {
               onChange={(event) => setSelectedTemplateId(event.target.value)}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-violet-500/10"
             >
-              {DEFAULT_SPECIFICATION_TEMPLATES.filter((template) => template.id !== 'general').map((template) => (
+              {DEFAULT_SPECIFICATION_TEMPLATES.filter((template) => template.id !== 'generic').map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.title}
                 </option>
