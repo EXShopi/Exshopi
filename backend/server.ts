@@ -154,7 +154,7 @@ app.options('*', cors(corsOptions));
 
 const PORT = Number(process.env.PORT || 3001);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
-const ADMIN_ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || '';
+const ADMIN_ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'ahsansajid295@gmail.com';
 const COD_MAX_DAILY_ORDERS = Number(process.env.COD_MAX_DAILY_ORDERS || 3);
 const ACTIVE_CATEGORY_SLUGS = new Set([
   'electronics',
@@ -335,13 +335,37 @@ const summarizeOrderItems = (order: any) =>
     : 'Marketplace item';
 
 const toCurrency = (amount: number) => `AED ${Number(amount || 0).toFixed(2)}`;
+const toDateTimeLabel = (value?: string) => {
+  const parsed = new Date(String(value || ''));
+  return Number.isNaN(parsed.getTime()) ? 'Not available' : parsed.toLocaleString('en-AE');
+};
 
 const buildOrderFacts = (order: any, sellerName?: string) => [
   { label: 'Order ID', value: order.orderId || order.id || '-' },
   { label: 'Seller', value: sellerName || order.sellerName || 'Marketplace Seller' },
+  { label: 'Customer', value: order.customerName || '-' },
   { label: 'Items', value: summarizeOrderItems(order) },
-  { label: 'Amount', value: toCurrency(order.totalAmount || order.subtotal || 0) },
-  { label: 'Payment', value: String(order.paymentStatus || 'pending').replace(/_/g, ' ') },
+  { label: 'Subtotal', value: toCurrency(order.subtotal || 0) },
+  { label: 'Shipping', value: toCurrency(order.shippingCost || 0) },
+  { label: 'VAT', value: toCurrency(order.vatAmount || 0) },
+  { label: 'Total', value: toCurrency(order.totalAmount || order.subtotal || 0) },
+  { label: 'Payment method', value: String(order.paymentMethod || 'cod').toUpperCase() },
+  { label: 'Payment status', value: String(order.paymentStatus || 'pending').replace(/_/g, ' ') },
+  { label: 'Order date', value: order.createdAt ? toDateTimeLabel(order.createdAt) : toDateTimeLabel(new Date().toISOString()) },
+  {
+    label: 'Shipping address',
+    value:
+      typeof order.shippingAddress === 'string'
+        ? order.shippingAddress
+        : [
+            order.shippingAddress?.addressLine,
+            order.shippingAddress?.area,
+            order.shippingAddress?.emirate,
+            order.shippingAddress?.building,
+          ]
+            .filter(Boolean)
+            .join(', ') || '-',
+  },
 ];
 
 const sendAdminAlert = async (subject: string, title: string, intro: string, facts: Array<{ label: string; value: string }> = []) => {
@@ -3581,11 +3605,17 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       risk.riskLevel === 'suspicious' ? 'Suspicious COD order requires review' : 'New COD order received',
       `${customerName} placed a COD order on ExShopi.`,
       [
-        { label: 'Order ID', value: orderPayload.orderId || order.id },
-        { label: 'Customer', value: customerName },
+        ...buildOrderFacts(
+          {
+            ...orderPayload,
+            createdAt: orderPayload.createdAt || timestamp,
+            customerName,
+            paymentMethod,
+            paymentStatus: 'cod_pending',
+          },
+          seller?.storeName
+        ),
         { label: 'Phone', value: normalizePhone(customerPhone) },
-        { label: 'Seller', value: seller?.storeName || 'Marketplace Seller' },
-        { label: 'Items', value: summarizeOrderItems(orderPayload) },
         { label: 'Risk level', value: risk.riskLevel },
       ]
     );

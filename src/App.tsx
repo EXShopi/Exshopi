@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect } from "react";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { RouteProgressBar } from "./components/ui/RouteProgressBar";
 import { OrbitLoader } from "./components/ui/OrbitLoader";
@@ -258,6 +258,8 @@ export default function App() {
           <Route path="/admin/forgot-password" element={<AdminForgotPassword />} />
           <Route path="/admin/reset-password" element={<AdminResetPassword />} />
 
+          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/approvals" element={<AdminApprovals />} />
@@ -266,12 +268,13 @@ export default function App() {
             <Route path="/admin/products" element={<AdminProducts />} />
             <Route path="/admin/products/add" element={<AdminAddProduct />} />
             <Route path="/admin/inventory" element={<AdminInventory />} />
+            <Route path="/admin/orders" element={<AdminOrderMonitoring />} />
             <Route path="/admin/commissions" element={<AdminCommissions />} />
             <Route path="/admin/categories" element={<AdminCategories />} />
             <Route path="/admin/banners" element={<AdminBanners />} />
             <Route path="/admin/offers" element={<AdminOffers />} />
             <Route path="/admin/payouts" element={<AdminPayoutProcessing />} />
-            <Route path="/admin/order-monitoring" element={<AdminOrderMonitoring />} />
+            <Route path="/admin/order-monitoring" element={<Navigate to="/admin/orders" replace />} />
             <Route path="/admin/customers" element={<AdminCustomers />} />
             <Route path="/admin/reports" element={<AdminReports />} />
             <Route path="/admin/returns" element={<AdminReturns />} />
