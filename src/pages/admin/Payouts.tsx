@@ -2,16 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Wallet, 
   Search, 
-  Filter, 
   CheckCircle2, 
-  XCircle, 
-  AlertCircle,
   Loader2,
   Eye,
   DollarSign,
   Store,
-  ArrowUpRight,
-  Clock
+  X
 } from 'lucide-react';
 import { payoutRequestAPI } from '../../services/api';
 import { formatAED } from '../../lib/currency';
@@ -32,6 +28,7 @@ export function AdminPayouts() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedRequest, setSelectedRequest] = useState<PayoutRequest | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -176,7 +173,12 @@ export function AdminPayouts() {
                             <DollarSign size={18} />
                           </button>
                         )}
-                        <button className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-900 hover:text-white transition-all">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRequest(request)}
+                          className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-900 hover:text-white transition-all"
+                          title="View details"
+                        >
                           <Eye size={18} />
                         </button>
                       </div>
@@ -185,6 +187,107 @@ export function AdminPayouts() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {selectedRequest && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Payout Request</p>
+                <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                  #PAY-{selectedRequest.id.slice(0, 8).toUpperCase()}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRequest(null)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-6 px-6 py-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Vendor</p>
+                  <p className="mt-2 text-lg font-black text-slate-900">
+                    {selectedRequest.sellerName || selectedRequest.sellerId || 'Seller'}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    Store slug: {selectedRequest.sellerStoreSlug || 'Not available'}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Payout Amount</p>
+                  <p className="mt-2 text-lg font-black text-emerald-600">
+                    {formatAED(selectedRequest.amount)}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    Requested on{' '}
+                    {selectedRequest.createdAt
+                      ? new Date(selectedRequest.createdAt).toLocaleString('en-AE')
+                      : 'Recent'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Status</p>
+                  <p className="mt-2 text-base font-black text-slate-900">{selectedRequest.status}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Bank Details</p>
+                  <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+                    {selectedRequest.bankDetails
+                      ? JSON.stringify(selectedRequest.bankDetails, null, 2)
+                      : 'No bank details were attached to this payout request.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
+                {selectedRequest.status === 'pending' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleStatusUpdate(selectedRequest.id, 'approved');
+                      setSelectedRequest((current) =>
+                        current ? { ...current, status: 'approved' } : current
+                      );
+                    }}
+                    className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+                  >
+                    Approve Request
+                  </button>
+                )}
+                {selectedRequest.status === 'approved' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleStatusUpdate(selectedRequest.id, 'paid');
+                      setSelectedRequest((current) =>
+                        current ? { ...current, status: 'paid' } : current
+                      );
+                    }}
+                    className="rounded-2xl bg-violet-600 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700"
+                  >
+                    Mark as Paid
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedRequest(null)}
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
