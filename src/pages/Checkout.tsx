@@ -491,6 +491,42 @@ export default function Checkout() {
     }
   };
 
+  const resolveCanonicalSellerGroups = async () => {
+    const grouped = new Map<string, any[]>();
+    const productCache = new Map<string, any>();
+
+    for (const item of items) {
+      const [baseProductId] = String(item.id || '').split('::');
+      const currentSellerId = String(item.sellerId || '').trim();
+      let canonicalSellerId = currentSellerId;
+
+      if (!canonicalSellerId && baseProductId) {
+        let product = productCache.get(baseProductId);
+        if (!product) {
+          product = await productAPI.get(baseProductId);
+          productCache.set(baseProductId, product);
+        }
+
+        canonicalSellerId = String(product?.sellerId || product?.storeId || '').trim();
+      }
+
+      if (!canonicalSellerId) {
+        throw new Error(`We could not determine the seller for "${item.title}". Please refresh the cart and try again.`);
+      }
+
+      if (!grouped.has(canonicalSellerId)) {
+        grouped.set(canonicalSellerId, []);
+      }
+
+      grouped.get(canonicalSellerId)!.push({
+        ...item,
+        sellerId: canonicalSellerId,
+      });
+    }
+
+    return grouped;
+  };
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -501,17 +537,8 @@ export default function Checkout() {
 
     try {
       setIsProcessing(true);
-
-      // Create orders for each unique seller in cart (robustly handle sellerId or seller name)
-      const ordersBySellerMap = new Map<string, any[]>();
-      items.forEach((item: any) => {
-        const sellerKey =
-          item.sellerId || item.seller || item.vendor || item.storeId || "exshopi_official";
-        if (!ordersBySellerMap.has(sellerKey)) {
-          ordersBySellerMap.set(sellerKey, []);
-        }
-        ordersBySellerMap.get(sellerKey)!.push(item);
-      });
+      setPageError("");
+      const ordersBySellerMap = await resolveCanonicalSellerGroups();
 
       const createdOrders: any[] = [];
 
@@ -584,9 +611,14 @@ export default function Checkout() {
       // Clear cart and redirect to success
       clearCart();
       navigate(primaryOrder?.trackingCode ? `/order-success?tracking=${primaryOrder.trackingCode}` : "/order-success");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Order creation failed:", error);
-      alert("Failed to create order. Please try again.");
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to create order. Please try again.";
+      setPageError(message);
+      alert(message);
     } finally {
       setIsProcessing(false);
     }

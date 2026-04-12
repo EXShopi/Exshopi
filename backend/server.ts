@@ -1344,6 +1344,51 @@ const serializeMarketplaceOrderAsync = async (order: any) => {
   };
 };
 
+const resolveCanonicalSellerForOrderItems = async (
+  requestedSellerId: string,
+  normalizedItems: Array<{ productId: string; quantity: number; unitPrice: number; variantId?: string; sku?: string; image?: string }>
+) => {
+  const requested = String(requestedSellerId || '').trim();
+  const productSellerIds = new Set<string>();
+
+  for (const item of normalizedItems) {
+    const product = prismaRuntime.enabled ? await prismaRuntime.getProduct(item.productId) : db.getProduct(item.productId);
+    if (!product) {
+      throw new Error(`Product not found: ${item.productId}`);
+    }
+
+    const sellerId = String((product as any).sellerId || (product as any).storeId || '').trim();
+    if (!sellerId) {
+      throw new Error(`Product ${item.productId} is missing a seller/store assignment.`);
+    }
+
+    productSellerIds.add(sellerId);
+  }
+
+  if (!productSellerIds.size) {
+    throw new Error('Could not determine a seller for this order.');
+  }
+
+  if (productSellerIds.size > 1) {
+    throw new Error('Order items belong to multiple sellers. Please place each seller order separately.');
+  }
+
+  const [derivedSellerId] = Array.from(productSellerIds);
+  const canonicalSellerId = requested && productSellerIds.has(requested) ? requested : derivedSellerId;
+  const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(canonicalSellerId) : db.getSeller(canonicalSellerId);
+
+  if (!seller) {
+    throw new Error(`Seller not found for resolved store ${canonicalSellerId}.`);
+  }
+
+  return {
+    seller,
+    sellerId: canonicalSellerId,
+    requestedSellerId: requested,
+    sellerWasCorrected: Boolean(requested) && requested !== canonicalSellerId,
+  };
+};
+
 const buildOrderPayloadFromItems = async ({
   customerId,
   sellerId,
@@ -1377,11 +1422,10 @@ const buildOrderPayloadFromItems = async ({
   paymentSessionId?: string;
   paidAt?: string;
 }) => {
-  const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(sellerId) : db.getSeller(sellerId);
+  const resolvedSeller = await resolveCanonicalSellerForOrderItems(sellerId, normalizedItems);
+  const seller = resolvedSeller.seller;
+  const resolvedSellerId = resolvedSeller.sellerId;
   const customer = prismaRuntime.enabled ? await prismaRuntime.getUser(customerId) : db.getUser(customerId);
-  if (!seller) {
-    throw new Error('Seller not found');
-  }
 
   const settings = db.getMarketplaceSettings();
   const matchedCountry = settings.countries.find((country) => country.code === deliveryCountry) || settings.countries[0];
@@ -1394,8 +1438,9 @@ const buildOrderPayloadFromItems = async ({
       if (!product) {
         throw new Error(`Product not found: ${item.productId}`);
       }
-      if (product.sellerId !== sellerId) {
-        throw new Error(`Product ${item.productId} does not belong to this seller`);
+      const productSellerId = String((product as any).sellerId || (product as any).storeId || '').trim();
+      if (productSellerId !== resolvedSellerId) {
+        throw new Error(`Product ${item.productId} does not belong to seller ${resolvedSellerId}`);
       }
       const quantity = Number(item.quantity || 1);
       // If a variantId is provided, prefer variant-specific values when available
@@ -1448,7 +1493,7 @@ const buildOrderPayloadFromItems = async ({
 
   return {
     customerId,
-    sellerId,
+    sellerId: resolvedSellerId,
     productId: items[0].productId,
     items,
     products: items.map((item) => ({
@@ -3940,10 +3985,19 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       return res.status(500).json({ error: 'Failed to create order' });
     }
 
-    const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(sellerId) : db.getSeller(sellerId);
+    const resolvedSellerId = String(orderPayload.sellerId || sellerId || '').trim();
+    const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(resolvedSellerId) : db.getSeller(resolvedSellerId);
     const customer = prismaRuntime.enabled ? await prismaRuntime.getUser(req.user!.id) : db.getUser(req.user!.id);
     const orderSummaryTitle = orderPayload.items?.[0]?.title || 'Marketplace item';
     const timestamp = new Date().toISOString();
+
+    console.info('[orders.create] order created', {
+      requestedSellerId: sellerId,
+      resolvedSellerId,
+      orderId: orderPayload.orderId,
+      itemCount: orderPayload.items?.length || 0,
+      customerId: req.user!.id,
+    });
 
     pushNotification({
       audience: 'admin',
