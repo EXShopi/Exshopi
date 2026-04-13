@@ -1,155 +1,47 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
 
-type CategoryItem = {
-  name: string;
-  link: string;
-  imageCandidates: string[];
-};
-
-const categories: CategoryItem[] = [
+const categories = [
   {
     name: "Computers",
+    image: "/Category%20Card/Computer.webp",
     link: "/products?category=computers",
-    imageCandidates: [
-      "/categories/computer.png",
-      "/categories/computer.webp",
-      "/categories/computers.png",
-      "/categories/computers.webp",
-      "/Category%20Card/Computer.webp",
-      "/Category%20Card/computer.webp",
-      "/Category%20Card/Laptop.webp",
-      "/Category%20Card/laptop.webp",
-    ],
   },
   {
     name: "Cell Phones",
+    image: "/Category%20Card/Mobile.webp",
     link: "/products?category=mobiles",
-    imageCandidates: [
-      "/categories/cellphone.png",
-      "/categories/cellphone.webp",
-      "/categories/mobile.png",
-      "/categories/mobile.webp",
-      "/categories/mobiles.png",
-      "/categories/mobiles.webp",
-      "/Category%20Card/Mobile.webp",
-      "/Category%20Card/mobile.webp",
-    ],
   },
   {
     name: "TVs / Video",
+    image: "/Category%20Card/TV.webp",
     link: "/products?category=tv",
-    imageCandidates: [
-      "/categories/tv.png",
-      "/categories/tv.webp",
-      "/categories/tvs.png",
-      "/categories/tvs.webp",
-      "/categories/video.png",
-      "/categories/video.webp",
-      "/Category%20Card/tv.webp",
-      "/Category%20Card/TV.webp",
-    ],
   },
   {
     name: "Video Games",
+    image: "/Category%20Card/Gaming.webp",
     link: "/products?category=gaming",
-    imageCandidates: [
-      "/categories/gaming.png",
-      "/categories/gaming.webp",
-      "/categories/game.png",
-      "/categories/game.webp",
-      "/Category%20Card/gaming.webp",
-      "/Category%20Card/Gaming.webp",
-    ],
   },
   {
     name: "Tshirts & Clothing",
+    image: "/Category%20Card/Clothing.webp",
     link: "/products?category=clothing",
-    imageCandidates: [
-      "/categories/clothing.png",
-      "/categories/clothing.webp",
-      "/categories/tshirts-clothing.png",
-      "/categories/tshirts-clothing.webp",
-      "/categories/fashion.png",
-      "/categories/fashion.webp",
-      "/Category%20Card/clothing.webp",
-      "/Category%20Card/fashion.webp",
-    ],
   },
   {
     name: "Cameras & Photo",
+    image: "/Category%20Card/Camera.webp",
     link: "/products?category=camera",
-    imageCandidates: [
-      "/categories/camera.png",
-      "/categories/camera.webp",
-      "/categories/cameras.png",
-      "/categories/cameras.webp",
-      "/Category%20Card/camera.webp",
-      "/Category%20Card/Camera.webp",
-    ],
   },
   {
     name: "Kitchen Appliances",
+    image: "/Category%20Card/Kitchen.webp",
     link: "/products?category=kitchen",
-    imageCandidates: [
-      "/categories/kitchen-appliances.png",
-      "/categories/kitchen-appliances.webp",
-      "/categories/kitchen.png",
-      "/categories/kitchen.webp",
-      "/Category%20Card/kitchen.webp",
-      "/Category%20Card/Kitchen.webp",
-    ],
   },
   {
     name: "Projectors",
+    image: "/Category%20Card/Projector.webp",
     link: "/products?category=projector",
-    imageCandidates: [
-      "/categories/projector.png",
-      "/categories/projector.webp",
-      "/categories/projectors.png",
-      "/categories/projectors.webp",
-      "/Category%20Card/projector.webp",
-      "/Category%20Card/Projector.webp",
-    ],
   },
 ];
-
-function CategoryImage({
-  alt,
-  candidates,
-}: {
-  alt: string;
-  candidates: string[];
-}) {
-  const [index, setIndex] = useState(0);
-  const [failed, setFailed] = useState(false);
-
-  const currentSrc = candidates[index];
-
-  if (!currentSrc || failed) {
-    return (
-      <div className="flex h-full w-full items-center justify-center rounded-[16px] bg-transparent text-center text-xs font-semibold text-slate-400">
-        {alt}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={currentSrc}
-      alt={alt}
-      loading="lazy"
-      onError={() => {
-        if (index < candidates.length - 1) {
-          setIndex((prev) => prev + 1);
-        } else {
-          setFailed(true);
-        }
-      }}
-      className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
-    />
-  );
-}
 
 export default function CategorySection() {
   return (
@@ -162,9 +54,14 @@ export default function CategorySection() {
             className="group rounded-[22px] border border-slate-200 bg-[#f3f4f6] p-3.5 shadow-sm transition hover:shadow-md md:rounded-[26px] md:p-6"
           >
             <div className="flex h-[92px] items-center justify-center md:h-[200px]">
-              <CategoryImage
+              <img
+                src={category.image}
                 alt={category.name}
-                candidates={category.imageCandidates}
+                loading="lazy"
+                className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
               />
             </div>
 
