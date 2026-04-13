@@ -9,6 +9,8 @@ import { SellerLayout } from "./layouts/SellerLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import ProductDetail from "./pages/ProductDetail";
 import GoogleServices from "./components/seo/GoogleServices";
+import { useAuthBootstrap, useProactiveTokenRefresh } from "./hooks";
+import { useAuthStore } from "./store/auth";
 
 const Home = lazy(() => import("./pages/Home"));
 const ProductListing = lazy(() => import("./pages/ProductListing"));
@@ -170,7 +172,15 @@ function NotFound() {
   );
 }
 
-export default function App() {
+function AppContent() {
+  // App-level auth bootstrap (runs once)
+  useAuthBootstrap();
+  
+  // Proactive token refresh (prevents surprise logouts)
+  useProactiveTokenRefresh();
+
+  const { authInitializing } = useAuthStore();
+
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
@@ -189,19 +199,30 @@ export default function App() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  return (
-    <ErrorBoundary>
-      <BrowserRouter>
-        <GoogleServices />
-        <PasswordRecoveryRedirect />
-        <RouteDebugLogger />
-        <RouteProgressBar />
-        <ScrollToTop />
+  // Show loader while auth is being verified
+  if (authInitializing) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <OrbitLoader label="Loading..." size={32} />
+          <p className="text-sm text-slate-500">Checking your session...</p>
+        </div>
+      </div>
+    );
+  }
 
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/login" element={<CustomerLogin />} />
-            <Route path="/register" element={<CustomerRegister />} />
+  return (
+    <>
+      <GoogleServices />
+      <PasswordRecoveryRedirect />
+      <RouteDebugLogger />
+      <RouteProgressBar />
+      <ScrollToTop />
+
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<CustomerLogin />} />
+          <Route path="/register" element={<CustomerRegister />} />
 
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
@@ -301,6 +322,15 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppContent />
       </BrowserRouter>
     </ErrorBoundary>
   );

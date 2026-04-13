@@ -17,6 +17,7 @@ import { useAuthStore } from '../../store/auth';
 import AuthService from '../../lib/authService';
 import { fileToDataUrl, uploadImageDataUrl } from '../../lib/uploadClient';
 import { compressImage } from '../../lib/imageUtils';
+import { useDraftFormPersistence } from '../../hooks';
 import SEOSettingsCard from '../../components/admin/SEOSettingsCard';
 import ProductSpecificationEditor from '../../components/admin/ProductSpecificationEditor';
 import { checkProductSlugAvailability } from '../../services/seoApi';
@@ -614,6 +615,48 @@ export default function AddProduct({ mode = 'seller' }: AddProductProps) {
   const [slugCheckState, setSlugCheckState] = useState<'idle' | 'checking' | 'available' | 'duplicate'>('idle');
   const [slugCheckMessage, setSlugCheckMessage] = useState('');
 
+  // Draft persistence hook - auto-saves form every 5 seconds
+  const draftKey = `${mode}-product-listing`;
+  const { saveDraft: saveDraftToStorage, restoreDraft: restoreDraftFromStorage, clearDraft } = useDraftFormPersistence(
+    {
+      formData,
+      images,
+      variants,
+      specificationValues,
+      briefHighlights,
+      boxContents,
+      selectedParentSlug,
+      selectedSubcategorySlug,
+      customSpecificationGroups,
+      defaultVariantId,
+    },
+    draftKey,
+    5000
+  );
+
+  // Restore draft on mount (unless we're editing an existing product)
+  useEffect(() => {
+    if (editingId || copyingId) {
+      // Loading existing product, don't restore draft
+      return;
+    }
+
+    const restored = restoreDraftFromStorage();
+    if (restored && typeof restored === 'object') {
+      const r = restored as any;
+      if (r.formData) setFormData(r.formData);
+      if (r.images) setImages(r.images);
+      if (r.variants) setVariants(r.variants);
+      if (r.specificationValues) setSpecificationValues(r.specificationValues);
+      if (r.briefHighlights) setBriefHighlights(r.briefHighlights);
+      if (r.boxContents) setBoxContents(r.boxContents);
+      if (r.selectedParentSlug) setSelectedParentSlug(r.selectedParentSlug);
+      if (r.selectedSubcategorySlug) setSelectedSubcategorySlug(r.selectedSubcategorySlug);
+      if (r.customSpecificationGroups) setCustomSpecificationGroups(r.customSpecificationGroups);
+      if (r.defaultVariantId) setDefaultVariantId(r.defaultVariantId);
+      console.log('[PRODUCT] Draft restored from storage');
+    }
+  }, [editingId, copyingId, restoreDraftFromStorage]);
 
   const categoryOptions = useMemo(
   () => (categories.length ? categories : MASTER_CATEGORIES),
@@ -1679,6 +1722,8 @@ useEffect(() => {
       }
 
       localStorage.removeItem(draftStorageKey);
+      // Clear new draft persistence as well
+      clearDraft();
       setSuccess(true);
 
       navigate(mode === 'admin' ? '/admin/products' : '/seller/products');

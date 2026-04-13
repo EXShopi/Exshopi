@@ -24,7 +24,6 @@ import {
   RotateCcw,
   ShieldCheck,
 } from 'lucide-react';
-import AuthService from '../lib/authService';
 import { useAuthStore } from '../store/auth';
 import { useSettingsStore } from '../store/settings';
 import { getAdminRoleLabel, hasAdminPermission } from '../lib/adminPermissions';
@@ -33,14 +32,12 @@ const ADMIN_ROLES = ['admin', 'super_admin', 'finance_manager', 'support_agent']
 
 export function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [bootChecked, setBootChecked] = useState(false);
 
   const { settings, fetchSettings } = useSettingsStore();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { user, role, setUser, setRole, setAccessToken, setRefreshToken, setSellerApplication, resetAuth } =
-    useAuthStore();
+  const { user, role, authInitializing } = useAuthStore();
 
   const runtimeRole = String(role || '').toLowerCase();
 
@@ -48,73 +45,14 @@ export function AdminLayout() {
     fetchSettings();
   }, [fetchSettings]);
 
+  // Auth has already been bootstrapped at App level
+  // Just check if user has admin access
   useEffect(() => {
-    let mounted = true;
-
-    const bootstrapAuth = async () => {
-      try {
-        const restored = await AuthService.restoreSession();
-
-        if (!mounted) return;
-
-        if (restored?.user && restored.accessToken && restored.role && ADMIN_ROLES.includes(restored.role)) {
-          const persistedAdminEmail =
-            typeof window !== 'undefined'
-              ? (localStorage.getItem('adminEmail') || '').trim().toLowerCase()
-              : '';
-
-          const restoredEmail = (restored.user.email || '').trim().toLowerCase();
-
-          const effectiveRole =
-            restored.role && ADMIN_ROLES.includes(restored.role)
-              ? restored.role
-              : persistedAdminEmail && restoredEmail && persistedAdminEmail === restoredEmail
-                ? 'admin'
-                : restored.role || null;
-
-          setUser({
-            id: restored.user.id,
-            uid: restored.user.id,
-            email: restored.user.email,
-            name: restored.user.name || restored.user.displayName || '',
-            fullName:
-              restored.user.fullName ||
-              restored.user.name ||
-              restored.user.displayName ||
-              '',
-            displayName: restored.user.displayName || restored.user.name || '',
-            phone: restored.user.phone || '',
-            status: restored.user.status || 'active',
-            country: restored.user.country || 'AE',
-            sellerApplicationStatus: restored.user.sellerApplicationStatus || null,
-          });
-
-          setRole((effectiveRole as any) || null);
-          setAccessToken(restored.accessToken || null);
-          setRefreshToken(null);
-          setSellerApplication((restored.sellerApplication as any) || null);
-        } else {
-          localStorage.removeItem('adminId');
-          localStorage.removeItem('adminEmail');
-          resetAuth();
-        }
-      } catch (error) {
-        console.error('[ADMIN_LAYOUT] Failed to restore session:', error);
-      } finally {
-        if (mounted) setBootChecked(true);
-      }
-    };
-
-    bootstrapAuth();
-
-    return () => {
-      mounted = false;
-    };
-  }, [resetAuth, setAccessToken, setRefreshToken, setRole, setSellerApplication, setUser]);
-
-  useEffect(() => {
-    if (!bootChecked) return;
-
+    // If still initializing auth, wait
+    if (authInitializing) {
+      return;
+    }
+    
     const persistedAdminId =
       typeof window !== 'undefined' ? localStorage.getItem('adminId') || '' : '';
     const persistedAdminEmail =
@@ -131,7 +69,7 @@ export function AdminLayout() {
     if (!canAccessAdmin) {
       navigate('/admin/login', { replace: true });
     }
-  }, [bootChecked, runtimeRole, user?.email, navigate]);
+  }, [authInitializing, runtimeRole, user?.email, navigate]);
 
   const effectiveRole = (
     ADMIN_ROLES.includes(runtimeRole) ? runtimeRole : 'admin'
