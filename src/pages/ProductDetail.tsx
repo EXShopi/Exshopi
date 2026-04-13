@@ -54,6 +54,7 @@ type ProductVariant = {
   originalPrice?: number | string | null;
   stock?: number | string | null;
   sku?: string;
+  image?: string;
 };
 
 const COLOR_HEX_MAP: Record<string, string> = {

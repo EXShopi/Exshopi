@@ -217,7 +217,7 @@ const CategorySelector: React.FC<Props> = (props) => {
                 {filteredParents.map((cat, idx) => (
                   <li key={cat.id}>
                     <button
-                      ref={(el) => (parentButtonsRef.current[idx] = el)}
+                      ref={(el) => { parentButtonsRef.current[idx] = el; }}
                       type="button"
                       role="option"
                       aria-selected={activeParent === String(cat.id)}
@@ -252,7 +252,7 @@ const CategorySelector: React.FC<Props> = (props) => {
                     {parent.subcategories.map((sub, sidx) => (
                       <li key={sub.slug}>
                         <button
-                          ref={(el) => (subButtonsRef.current[sidx] = el)}
+                          ref={(el) => { subButtonsRef.current[sidx] = el; }}
                           type="button"
                           role="option"
                           aria-selected={activeSub === sub.slug && String(activeParent) === String(parent.id)}
