@@ -1,66 +1,157 @@
 import { Link } from "react-router-dom";
-import OptimizedImage from "./OptimizedImage";
+import { useState } from "react";
 
-const categories = [
+type CategoryItem = {
+  name: string;
+  link: string;
+  imageCandidates: string[];
+};
+
+const categories: CategoryItem[] = [
   {
     name: "Computers",
-    image: "/categories/computer.png",
-    fallback: "/categories/computer.webp",
     link: "/products?category=computers",
+    imageCandidates: [
+      "/categories/computer.png",
+      "/categories/computer.webp",
+      "/categories/computers.png",
+      "/categories/computers.webp",
+      "/Category%20Card/Computer.webp",
+      "/Category%20Card/computer.webp",
+      "/Category%20Card/Laptop.webp",
+      "/Category%20Card/laptop.webp",
+    ],
   },
   {
     name: "Cell Phones",
-    image: "/categories/cellphone.png",
-    fallback: "/categories/cellphone.webp",
     link: "/products?category=mobiles",
+    imageCandidates: [
+      "/categories/cellphone.png",
+      "/categories/cellphone.webp",
+      "/categories/mobile.png",
+      "/categories/mobile.webp",
+      "/categories/mobiles.png",
+      "/categories/mobiles.webp",
+      "/Category%20Card/Mobile.webp",
+      "/Category%20Card/mobile.webp",
+    ],
   },
   {
     name: "TVs / Video",
-    image: "/categories/tv.png",
-    fallback: "/categories/tv.webp",
     link: "/products?category=tv",
+    imageCandidates: [
+      "/categories/tv.png",
+      "/categories/tv.webp",
+      "/categories/tvs.png",
+      "/categories/tvs.webp",
+      "/categories/video.png",
+      "/categories/video.webp",
+      "/Category%20Card/tv.webp",
+      "/Category%20Card/TV.webp",
+    ],
   },
   {
     name: "Video Games",
-    image: "/categories/gaming.png",
-    fallback: "/categories/gaming.webp",
     link: "/products?category=gaming",
+    imageCandidates: [
+      "/categories/gaming.png",
+      "/categories/gaming.webp",
+      "/categories/game.png",
+      "/categories/game.webp",
+      "/Category%20Card/gaming.webp",
+      "/Category%20Card/Gaming.webp",
+    ],
   },
   {
     name: "Tshirts & Clothing",
-    image: "/categories/clothing.png",
-    fallback: "/categories/clothing.webp",
     link: "/products?category=clothing",
+    imageCandidates: [
+      "/categories/clothing.png",
+      "/categories/clothing.webp",
+      "/categories/tshirts-clothing.png",
+      "/categories/tshirts-clothing.webp",
+      "/categories/fashion.png",
+      "/categories/fashion.webp",
+      "/Category%20Card/clothing.webp",
+      "/Category%20Card/fashion.webp",
+    ],
   },
   {
     name: "Cameras & Photo",
-    image: "/categories/camera.png",
-    fallback: "/categories/camera.webp",
     link: "/products?category=camera",
+    imageCandidates: [
+      "/categories/camera.png",
+      "/categories/camera.webp",
+      "/categories/cameras.png",
+      "/categories/cameras.webp",
+      "/Category%20Card/camera.webp",
+      "/Category%20Card/Camera.webp",
+    ],
   },
   {
     name: "Kitchen Appliances",
-    image: "/categories/kitchen-appliances.png",
-    fallback: "/categories/kitchen-appliances.webp",
     link: "/products?category=kitchen",
+    imageCandidates: [
+      "/categories/kitchen-appliances.png",
+      "/categories/kitchen-appliances.webp",
+      "/categories/kitchen.png",
+      "/categories/kitchen.webp",
+      "/Category%20Card/kitchen.webp",
+      "/Category%20Card/Kitchen.webp",
+    ],
   },
   {
     name: "Projectors",
-    image: "/categories/projector.png",
-    fallback: "/categories/projector.webp",
     link: "/products?category=projector",
+    imageCandidates: [
+      "/categories/projector.png",
+      "/categories/projector.webp",
+      "/categories/projectors.png",
+      "/categories/projectors.webp",
+      "/Category%20Card/projector.webp",
+      "/Category%20Card/Projector.webp",
+    ],
   },
 ];
 
-export default function CategorySection() {
-  const critical = new Set([
-    "Computers",
-    "TVs / Video",
-    "Tshirts & Clothing",
-    "Kitchen Appliances",
-    "Projectors",
-  ]);
+function CategoryImage({
+  alt,
+  candidates,
+}: {
+  alt: string;
+  candidates: string[];
+}) {
+  const [index, setIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
 
+  const currentSrc = candidates[index];
+
+  if (!currentSrc || failed) {
+    return (
+      <div className="flex h-full w-full items-center justify-center rounded-[16px] bg-transparent text-center text-xs font-semibold text-slate-400">
+        {alt}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      loading="lazy"
+      onError={() => {
+        if (index < candidates.length - 1) {
+          setIndex((prev) => prev + 1);
+        } else {
+          setFailed(true);
+        }
+      }}
+      className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
+    />
+  );
+}
+
+export default function CategorySection() {
   return (
     <section className="mx-auto mt-6 max-w-[1800px] px-4 md:mt-8 md:px-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -71,13 +162,9 @@ export default function CategorySection() {
             className="group rounded-[22px] border border-slate-200 bg-[#f3f4f6] p-3.5 shadow-sm transition hover:shadow-md md:rounded-[26px] md:p-6"
           >
             <div className="flex h-[92px] items-center justify-center md:h-[200px]">
-              <OptimizedImage
-                src={category.image}
-                fallbackSrc={category.fallback}
+              <CategoryImage
                 alt={category.name}
-                lazy={!critical.has(category.name)}
-                useWebP={false}
-                className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
+                candidates={category.imageCandidates}
               />
             </div>
 
