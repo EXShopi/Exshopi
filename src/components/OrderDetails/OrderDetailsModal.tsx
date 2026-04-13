@@ -65,7 +65,7 @@ export interface OrderDetailsData {
   }>;
 }
 
-interface OrderDetailsModalProps {
+export interface OrderDetailsModalProps {
   order: OrderDetailsData;
   isOpen: boolean;
   onClose: () => void;
