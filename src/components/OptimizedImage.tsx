@@ -43,10 +43,14 @@ function getImageSources(
 ): { webp: string; png: string } {
   // Ensure src starts with /
   const path = src.startsWith('/') ? src : `/${src}`;
+  
+  // If caller already provided an extension (e.g. '/hero/hero-1.png'),
+  // strip it so we don't end up with duplicate extensions like '.png.png'.
+  const base = path.replace(/\.(png|webp|jpg|jpeg|gif)$/i, '');
 
   return {
-    webp: `${path}.webp`,
-    png: `${path}.png`,
+    webp: `${base}.webp`,
+    png: `${base}.png`,
   };
 }
 
@@ -92,14 +96,43 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   };
 
   useEffect(() => {
-    // On client side, prefer WebP
-    if (useWebP && typeof document !== 'undefined') {
-      const { webp } = getImageSources(src);
-      setImageSrc(webp);
+    // On client side, prefer WebP but probe first so we don't switch to
+    // a WebP URL that returns HTML or 404 (which would cause a broken image
+    // and extra console noise). Start with the PNG (SSR-friendly) and
+    // only switch to WebP if the probe succeeds.
+    if (useWebP && typeof window !== 'undefined') {
+      const { webp, png } = getImageSources(src);
+      let cancelled = false;
+      const probe = new Image();
+      probe.onload = () => {
+        if (!cancelled) setImageSrc(webp);
+      };
+      probe.onerror = () => {
+        if (!cancelled) setImageSrc(png);
+      };
+      // Kick off probe (browser will request the resource)
+      probe.src = webp;
+
+      return () => {
+        cancelled = true;
+        probe.onload = null;
+        probe.onerror = null;
+      };
     }
   }, [src, useWebP]);
 
   const handleError = () => {
+    // If the current src is WebP, try the PNG fallback automatically
+    try {
+      const { webp, png } = getImageSources(src);
+      if (imageSrc === webp && png && imageSrc !== png) {
+        setImageSrc(png);
+        return;
+      }
+    } catch (e) {
+      // ignore and fallthrough
+    }
+
     if (fallbackSrc && imageSrc !== fallbackSrc) {
       setImageSrc(fallbackSrc);
     } else {

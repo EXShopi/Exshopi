@@ -45,6 +45,13 @@ const categories = [
 ];
 
 export default function CategorySection() {
+  const critical = new Set([
+    'Computers',
+    'TVs / Video',
+    'Tshirts & Clothing',
+    'Kitchen Appliances',
+    'Projectors',
+  ]);
   return (
     <section className="mx-auto mt-6 max-w-[1800px] px-4 md:mt-8 md:px-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -58,7 +65,7 @@ export default function CategorySection() {
               <OptimizedImage
                 src={category.image}
                 alt={category.name}
-                lazy={idx >= 4}
+                lazy={!critical.has(category.name)}
                 useWebP={true}
                 className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
               />

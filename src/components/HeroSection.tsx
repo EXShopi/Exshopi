@@ -80,7 +80,7 @@ export default function HeroSection() {
       />
 
       <div className="relative z-10 overflow-hidden rounded-[20px] border border-slate-200 shadow-lg md:rounded-[34px]">
-        <div className="relative aspect-video min-h-[224px] w-full sm:min-h-[300px] md:aspect-[2048/890]" style={{ aspectRatio: '2048 / 890' }}>
+        <div className="relative aspect-video min-h-[160px] w-full sm:min-h-[220px] md:aspect-[1280/420]" style={{ aspectRatio: '1280 / 420' }}>
           <div className="h-full w-full">
             <div className={`relative h-full w-full overflow-hidden bg-gradient-to-br ${slide.bg} text-white`}>
               {slide.image && (

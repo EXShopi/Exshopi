@@ -567,6 +567,15 @@ export const userAPI = {
       credentials: 'include',
       body: JSON.stringify({}),
     });
+
+    // If the refresh attempt is unauthorized for a guest user, handle
+    // silently and return null instead of throwing noisy errors.
+    if (res.status === 401 || res.status === 403) {
+      // Clear any persisted auth state if present and return null.
+      clearPersistedAuthState();
+      return null;
+    }
+
     const data = await parseApiResponse(res);
     persistAuthTokens({
       accessToken: data?.accessToken || null,
