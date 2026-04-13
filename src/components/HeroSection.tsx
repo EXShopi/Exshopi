@@ -20,6 +20,12 @@ export default function HeroSection() {
         const first = banners
           .sort((a, b) => (a.order || 0) - (b.order || 0))[0];
         if (first) {
+          // Normalize any legacy .png hero references to .webp where possible
+          let imageUrl = first.image || settings.homepage.hero.productImageUrl;
+          if (typeof imageUrl === 'string' && !imageUrl.startsWith('http')) {
+            imageUrl = imageUrl.replace(/\.png$/i, '.webp');
+          }
+
           setRemoteSlide({
             id: first.id,
             tag: first.badge || "EXSHOPI MARKETPLACE",
@@ -29,7 +35,7 @@ export default function HeroSection() {
             primaryLink: first.link || settings.homepage.hero.primaryCtaLink,
             secondaryLink: "/categories",
             bg: first.color || "from-[#06142c] via-[#0f2347] to-[#31545f]",
-            image: first.image || settings.homepage.hero.productImageUrl,
+            image: imageUrl,
             glowColor: "rgba(52, 168, 219, 0.5)",
           });
         }
@@ -43,7 +49,7 @@ export default function HeroSection() {
   }, [settings.homepage.hero.primaryCtaLink, settings.homepage.hero.primaryCtaText, settings.homepage.hero.productImageUrl, settings.homepage.hero.subtitle, settings.homepage.hero.title]);
 
   const baseSlide = useMemo(() => {
-    const img = settings.homepage.hero.productImageUrl || '/hero/hero-1.png';
+    const img = settings.homepage.hero.productImageUrl || '/hero/hero-1.webp';
     return {
       id: 'settings-hero-0',
       tag: settings.general.siteName ? `${settings.general.siteName.toUpperCase()} MARKETPLACE` : 'EXSHOPI MARKETPLACE',
