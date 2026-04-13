@@ -13,7 +13,7 @@ import PromoSection from "../components/PromoSection";
 import AllProductsSection from "../components/AllProductsSection";
 import { useSettingsStore } from "../store/settings";
 import SEOHead from "../components/seo/SEOHead";
-import { generateHomepageSeo } from "../lib/seo";
+import { generateHomepageSeo, buildHomepageSchemas } from "../lib/seo";
 
 export default function Home() {
   const { settings, fetchSettings } = useSettingsStore();
@@ -60,9 +60,14 @@ export default function Home() {
         keywords={homeSeo.metaKeywords}
         pathname="/"
         image={settings.homepage.hero.productImageUrl}
+        jsonLd={buildHomepageSchemas()}
       />
       <UAEPrideStrip {...settings.homepage.uaeStrip} />
       <HeroSection />
+      {/* SEO-optimized headline */}
+      <div className="sr-only">
+        <h1>ExShopi UAE Online Shopping Marketplace</h1>
+      </div>
       <CategorySection />
       <MegaCategoryCarousel />
       <AccessoriesSection />

@@ -278,18 +278,20 @@ export function buildCategorySeoDescription(categoryName: string) {
 
 export function generateHomepageSeo() {
   return {
-    metaTitle: "Buy Electronics in UAE | Refurbished Laptops, iPhones & COD | ExShopi",
+    metaTitle: "ExShopi UAE | Online Shopping for Electronics, Mobiles, Laptops & More",
     metaDescription: clampText(
-      "Shop refurbished laptops, used MacBook deals, cheap iPhones, and premium electronics in UAE with COD checkout, fast delivery, and trusted marketplace protection on ExShopi.",
+      "Shop electronics, mobiles, refurbished laptops, accessories and more in the UAE on ExShopi. Trusted sellers, fast delivery, and cash on delivery.",
       160
     ),
     metaKeywords: uniqueKeywords([
       "ExShopi",
+      "online shopping UAE",
       "buy electronics UAE",
+      "mobiles UAE",
+      "laptops UAE",
       "refurbished laptops UAE",
-      "used MacBook Dubai",
-      "cheap iPhone UAE",
-      "buy electronics UAE COD",
+      "electronics UAE COD",
+      "cash on delivery UAE",
       ...UAE_KEYWORDS,
     ]).join(", "),
   };
@@ -344,4 +346,82 @@ export function getDefaultPageDescription(pathname: string) {
     return "Read ExShopi buying guides, product comparisons, and UAE-focused shopping insights for electronics and marketplace deals.";
   }
   return "Discover premium marketplace products, category collections, and trusted seller offers across ExShopi in the UAE.";
+}
+
+/**
+ * Generate Organization structured data (JSON-LD)
+ * Helps Google understand ExShopi as a legitimate business
+ */
+export function buildOrganizationSchema() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "ExShopi",
+    url: getSiteUrl(),
+    logo: `${getSiteUrl()}/logo.png`,
+    description: "ExShopi is a UAE-based online marketplace offering electronics, mobiles, laptops, and accessories with trusted sellers, fast delivery, and cash on delivery (COD) options.",
+    sameAs: [
+      "https://www.instagram.com/exshopi",
+      "https://www.facebook.com/exshopi",
+    ],
+    address: {
+      "@type": "PostalAddress",
+      addressCountry: "AE",
+      addressLocality: "Dubai",
+      addressRegion: "Dubai, UAE",
+    },
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "Customer Support",
+      telephone: "+971-XXXX-XXXX",
+      email: "support@exshopi.com",
+    },
+  };
+}
+
+/**
+ * Generate WebSite structured data (JSON-LD) with SearchAction
+ * Helps Google show sitelinks and understand search functionality
+ */
+export function buildWebsiteSchema() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "ExShopi",
+    url: getSiteUrl(),
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${getSiteUrl()}/?search={search_term_string}`,
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
+}
+
+/**
+ * Generate Breadcrumb structured data for navigation hierarchy
+ */
+export function buildBreadcrumbSchema(items: Array<{ name: string; url: string }>) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
+/**
+ * Generate combined schema array for all structured data
+ */
+export function buildHomepageSchemas() {
+  return [
+    buildOrganizationSchema(),
+    buildWebsiteSchema(),
+  ];
 }

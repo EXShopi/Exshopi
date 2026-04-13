@@ -1,3 +1,69 @@
+# ExShopi robots.txt - SEO optimized crawling rules
+# Last updated: April 13, 2026
+# For more information: https://www.robotstxt.org/
+
+# Default rules for all bots
 User-agent: *
 Allow: /
+Disallow: /admin/
+Disallow: /seller/
+Disallow: /auth/
+Disallow: /checkout/
+Disallow: /cart/
+Disallow: /account/
+Disallow: /wishlist/
+Disallow: /track/
+Disallow: /.git/
+Disallow: /node_modules/
+Disallow: /backend/
+Disallow: /scripts/
+Disallow: /dist/
+Disallow: /*.json$
+Disallow: /*.ts$
+Disallow: /*.tsx$
+
+# Allow indexing of customer-facing pages
+Allow: /category/
+Allow: /search/
+Allow: /blog/
+Allow: /products/
+Allow: /about/
+Allow: /contact/
+Allow: /faq/
+Allow: /privacy-policy
+Allow: /terms-conditions
+Allow: /shipping-policy
+Allow: /return-policy
+Allow: /warranty
+
+# Optimize crawl for Googlebot
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+Request-rate: 100/1s
+
+# Optimize crawl for Bingbot
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+Request-rate: 10/1s
+
+# Standard crawl delay for other bots
+User-agent: *
+Crawl-delay: 1
+Request-rate: 10/1s
+
+# Block aggressive bots and scrapers
+User-agent: SemrushBot
+User-agent: AhrefsBot
+User-agent: MJ12bot
+User-agent: DotBot
+User-agent: AhrefsBot-Abk
+User-agent: SemrushBot-BA
+User-agent: SemrushBot-BLRT
+User-agent: SemrushBot-FAST
+User-agent: SemrushBot-SA
+Disallow: /
+
+# Sitemap for search engines
 Sitemap: https://exshopi.com/sitemap.xml
