@@ -9,7 +9,7 @@ import { userAPI } from '../services/api';
  */
 export function useProactiveTokenRefresh() {
   const { accessToken, setAccessToken } = useAuthStore();
-  const timerRef = useRef<NodeJS.Timeout>();
+  const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastRefreshRef = useRef<number>(0);
 
   useEffect(() => {

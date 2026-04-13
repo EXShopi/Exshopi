@@ -16,7 +16,7 @@ export interface SessionWarningConfig {
 export function useSessionWarning(config: SessionWarningConfig = {}) {
   const { warningBeforeExpiry = 2 * 60 * 1000, onWarning, onExpired } = config;
   const { accessToken } = useAuthStore();
-  const timerRef = useRef<NodeJS.Timeout>();
+  const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const warningShownRef = useRef(false);
 
   const showWarning = useCallback(() => {

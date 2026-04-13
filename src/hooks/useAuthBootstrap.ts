@@ -8,7 +8,7 @@ import AuthService from '../lib/authService';
  * Prevents race conditions where routes redirect before auth check completes
  */
 export function useAuthBootstrap() {
-  const { setLoading, setAuthInitializing } = useAuthStore();
+  const { setLoading } = useAuthStore();
   const bootstrapDoneRef = useRef(false);
   
   useEffect(() => {
@@ -38,7 +38,6 @@ export function useAuthBootstrap() {
       } finally {
         if (isMounted) {
           setLoading(false);
-          setAuthInitializing(false);
         }
       }
     }
@@ -48,5 +47,5 @@ export function useAuthBootstrap() {
     return () => {
       isMounted = false;
     };
-  }, [setLoading, setAuthInitializing]);
+  }, [setLoading]);
 }
