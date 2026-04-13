@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, ShoppingCart, TrendingUp, Clock, AlertCircle, CheckCircle, Package, ShieldAlert, Truck, Wallet } from 'lucide-react';
 import { orderAPI } from '../../services/api';
 import { formatAED } from '../../lib/currency';
+import { OrderDetailsModal } from '../../components/OrderDetails';
 
 type CanonicalOrderStatus =
   | 'pending'
@@ -14,6 +15,7 @@ type CanonicalOrderStatus =
 
 interface Order {
   id: string;
+  orderNumber?: string;
   customerId: string;
   customerName: string;
   customerEmail: string;
@@ -25,16 +27,28 @@ interface Order {
     title: string;
     quantity: number;
     price: number;
+    unitPrice?: number;
+    sku?: string;
+  }>;
+  items?: Array<{
+    id: string;
+    title: string;
+    quantity: number;
+    unitPrice: number;
+    salePrice?: number;
+    sku?: string;
   }>;
   subtotal: number;
   vatAmount: number;
   totalAmount: number;
+  deliveryFee?: number;
   paymentMethod: string;
   commission: number;
   sellerAmount: number;
   status: CanonicalOrderStatus;
   rawStatus: string;
   shippingAddress: string;
+  shippingAddressJson?: any;
   trackingCode: string;
   dispatchSlotDate?: string;
   dispatchSlotWindow?: string;
@@ -44,7 +58,18 @@ interface Order {
   refundReason?: string;
   refundAmount?: number;
   createdAt: string;
+  placedAt?: string;
   deliveredAt?: string;
+  deliveryType?: string;
+  paymentStatus?: string;
+  operationalStatus?: string;
+  trackingEvents?: Array<{
+    id: string;
+    status: string;
+    timestamp: string;
+    notes?: string;
+    location?: string;
+  }>;
 }
 
 const ORDER_STATUS_LABELS: Record<CanonicalOrderStatus, string> = {
@@ -160,45 +185,72 @@ function normalizeOrderStatus(value: unknown, refundStatus?: unknown): Canonical
   return 'pending';
 }
 
-const normalizeOrder = (order: any): Order => ({
-  id: String(order.id || ''),
-  customerId: String(order.customerId || ''),
-  customerName: order.customerName || 'Customer',
-  customerEmail: order.customerEmail || '',
-  customerPhone: order.customerPhone || order.customPhone || '',
-  sellerId: String(order.sellerId || ''),
-  sellerName: order.sellerName || 'ExShopi Official',
-  products:
-    Array.isArray(order.products) && order.products.length
-      ? order.products
-      : [
-          {
-            id: String(order.productId || order.id || ''),
-            title: order.productTitle || 'Marketplace Product',
-            quantity: order.quantity || 1,
-            price: Number(order.unitPrice || order.subtotal || 0),
-          },
-        ],
-  subtotal: Number(order.subtotal || 0),
-  vatAmount: Number(order.vatAmount || 0),
-  totalAmount: Number(order.totalAmount || order.total || order.subtotal || 0),
-  paymentMethod: String(order.paymentMethod || 'Unknown'),
-  commission: Number(order.commission || 0),
-  sellerAmount: Number(order.sellerAmount || Math.max(Number(order.subtotal || 0) - Number(order.commission || 0), 0)),
-  status: normalizeOrderStatus(order.operationalStatus || order.status, order.refundStatus),
-  rawStatus: String(order.operationalStatus || order.status || 'pending'),
-  shippingAddress: order.shippingAddress || order.address || '',
-  trackingCode: order.trackingCode || `TRK-${String(order.id || '').slice(-8)}`,
-  dispatchSlotDate: order.dispatchSlotDate || '',
-  dispatchSlotWindow: order.dispatchSlotWindow || '',
-  dispatchNotes: order.dispatchNotes || '',
-  courierPartner: order.courierPartner || '',
-  refundStatus: order.refundStatus || 'none',
-  refundReason: order.refundReason || '',
-  refundAmount: Number(order.refundAmount || 0),
-  createdAt: order.createdAt || new Date().toISOString(),
-  deliveredAt: order.deliveredAt,
-});
+const normalizeOrder = (order: any): Order => {
+  // Handle items array properly
+  const items = order.items || [];
+  const products = items.length > 0 
+    ? items.map((item: any) => ({
+        id: item.id || item.productId || String(order.id || ''),
+        title: item.productTitle || item.title || 'Marketplace Product',
+        quantity: item.quantity || 1,
+        price: Number(item.unitPrice || item.salePrice || 0),
+        unitPrice: Number(item.unitPrice || 0),
+        sku: item.sku,
+      }))
+    : [
+        {
+          id: String(order.productId || order.id || ''),
+          title: order.productTitle || 'Marketplace Product',
+          quantity: order.quantity || 1,
+          price: Number(order.unitPrice || order.subtotal || 0),
+        },
+      ];
+
+  return {
+    id: String(order.id || ''),
+    orderNumber: order.orderNumber || String(order.id || '').slice(-8),
+    customerId: String(order.customerId || ''),
+    customerName: order.customerName || 'Customer',
+    customerEmail: order.customerEmail || '',
+    customerPhone: order.customerPhone || order.customPhone || '',
+    sellerId: String(order.sellerId || ''),
+    sellerName: order.sellerName || 'ExShopi Official',
+    products,
+    items: products.map(p => ({
+      id: p.id,
+      title: p.title,
+      quantity: p.quantity,
+      unitPrice: p.price,
+      sku: p.sku,
+    })),
+    subtotal: Number(order.subtotal || 0),
+    vatAmount: Number(order.vatAmount || 0),
+    totalAmount: Number(order.totalAmount || order.total || order.subtotal || 0),
+    deliveryFee: Number(order.deliveryFee || order.shippingCost || 0),
+    paymentMethod: String(order.paymentMethod || 'Unknown'),
+    paymentStatus: order.paymentStatus || 'pending',
+    commission: Number(order.commission || order.commissionAmount || 0),
+    sellerAmount: Number(order.sellerAmount || Math.max(Number(order.subtotal || 0) - Number(order.commission || 0), 0)),
+    status: normalizeOrderStatus(order.operationalStatus || order.status, order.refundStatus),
+    rawStatus: String(order.operationalStatus || order.status || 'pending'),
+    shippingAddress: order.shippingAddress || order.address || '',
+    shippingAddressJson: order.shippingAddressJson,
+    trackingCode: order.trackingCode || `TRK-${String(order.id || '').slice(-8)}`,
+    dispatchSlotDate: order.dispatchSlotDate || '',
+    dispatchSlotWindow: order.dispatchSlotWindow || '',
+    dispatchNotes: order.dispatchNotes || '',
+    courierPartner: order.courierPartner || '',
+    refundStatus: order.refundStatus || 'none',
+    refundReason: order.refundReason || '',
+    refundAmount: Number(order.refundAmount || 0),
+    createdAt: order.createdAt || new Date().toISOString(),
+    placedAt: order.placedAt || order.createdAt,
+    deliveredAt: order.deliveredAt,
+    deliveryType: order.deliveryType || 'Standard',
+    operationalStatus: order.operationalStatus || order.status,
+    trackingEvents: Array.isArray(order.trackingEvents) ? order.trackingEvents : [],
+  };
+};
 
 const formatDateSafe = (value: any, fallback = 'Not available') => {
   if (!value) return fallback;
@@ -753,193 +805,50 @@ const AdminOrderMonitoring = () => {
       </div>
       </div>
 
-      {/* Modal */}
-      {showModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 space-y-4 my-8">
-            <h3 className="text-lg font-bold text-slate-900">Order Details</h3>
-
-            {/* Order Header */}
-            <div className="bg-slate-50 p-4 rounded-lg space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Order ID</p>
-                  <p className="font-semibold text-slate-900">{selectedOrder.id}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Tracking Code</p>
-                  <p className="font-semibold text-slate-900 font-mono">{selectedOrder.trackingCode}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Order Date</p>
-                  <p className="font-semibold text-slate-900">{formatDateSafe(selectedOrder.createdAt)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Status</p>
-                  {getStatusBadge(selectedOrder.status)}
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Refund Status</p>
-                  <p className="font-semibold text-slate-900">{selectedOrder.refundStatus || 'none'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Payment Method</p>
-                  <p className="font-semibold text-slate-900">{selectedOrder.paymentMethod}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Backend Status</p>
-                  <p className="font-semibold text-slate-900">{selectedOrder.rawStatus}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Status Timeline */}
-            <div className="border-t border-slate-200 pt-4">
-              <p className="text-sm font-semibold text-slate-900 mb-3">Delivery Timeline</p>
-              {getStatusTimeline(selectedOrder.status)}
-            </div>
-
-            {/* Customer & Seller Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border rounded-lg p-4">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Customer</p>
-                <div className="space-y-1">
-                  <p className="font-medium text-slate-900">{selectedOrder.customerName}</p>
-                  <p className="text-sm text-slate-600">{selectedOrder.customerEmail}</p>
-                  <p className="text-sm text-slate-600">{selectedOrder.customerPhone}</p>
-                </div>
-              </div>
-              <div className="border rounded-lg p-4">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Seller</p>
-                <div className="space-y-1">
-                  <p className="font-medium text-slate-900">{selectedOrder.sellerName}</p>
-                  <p className="text-sm text-slate-600">ID: {selectedOrder.sellerId}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Products */}
-            <div className="border-t border-slate-200 pt-4">
-              <p className="text-sm font-semibold text-slate-900 mb-3">Products</p>
-              <div className="space-y-2">
-                {selectedOrder.products.map((product) => (
-                  <div key={product.id} className="flex justify-between items-center border rounded p-3 bg-slate-50">
-                    <div>
-                      <p className="font-medium text-slate-900">{product.title}</p>
-                      <p className="text-xs text-slate-600">Qty: {product.quantity}</p>
-                    </div>
-                    <p className="font-semibold text-slate-900">{formatAED(product.price * product.quantity)}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Financial Summary */}
-            <div className="border-t border-slate-200 pt-4 bg-indigo-50 p-4 rounded-lg">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <p className="text-slate-700">Subtotal:</p>
-                  <p className="font-semibold text-slate-900">{formatAED(selectedOrder.subtotal)}</p>
-                </div>
-                <div className="flex justify-between">
-                  <p className="text-slate-700">VAT:</p>
-                  <p className="font-semibold text-slate-900">{formatAED(selectedOrder.vatAmount)}</p>
-                </div>
-                <div className="flex justify-between">
-                  <p className="text-slate-700">Customer Total:</p>
-                  <p className="font-semibold text-slate-900">{formatAED(selectedOrder.totalAmount)}</p>
-                </div>
-                <div className="flex justify-between">
-                  <p className="text-slate-700">Commission (6%):</p>
-                  <p className="font-semibold text-slate-900">{formatAED(selectedOrder.commission)}</p>
-                </div>
-                <div className="flex justify-between border-t border-indigo-200 pt-2">
-                  <p className="font-semibold text-slate-900">Seller Amount:</p>
-                  <p className="font-bold text-indigo-600 text-lg">{formatAED(selectedOrder.sellerAmount)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Shipping Address */}
-            <div className="border-t border-slate-200 pt-4">
-              <p className="text-sm font-semibold text-slate-900 mb-2">Shipping Address</p>
-              <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded">{selectedOrder.shippingAddress}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200 pt-4">
-              <div className="rounded-lg border border-slate-200 p-4 space-y-3">
-                <p className="text-sm font-semibold text-slate-900">Dispatch Scheduling</p>
-                <input
-                  type="date"
-                  value={dispatchForm.dispatchSlotDate}
-                  onChange={(e) => setDispatchForm((prev) => ({ ...prev, dispatchSlotDate: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                />
-                <select
-                  value={dispatchForm.dispatchSlotWindow}
-                  onChange={(e) => setDispatchForm((prev) => ({ ...prev, dispatchSlotWindow: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                >
-                  <option>10:00 AM - 1:00 PM</option>
-                  <option>1:00 PM - 4:00 PM</option>
-                  <option>4:00 PM - 8:00 PM</option>
-                </select>
-                <input
-                  type="text"
-                  value={dispatchForm.courierPartner}
-                  onChange={(e) => setDispatchForm((prev) => ({ ...prev, courierPartner: e.target.value }))}
-                  placeholder="Courier partner"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                />
-                <textarea
-                  value={dispatchForm.dispatchNotes}
-                  onChange={(e) => setDispatchForm((prev) => ({ ...prev, dispatchNotes: e.target.value }))}
-                  rows={3}
-                  placeholder="Dispatch notes"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none"
-                />
-                <button
-                  onClick={handleScheduleDispatch}
-                  className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                >
-                  Save Dispatch Slot
-                </button>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 p-4 space-y-3">
-                <p className="text-sm font-semibold text-slate-900">Refund Review</p>
-                <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600 space-y-1">
-                  <p><span className="font-semibold text-slate-900">Status:</span> {selectedOrder.refundStatus || 'none'}</p>
-                  <p><span className="font-semibold text-slate-900">Amount:</span> {formatAED(selectedOrder.refundAmount || selectedOrder.subtotal || 0)}</p>
-                  <p><span className="font-semibold text-slate-900">Reason:</span> {selectedOrder.refundReason || 'No refund requested yet'}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleRefundAction('approve')}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                  >
-                    Approve Refund
-                  </button>
-                  <button
-                    onClick={() => handleRefundAction('reject')}
-                    className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-                  >
-                    Reject Refund
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 bg-slate-200 text-slate-900 py-2 rounded-lg hover:bg-slate-300 font-medium"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <OrderDetailsModal
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          order={{
+            id: selectedOrder.id,
+            orderNumber: selectedOrder.orderNumber || selectedOrder.id,
+            customerId: selectedOrder.customerId,
+            customerName: selectedOrder.customerName,
+            customerEmail: selectedOrder.customerEmail,
+            customerPhone: selectedOrder.customerPhone,
+            sellerId: selectedOrder.sellerId,
+            sellerName: selectedOrder.sellerName,
+            subtotal: selectedOrder.subtotal,
+            vatAmount: selectedOrder.vatAmount,
+            deliveryFee: selectedOrder.deliveryFee || 0,
+            totalAmount: selectedOrder.totalAmount,
+            paymentMethod: selectedOrder.paymentMethod,
+            paymentStatus: selectedOrder.paymentStatus,
+            commissionAmount: selectedOrder.commission,
+            sellerAmount: selectedOrder.sellerAmount,
+            status: selectedOrder.rawStatus,
+            operationalStatus: selectedOrder.status,
+            items: selectedOrder.items || selectedOrder.products,
+            shippingAddress: selectedOrder.shippingAddress,
+            shippingAddressJson: selectedOrder.shippingAddressJson,
+            trackingCode: selectedOrder.trackingCode,
+            dispatchSlotDate: selectedOrder.dispatchSlotDate,
+            dispatchSlotWindow: selectedOrder.dispatchSlotWindow,
+            dispatchNotes: selectedOrder.dispatchNotes,
+            courierPartner: selectedOrder.courierPartner,
+            refundStatus: selectedOrder.refundStatus,
+            refundReason: selectedOrder.refundReason,
+            refundAmount: selectedOrder.refundAmount,
+            createdAt: selectedOrder.createdAt,
+            deliveredAt: selectedOrder.deliveredAt,
+            deliveryType: selectedOrder.deliveryType,
+            trackingEvents: selectedOrder.trackingEvents,
+          }}
+          onStatusChange={(orderId, newStatus) => {
+            handleRefundAction('approve');
+          }}
+        />
       )}
     </div>
   );

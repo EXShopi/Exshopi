@@ -75,14 +75,20 @@ export default function Checkout() {
     building: "",
     landmark: "",
     postalCode: "",
-    // Step 3: Shipping Method
-    shippingMethod: "standard",
+    // Step 3: Delivery Method
+    deliveryType: "standard_uae", // "same_day_delivery" or "standard_uae"
     // Step 4: Payment
     paymentMethod: "cod",
   });
 
   const total = useMemo(() => getCartTotal(), [getCartTotal, items]);
-  const shippingFee = form.shippingMethod === "express" ? 25 : 12;
+  
+  // Determine available delivery types based on emirate
+  const sameDayEmirateers = ['Dubai', 'Sharjah', 'Ajman'];
+  const canUseSameDay = sameDayEmirateers.includes(form.city);
+  
+  // Delivery fee: AED 25 for Same Day, AED 15 for Standard UAE
+  const shippingFee = form.deliveryType === "same_day_delivery" ? 25 : 15;
   const vatAmount = Math.round(total * 0.05);
   const totalPayable = total + shippingFee + vatAmount;
 
@@ -94,6 +100,17 @@ export default function Checkout() {
       ...getFirebasePhoneVerificationRuntimeInfo(),
     });
   }, [items.length, phoneVerificationSupported, useFirebaseOtp]);
+
+  // Validate delivery type based on emirate
+  useEffect(() => {
+    const sameDayEmirateers = ['Dubai', 'Sharjah', 'Ajman'];
+    const canUseSameDay = sameDayEmirateers.includes(form.city);
+    
+    // If Same Day is selected but not available for this emirate, switch to Standard
+    if (form.deliveryType === 'same_day_delivery' && !canUseSameDay) {
+      setForm(prev => ({ ...prev, deliveryType: 'standard_uae' }));
+    }
+  }, [form.city]);
 
   useEffect(() => {
     let active = true;
@@ -393,7 +410,7 @@ export default function Checkout() {
       return !!(form.address && form.city && form.area && form.building);
     }
     if (step === 3) {
-      return !!form.shippingMethod;
+      return !!form.deliveryType;
     }
     if (step === 4) {
       return form.paymentMethod === "cod" && otpVerified;
@@ -544,7 +561,7 @@ export default function Checkout() {
 
       // Create an order for each seller
       for (const [sellerId, sellerItems] of ordersBySellerMap) {
-        const sellerShippingCost = form.shippingMethod === "express" ? 25 : 12;
+        const sellerShippingCost = form.deliveryType === "same_day_delivery" ? 25 : 15;
         const created = await orderAPI.create({
           sellerId,
           items: sellerItems.map((item: any) => {
@@ -566,6 +583,7 @@ export default function Checkout() {
           customerPhone: normalizeUaePhone(form.phone),
           verificationToken: otpSessionId,
           shippingCost: sellerShippingCost,
+          deliveryType: form.deliveryType === 'same_day_delivery' ? 'Same Day Delivery' : 'Standard UAE Delivery',
           shippingAddress: {
             emirate: form.city,
             area: form.area,
@@ -573,7 +591,7 @@ export default function Checkout() {
             flat: '',
             landmark: form.landmark,
             addressLine: form.address,
-            method: form.shippingMethod,
+            method: form.deliveryType,
           },
           paymentMethod: "cod",
         });
@@ -861,55 +879,79 @@ export default function Checkout() {
                 </div>
               )}
 
-              {/* Step 3: Shipping Method */}
+              {/* Step 3: Delivery Method */}
               {currentStep === 3 && (
                 <div>
                   <h2 className="mb-8 text-3xl font-black text-slate-900 flex items-center gap-3">
                     <Truck className="h-8 w-8 text-blue-600" />
-                    Shipping Method
+                    Delivery Method
                   </h2>
 
+                  {form.city && (
+                    <p className="mb-6 text-sm text-slate-600">
+                      <span className="font-semibold">Delivery to:</span> {form.city}
+                    </p>
+                  )}
+
                   <div className="space-y-3">
-                    {[
-                      {
-                        id: "standard",
-                        name: "Standard UAE Delivery",
-                        desc: "ExShopi COD route • 2-4 business days",
-                        price: "AED 12",
-                      },
-                      {
-                        id: "express",
-                        name: "Priority UAE Delivery",
-                        desc: "Faster COD route • 1-2 business days",
-                        price: "AED 25",
-                      },
-                    ].map((method) => (
+                    {/* Same Day Delivery - Only for Dubai, Sharjah, Ajman */}
+                    {canUseSameDay && (
                       <label
-                        key={method.id}
-                        className="relative flex cursor-pointer items-center rounded-xl border-2 p-4 transition-all hover:border-blue-400"
+                        className="relative flex cursor-pointer items-center rounded-xl border-2 p-4 transition-all hover:border-green-400"
                         style={{
                           borderColor:
-                            form.shippingMethod === method.id
-                              ? "rgb(37, 99, 235)"
+                            form.deliveryType === "same_day_delivery"
+                              ? "rgb(34, 197, 94)"
                               : "rgb(226, 232, 240)",
                         }}
                       >
                         <input
                           type="radio"
-                          name="shippingMethod"
-                          value={method.id}
-                          checked={form.shippingMethod === method.id}
+                          name="deliveryType"
+                          value="same_day_delivery"
+                          checked={form.deliveryType === "same_day_delivery"}
                           onChange={handleChange}
                           className="h-4 w-4"
                         />
                         <div className="ml-4 flex-1">
-                          <p className="font-bold text-slate-900">{method.name}</p>
-                          <p className="text-sm text-slate-600">{method.desc}</p>
+                          <p className="font-bold text-slate-900">Same Day Delivery ⚡</p>
+                          <p className="text-sm text-slate-600">Express delivery in Dubai, Sharjah, Ajman (next business day)</p>
                         </div>
-                        <span className="font-bold text-slate-900">{method.price}</span>
+                        <span className="font-bold text-green-600">AED 25</span>
                       </label>
-                    ))}
+                    )}
+
+                    {/* Standard UAE Delivery - Available for all UAE emirates */}
+                    <label
+                      className="relative flex cursor-pointer items-center rounded-xl border-2 p-4 transition-all hover:border-blue-400"
+                      style={{
+                        borderColor:
+                          form.deliveryType === "standard_uae"
+                            ? "rgb(37, 99, 235)"
+                            : "rgb(226, 232, 240)",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="deliveryType"
+                        value="standard_uae"
+                        checked={form.deliveryType === "standard_uae"}
+                        onChange={handleChange}
+                        className="h-4 w-4"
+                      />
+                      <div className="ml-4 flex-1">
+                        <p className="font-bold text-slate-900">Standard UAE Delivery</p>
+                        <p className="text-sm text-slate-600">Full UAE coverage (2-4 business days)</p>
+                      </div>
+                      <span className="font-bold text-blue-600">AED 15</span>
+                    </label>
                   </div>
+
+                  {!canUseSameDay && (
+                    <div className="mt-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
+                      <p><span className="font-semibold">Note:</span> Same Day Delivery is available only for Dubai, Sharjah, and Ajman. We offer Standard UAE Delivery for all other emirates.</p>
+                    </div>
+                  )}
                 </div>
               )}
 

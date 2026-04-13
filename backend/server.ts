@@ -12,6 +12,7 @@ import { supabaseRuntime } from './supabaseRuntime';
 import { ensureUploadDir, uploadDataUrl } from './uploadStorage';
 import { createStripeCheckoutSession, verifyStripeWebhookSignature } from './stripeService';
 import { sendTransactionalEmail } from './emailService';
+import { sendNewOrderNotificationToAdmin } from './emailService.helpers';
 import {
   addBlacklistEntry,
   calculateCodRisk,
@@ -4062,6 +4063,39 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
         { label: 'Risk level', value: risk.riskLevel },
       ]
     );
+
+    // Send professional new order notification email to admin
+    try {
+      const shippingAddressStr = shippingAddress ? 
+        [shippingAddress.addressLine, shippingAddress.building, shippingAddress.area, shippingAddress.emirate]
+          .filter(Boolean)
+          .join(', ') : 'No address provided';
+      
+      await sendNewOrderNotificationToAdmin({
+        orderId: orderPayload.id || order.id,
+        orderNumber: orderPayload.orderId || order.orderId || String(order.id).slice(-8),
+        customerName,
+        customerPhone: normalizePhone(customerPhone),
+        customerEmail,
+        deliveryAddress: shippingAddressStr,
+        emirate: shippingAddress?.emirate || 'UAE',
+        items: (orderPayload.items || []).map((item: any) => ({
+          title: item.title,
+          quantity: item.quantity,
+          price: Number(item.unitPrice || 0),
+        })),
+        subtotal: Number(orderPayload.subtotal || 0),
+        deliveryFee: Number(shippingCost || 0),
+        vatAmount: Number(orderPayload.vatAmount || 0),
+        totalAmount: Number(orderPayload.totalAmount || 0),
+        paymentMethod: paymentMethod || 'cod',
+        deliveryType: payload.deliveryType || shippingAddress?.method || 'Standard Delivery',
+        orderDate: orderPayload.createdAt || timestamp,
+      });
+    } catch (emailError) {
+      console.warn('[orders.create] Failed to send new order notification email:', emailError);
+      // Don't fail the order creation if email fails
+    }
     if (seller?.email) {
       await sendSellerNotice(
         seller.email,
