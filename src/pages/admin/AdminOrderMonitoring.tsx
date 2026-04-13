@@ -472,6 +472,36 @@ const AdminOrderMonitoring = () => {
     }
   };
 
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    if (!orderId || !newStatus) {
+      console.error('Invalid order ID or status');
+      return;
+    }
+
+    try {
+      // Call backend API to update status
+      const updated = await orderAPI.updateStatus(orderId, newStatus);
+      
+      // Sync the updated order in state
+      syncUpdatedOrder(updated);
+      
+      // Show success message
+      const statusLabel = newStatus
+        .replace(/_/g, ' ')
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      
+      console.log(`✓ Order updated to: ${statusLabel}`);
+      
+      // Toast notification would go here in a real app
+      // For now, just log the success
+    } catch (error) {
+      console.error('Failed to update order status:', error);
+      // Toast error notification would go here
+    }
+  };
+
   const getStatusBadge = (status: CanonicalOrderStatus) => {
     const style = ORDER_STATUS_STYLES[status] || ORDER_STATUS_STYLES.pending;
     const Icon = style.icon;
@@ -846,7 +876,7 @@ const AdminOrderMonitoring = () => {
             trackingEvents: selectedOrder.trackingEvents,
           }}
           onStatusChange={(orderId, newStatus) => {
-            handleRefundAction('approve');
+            handleStatusChange(orderId, newStatus);
           }}
         />
       )}

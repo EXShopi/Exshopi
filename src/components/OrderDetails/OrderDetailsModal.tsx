@@ -82,8 +82,38 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 }) => {
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'label'>('overview');
+  const [loadingStatus, setLoadingStatus] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   if (!isOpen || !order) return null;
+
+  // Valid status transitions
+  const getValidNextStatuses = (currentStatus: string): string[] => {
+    const status = String(currentStatus || '').toLowerCase();
+    
+    // Map backend statuses to frontend action buttons
+    if (status.includes('pending') || status.includes('placed')) {
+      return ['confirmed']; // From pending → confirmed
+    }
+    if (status.includes('confirmed')) {
+      return ['packed']; // From confirmed → packed
+    }
+    if (status.includes('packed') || status.includes('preparing') || status.includes('ready')) {
+      return ['shipped']; // From packed → shipped
+    }
+    if (status.includes('shipped') || status.includes('transit') || status.includes('pickup') || status.includes('out_for')) {
+      return ['delivered']; // From shipped → delivered
+    }
+    if (status.includes('delivered')) {
+      return []; // Cannot transition from delivered
+    }
+    
+    return ['confirmed', 'packed', 'shipped', 'delivered']; // Default: allow all
+  };
+
+  const isStatusDisabled = (buttonStatus: string): boolean => {
+    return !getValidNextStatuses(order.status || order.operationalStatus || 'pending').includes(buttonStatus);
+  };
 
   const getStatusColor = (status: string) => {
     const statusLower = String(status).toLowerCase();
@@ -104,8 +134,39 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   };
 
   const handleActionClick = (action: string) => {
-    if (onStatusChange) {
-      onStatusChange(order.id, action);
+    // Map button actions to backend status values
+    const statusMap: Record<string, string> = {
+      'confirmed': 'confirmed',
+      'packed': 'packed',
+      'shipped': 'in_transit', // or could be 'picked_up' depending on workflow
+      'delivered': 'delivered',
+    };
+    
+    const backendStatus = statusMap[action.toLowerCase()] || action;
+    
+    if (onStatusChange && !isStatusDisabled(action)) {
+      setLoadingStatus(action);
+      setToastMessage(null);
+      
+      // Wrap the callback to handle completion and show toast
+      Promise.resolve(onStatusChange(order.id, backendStatus))
+        .then(() => {
+          setLoadingStatus(null);
+          setToastMessage({
+            text: `Order successfully moved to ${action}! 🎉`,
+            type: 'success',
+          });
+          // Clear toast after 3 seconds
+          setTimeout(() => setToastMessage(null), 3000);
+        })
+        .catch((error) => {
+          setLoadingStatus(null);
+          setToastMessage({
+            text: `Failed to update status: ${error?.message || 'Unknown error'}`,
+            type: 'error',
+          });
+          setTimeout(() => setToastMessage(null), 4000);
+        });
     }
   };
 
@@ -125,6 +186,17 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className={`fixed top-4 right-4 z-[999] px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium animate-in fade-in slide-in-from-right-4 ${
+          toastMessage.type === 'success'
+            ? 'bg-emerald-600'
+            : 'bg-rose-600'
+        }`}>
+          {toastMessage.text}
+        </div>
+      )}
+      
       <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl my-8">
         {/* Header */}
         <div className="sticky top-0 bg-linear-to-r from-slate-900 to-slate-800 text-white rounded-t-3xl p-6 flex items-center justify-between border-b border-slate-700">
@@ -368,15 +440,35 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
                 <h3 className="font-semibold text-slate-900 mb-3">Admin Actions</h3>
                 <div className="grid grid-cols-2 gap-2">
-                  {['confirmed', 'packed', 'shipped', 'delivered'].map((action) => (
-                    <button
-                      key={action}
-                      onClick={() => handleActionClick(action)}
-                      className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition"
-                    >
-                      {action.charAt(0).toUpperCase() + action.slice(1)}
-                    </button>
-                  ))}
+                  {['confirmed', 'packed', 'shipped', 'delivered'].map((action) => {
+                    const isDisabled = isStatusDisabled(action);
+                    const isLoading = loadingStatus === action;
+                    
+                    return (
+                      <button
+                        key={action}
+                        onClick={() => handleActionClick(action)}
+                        disabled={isDisabled || isLoading}
+                        title={isDisabled ? `Cannot transition to ${action} from current status` : ''}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
+                          isDisabled
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'
+                            : isLoading
+                            ? 'bg-indigo-600 text-white animate-pulse'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
+                      >
+                        {isLoading ? (
+                          <>
+                            <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            {action.charAt(0).toUpperCase() + action.slice(1)}
+                          </>
+                        ) : (
+                          action.charAt(0).toUpperCase() + action.slice(1)
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
