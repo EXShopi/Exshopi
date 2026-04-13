@@ -7,6 +7,10 @@ export type LiveMarketplaceProduct = ProductCardProps & {
   categoryKey: string;
 };
 
+function normalizeMarketplaceValue(value: any) {
+  return String(value || '').trim().toLowerCase();
+}
+
 export function isLiveMarketplaceProduct(product: any) {
   if (!product) return false;
 
@@ -15,22 +19,15 @@ export function isLiveMarketplaceProduct(product: any) {
     return false;
   }
 
-  const status = String(
-    product.status || product.productStatus || product.product_status || ''
-  ).toLowerCase();
-  const approval = String(
-    product.approval_status || product.approvalStatus || ''
-  ).toLowerCase();
-  const visibility = String(
-    product.visibility_status || product.visibilityStatus || ''
-  ).toLowerCase();
+  const status = normalizeMarketplaceValue(product.status || product.productStatus || product.product_status);
+  const approval = normalizeMarketplaceValue(product.approval_status || product.approvalStatus);
+  const visibility = normalizeMarketplaceValue(product.visibility_status || product.visibilityStatus);
 
   if (['draft', 'pending', 'pending_approval', 'rejected', 'archived'].includes(status)) return false;
   if (approval === 'rejected' || visibility === 'archived') return false;
+  if (visibility && !['live', 'public', 'visible'].includes(visibility)) return false;
 
-  if (status === 'live') return true;
-  if (approval === 'approved' && (!visibility || visibility === 'live' || status === 'approved')) return true;
-  return false;
+  return status === 'live' || approval === 'approved';
 }
 
 export function mapLiveMarketplaceProduct(product: any): LiveMarketplaceProduct {

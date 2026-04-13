@@ -1,4 +1,4 @@
-export type { OrderDetailsModalProps } from './OrderDetailsModal';
-export { OrderDetailsModal, OrderDetailsData } from './OrderDetailsModal';
+export type { OrderDetailsModalProps, OrderDetailsData } from './OrderDetailsModal';
+export { OrderDetailsModal } from './OrderDetailsModal';
 export { OrderStatusTimeline, type OrderStatusTimelineProps } from './OrderStatusTimeline';
 export { OrderDetailsShippingLabel } from './OrderDetailsShippingLabel';

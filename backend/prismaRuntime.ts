@@ -1027,7 +1027,7 @@ export const prismaRuntime = {
 
   const imageList = [input.image, ...(input.images || [])].filter(Boolean);
     const categoryExtras: any = {};
-    const baseSpecs = withDeletionMeta(input.specs || {}, {
+    const baseSpecs: any = withDeletionMeta(input.specs || {}, {
       isDeleted: Boolean(input.isDeleted),
       deletedAt: input.deletedAt || '',
     });
@@ -1216,7 +1216,7 @@ export const prismaRuntime = {
       await prisma.productImage.deleteMany({ where: { productId: id } });
     }
     const updateExtras: any = {};
-    const nextSpecs = withDeletionMeta(
+    const nextSpecs: any = withDeletionMeta(
       {
         ...(((current.specsJson as Record<string, any>) || {})),
         ...(updates.specs || {}),

@@ -24,6 +24,7 @@ import {
   RotateCcw,
   ShieldCheck,
 } from 'lucide-react';
+import AuthService from '../lib/authService';
 import { useAuthStore } from '../store/auth';
 import { useSettingsStore } from '../store/settings';
 import { getAdminRoleLabel, hasAdminPermission } from '../lib/adminPermissions';
@@ -37,7 +38,7 @@ export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { user, role } = useAuthStore();
+  const { user, role, isLoading, resetAuth } = useAuthStore();
 
   const runtimeRole = String(role || '').toLowerCase();
 
@@ -48,6 +49,8 @@ export function AdminLayout() {
   // Auth has already been bootstrapped at App level
   // Just check if user has admin access
   useEffect(() => {
+    if (isLoading) return;
+
     const persistedAdminId =
       typeof window !== 'undefined' ? localStorage.getItem('adminId') || '' : '';
     const persistedAdminEmail =
@@ -64,7 +67,7 @@ export function AdminLayout() {
     if (!canAccessAdmin) {
       navigate('/admin/login', { replace: true });
     }
-  }, [runtimeRole, user?.email, navigate]);
+  }, [runtimeRole, user?.email, isLoading, navigate]);
 
   const effectiveRole = (
     ADMIN_ROLES.includes(runtimeRole) ? runtimeRole : 'admin'

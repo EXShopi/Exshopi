@@ -74,14 +74,22 @@ function isDeletedMarketplaceProduct(product: any) {
   return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt);
 }
 
+function normalizeMarketplaceValue(value: any) {
+  return String(value || '').trim().toLowerCase();
+}
+
 function isPubliclyVisibleMarketplaceProduct(product: any) {
   if (!product || isDeletedMarketplaceProduct(product)) return false;
 
-  const status = String(product.status || product.productStatus || '').toLowerCase();
-  const approval = String(product.approval_status || product.approvalStatus || '').toLowerCase();
-  const visibility = String(product.visibility_status || product.visibilityStatus || '').toLowerCase();
+  const status = normalizeMarketplaceValue(product.status || product.productStatus || product.product_status);
+  const approval = normalizeMarketplaceValue(product.approval_status || product.approvalStatus);
+  const visibility = normalizeMarketplaceValue(product.visibility_status || product.visibilityStatus);
 
-  return status === 'live' && approval === 'approved' && visibility === 'live';
+  if (['draft', 'pending', 'pending_approval', 'rejected', 'archived'].includes(status)) return false;
+  if (approval === 'rejected' || visibility === 'archived') return false;
+  if (visibility && !['live', 'public', 'visible'].includes(visibility)) return false;
+
+  return status === 'live' || approval === 'approved';
 }
 
 if (typeof window !== 'undefined') {
@@ -780,18 +788,8 @@ export const productAPI = {
 
         if (error) throw error;
 
-        if (data) {
-          const status = data.status || data.productStatus || data.status;
-          const approval = data.approval_status || data.approvalStatus || data.approvalStatus;
-          const visibility = data.visibility_status || data.visibilityStatus || data.visibilityStatus;
-
-          if (!isDeletedMarketplaceProduct(data) &&
-            String(status) === 'live' &&
-            String(approval) === 'approved' &&
-            String(visibility) === 'live'
-          ) {
-            return data;
-          }
+        if (data && isPubliclyVisibleMarketplaceProduct(data)) {
+          return data;
         }
 
         const { data: bySlug, error: slugError } = await supabase
@@ -802,18 +800,8 @@ export const productAPI = {
 
         if (slugError) throw slugError;
 
-        if (bySlug) {
-          const status = bySlug.status || bySlug.productStatus || bySlug.status;
-          const approval = bySlug.approval_status || bySlug.approvalStatus || bySlug.approvalStatus;
-          const visibility = bySlug.visibility_status || bySlug.visibilityStatus || bySlug.visibilityStatus;
-
-          if (!isDeletedMarketplaceProduct(bySlug) &&
-            String(status) === 'live' &&
-            String(approval) === 'approved' &&
-            String(visibility) === 'live'
-          ) {
-            return bySlug;
-          }
+        if (bySlug && isPubliclyVisibleMarketplaceProduct(bySlug)) {
+          return bySlug;
         }
       } catch (e) {
         console.warn('Supabase product fetch failed:', e);
@@ -843,37 +831,20 @@ export const productAPI = {
 
     if (useSupabase) {
       try {
-        try {
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .eq('status', 'live')
-            .eq('approval_status', 'approved')
-            .eq('visibility_status', 'live')
-            .order('created_at', { ascending: false });
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-          if (error) throw error;
-          const safeData = data || [];
-          const explicitApi = Boolean(API_BASE);
-          if (safeData.length === 0 && explicitApi) {
-            const res = await safeFetchApi('/products', { signal: options?.signal });
-            return parseApiResponse(res);
-          }
-          return safeData.filter((product: any) => !isDeletedMarketplaceProduct(product));
-        } catch (err) {
-          console.warn('Filtered supabase query failed, falling back to client-side filter:', err);
+        if (error) throw error;
 
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (error) throw error;
-
-          const filtered = (data || []).filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
-
-          return filtered;
+        const filtered = (data || []).filter((product: any) => isPubliclyVisibleMarketplaceProduct(product));
+        const explicitApi = Boolean(API_BASE);
+        if (filtered.length === 0 && explicitApi) {
+          const res = await safeFetchApi('/products', { signal: options?.signal });
+          return parseApiResponse(res);
         }
+        return filtered;
       } catch (e) {
         console.warn('Supabase products fetch failed:', e);
         const explicitApi = Boolean(API_BASE);
@@ -902,36 +873,18 @@ export const productAPI = {
 
     if (useSupabase) {
       try {
-        try {
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .eq('status', 'live')
-            .eq('approval_status', 'approved')
-            .eq('visibility_status', 'live')
-            .order('created_at', { ascending: false });
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-          if (error) throw error;
+        if (error) throw error;
 
-          return (data || []).filter(
+        return (data || [])
+          .filter(
             (p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId
-          );
-        } catch (err) {
-          console.warn('Filtered supabase category query failed, falling back to client-side filter:', err);
-
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (error) throw error;
-
-          return (data || [])
-            .filter(
-              (p: any) => String(p.categoryId || p.specs?.backendCategoryId || '') === categoryId
-            )
-            .filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
-        }
+          )
+          .filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
       } catch (e) {
         console.warn('Supabase category fetch failed:', e);
         const explicitApi = Boolean(API_BASE);
@@ -965,19 +918,16 @@ export const productAPI = {
 
     if (useSupabase) {
       try {
-        try {
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .eq('status', 'live')
-            .eq('approval_status', 'approved')
-            .eq('visibility_status', 'live')
-            .order('created_at', { ascending: false });
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-          if (error) throw error;
+        if (error) throw error;
 
-          const all = data || [];
-          return all.filter((product: any) => {
+        const all = data || [];
+        return all
+          .filter((product: any) => {
             const specs = product.specs || {};
             if (subcategorySlug) {
               return (
@@ -990,34 +940,8 @@ export const productAPI = {
               specs.categorySlug === categorySlug ||
               specs.subcategorySlug === categorySlug
             );
-          });
-        } catch (err) {
-          console.warn('Filtered supabase slug query failed, falling back to client-side filter:', err);
-
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (error) throw error;
-
-          return (data || [])
-            .filter((product: any) => {
-              const specs = product.specs || {};
-              if (subcategorySlug) {
-                return (
-                  specs.categorySlug === categorySlug &&
-                  specs.subcategorySlug === subcategorySlug
-                );
-              }
-              return (
-                specs.parentCategorySlug === categorySlug ||
-                specs.categorySlug === categorySlug ||
-                specs.subcategorySlug === categorySlug
-              );
-            })
-            .filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
-        }
+          })
+          .filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
       } catch (e) {
         console.warn('Supabase slug fetch failed:', e);
         const explicitApi = Boolean(API_BASE);

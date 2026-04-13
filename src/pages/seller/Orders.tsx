@@ -41,6 +41,7 @@ interface OrderItem {
   customerName?: string;
   customerEmail?: string;
   shippingAddress?: any;
+  image?: string;
 }
 
 export function SellerOrders() {

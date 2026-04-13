@@ -9,7 +9,7 @@ import { SellerLayout } from "./layouts/SellerLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import ProductDetail from "./pages/ProductDetail";
 import GoogleServices from "./components/seo/GoogleServices";
-import { useSimpleAuthBootstrap } from "./hooks";
+import { useAuthBootstrap } from "./hooks";
 
 const Home = lazy(() => import("./pages/Home"));
 const ProductListing = lazy(() => import("./pages/ProductListing"));
@@ -172,8 +172,8 @@ function NotFound() {
 }
 
 function AppContent() {
-  // Silent session bootstrap - no loading states
-  useSimpleAuthBootstrap();
+  // App-level auth bootstrap: restore session before route guards evaluate
+  useAuthBootstrap();
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {

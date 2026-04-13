@@ -9,7 +9,7 @@ interface TrackingEvent {
   location?: string;
 }
 
-interface OrderStatusTimelineProps {
+export interface OrderStatusTimelineProps {
   events: TrackingEvent[];
   currentStatus: string;
   orderId: string;

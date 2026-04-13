@@ -867,7 +867,7 @@ const AdminOrderMonitoring = () => {
               salePrice: product.price,
               sku: product.sku,
             })) || [],
-            shippingAddress: selectedOrder.shippingAddress,
+            shippingAddress: selectedOrder.shippingAddress as any,
             shippingAddressJson: selectedOrder.shippingAddressJson,
             trackingCode: selectedOrder.trackingCode,
             dispatchSlotDate: selectedOrder.dispatchSlotDate,
