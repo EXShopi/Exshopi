@@ -183,8 +183,8 @@ export default function Navbar() {
                 </Link>
               </div>
 
-              <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-3 xl:hidden">
-                <NavbarWishlistIcon />
+<div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-3 xl:hidden relative z-[600] overflow-visible">     
+             <NavbarWishlistIcon />
                 <PremiumAccountButton
                   isLoggedIn={Boolean(authUser?.id || authUser?.uid)}
                   userName={
@@ -198,8 +198,8 @@ export default function Navbar() {
                 <CartIcon onClick={() => setCartDrawerOpen(true)} />
               </div>
 
-              <div className="hidden flex-wrap items-center gap-3 xl:flex xl:justify-end">
-                <SupportIcon />
+<div className="hidden flex-wrap items-center gap-3 xl:flex xl:justify-end relative z-[600] overflow-visible">
+                  <SupportIcon />
                 <NavbarWishlistIcon />
                 <PremiumAccountButton
                   isLoggedIn={Boolean(authUser?.id || authUser?.uid)}

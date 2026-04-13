@@ -72,8 +72,7 @@ export default function AccountDropdown({
     return (
       <div
         ref={dropdownRef}
-        className="absolute top-full right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50"
-      >
+className="absolute top-full right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-2 z-[9999]"      >
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-5 text-white">
           <p className="text-sm opacity-90">Welcome back</p>

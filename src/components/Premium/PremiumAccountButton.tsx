@@ -27,8 +27,7 @@ export default function PremiumAccountButton({
 
   return (
     <>
-      <div className="relative">
-        {/* Account Button */}
+<div className="relative z-[300] overflow-visible">        {/* Account Button */}
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
           className="group flex items-center gap-1.5 rounded-[18px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,255,0.95))] px-2 py-2 shadow-[0_10px_22px_rgba(15,23,42,0.06)] transition-all duration-300 hover:border-blue-200 hover:shadow-[0_16px_32px_rgba(15,23,42,0.10)] sm:gap-3 sm:rounded-[24px] sm:px-3 sm:py-2.5"
