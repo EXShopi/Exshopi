@@ -919,6 +919,7 @@ const createOrderSchema = z.object({
   verificationToken: z.string().min(8),
   paymentMethod: z.enum(['cod']).default('cod'),
   deliveryCountry: z.string().min(2).max(10).default('AE'),
+  deliveryType: z.string().optional().default('Standard UAE Delivery'),
 });
 
 const codOtpSendSchema = z.object({

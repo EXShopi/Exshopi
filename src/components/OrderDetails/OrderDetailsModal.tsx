@@ -125,9 +125,9 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-[1.5rem] max-w-4xl w-full shadow-2xl my-8">
+      <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl my-8">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-t-[1.5rem] p-6 flex items-center justify-between border-b border-slate-700">
+        <div className="sticky top-0 bg-linear-to-r from-slate-900 to-slate-800 text-white rounded-t-3xl p-6 flex items-center justify-between border-b border-slate-700">
           <div>
             <h2 className="text-2xl font-bold">Order Details</h2>
             <p className="text-sm text-slate-300 mt-1">Order #{order.orderNumber || order.id}</p>
@@ -398,7 +398,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-slate-200 p-6 bg-slate-50 rounded-b-[1.5rem] flex gap-3">
+        <div className="border-t border-slate-200 p-6 bg-slate-50 rounded-b-3xl flex gap-3">
           <button
             onClick={onClose}
             className="flex-1 px-4 py-2 rounded-lg bg-slate-300 text-slate-900 font-medium hover:bg-slate-400 transition"

@@ -103,7 +103,7 @@ export const OrderStatusTimeline: React.FC<OrderStatusTimelineProps> = ({
               return (
                 <div key={event.id || idx} className={`rounded-lg p-4 ${getEventColor(event.status)}`}>
                   <div className="flex items-start gap-3">
-                    <Icon size={20} className="mt-1 flex-shrink-0" />
+                    <Icon size={20} className="mt-1 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold capitalize text-sm">
                         {String(event.status).replace(/_/g, ' ')}

@@ -69,7 +69,7 @@ export default function TrackOrder() {
   };
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-10 md:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
       <div className="mb-8 text-sm text-slate-500">
         <Link to="/" className="hover:text-slate-900">
           Home
@@ -78,7 +78,7 @@ export default function TrackOrder() {
         <span className="font-bold text-slate-900">Track Order</span>
       </div>
 
-      <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm md:p-10">
+      <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm md:p-10">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.25em] text-slate-400">
@@ -93,13 +93,13 @@ export default function TrackOrder() {
             </p>
           </div>
 
-          <div className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-slate-950 text-white shadow-lg">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-950 text-white shadow-lg">
             <PackageCheck size={32} />
           </div>
         </div>
       </div>
 
-      <div className="mt-10 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm md:p-10">
+      <div className="mt-10 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm md:p-10">
         <h2 className="text-2xl font-black text-slate-900">
           Order Tracking
         </h2>
@@ -144,7 +144,7 @@ export default function TrackOrder() {
         {/* Error Message */}
         {errorMessage && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
-            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-red-900">{errorMessage}</p>
               <p className="text-sm text-red-800 mt-1">
@@ -156,7 +156,7 @@ export default function TrackOrder() {
 
         {/* Information Cards */}
         <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
             <Clock3 className="h-6 w-6 text-slate-900" />
             <h3 className="mt-4 text-xl font-black text-slate-900">
               Order Received
@@ -166,7 +166,7 @@ export default function TrackOrder() {
             </p>
           </div>
 
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
             <Truck className="h-6 w-6 text-slate-900" />
             <h3 className="mt-4 text-xl font-black text-slate-900">
               Out for Delivery
@@ -176,7 +176,7 @@ export default function TrackOrder() {
             </p>
           </div>
 
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
             <MapPin className="h-6 w-6 text-slate-900" />
             <h3 className="mt-4 text-xl font-black text-slate-900">
               Delivered
@@ -191,16 +191,11 @@ export default function TrackOrder() {
           <p>✓ Keep your order number or tracking code ready for faster tracking.</p>
           <p>✓ You can search using your phone number or email address associated with the order.</p>
           <p>✓ Tracking updates may take some time after shipment confirmation.</p>
-          <p>✓ For delivery issues or support, contact us
-          </div>
-
-          <div className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-slate-950 text-white shadow-lg">
-            <PackageCheck size={32} />
-          </div>
+          <p>✓ For delivery issues or support, contact us with your order details.</p>
         </div>
       </div>
 
-      <div className="mt-10 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm md:p-10">
+      <div className="mt-10 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm md:p-10">
         <h2 className="text-2xl font-black text-slate-900">
           Order Tracking
         </h2>
@@ -245,7 +240,7 @@ export default function TrackOrder() {
         {/* Error Message */}
         {errorMessage && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
-            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-red-900">{errorMessage}</p>
               <p className="text-sm text-red-800 mt-1">
@@ -257,7 +252,7 @@ export default function TrackOrder() {
 
         {/* Information Cards */}
         <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
             <Clock3 className="h-6 w-6 text-slate-900" />
             <h3 className="mt-4 text-xl font-black text-slate-900">
               Order Received
@@ -267,7 +262,7 @@ export default function TrackOrder() {
             </p>
           </div>
 
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
             <Truck className="h-6 w-6 text-slate-900" />
             <h3 className="mt-4 text-xl font-black text-slate-900">
               Out for Delivery
@@ -277,7 +272,7 @@ export default function TrackOrder() {
             </p>
           </div>
 
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
             <MapPin className="h-6 w-6 text-slate-900" />
             <h3 className="mt-4 text-xl font-black text-slate-900">
               Delivered
