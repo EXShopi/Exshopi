@@ -29,14 +29,12 @@ interface AuthState {
   refreshToken: string | null;
   sellerApplication: SellerApplication | null;
   isLoading: boolean;
-  authInitializing: boolean;
   setUser: (user: User | null) => void;
   setRole: (role: 'customer' | 'seller' | 'admin' | 'super_admin' | 'finance_manager' | 'support_agent' | null) => void;
   setAccessToken: (accessToken: string | null) => void;
   setRefreshToken: (refreshToken: string | null) => void;
   setSellerApplication: (sellerApplication: SellerApplication | null) => void;
   setLoading: (isLoading: boolean) => void;
-  setAuthInitializing: (initializing: boolean) => void;
   resetAuth: () => void;
 }
 
@@ -67,7 +65,6 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       sellerApplication: null,
       isLoading: false,
-      authInitializing: true,
       setUser: (user) => set({ user }),
       setRole: (role) => set({ role }),
       setAccessToken: (accessToken) => {
@@ -80,7 +77,6 @@ export const useAuthStore = create<AuthState>()(
       },
       setSellerApplication: (sellerApplication) => set({ sellerApplication }),
       setLoading: (isLoading) => set({ isLoading }),
-      setAuthInitializing: (authInitializing) => set({ authInitializing }),
       resetAuth: () => {
         syncLegacyAccessToken(null);
         syncLegacyRefreshToken(null);
@@ -91,7 +87,6 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           sellerApplication: null,
           isLoading: false,
-          authInitializing: false,
         });
       },
     }),
@@ -105,7 +100,6 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: null,
         sellerApplication: state.sellerApplication,
         isLoading: state.isLoading,
-        authInitializing: false,
       }),
       onRehydrateStorage: () => () => {
         syncLegacyRefreshToken(null);

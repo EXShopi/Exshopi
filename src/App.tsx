@@ -9,8 +9,6 @@ import { SellerLayout } from "./layouts/SellerLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import ProductDetail from "./pages/ProductDetail";
 import GoogleServices from "./components/seo/GoogleServices";
-import { useAuthBootstrap, useProactiveTokenRefresh } from "./hooks";
-import { useAuthStore } from "./store/auth";
 
 const Home = lazy(() => import("./pages/Home"));
 const ProductListing = lazy(() => import("./pages/ProductListing"));
@@ -173,14 +171,6 @@ function NotFound() {
 }
 
 function AppContent() {
-  // App-level auth bootstrap (runs once)
-  useAuthBootstrap();
-  
-  // Proactive token refresh (prevents surprise logouts)
-  useProactiveTokenRefresh();
-
-  const { authInitializing } = useAuthStore();
-
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
@@ -198,18 +188,6 @@ function AppContent() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
-
-  // Show loader while auth is being verified
-  if (authInitializing) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-4">
-          <OrbitLoader label="Loading..." size={32} />
-          <p className="text-sm text-slate-500">Checking your session...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>

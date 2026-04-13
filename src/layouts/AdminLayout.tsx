@@ -37,7 +37,7 @@ export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { user, role, authInitializing } = useAuthStore();
+  const { user, role } = useAuthStore();
 
   const runtimeRole = String(role || '').toLowerCase();
 
@@ -48,11 +48,6 @@ export function AdminLayout() {
   // Auth has already been bootstrapped at App level
   // Just check if user has admin access
   useEffect(() => {
-    // If still initializing auth, wait
-    if (authInitializing) {
-      return;
-    }
-    
     const persistedAdminId =
       typeof window !== 'undefined' ? localStorage.getItem('adminId') || '' : '';
     const persistedAdminEmail =
@@ -69,7 +64,7 @@ export function AdminLayout() {
     if (!canAccessAdmin) {
       navigate('/admin/login', { replace: true });
     }
-  }, [authInitializing, runtimeRole, user?.email, navigate]);
+  }, [runtimeRole, user?.email, navigate]);
 
   const effectiveRole = (
     ADMIN_ROLES.includes(runtimeRole) ? runtimeRole : 'admin'
@@ -182,19 +177,6 @@ export function AdminLayout() {
 
   const siteName = settings?.branding?.siteName || 'ExShopi';
   const logoUrl = settings?.branding?.logoUrl || '';
-
-  if (authInitializing) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(168,85,247,0.12),_transparent_24%),linear-gradient(180deg,#f7faff_0%,#f8fafc_48%,#eef2ff_100%)]">
-        <div className="rounded-3xl border border-slate-200 bg-white px-8 py-6 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-violet-600" />
-            <p className="text-sm font-bold text-slate-700">Loading admin workspace...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(168,85,247,0.12),_transparent_24%),linear-gradient(180deg,#f7faff_0%,#f8fafc_48%,#eef2ff_100%)] text-slate-900">
