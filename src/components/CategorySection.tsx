@@ -60,6 +60,7 @@ export default function CategorySection() {
                 loading="lazy"
                 className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
                 onError={(e) => {
+                  console.error("Category image failed:", category.image);
                   e.currentTarget.style.display = "none";
                 }}
               />
