@@ -46,7 +46,23 @@ function getImageSources(
   
   // If caller already provided an extension (e.g. '/hero/hero-1.png'),
   // strip it so we don't end up with duplicate extensions like '.png.png'.
-  const base = path.replace(/\.(png|webp|jpg|jpeg|gif)$/i, '');
+  let base = path.replace(/\.(png|webp|jpg|jpeg|gif)$/i, '');
+
+  // Normalize legacy Category Card paths and unsafe characters so images
+  // placed under /public/categories/ are resolved consistently.
+  try {
+    // Replace percent-encoded spaces and canonicalize folder names
+    base = base.replace(/Category%20Card|Category Card/gi, '/categories');
+    // Replace spaces, ampersands and underscores with hyphens and collapse multiple hyphens
+    base = base.replace(/[\s_&]+/g, '-');
+    // Replace accidental multiple slashes
+    base = base.replace(/\/+/g, '/');
+    // Make lowercase to match normalized public filenames
+    const parts = base.split('/').filter(Boolean);
+    base = '/' + parts.map((p) => p.toLowerCase()).join('/');
+  } catch (e) {
+    // If normalization fails, fall back to original base
+  }
 
   return {
     webp: `${base}.webp`,

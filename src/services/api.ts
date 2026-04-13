@@ -299,6 +299,17 @@ export async function authFetch(path: string, options: RequestInit = {}) {
   let response = await makeRequest(token || undefined);
 
   if (response.status === 401) {
+    // Only attempt a token refresh if we have an explicit refresh token stored
+    // (legacy support). In many deployments refresh is done via HttpOnly cookies
+    // — but calling the refresh endpoint blindly when the client has no token
+    // can cause repeated 401s. Protect against that by checking local state.
+    const storedRefresh = useAuthStore.getState().refreshToken || (typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null);
+    if (!storedRefresh) {
+      // No client-side refresh token known — abort and force sign-in
+      clearPersistedAuthState();
+      throw new Error('Session expired. Please sign in again.');
+    }
+
     const refreshUrl = buildApiUrl('/auth/refresh');
     if (!refreshUrl) {
       clearPersistedAuthState();
@@ -309,11 +320,11 @@ export async function authFetch(path: string, options: RequestInit = {}) {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: storedRefresh }),
     });
 
     const refreshData = await parseJsonSafe(refreshRes);
-    const newToken =
-      typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : '';
+    const newToken = typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : '';
 
     if (!refreshRes.ok || !newToken) {
       clearPersistedAuthState();

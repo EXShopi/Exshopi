@@ -4,42 +4,42 @@ import OptimizedImage from "./OptimizedImage";
 const categories = [
   {
     name: "Computers",
-    image: "/categories/Computer",
+    image: "/categories/computer",
     link: "/products?category=computers",
   },
   {
     name: "Cell Phones",
-    image: "/categories/Cellphone",
+    image: "/categories/cellphone",
     link: "/products?category=mobiles",
   },
   {
     name: "TVs / Video",
-    image: "/categories/Tv",
+    image: "/categories/tv",
     link: "/products?category=tv",
   },
   {
     name: "Video Games",
-    image: "/categories/Gaming",
+    image: "/categories/gaming",
     link: "/products?category=gaming",
   },
   {
     name: "Tshirts & Clothing",
-    image: "/categories/Clothing",
+    image: "/categories/clothing",
     link: "/products?category=clothing",
   },
   {
     name: "Cameras & Photo",
-    image: "/categories/Camera",
+    image: "/categories/camera",
     link: "/products?category=camera",
   },
   {
     name: "Kitchen Appliances",
-    image: "/categories/Kitchen_Appliances",
+    image: "/categories/kitchen-appliances",
     link: "/products?category=kitchen",
   },
   {
     name: "Projectors",
-    image: "/categories/Projector",
+    image: "/categories/projector",
     link: "/products?category=projector",
   },
 ];

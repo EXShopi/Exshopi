@@ -159,7 +159,8 @@ export const defaultSettings: SiteSettings = {
       subtitle: 'Shop top electronics, gadgets, and more.',
       primaryCtaText: 'Shop Now',
       primaryCtaLink: '/products',
-      productImageUrl: '/hero/hero-1.png',
+      // Use WebP for better performance and to match public/hero/*.webp
+      productImageUrl: '/hero/hero-1.webp',
     },
     featuredSection: {
       bestsellersProductIds: [],

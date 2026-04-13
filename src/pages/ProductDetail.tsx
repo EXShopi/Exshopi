@@ -83,7 +83,7 @@ function getProductImages(image?: string, gallery?: unknown) {
     : [];
 
   const images = [String(image || "").trim(), ...galleryImages].filter(Boolean);
-  return images.length > 0 ? images : ["/hero/hero-1.png"];
+  return images.length > 0 ? images : ["/hero/hero-1.webp"];
 }
 
 function mapToCardProduct(item: any) {
