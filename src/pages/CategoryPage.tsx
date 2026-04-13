@@ -9,7 +9,7 @@ import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCa
 import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { categoryAPI, productAPI } from "../services/api";
 import SEOHead from "../components/seo/SEOHead";
-import { buildCategorySeoDescription, generateCategorySeo, getCategoryPath } from "../lib/seo";
+import { buildCategorySeoDescription, generateCategorySeo, getCategoryPath, buildAbsoluteUrl } from "../lib/seo";
 
 type CatalogProduct = {
   id: string;
@@ -187,6 +187,7 @@ export default function CategoryPage() {
         keywords={seo.metaKeywords}
         pathname={getCategoryPath(effectiveCategoryKey, effectiveSubcategoryKey || undefined)}
         type="website"
+        canonicalUrl={buildAbsoluteUrl(getCategoryPath(effectiveCategoryKey, effectiveSubcategoryKey || undefined))}
       />
       <section className="border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_32%),linear-gradient(135deg,#ffffff,#eef4ff)]">
         <div className="mx-auto max-w-7xl px-4 py-10 md:px-6 lg:py-14">

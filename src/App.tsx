@@ -240,6 +240,15 @@ export default function App() {
             <Route path="/vendors" element={<VendorStorefront />} />
             <Route path="/deals" element={<CategoryPage />} />
             <Route path="/categories" element={<CategoryPage />} />
+            
+            {/* SEO Redirects: Old category paths to new canonical paths */}
+            <Route path="/mobiles" element={<Navigate to="/category/mobiles" replace />} />
+            <Route path="/laptops" element={<Navigate to="/category/laptops" replace />} />
+            <Route path="/electronics" element={<Navigate to="/category/electronics" replace />} />
+            <Route path="/tablets" element={<Navigate to="/category/tablets" replace />} />
+            <Route path="/accessories" element={<Navigate to="/category/accessories" replace />} />
+            <Route path="/gaming" element={<Navigate to="/category/gaming" replace />} />
+            <Route path="/games" element={<Navigate to="/category/gaming" replace />} />
           </Route>
 
           <Route path="/seller/login" element={<SellerLogin />} />
