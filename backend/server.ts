@@ -813,6 +813,12 @@ app.use(express.json({ limit: '80mb' }));
 app.use(express.urlencoded({ extended: true, limit: '80mb' }));
 void ensureUploadDir();
 app.use('/uploads', express.static(path.join(process.cwd(), 'backend', 'uploads')));
+// Serve public static assets (images, favicons, site.webmanifest, etc.)
+// Must be before any SPA/catch-all handlers so assets are served correctly
+app.use(express.static(path.join(process.cwd(), 'public'), {
+  maxAge: IS_PRODUCTION ? '30d' : 0,
+  index: false,
+}));
 
 // Simple SSE hub for broadcasting lightweight marketplace events (product updates/deletes)
 const sseClients = new Set<Response>();
@@ -871,8 +877,9 @@ const refreshCookieOptions: {
   path: string;
 } = {
   httpOnly: true,
-  secure: true,
-  sameSite: 'none',
+  // Only require secure cookies in production (HTTPS).
+  secure: IS_PRODUCTION,
+  sameSite: IS_PRODUCTION ? 'none' : 'lax',
   path: '/',
 };
 
