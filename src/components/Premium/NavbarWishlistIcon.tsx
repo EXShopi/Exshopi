@@ -10,6 +10,7 @@ export default function NavbarWishlistIcon() {
   return (
     <Link
       to="/wishlist"
+      aria-label="Open wishlist"
       className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all duration-300 hover:border-red-300 hover:shadow-md hover:bg-red-50 hover:-translate-y-0.5"
     >
       <Heart className="h-5 w-5 text-current" />

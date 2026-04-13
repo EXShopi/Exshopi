@@ -159,7 +159,7 @@ export default function HeroSection() {
       />
 
       <div className="relative z-10 overflow-hidden rounded-[20px] border border-slate-200 shadow-lg md:rounded-[34px]">
-        <div className="relative h-[224px] w-full sm:h-[300px] md:aspect-[2048/890] md:max-h-[700px] md:min-h-[380px]">
+        <div className="relative aspect-video min-h-[224px] w-full sm:min-h-[300px] md:aspect-[2048/890]" style={{aspectRatio: '2048 / 890'}}>
           <div
             className="flex h-full transition-transform duration-700 ease-in-out"
             style={{ transform: `translateX(-${current * 100}%)` }}

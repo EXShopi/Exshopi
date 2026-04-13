@@ -137,7 +137,10 @@ export default function SupportIcon() {
   return (
     <>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={isOpen ? 'Close support panel' : 'Open support panel'}
+        aria-expanded={isOpen}
         className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all duration-300 hover:border-green-300 hover:shadow-md hover:bg-green-50 hover:-translate-y-0.5"
       >
         <Headphones className="h-5 w-5" />

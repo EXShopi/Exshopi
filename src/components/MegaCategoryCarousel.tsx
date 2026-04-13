@@ -353,20 +353,22 @@ export default function MegaCategoryCarousel() {
                 href={item.link}
                 className="group min-w-[132px] max-w-[132px] snap-start text-center sm:min-w-[144px] sm:max-w-[144px] md:min-w-[156px] md:max-w-[156px]"
               >
-                <div className="relative overflow-hidden rounded-[26px] border border-[#efc7b7] bg-[linear-gradient(180deg,#f7cbbd_0%,#f8d4c8_58%,#ffffff_100%)] shadow-[0_6px_18px_rgba(15,23,42,0.10)] transition-shadow duration-300 hover:shadow-[0_14px_28px_rgba(15,23,42,0.14)]">
+                <div className="relative overflow-hidden rounded-[26px] border border-[#efc7b7] bg-[linear-gradient(180deg,#f7cbbd_0%,#f8d4c8_58%,#ffffff_100%)] shadow-[0_6px_18px_rgba(15,23,42,0.10)] transition-shadow duration-300 hover:shadow-[0_14px_28px_rgba(15,23,42,0.14)]" style={{aspectRatio: '1 / 1.2'}}>
                   {item.badge ? (
                     <div className="absolute left-3 top-3 z-10 rounded-full bg-[#ff4d4f] px-3 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-white shadow-sm">
                       {item.badge}
                     </div>
                   ) : null}
 
-                  <div className="relative flex h-[150px] items-center justify-center overflow-visible px-3 sm:h-[162px] sm:px-4 md:h-[172px]">
+                  <div className="relative flex items-center justify-center overflow-visible px-3 sm:px-4" style={{aspectRatio: '1 / 1.2'}}>
                     <OptimizedImage
                       src={item.image}
                       alt={item.title}
                       lazy={true}
                       useWebP={true}
-                      className="relative h-[102px] w-auto object-contain transition-transform duration-300 group-hover:scale-105 sm:h-[112px] md:h-[120px]"
+                      width={120}
+                      height={120}
+                      className="relative h-auto w-auto max-h-[120px] max-w-[90%] object-contain transition-transform duration-300 group-hover:scale-105"
                     />
                   </div>
                 </div>

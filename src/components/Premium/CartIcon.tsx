@@ -8,7 +8,9 @@ export default function CartIcon(props?: { onClick?: () => void }) {
 
   return (
     <button
+      type="button"
       onClick={props?.onClick}
+      aria-label="Open cart drawer"
       className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all duration-300 hover:border-blue-300 hover:shadow-md hover:bg-blue-50 hover:-translate-y-0.5"
     >
       <ShoppingCart className="h-5 w-5" />

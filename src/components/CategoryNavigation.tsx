@@ -30,6 +30,9 @@ export default function CategoryNavigation() {
       <div className="relative">
         <button
           onClick={() => setMegaOpen((prev) => !prev)}
+          aria-label="Toggle categories menu"
+          aria-expanded={megaOpen}
+          aria-controls="category-navigation-menu"
           className="hidden h-[58px] min-w-[190px] items-center justify-between rounded-[18px] border border-slate-200 bg-slate-50 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 xl:inline-flex"
         >
           <span className="flex items-center gap-2">
@@ -47,7 +50,7 @@ export default function CategoryNavigation() {
               className="fixed inset-0 z-[90] bg-black/20"
               onClick={() => setMegaOpen(false)}
             />
-            <div className="absolute left-0 top-[calc(100%+12px)] z-[100] hidden w-[1180px] overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.16)] xl:block">
+            <div id="category-navigation-menu" className="absolute left-0 top-[calc(100%+12px)] z-[100] hidden w-[1180px] overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.16)] xl:block">
               <div className="grid grid-cols-[320px_1fr]">
                 <div className="border-r border-slate-200 bg-slate-50 p-5">
                   <div className="mb-4 text-sm font-bold text-slate-900">
@@ -72,11 +75,11 @@ export default function CategoryNavigation() {
                             <div className="text-sm font-semibold text-slate-900">
                               {category.name}
                             </div>
-                            <div className="mt-1 text-xs text-slate-500">
+                            <div className="mt-1 text-xs text-slate-600">
                               {category.description}
                             </div>
                           </div>
-                          <ChevronRight className="mt-0.5 h-4 w-4 text-slate-400" />
+                          <ChevronRight className="mt-0.5 h-4 w-4 text-slate-500" />
                         </button>
                       );
                     })}
@@ -87,7 +90,7 @@ export default function CategoryNavigation() {
                   <div className="mb-2 text-2xl font-bold text-slate-900">
                     {activeCategory.name}
                   </div>
-                  <div className="mb-8 text-sm text-slate-500">
+                  <div className="mb-8 text-sm text-slate-600">
                     {activeCategory.description}
                   </div>
 
@@ -137,7 +140,9 @@ export default function CategoryNavigation() {
               </div>
 
               <button
+                type="button"
                 onClick={() => setSidebarOpen(false)}
+                aria-label="Close categories sidebar"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-50"
               >
                 <X className="h-5 w-5" />

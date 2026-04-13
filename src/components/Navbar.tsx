@@ -160,6 +160,7 @@ export default function Navbar() {
               <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-4">
                 <button
                   onClick={() => setSidebarOpen(true)}
+                  aria-label="Open navigation menu"
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-50 md:h-12 md:w-12 md:rounded-2xl"
                   type="button"
                 >
@@ -313,6 +314,7 @@ export default function Navbar() {
 
                   <input
                     type="text"
+                    aria-label="Search products and sellers"
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     onKeyDown={(e) => {
@@ -328,6 +330,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={startVoiceSearch}
+                    aria-label="Start voice search"
                     className={`relative mr-2 hidden h-11 w-11 items-center justify-center rounded-full transition-all duration-300 md:flex md:h-12 md:w-12 ${
                       listening
                         ? "animate-pulse bg-gradient-to-br from-red-500 to-red-600 text-white shadow-[0_8px_20px_rgba(239,68,68,0.3)]"
@@ -341,6 +344,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={handleSearchSubmit}
+                    aria-label="Submit search"
                     className="h-8 shrink-0 rounded-[12px] bg-gradient-to-r from-blue-600 to-blue-700 px-3 text-[10.5px] font-bold text-white transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-lg active:scale-95 md:h-[56px] md:rounded-[22px] md:px-8 md:text-sm"
                   >
                     {storefrontT(lang, "search")}

@@ -238,12 +238,12 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
       </div>
 
       <div className="flex min-h-[170px] flex-col px-0.5 pb-0.5 pt-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{product.category}</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">{product.category}</p>
         <h3 className="mt-1.5 line-clamp-2 min-h-[40px] text-[14px] font-bold leading-[1.35] text-slate-900">
           {product.title}
         </h3>
 
-        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-600">
           <div className="flex items-center gap-0.5">
             {[...Array(5)].map((_, i) => (
               <Star
@@ -257,11 +257,11 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
 
         <div className="mt-2 flex items-end gap-2">
           <span className="text-[22px] font-black leading-none text-slate-950">{formatAEDPlain(product.price)}</span>
-          {product.oldPrice && <span className="pb-0.5 text-[11px] text-slate-400 line-through">{formatAEDPlain(product.oldPrice)}</span>}
+          {product.oldPrice && <span className="pb-0.5 text-[11px] text-slate-600 line-through">{formatAEDPlain(product.oldPrice)}</span>}
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-3">
-          <span className={`text-[11px] font-semibold ${String(product.stock).toLowerCase().includes("out") ? "text-slate-500" : "text-emerald-600"}`}>
+          <span className={`text-[11px] font-semibold ${String(product.stock).toLowerCase().includes("out") ? "text-slate-600" : "text-emerald-600"}`}>
             {product.stock}
           </span>
           <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-600">
@@ -976,7 +976,7 @@ const structuredTemplate = getSpecificationTemplate(
       ) : null}
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-[1800px] px-4 py-3 md:px-6">
-          <div className="flex items-center gap-2 overflow-x-auto text-sm text-slate-500">
+          <div className="flex items-center gap-2 overflow-x-auto text-sm text-slate-600">
             <Link to="/" className="whitespace-nowrap hover:text-blue-600">Home</Link>
             <ChevronRight className="h-4 w-4 flex-shrink-0" />
             <Link to="/category/electronics" className="whitespace-nowrap hover:text-blue-600">Electronics</Link>
@@ -1009,13 +1009,14 @@ const structuredTemplate = getSpecificationTemplate(
                     <button
                       key={idx}
                       onClick={() => setMainImage(idx)}
+                      aria-label={`View ${product.title} image ${idx + 1}`}
                       className={`h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl border-2 transition ${
                         mainImage === idx
                           ? "border-blue-600 ring-2 ring-blue-200 ring-offset-2"
                           : "border-slate-200 hover:border-slate-300"
                       }`}
                     >
-                      <img src={img} alt="" className="h-full w-full object-cover" />
+                      <img src={img} alt={`${product.title} preview ${idx + 1}`} className="h-full w-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -1028,7 +1029,7 @@ const structuredTemplate = getSpecificationTemplate(
               <div className="rounded-[30px] border border-slate-200 bg-white p-7 shadow-sm">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Sold by</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Sold by</p>
                     <Link to={`/vendor/${sellerLinkSlug}`} className="mt-2 inline-block text-sm font-bold text-blue-600 hover:underline">
                       {product.sellerName || sellerProfile.name}
                     </Link>
@@ -1044,7 +1045,7 @@ const structuredTemplate = getSpecificationTemplate(
                   </h1>
                   {selectedVariantLabel ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
                         Selected
                       </span>
                       <span className="text-sm font-medium text-slate-600">
@@ -1090,7 +1091,7 @@ const structuredTemplate = getSpecificationTemplate(
                     <span className="text-5xl font-black tracking-tight text-slate-950">{formatAEDPlain(displayPrice)}</span>
                     {displayOriginalPrice > displayPrice && (
                       <>
-                        <span className="pb-2 text-xl text-slate-400 line-through">{formatAEDPlain(displayOriginalPrice)}</span>
+                        <span className="pb-2 text-xl text-slate-600 line-through">{formatAEDPlain(displayOriginalPrice)}</span>
                         <span className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white">
                           Save {Math.max(1, Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100))}%
                         </span>
@@ -1266,9 +1267,9 @@ const structuredTemplate = getSpecificationTemplate(
               </div>
 
               <div className="mt-5 border-b border-slate-200 pb-5">
-                <p className="mb-2 text-sm text-slate-500">Price</p>
+                <p className="mb-2 text-sm text-slate-700">Price</p>
                 <div className="text-4xl font-black text-slate-950">{formatAEDPlain(displayPrice)}</div>
-                <p className="mt-1 text-xs text-slate-500">Inclusive of VAT</p>
+                <p className="mt-1 text-xs text-slate-700">Inclusive of VAT</p>
               </div>
 
               <div className="mt-5">
@@ -1377,7 +1378,7 @@ const structuredTemplate = getSpecificationTemplate(
             {activeTab === "overview" && (
               <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
                 <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fbff)] p-6">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Product Overview</p>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Product Overview</p>
                   <div className="space-y-4">
                     {overviewVisibleParagraphs.map((paragraph, index) => (
                       <p key={`${index}-${paragraph.slice(0, 12)}`} className="text-[15px] leading-8 text-slate-700">
@@ -1404,7 +1405,7 @@ const structuredTemplate = getSpecificationTemplate(
                   )}
                 </div>
                 <div className="rounded-[28px] border border-blue-100 bg-[linear-gradient(180deg,rgba(239,246,255,0.95),rgba(247,250,255,1))] p-6">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Top Highlights</p>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Top Highlights</p>
                   <div className="space-y-3">
                     {overviewBullets.map((highlight, idx) => (
                       <div key={idx} className="flex items-start gap-3">
@@ -1423,7 +1424,7 @@ const structuredTemplate = getSpecificationTemplate(
               <div className="space-y-8">
                 <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Technical Details</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Technical Details</p>
                     <h3 className="mt-2 text-2xl font-black text-slate-900">Specifications</h3>
                   </div>
                   <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 md:block">
@@ -1440,7 +1441,7 @@ const structuredTemplate = getSpecificationTemplate(
 
                 {variants.length > 0 && (
                   <div className="rounded-[28px] border border-blue-100 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-6">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Available Variants</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Available Variants</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {variants.map((variant, index) => (
                         <div key={variant.id || index} className="rounded-[22px] border border-white/70 bg-white/85 px-4 py-4 shadow-sm">
@@ -1479,7 +1480,7 @@ const structuredTemplate = getSpecificationTemplate(
                         <Star key={i} className={`h-6 w-6 ${i < Math.floor(reviewAverage || product.rating || 0) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                       ))}
                     </div>
-                    <p className="mt-3 text-sm text-slate-500">
+                    <p className="mt-3 text-sm text-slate-600">
                       Based on {(reviews.length || product.reviews || 0).toLocaleString()} verified reviews
                     </p>
                   </div>
@@ -1490,7 +1491,7 @@ const structuredTemplate = getSpecificationTemplate(
                         <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-200">
                           <div className="h-full rounded-full bg-blue-500" style={{ width: `${item.percentage}%` }} />
                         </div>
-                        <span className="w-12 text-right text-sm font-semibold text-slate-500">{item.percentage}%</span>
+                        <span className="w-12 text-right text-sm font-semibold text-slate-600">{item.percentage}%</span>
                       </div>
                     ))}
                   </div>
@@ -1503,7 +1504,7 @@ const structuredTemplate = getSpecificationTemplate(
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Write a review</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Write a review</p>
                         <h4 className="mt-2 text-2xl font-black text-slate-950">Share your purchase experience</h4>
                       </div>
                       {authRole === "customer" && authUser?.name && (
@@ -1542,7 +1543,7 @@ const structuredTemplate = getSpecificationTemplate(
                       className="mt-5 min-h-[180px] w-full rounded-[24px] border border-slate-200 bg-white px-4 py-4 text-sm leading-7 text-slate-700 outline-none transition focus:border-blue-500"
                     />
 
-                    <p className="mt-3 text-xs leading-6 text-slate-500">
+                    <p className="mt-3 text-xs leading-6 text-slate-600">
                       Reviews are only accepted for delivered purchases, so every published review shown here is tied to a real order.
                     </p>
 
@@ -1560,7 +1561,7 @@ const structuredTemplate = getSpecificationTemplate(
 
                   <div className="space-y-4">
                     {reviewsLoading ? (
-                      <div className="rounded-[28px] border border-slate-200 bg-white p-6 text-sm font-medium text-slate-500">
+                      <div className="rounded-[28px] border border-slate-200 bg-white p-6 text-sm font-medium text-slate-600">
                         Loading reviews...
                       </div>
                     ) : reviews.length === 0 ? (
@@ -1598,7 +1599,7 @@ const structuredTemplate = getSpecificationTemplate(
                                 ))}
                               </div>
                             </div>
-                            <span className="text-sm font-medium text-slate-500">
+                            <span className="text-sm font-medium text-slate-600">
                               {formatReviewDate(review.createdAt)}
                             </span>
                           </div>
@@ -1658,7 +1659,7 @@ const structuredTemplate = getSpecificationTemplate(
                           <Link to={`/vendor/${sellerProfile.slug}`} className="text-2xl font-black text-slate-950 hover:text-blue-600">
                             {sellerProfile.name}
                           </Link>
-                          <p className="mt-1 text-sm font-medium text-slate-500">{sellerProfile.verifiedLabel} • Since {sellerProfile.since}</p>
+                          <p className="mt-1 text-sm font-medium text-slate-600">{sellerProfile.verifiedLabel} • Since {sellerProfile.since}</p>
                         </div>
                       </div>
                       <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-4">
@@ -1668,7 +1669,7 @@ const structuredTemplate = getSpecificationTemplate(
                           ))}
                           <span className="font-black text-slate-900">{sellerProfile.rating}</span>
                         </div>
-                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
                           {sellerProfile.reviewCount.toLocaleString()} reviews
                         </p>
                       </div>
@@ -1678,15 +1679,15 @@ const structuredTemplate = getSpecificationTemplate(
 
                     <div className="mt-5 grid gap-4 md:grid-cols-3">
                       <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Positive Rating</p>
+                        <p className="text-xs uppercase tracking-[0.14em] text-slate-600">Positive Rating</p>
                         <p className="mt-2 text-3xl font-black text-emerald-600">{sellerProfile.positiveRate}%</p>
                       </div>
                       <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-xs uppercase tracking-[0.14em] text-slate-400">On-time Delivery</p>
+                        <p className="text-xs uppercase tracking-[0.14em] text-slate-600">On-time Delivery</p>
                         <p className="mt-2 text-3xl font-black text-emerald-600">{sellerProfile.onTimeDelivery}%</p>
                       </div>
                       <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Categories</p>
+                        <p className="text-xs uppercase tracking-[0.14em] text-slate-600">Categories</p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">{sellerProfile.categories.join(", ")}</p>
                       </div>
                     </div>
@@ -1785,7 +1786,7 @@ const structuredTemplate = getSpecificationTemplate(
                         ))}
                       </div>
                     </div>
-                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
                       {formatReviewDate(review.createdAt)}
                     </span>
                   </div>
@@ -1809,7 +1810,7 @@ const structuredTemplate = getSpecificationTemplate(
           <div className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-white/20 bg-white shadow-[0_40px_120px_rgba(15,23,42,0.35)]">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Contact Seller</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Contact Seller</p>
                 <h3 className="mt-1 text-2xl font-black text-slate-950">{sellerProfile.name}</h3>
               </div>
               <button

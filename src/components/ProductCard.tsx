@@ -82,14 +82,25 @@ const ProductCard: React.FC<ProductCardProps> = ({
     setTimeout(() => setIsAdded(false), 2000);
   };
 
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.preventDefault();
     navigate(productPath);
   };
 
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      navigate(productPath);
+    }
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      aria-label={`View ${title}`}
       className="block group cursor-pointer"
     >
       <div className="flex h-full max-w-full flex-col overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_18px_40px_rgba(15,23,42,0.10)] md:rounded-[26px]">
@@ -125,7 +136,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         {/* Content */}
         <div className="-mt-px flex flex-1 flex-col bg-[linear-gradient(180deg,rgba(243,247,255,0.96)_0%,rgba(232,240,252,0.93)_100%)] px-3.5 pb-3.5 pt-3 backdrop-blur-xl md:px-4 md:pb-4 md:pt-4">
           {/* Category */}
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{category}</p>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">{category}</p>
           
           {/* Title */}
           <h3 className="mb-2 line-clamp-2 min-h-[36px] text-[13px] font-bold leading-5 text-slate-900 transition-colors duration-300 group-hover:text-blue-600 md:min-h-[42px] md:text-[14px] md:leading-5.5">
@@ -143,7 +154,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 />
               ))}
             </div>
-            <span className="text-xs text-slate-500">({reviews})</span>
+            <span className="text-xs text-slate-600">({reviews})</span>
           </div>
 
           {/* Price */}
@@ -151,7 +162,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             <div className="flex items-baseline gap-2">
               <span className="whitespace-nowrap text-[22px] font-black leading-none text-slate-900 md:text-[28px]">{formatAEDPlain(price)}</span>
               {oldPrice && (
-                <span className="whitespace-nowrap text-sm text-slate-400 line-through">{formatAEDPlain(oldPrice)}</span>
+                <span className="whitespace-nowrap text-sm text-slate-600 line-through">{formatAEDPlain(oldPrice)}</span>
               )}
             </div>
           </div>

@@ -12,7 +12,7 @@ import { supabaseRuntime } from './supabaseRuntime';
 import { ensureUploadDir, uploadDataUrl } from './uploadStorage';
 import { createStripeCheckoutSession, verifyStripeWebhookSignature } from './stripeService';
 import { sendTransactionalEmail } from './emailService';
-import { sendNewOrderNotificationToAdmin } from './emailService.helpers';
+import { sendNewOrderNotificationToAdmin, sendSellerSignupConfirmationEmail, sendSellerApplicationNotificationToAdmin } from './emailService.helpers';
 import {
   addBlacklistEntry,
   calculateCodRisk,
@@ -711,8 +711,82 @@ const decorateCategory = (category: any) => {
   };
 };
 
-// Middleware
-app.use(helmet());
+// Middleware - Enhanced Security Headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'", // For inline scripts (Vite injects styles/scripts)
+        "'unsafe-eval'", // For dynamic code (Vite/React dev tools)
+        "https://cdn.jsdelivr.net",
+        "https://cdnjs.cloudflare.com",
+        "https://fonts.googleapis.com",
+        "https://www.googletagmanager.com",
+        "https://www.google-analytics.com",
+        "https://apis.google.com",
+        "https://www.gstatic.com",
+      ],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://fonts.googleapis.com",
+        "https://cdnjs.cloudflare.com",
+      ],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "https:",
+        "http://localhost:*",
+      ],
+      fontSrc: [
+        "'self'",
+        "data:",
+        "https://fonts.gstatic.com",
+        "https://cdnjs.cloudflare.com",
+      ],
+      connectSrc: [
+        "'self'",
+        "https://www.google-analytics.com",
+        "https://www.googletagmanager.com",
+        "https://firebaseremoteconfig.googleapis.com",
+        "https://firebaseinstallations.googleapis.com",
+        "https://www.googleapis.com",
+        "https://accounts.google.com",
+        "ws://localhost:*",
+        "http://localhost:*",
+        "https://*.supabase.co",
+        "https://*.firebaseapp.com",
+        "https://*.cloudinary.com",
+        "https://api.stripe.com",
+        "https://resend.com",
+      ],
+      frameSrc: [
+        "'self'",
+        "https://www.stripe.com",
+        "https://js.stripe.com",
+      ],
+      mediaSrc: ["'self'", "https:"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : undefined,
+    },
+    reportOnly: process.env.NODE_ENV !== "production",
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  },
+  frameguard: {
+    action: 'sameorigin',
+  },
+  referrerPolicy: {
+    policy: 'strict-origin-when-cross-origin',
+  },
+  xssFilter: true,
+  noSniff: true,
+}));
 app.use(cookieParser());
 app.use(
   rateLimit({
@@ -2320,6 +2394,32 @@ app.post('/api/seller-applications', authMiddleware, async (req: Request, res: R
       entityType: 'seller_application',
       entityId: application.id,
     });
+
+    // Send email notifications
+    await Promise.all([
+      sendSellerSignupConfirmationEmail({
+        businessName: application.businessName,
+        ownerName: application.ownerName,
+        email: application.email,
+        phone: application.phone,
+        businessType: application.businessType,
+        city: application.city,
+        applicationId: application.id,
+      }),
+      sendSellerApplicationNotificationToAdmin({
+        businessName: application.businessName,
+        ownerName: application.ownerName,
+        email: application.email,
+        phone: application.phone,
+        businessType: application.businessType,
+        city: application.city,
+        applicationId: application.id,
+        isResubmission,
+      }),
+    ]).catch((emailErr) => {
+      console.error('[EMAIL] Failed to send seller application emails:', emailErr);
+    });
+
     await sendAdminAlert(
       isResubmission ? 'Seller resubmission received' : 'New seller application received',
       isResubmission ? 'Seller resubmission ready for review' : 'New seller application ready for review',

@@ -435,7 +435,7 @@ export default function Wishlist() {
                                 {formatAED(item.price)}
                               </span>
                               {hasDiscount && (
-                                <span className="pb-1 text-sm text-slate-400 line-through">
+                                <span className="pb-1 text-sm text-slate-600 line-through">
                                   {formatAED(item.oldPrice)}
                                 </span>
                               )}

@@ -50,6 +50,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     
+    <!-- Load fonts asynchronously to prevent render blocking -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'" />
+    
     <title>ExShopi UAE | Online Shopping for Electronics, Mobiles, Laptops & More</title>
     <style>
       body {
@@ -83,13 +87,20 @@
     
     <!-- Preload critical LCP images for better performance -->
     <!-- Hero images: First hero is the main LCP -->
-    <link rel="preload" as="image" href="/hero/hero-1.webp" type="image/webp" />
-    <link rel="preload" as="image" href="/hero/hero-1.png" type="image/png" />
+    <link rel="preload" as="image" href="/hero/hero-1.webp" type="image/webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/hero/hero-1.png" type="image/png" fetchpriority="high" />
     
     <!-- Preload commonly viewed category images -->
     <link rel="preload" as="image" href="/Category Card/electronics.webp" type="image/webp" />
     <link rel="preload" as="image" href="/Category Card/Mobile.webp" type="image/webp" />
     <link rel="preload" as="image" href="/Category Card/Laptop.webp" type="image/webp" />
+    
+    <!-- DNS Prefetch for external services to improve connection speed -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="dns-prefetch" href="https://www.google-analytics.com" />
+    <link rel="dns-prefetch" href="https://cdn.cloudinary.com" />
+    <link rel="dns-prefetch" href="https://www.stripe.com" />
   </head>
   <body>
     <div id="root">

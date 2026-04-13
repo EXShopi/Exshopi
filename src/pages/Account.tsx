@@ -299,7 +299,7 @@ export default function Account() {
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <div className="w-20 h-20 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mb-8 shadow-sm border border-violet-100">
               {userData?.photoURL ? (
-                <img src={userData.photoURL} alt="" className="w-full h-full rounded-2xl object-cover" referrerPolicy="no-referrer" />
+                <img src={userData.photoURL} alt="Profile photo" className="w-full h-full rounded-2xl object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <User size={32} />
               )}
@@ -583,7 +583,7 @@ export default function Account() {
               <div className="flex items-center gap-4 pb-6 border-b border-slate-200/50 mb-6">
                 <div className="w-14 h-14 bg-gradient-to-br from-violet-500 to-blue-500 text-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg shadow-violet-500/20 overflow-hidden">
                   {userData?.photoURL ? (
-                    <img src={userData.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={userData.photoURL} alt="Profile photo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     (userData?.fullName?.charAt(0) || user?.email?.charAt(0).toUpperCase())
                   )}

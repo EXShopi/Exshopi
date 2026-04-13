@@ -411,10 +411,12 @@ export class AuthService {
           }
         }
       } catch (backendSessionError: any) {
-        console.warn(
-          '[AUTH] Backend session check fallback:',
-          backendSessionError?.message || backendSessionError
-        );
+        // Silently handle 401/403 on public pages - don't log warnings
+        if (backendSessionError?.status !== 401 && backendSessionError?.status !== 403) {
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[AUTH] Backend session check:', backendSessionError?.message);
+          }
+        }
       }
 
       try {
@@ -425,10 +427,12 @@ export class AuthService {
           return backendSession;
         }
       } catch (backendRefreshError: any) {
-        console.warn(
-          '[AUTH] Backend session restore fallback:',
-          backendRefreshError?.message || backendRefreshError
-        );
+        // Silently handle 401/403 on public pages - don't log warnings
+        if (backendRefreshError?.status !== 401 && backendRefreshError?.status !== 403) {
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[AUTH] Backend session restore:', backendRefreshError?.message);
+          }
+        }
       }
 
       const { data, error } = await supabase.auth.getSession();
@@ -456,7 +460,10 @@ export class AuthService {
         storedRole: useAuthStore.getState().role,
       });
     } catch (error) {
-      console.error('[AUTH] Restore session error:', error);
+      // Silently fail on public pages
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[AUTH] Session restore skipped');
+      }
       useAuthStore.getState().setAccessToken(null);
       useAuthStore.getState().setRefreshToken(null);
       return null;

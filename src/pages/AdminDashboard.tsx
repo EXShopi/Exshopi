@@ -1672,7 +1672,7 @@ export function AdminDashboard() {
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-500 overflow-hidden">
                                 {customer.photoURL ? (
-                                  <img src={customer.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  <img src={customer.photoURL} alt={`Customer avatar for ${customer.fullName || customer.name || 'customer'}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                 ) : (
                                   (customer.fullName || customer.name || '?')[0].toUpperCase()
                                 )}

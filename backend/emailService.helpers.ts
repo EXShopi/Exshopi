@@ -55,3 +55,79 @@ export async function sendNewOrderNotificationToAdmin(orderData: {
     outro: 'Please ensure to process this order promptly to maintain customer satisfaction and marketplace reputation.',
   });
 }
+
+// Seller signup confirmation email sent to seller after successful registration
+export async function sendSellerSignupConfirmationEmail(sellerData: {
+  businessName: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+  businessType: string;
+  city: string;
+  applicationId: string;
+}) {
+  return sendTransactionalEmail({
+    to: sellerData.email,
+    subject: `Welcome to ExShopi Seller Program – Application Received`,
+    title: 'Welcome to ExShopi',
+    intro: `Thank you for joining ExShopi Marketplace! We've received your seller application and our team is reviewing it.`,
+    facts: [
+      { label: 'Business Name', value: sellerData.businessName },
+      { label: 'Owner Name', value: sellerData.ownerName },
+      { label: 'Business Type', value: sellerData.businessType },
+      { label: 'City', value: sellerData.city },
+      { label: 'Application ID', value: sellerData.applicationId },
+      { label: 'Status', value: 'Under Review' },
+    ],
+    bullets: [
+      `Your application has been successfully submitted to ExShopi.`,
+      `Our admin team will review your business information within 1-2 business days.`,
+      `You'll receive an email notification as soon as a decision is made.`,
+      `In the meantime, you can log in to your seller account and explore the dashboard.`,
+      `If you have any questions, our support team is here to help.`,
+    ],
+    ctaLabel: 'View Application Status',
+    ctaUrl: `https://exshopi.com/seller/applications`,
+    outro: `We look forward to partnering with ${sellerData.businessName} on ExShopi!`,
+  });
+}
+
+// Admin notification when new seller applies
+export async function sendSellerApplicationNotificationToAdmin(sellerData: {
+  businessName: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+  businessType: string;
+  city: string;
+  applicationId: string;
+  isResubmission: boolean;
+}) {
+  const adminEmail = process.env.ADMIN_EMAIL || 'ahsansajid295@gmail.com';
+
+  return sendTransactionalEmail({
+    to: adminEmail,
+    subject: `${sellerData.isResubmission ? '📝 Seller Resubmission' : '🔔 New Seller Application'} – ${sellerData.businessName}`,
+    title: sellerData.isResubmission ? 'Seller Resubmission Received' : 'New Seller Application Received',
+    intro: `A ${sellerData.isResubmission ? 'resubmitted' : 'new'} seller application requires your review and approval.`,
+    facts: [
+      { label: 'Business Name', value: sellerData.businessName },
+      { label: 'Owner Name', value: sellerData.ownerName },
+      { label: 'Email', value: sellerData.email },
+      { label: 'Phone', value: sellerData.phone },
+      { label: 'Business Type', value: sellerData.businessType },
+      { label: 'City', value: sellerData.city },
+      { label: 'Application ID', value: sellerData.applicationId },
+      { label: 'Type', value: sellerData.isResubmission ? 'Resubmission' : 'New Application' },
+    ],
+    bullets: [
+      `Please review the business documents and information provided.`,
+      `Verify the seller's legitimacy and compliance with ExShopi policies.`,
+      `Check for any red flags or incomplete information.`,
+      `Either approve, reject, or request additional information.`,
+    ],
+    ctaLabel: 'Review in Admin Panel',
+    ctaUrl: `https://exshopi.com/admin/seller-applications`,
+    outro: `Process seller applications promptly to maintain marketplace growth and seller satisfaction.`,
+  });
+}

@@ -17,6 +17,7 @@ export default function WishlistIcon({ productId, showCount = false }: WishlistI
   return (
     <>
       <button
+        type="button"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -30,6 +31,8 @@ export default function WishlistIcon({ productId, showCount = false }: WishlistI
             .catch(() => undefined);
         }}
         className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all duration-300 hover:border-red-300 hover:shadow-md hover:-translate-y-0.5"
+        aria-label={isFavorited ? 'Remove from wishlist' : 'Add to wishlist'}
+        aria-pressed={isFavorited}
       >
         <Heart
           className={`h-5 w-5 transition-all duration-300 ${

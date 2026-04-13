@@ -80,7 +80,9 @@ export function AIChat() {
   return (
     <>
       <motion.button
+  type="button"
   onClick={() => setIsOpen(true)}
+  aria-label="Open ExShopi AI chat"
   initial={{ scale: 0, opacity: 0 }}
   animate={{ scale: 1, opacity: 1 }}
   whileHover={{ scale: 1.15, rotate: 5 }}
@@ -118,7 +120,9 @@ export function AIChat() {
                 </div>
               </div>
               <button 
+                type="button"
                 onClick={() => setIsOpen(false)}
+                aria-label="Close chat"
                 className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors relative z-10"
               >
                 <X size={20} />
@@ -177,6 +181,7 @@ export function AIChat() {
               />
               <button
                 type="submit"
+                aria-label="Send message"
                 className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center hover:bg-violet-600 transition-all active:scale-90 shadow-lg shadow-slate-900/10"
               >
                 <Send size={20} />

@@ -89,6 +89,8 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
               stock: product.stock,
             });
           }}
+          aria-label={saved ? `Remove ${product.title} from wishlist` : `Add ${product.title} to wishlist`}
+          aria-pressed={saved}
           className={`absolute right-2.5 top-2.5 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-full border transition md:right-4 md:top-4 md:h-11 md:w-11 ${
             saved
               ? "border-rose-200 bg-white text-rose-500 shadow-md"
@@ -124,7 +126,7 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
 
       <div className="-mt-px bg-[linear-gradient(180deg,rgba(243,247,255,0.96)_0%,rgba(232,240,252,0.93)_100%)] backdrop-blur-xl flex min-h-[158px] flex-col p-2.5 md:min-h-[276px] md:p-4.5">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-medium text-slate-500">{product.category}</p>
+          <p className="text-[10px] font-medium text-slate-600">{product.category}</p>
           <p className="text-[10px] font-semibold text-emerald-600">{product.stock}</p>
         </div>
 
@@ -132,7 +134,7 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
           {product.title}
         </h3>
 
-        <p className="mt-1 min-h-[22px] text-[10px] text-slate-500 md:mt-2.5 md:min-h-[34px] md:text-[12px]">
+        <p className="mt-1 min-h-[22px] text-[10px] text-slate-600 md:mt-2.5 md:min-h-[34px] md:text-[12px]">
           Sold by{" "}
           <span className="font-semibold text-slate-700">{product.seller}</span>
         </p>
@@ -149,7 +151,7 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
             {formatAEDPlain(product.price)}
           </span>
           {product.oldPrice ? (
-            <span className="whitespace-nowrap pb-0.5 text-[10px] text-slate-400 line-through md:text-sm">
+            <span className="whitespace-nowrap pb-0.5 text-[10px] text-slate-600 line-through md:text-sm">
               {formatAEDPlain(product.oldPrice)}
             </span>
           ) : null}
@@ -180,6 +182,7 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
 
           <button
             type="button"
+            aria-label="Add one more item to cart"
             className="inline-flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl border border-white/70 bg-white/65 text-slate-700 shadow-[0_6px_14px_rgba(15,23,42,0.06)] backdrop-blur-lg transition hover:bg-white md:h-11 md:w-11 md:rounded-2xl"
           >
             +1
@@ -303,7 +306,7 @@ export default function FeaturedProducts() {
                   className={`rounded-full px-4 py-2 text-[11px] font-bold transition-all duration-300 md:px-6 md:py-3 md:text-sm ${
                     isActive
                       ? "bg-white text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.12)]"
-                      : "text-slate-500 hover:bg-white/80 hover:text-slate-900"
+                      : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
                   }`}
                 >
                   {tabLabel}
@@ -388,9 +391,9 @@ export default function FeaturedProducts() {
               </div>
             </>
           ) : (
-            <div className="w-full rounded-[26px] border border-slate-200 bg-white px-6 py-16 text-center text-slate-500 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+            <div className="w-full rounded-[26px] border border-slate-200 bg-white px-6 py-16 text-center text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
               <p className="text-lg font-black text-slate-900">No featured products yet</p>
-              <p className="mt-2 text-sm font-medium text-slate-500">
+              <p className="mt-2 text-sm font-medium text-slate-600">
                 Featured sections will populate automatically after approved products go live.
               </p>
             </div>
