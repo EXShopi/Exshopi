@@ -1,44 +1,45 @@
 import { Link } from "react-router-dom";
+import OptimizedImage from "./OptimizedImage";
 
 const categories = [
   {
     name: "Computers",
-    image: "/categories/Computer.png",
+    image: "/categories/Computer",
     link: "/products?category=computers",
   },
   {
     name: "Cell Phones",
-    image: "/categories/Cellphone.png",
+    image: "/categories/Cellphone",
     link: "/products?category=mobiles",
   },
   {
     name: "TVs / Video",
-    image: "/categories/Tv.png",
+    image: "/categories/Tv",
     link: "/products?category=tv",
   },
   {
     name: "Video Games",
-    image: "/categories/Gaming.png",
+    image: "/categories/Gaming",
     link: "/products?category=gaming",
   },
   {
     name: "Tshirts & Clothing",
-    image: "/categories/Clothing.png",
+    image: "/categories/Clothing",
     link: "/products?category=clothing",
   },
   {
     name: "Cameras & Photo",
-    image: "/categories/Camera.png",
+    image: "/categories/Camera",
     link: "/products?category=camera",
   },
   {
     name: "Kitchen Appliances",
-    image: "/categories/Kitchen_Appliances.png",
+    image: "/categories/Kitchen_Appliances",
     link: "/products?category=kitchen",
   },
   {
     name: "Projectors",
-    image: "/categories/Projector.png",
+    image: "/categories/Projector",
     link: "/products?category=projector",
   },
 ];
@@ -54,9 +55,11 @@ export default function CategorySection() {
             className="group rounded-[22px] border border-slate-200 bg-[#f3f4f6] p-3.5 shadow-sm transition hover:shadow-md md:rounded-[26px] md:p-6"
           >
             <div className="flex h-[92px] items-center justify-center md:h-[200px]">
-              <img
+              <OptimizedImage
                 src={category.image}
                 alt={category.name}
+                lazy={true}
+                useWebP={true}
                 className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
               />
             </div>

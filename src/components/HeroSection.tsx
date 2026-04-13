@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useLanguageStore } from "../store/language";
 import { analyticsAPI, bannerAPI } from "../services/api";
 import { useSettingsStore } from "../store/settings";
+import { OptimizedImage } from "./OptimizedImage";
 
 export default function HeroSection() {
   const [current, setCurrent] = useState(0);
@@ -169,11 +170,24 @@ export default function HeroSection() {
                   className={`relative h-full w-full overflow-hidden bg-gradient-to-br ${slide.bg} text-white`}
                 >
                   {slide.image && (
-                    <img
-                      src={slide.image}
-                      alt={slide.title}
-                      className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
-                    />
+                    slide.image.startsWith('http') ? (
+                      <img
+                        src={slide.image}
+                        alt={slide.title}
+                        className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
+                        loading="eager"
+                        fetchPriority="high"
+                      />
+                    ) : (
+                      <OptimizedImage
+                        src={slide.image}
+                        alt={slide.title}
+                        className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
+                        priority="high"
+                        lazy={false}
+                        useWebP={true}
+                      />
+                    )
                   )}
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(52,211,153,0.16),transparent_24%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_18%)]" />
 

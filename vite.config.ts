@@ -41,15 +41,49 @@ export default defineConfig(({ mode }) => {
       port: 4173,
     },
     build: {
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            react: ["react", "react-dom", "react-router-dom"],
-            charts: ["recharts"],
-            icons: ["lucide-react"],
-          },
+      target: "es2020",
+      minify: "terser",
+      terserOptions: {
+        compress: {
+          drop_console: mode === "production",
+          drop_debugger: true,
         },
       },
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          // Optimized chunk naming for better caching
+          entryFileNames: "js/[name]-[hash].js",
+          chunkFileNames: "js/[name]-[hash].js",
+          assetFileNames: (assetInfo) => {
+            const info = assetInfo.name.split(".");
+            const ext = info[info.length - 1];
+            if (/png|jpe?g|gif|svg|webp|ico/.test(ext)) {
+              return `images/[name]-[hash][extname]`;
+            } else if (/woff|woff2|eot|ttf|otf/.test(ext)) {
+              return `fonts/[name]-[hash][extname]`;
+            } else if (ext === "css") {
+              return `css/[name]-[hash][extname]`;
+            }
+            return `assets/[name]-[hash][extname]`;
+          },
+          manualChunks: {
+            "vendor-react": ["react", "react-dom", "react-router-dom"],
+            "vendor-icons": ["lucide-react"],
+            "vendor-charts": ["recharts"],
+            "vendor-ui": ["framer-motion"],
+          },
+        },
+        // Optimize input options
+        input: {
+          main: path.resolve(__dirname, "index.html"),
+        },
+      },
+      // Inline smaller assets
+      assetsInlineLimit: 10000,
+      // Report compressed size
+      reportCompressedSize: true,
+      sourcemap: mode !== "production",
     },
   };
 });

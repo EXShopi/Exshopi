@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import OptimizedImage from "./OptimizedImage";
 
 type MegaCategoryItem = {
   title: string;
@@ -11,294 +12,294 @@ type MegaCategoryItem = {
 const megaCategories: MegaCategoryItem[] = [
   {
     title: "Deals",
-    image: "/Category Card/clearncestore.png",
+    image: "/Category Card/clearncestore",
     link: "/category/deals",
     badge: "SALE",
   },
   {
     title: "Global Store",
-    image: "/Category Card/electronics.png",
+    image: "/Category Card/electronics",
     link: "/category/global-store",
   },
   {
     title: "Grocery",
-    image: "/Category Card/Grocery.png",
+    image: "/Category Card/Grocery",
     link: "/category/grocery",
   },
   {
     title: "Electronics",
-    image: "/Category Card/electronics.png",
+    image: "/Category Card/electronics",
     link: "/category/electronics",
   },
   {
     title: "Mobiles",
-    image: "/Category Card/Mobile.png",
+    image: "/Category Card/Mobile",
     link: "/category/mobiles",
   },
   {
     title: "Laptops & Desktops",
-    image: "/Category Card/Laptop.png",
+    image: "/Category Card/Laptop",
     link: "/category/laptops-desktops",
   },
   {
     title: "Beauty",
-    image: "/Category Card/beauty.png",
+    image: "/Category Card/beauty",
     link: "/category/beauty",
   },
   {
     title: "Gift Cards",
-    image: "/Category Card/Gift.png",
+    image: "/Category Card/Gift",
     link: "/category/gift-cards",
   },
   {
     title: "Home & Kitchen",
-    image: "/Category Card/home&kitchen.png",
+    image: "/Category Card/home&kitchen",
     link: "/category/home-kitchen",
   },
   {
     title: "Women's Fashion",
-    image: "/Category Card/women fashion.png",
+    image: "/Category Card/women fashion",
     link: "/category/womens-fashion",
   },
   {
     title: "Men's Fashion",
-    image: "/Category Card/manfashion.png",
+    image: "/Category Card/manfashion",
     link: "/category/mens-fashion",
   },
   {
     title: "Home Appliances",
-    image: "/Category Card/Homeappliances.png",
+    image: "/Category Card/Homeappliances",
     link: "/category/home-appliances",
   },
   {
     title: "Health & Nutrition",
-    image: "/Category Card/healthnutrition.png",
+    image: "/Category Card/healthnutrition",
     link: "/category/health-nutrition",
   },
   {
     title: "Wearables",
-    image: "/Category Card/wearable.png",
+    image: "/Category Card/wearable",
     link: "/category/wearables",
   },
   {
     title: "Backpack",
-    image: "/Category Card/Backpack.png",
+    image: "/Category Card/Backpack",
     link: "/category/backpack",
   },
   {
     title: "Luggage",
-    image: "/Category Card/Luggage.png",
+    image: "/Category Card/Luggage",
     link: "/category/luggage",
   },
   {
     title: "Televisions",
-    image: "/Category Card/Television.png",
+    image: "/Category Card/Television",
     link: "/category/televisions",
   },
   {
     title: "Footwear",
-    image: "/Category Card/footwear.png",
+    image: "/Category Card/footwear",
     link: "/category/footwear",
   },
   {
     title: "Camera",
-    image: "/Category Card/Cameraa.png",
+    image: "/Category Card/Cameraa",
     link: "/category/camera",
   },
   {
     title: "Gaming",
-    image: "/Category Card/Gamingpc.png",
+    image: "/Category Card/Gamingpc",
     link: "/category/gaming",
   },
   {
     title: "Men's Care",
-    image: "/Category Card/menscare.png",
+    image: "/Category Card/menscare",
     link: "/category/mens-care",
   },
   {
     title: "Personal Care",
-    image: "/Category Card/personalcare.png",
+    image: "/Category Card/personalcare",
     link: "/category/personal-care",
   },
   {
     title: "Makeup",
-    image: "/Category Card/makeup.png",
+    image: "/Category Card/makeup",
     link: "/category/makeup",
   },
   {
     title: "Watches",
-    image: "/Category Card/watches.png",
+    image: "/Category Card/watches",
     link: "/category/watches",
   },
   {
     title: "Eyewear",
-    image: "/Category Card/eyeware.png",
+    image: "/Category Card/eyeware",
     link: "/category/eyewear",
   },
   {
     title: "Travel Store",
-    image: "/Category Card/travelstore.png",
+    image: "/Category Card/travelstore",
     link: "/category/travel-store",
   },
   {
     title: "Clearance Store",
-    image: "/Category Card/clearncestore.png",
+    image: "/Category Card/clearncestore",
     link: "/category/clearance-store",
     badge: "SALE",
   },
   {
     title: "Sports & Fitness",
-    image: "/Category Card/sportsequipments.png",
+    image: "/Category Card/sportsequipments",
     link: "/category/sports-fitness",
   },
   {
     title: "Fragrances",
-    image: "/Category Card/fragranc.png",
+    image: "/Category Card/fragranc",
     link: "/category/fragrances",
   },
   {
     title: "Baby",
-    image: "/Category Card/babcare.png",
+    image: "/Category Card/babcare",
     link: "/category/baby",
   },
   {
     title: "Toys & Games",
-    image: "/Category Card/toys&games.png",
+    image: "/Category Card/toys&games",
     link: "/category/toys-games",
   },
   {
     title: "Stationery",
-    image: "/Category Card/stationary.png",
+    image: "/Category Card/stationary",
     link: "/category/stationery",
   },
   {
     title: "Furniture",
-    image: "/Category Card/furniture.png",
+    image: "/Category Card/furniture",
     link: "/category/furniture",
   },
   {
     title: "Digital Cards",
-    image: "/Category Card/digitalcard.png",
+    image: "/Category Card/digitalcard",
     link: "/category/digital-cards",
   },
   {
     title: "Skincare",
-    image: "/Category Card/skincare.png",
+    image: "/Category Card/skincare",
     link: "/category/skincare",
   },
   {
     title: "Kitchen Dining",
-    image: "/Category Card/kitchendining.com.png",
+    image: "/Category Card/kitchendining.com",
     link: "/category/kitchen-dining",
   },
   {
     title: "Large Appliances",
-    image: "/Category Card/largeappliances.png",
+    image: "/Category Card/largeappliances",
     link: "/category/large-appliances",
   },
   {
     title: "Home Improvement",
-    image: "/Category Card/homeimprovement.png",
+    image: "/Category Card/homeimprovement",
     link: "/category/home-improvement",
   },
   {
     title: "Mobile Accessories",
-    image: "/Category Card/mobileAcessories.png",
+    image: "/Category Card/mobileAcessories",
     link: "/category/mobile-accessories",
   },
   {
     title: "Computer Accessories",
-    image: "/Category Card/computeracessories.png",
+    image: "/Category Card/computeracessories",
     link: "/category/computer-accessories",
   },
   {
     title: "Headphones",
-    image: "/Category Card/Headphone.png",
+    image: "/Category Card/Headphone",
     link: "/category/headphones",
   },
   {
     title: "Hair Care",
-    image: "/Category Card/personalcare.png",
+    image: "/Category Card/personalcare",
     link: "/category/hair-care",
   },
   {
     title: "Home Decor",
-    image: "/Category Card/homedecration.png",
+    image: "/Category Card/homedecration",
     link: "/category/home-decor",
   },
   {
     title: "Kids' Fashion",
-    image: "/Category Card/kidsfashion.png",
+    image: "/Category Card/kidsfashion",
     link: "/category/kids-fashion",
   },
   {
     title: "Pet Store",
-    image: "/Category Card/petstore.png",
+    image: "/Category Card/petstore",
     link: "/category/pet-store",
   },
   {
     title: "Automotive",
-    image: "/Category Card/automotivetools.png",
+    image: "/Category Card/automotivetools",
     link: "/category/automotive",
   },
   {
     title: "Books",
-    image: "/Category Card/book.png",
+    image: "/Category Card/book",
     link: "/category/books",
   },
   {
     title: "Music & Media",
-    image: "/Category Card/music medi.png",
+    image: "/Category Card/music medi",
     link: "/category/music-media",
   },
   {
     title: "Jewelry",
-    image: "/Category Card/Jewlery.png",
+    image: "/Category Card/Jewlery",
     link: "/category/jewelry",
   },
   {
     title: "New Arrivals",
-    image: "/Category Card/new arrival.png",
+    image: "/Category Card/new arrival",
     link: "/category/new-arrivals",
   },
   {
     title: "Bestsellers",
-    image: "/Category Card/best seller.png",
+    image: "/Category Card/best seller",
     link: "/category/bestsellers",
   },
   {
     title: "Top Rated",
-    image: "/Category Card/Top Rated.png",
+    image: "/Category Card/Top Rated",
     link: "/category/top-rated",
   },
   {
     title: "Traditional Wear",
-    image: "/Category Card/traditionalwear.png",
+    image: "/Category Card/traditionalwear",
     link: "/category/traditional-wear",
   },
   {
     title: "Bath & Bedding",
-    image: "/Category Card/bed&bath.png",
+    image: "/Category Card/bed&bath",
     link: "/category/bath-bedding",
   },
   {
     title: "Experience Vouchers",
-    image: "/Category Card/digitalcard.png",
+    image: "/Category Card/digitalcard",
     link: "/category/experience-vouchers",
   },
   {
     title: "Snacks & Chips",
-    image: "/Category Card/Snack.png",
+    image: "/Category Card/Snack",
     link: "/category/snacks-chips",
   },
   {
     title: "Beverages",
-    image: "/Category Card/Beverage.png",
+    image: "/Category Card/Beverage",
     link: "/category/beverages",
   },
   {
     title: "Laundry & Dishwashing",
-    image: "/Category Card/Laundry.png",
+    image: "/Category Card/Laundry",
     link: "/category/laundry-dishwashing",
   },
 ];
@@ -360,9 +361,11 @@ export default function MegaCategoryCarousel() {
                   ) : null}
 
                   <div className="relative flex h-[150px] items-center justify-center overflow-visible px-3 sm:h-[162px] sm:px-4 md:h-[172px]">
-                    <img
+                    <OptimizedImage
                       src={item.image}
                       alt={item.title}
+                      lazy={true}
+                      useWebP={true}
                       className="relative h-[102px] w-auto object-contain transition-transform duration-300 group-hover:scale-105 sm:h-[112px] md:h-[120px]"
                     />
                   </div>

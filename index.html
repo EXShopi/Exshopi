@@ -80,6 +80,16 @@
         font-family: monospace;
       }
     </style>
+    
+    <!-- Preload critical LCP images for better performance -->
+    <!-- Hero images: First hero is the main LCP -->
+    <link rel="preload" as="image" href="/hero/hero-1.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/hero/hero-1.png" type="image/png" />
+    
+    <!-- Preload commonly viewed category images -->
+    <link rel="preload" as="image" href="/Category Card/electronics.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/Category Card/Mobile.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/Category Card/Laptop.webp" type="image/webp" />
   </head>
   <body>
     <div id="root">

@@ -1,37 +1,39 @@
+import OptimizedImage from "./OptimizedImage";
+
 const accessories = [
   {
     name: "Phone Covers",
-    image: "/Accessories/phonecover.png",
+    image: "/Accessories/phonecover",
     slug: "phone-covers",
     link: "/category/phone-covers",
   },
   {
     name: "Cables & Connectors",
-    image: "/Accessories/cables&connector.png",
+    image: "/Accessories/cables&connector",
     slug: "cables-connectors",
     link: "/category/cables-connectors",
   },
   {
     name: "Keyboards & Mouse",
-    image: "/Accessories/keyboard&mouse.png",
+    image: "/Accessories/keyboard&mouse",
     slug: "keyboards-mouse",
     link: "/category/keyboards-mouse",
   },
   {
     name: "Hard Disk & Memory Cards",
-    image: "/Accessories/harddisk.png",
+    image: "/Accessories/harddisk",
     slug: "hard-disk-memory-cards",
     link: "/category/hard-disk-memory-cards",
   },
   {
     name: "Bags & Sleeves",
-    image: "/Accessories/bag&sleeves.png",
+    image: "/Accessories/bag&sleeves",
     slug: "bags-sleeves",
     link: "/category/bags-sleeves",
   },
   {
     name: "True Wireless",
-    image: "/Accessories/truewireless.png",
+    image: "/Accessories/truewireless",
     slug: "true-wireless",
     link: "/category/true-wireless",
   },
@@ -54,9 +56,11 @@ export default function AccessoriesSection() {
             >
               <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-500 md:p-5">
                 <div className="mb-2 flex items-center justify-center md:mb-3">
-                  <img
+                  <OptimizedImage
                     src={item.image}
                     alt={item.name}
+                    lazy={true}
+                    useWebP={true}
                     className="h-[54px] w-auto object-contain transition duration-300 group-hover:scale-110 md:h-[80px]"
                   />
                 </div>

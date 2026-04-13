@@ -14,6 +14,7 @@ import AllProductsSection from "../components/AllProductsSection";
 import { useSettingsStore } from "../store/settings";
 import SEOHead from "../components/seo/SEOHead";
 import { generateHomepageSeo, buildHomepageSchemas } from "../lib/seo";
+import { LazyComponent } from "../components/LazyComponent";
 
 export default function Home() {
   const { settings, fetchSettings } = useSettingsStore();
@@ -34,13 +35,29 @@ export default function Home() {
   const renderHomepageSection = (sectionId: string) => {
     switch (sectionId) {
       case "featured-products":
-        return <FeaturedProducts key={sectionId} />;
+        return (
+          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+            <FeaturedProducts />
+          </LazyComponent>
+        );
       case "brands":
-        return <ShopByBrandSection key={sectionId} />;
+        return (
+          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+            <ShopByBrandSection />
+          </LazyComponent>
+        );
       case "most-popular":
-        return <MostPopularSection key={sectionId} />;
+        return (
+          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+            <MostPopularSection />
+          </LazyComponent>
+        );
       case "flash-deals":
-        return <BlackFridaySection key={sectionId} />;
+        return (
+          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+            <BlackFridaySection />
+          </LazyComponent>
+        );
       case "promo":
         return (
           <div key={sectionId}>
@@ -72,7 +89,9 @@ export default function Home() {
       <MegaCategoryCarousel />
       <AccessoriesSection />
       {orderedCmsSections.map((section) => renderHomepageSection(section.id))}
-      <AllProductsSection />
+      <LazyComponent deferUntilVisible={true} rootMargin="100px">
+        <AllProductsSection />
+      </LazyComponent>
       <section className="mx-auto mt-10 max-w-7xl px-4 pb-12 md:px-6">
         <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">From The Blog</p>

@@ -1,45 +1,46 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import OptimizedImage from "./OptimizedImage";
 
 export const brands = [
   {
     name: "Apple",
-    logo: "/Banners/apple.png",
+    logo: "/Banners/apple",
     link: "/brands/apple",
   },
   {
     name: "Samsung",
-    logo: "/Banners/samsung.png",
+    logo: "/Banners/samsung",
     link: "/brands/samsung",
   },
   {
     name: "Dell",
-    logo: "/Banners/dell.png",
+    logo: "/Banners/dell",
     link: "/brands/dell",
   },
   {
     name: "HP",
-    logo: "/Banners/hp.png",
+    logo: "/Banners/hp",
     link: "/brands/hp",
   },
   {
     name: "Lenovo",
-    logo: "/Banners/lenovo.png",
+    logo: "/Banners/lenovo",
     link: "/brands/lenovo",
   },
   {
     name: "Gaming",
-    logo: "/Banners/gaming.png",
+    logo: "/Banners/gaming",
     link: "/brands/gaming",
   },
   {
     name: "Acer",
-    logo: "/Banners/acer.png",
+    logo: "/Banners/acer",
     link: "/brands/acer",
   },
   {
     name: "Asus",
-    logo: "/Banners/asus.png",
+    logo: "/Banners/asus",
     link: "/brands/asus",
   },
 ];
@@ -95,9 +96,11 @@ export default function ShopByBrandSection() {
                 className="group flex h-[112px] w-[112px] shrink-0 flex-col items-center justify-center rounded-full border border-white/70 bg-[linear-gradient(180deg,#ffffff,#f7faff)] shadow-[0_14px_30px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_36px_rgba(15,23,42,0.14)] hover:ring-blue-200 cursor-pointer sm:h-[126px] sm:w-[126px] md:h-[138px] md:w-[138px]"
               >
                 <div className="flex h-[52px] w-[72px] items-center justify-center sm:h-[58px] sm:w-[80px] md:h-[64px] md:w-[88px]">
-                  <img
+                  <OptimizedImage
                     src={brand.logo}
                     alt={brand.name}
+                    lazy={true}
+                    useWebP={true}
                     className="max-h-full max-w-full object-contain"
                   />
                 </div>

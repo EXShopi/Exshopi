@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { MessageCircle, X, Send, Loader2, Bot, User, ArrowRight, ShoppingBag, HelpCircle, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import OptimizedImage from "./OptimizedImage";
+
 export function WhatsAppButton() {
   const phoneNumber = "+971522608063"; // Placeholder UAE number
   const message = "Hello ExShopi! I'm interested in your products.";
@@ -15,13 +17,16 @@ export function WhatsAppButton() {
       animate={{ scale: 1, opacity: 1 }}
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.9 }}
-className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-white text-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition"    >
-<img
-  src="public/Banners/call.png"
-  alt="WhatsApp"
-  className="w-10 h-10 group-hover:scale-110 transition rounded-full flex items-center justify-center"
-  
-/>      <div className="absolute right-full mr-4 bg-white text-slate-900 px-4 py-2 rounded-xl shadow-xl text-xs font-black uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-slate-100">
+      className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-white text-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition"
+    >
+      <OptimizedImage
+        src="/Banners/call"
+        alt="WhatsApp"
+        lazy={false}
+        useWebP={true}
+        className="w-10 h-10 transition"
+      />
+      <div className="absolute right-full mr-4 bg-white text-slate-900 px-4 py-2 rounded-xl shadow-xl text-xs font-black uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-slate-100">
         Chat on WhatsApp
       </div>
     </motion.a>
