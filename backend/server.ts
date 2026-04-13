@@ -60,6 +60,16 @@ const connectionMode = prismaRuntime.enabled
     ? 'supabase'
     : 'json-db';
 
+const seoSlugify = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+
+
 // ==================== CORS CONFIGURATION ====================
 const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '');
 const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;

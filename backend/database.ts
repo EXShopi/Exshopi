@@ -745,7 +745,7 @@ function defaultTranslations(): Translation[] {
 
 // Database Operations
 export class Database {
-  private data: DatabaseSchema;
+private data!: DatabaseSchema;
   private dbPath: string;
 
   constructor(dbPath: string) {
