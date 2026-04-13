@@ -161,33 +161,33 @@ export default function HeroSection() {
       <div className="relative z-10 overflow-hidden rounded-[20px] border border-slate-200 shadow-lg md:rounded-[34px]">
         <div className="relative aspect-video min-h-[224px] w-full sm:min-h-[300px] md:aspect-[2048/890]" style={{aspectRatio: '2048 / 890'}}>
           <div
-            className="flex h-full transition-transform duration-700 ease-in-out"
-            style={{ transform: `translateX(-${current * 100}%)` }}
-          >
-            {translatedSlides.map((slide) => (
-              <div key={slide.id} className="h-full min-w-full">
+            <div className="flex h-full transition-transform duration-700 ease-in-out"
+              style={{ transform: `translateX(-${current * 100}%)` }}
+            >
+              {translatedSlides.map((slide, idx) => (
+                <div key={slide.id} className="h-full min-w-full">
                 <div
                   className={`relative h-full w-full overflow-hidden bg-gradient-to-br ${slide.bg} text-white`}
                 >
                   {slide.image && (
-                    slide.image.startsWith('http') ? (
-                      <img
-                        src={slide.image}
-                        alt={slide.title}
-                        className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
-                        loading="eager"
-                        fetchPriority="high"
-                      />
-                    ) : (
-                      <OptimizedImage
-                        src={slide.image}
-                        alt={slide.title}
-                        className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
-                        priority="high"
-                        lazy={false}
-                        useWebP={true}
-                      />
-                    )
+                      slide.image.startsWith('http') ? (
+                        <img
+                          src={slide.image}
+                          alt={slide.title}
+                          className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
+                          loading={idx === current ? 'eager' : 'lazy'}
+                          fetchPriority={idx === current ? 'high' : 'low'}
+                        />
+                      ) : (
+                        <OptimizedImage
+                          src={slide.image}
+                          alt={slide.title}
+                          className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
+                          priority={idx === current ? 'high' : 'low'}
+                          lazy={idx !== current}
+                          useWebP={true}
+                        />
+                      )
                   )}
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(52,211,153,0.16),transparent_24%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_18%)]" />
 

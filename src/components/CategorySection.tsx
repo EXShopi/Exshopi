@@ -48,7 +48,7 @@ export default function CategorySection() {
   return (
     <section className="mx-auto mt-6 max-w-[1800px] px-4 md:mt-8 md:px-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {categories.map((category) => (
+        {categories.map((category, idx) => (
           <Link
             key={category.name}
             to={category.link}
@@ -58,7 +58,7 @@ export default function CategorySection() {
               <OptimizedImage
                 src={category.image}
                 alt={category.name}
-                lazy={true}
+                lazy={idx >= 4}
                 useWebP={true}
                 className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
               />
