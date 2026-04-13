@@ -183,7 +183,7 @@ export function AdminLayout() {
   const siteName = settings?.branding?.siteName || 'ExShopi';
   const logoUrl = settings?.branding?.logoUrl || '';
 
-  if (!bootChecked) {
+  if (authInitializing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(168,85,247,0.12),_transparent_24%),linear-gradient(180deg,#f7faff_0%,#f8fafc_48%,#eef2ff_100%)]">
         <div className="rounded-3xl border border-slate-200 bg-white px-8 py-6 shadow-xl">
