@@ -1,0 +1,46 @@
+{
+  "name": "ExShopi UAE - Online Shopping",
+  "short_name": "ExShopi",
+  "description": "Shop electronics, mobiles, refurbished laptops, accessories and more in the UAE on ExShopi. Trusted sellers, fast delivery, and cash on delivery.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon-192x192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-512x512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-192x192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon-512x512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["shopping", "business"],
+  "screenshots": [
+    {
+      "src": "/favicon-192x192-v2.png",
+      "sizes": "192x192",
+      "form_factor": "narrow",
+      "type": "image/png"
+    }
+  ]
+}
