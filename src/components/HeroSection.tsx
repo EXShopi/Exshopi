@@ -142,8 +142,7 @@ export default function HeroSection() {
                       to={slide.secondaryLink}
                       className="group inline-flex w-auto min-h-[28px] items-center justify-center self-start rounded-full border border-white/30 bg-white/10 px-4 py-1.5 text-[10px] font-bold text-white backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-white/50 hover:bg-white/20 sm:min-h-[34px] sm:rounded-2xl sm:px-3.5 sm:py-2 sm:text-[11px] md:min-h-[56px] md:px-7 md:py-4 md:text-base"
                     >
-                      {slide.secondaryCta}
-                    </Link>
+Browse Categories                    </Link>
                   </div>
                 </div>
               </div>

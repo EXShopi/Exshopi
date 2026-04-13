@@ -41,35 +41,35 @@ function getImageSources(
   src: string,
   useWebP: boolean = true
 ): { webp: string; png: string } {
-  // Ensure src starts with /
-  const path = src.startsWith('/') ? src : `/${src}`;
-  
-  // If caller already provided an extension (e.g. '/hero/hero-1.png'),
-  // strip it so we don't end up with duplicate extensions like '.png.png'.
-  let base = path.replace(/\.(png|webp|jpg|jpeg|gif)$/i, '');
+  const path = src.startsWith("/") ? src : `/${src}`;
 
-  // Normalize legacy Category Card paths and unsafe characters so images
-  // placed under /public/categories/ are resolved consistently.
-  try {
-    // Replace percent-encoded spaces and canonicalize folder names
-    base = base.replace(/Category%20Card|Category Card/gi, '/categories');
-    // Replace spaces, ampersands and underscores with hyphens and collapse multiple hyphens
-    base = base.replace(/[\s_&]+/g, '-');
-    // Replace accidental multiple slashes
-    base = base.replace(/\/+/g, '/');
-    // Make lowercase to match normalized public filenames
-    const parts = base.split('/').filter(Boolean);
-    base = '/' + parts.map((p) => p.toLowerCase()).join('/');
-  } catch (e) {
-    // If normalization fails, fall back to original base
+  let suffix = "";
+  let pathname = path;
+
+  const idx = path.search(/[?#]/);
+  if (idx !== -1) {
+    pathname = path.slice(0, idx);
+    suffix = path.slice(idx);
+  }
+
+  const hasExtension = /\.(png|webp|jpg|jpeg|gif|svg)$/i.test(pathname);
+
+  if (hasExtension) {
+    const extMatch = pathname.match(/\.([a-zA-Z0-9]+)$/);
+    const ext = extMatch ? extMatch[1].toLowerCase() : "png";
+    const base = pathname.replace(/\.(png|webp|jpg|jpeg|gif|svg)$/i, "");
+
+    return {
+      webp: `${base}.webp${suffix}`,
+      png: `${base}.${ext}${suffix}`,
+    };
   }
 
   return {
-    webp: `${base}.webp`,
-    png: `${base}.png`,
+    webp: `${pathname}.webp${suffix}`,
+    png: `${pathname}.png${suffix}`,
   };
 }
-
 /**
  * OptimizedImage Component
  * Automatically serves WebP with PNG fallback, adds lazy loading, and prevents layout shift
@@ -88,14 +88,16 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   style,
   ...props
 }) => {
-  const [imageSrc, setImageSrc] = useState<string>(() => {
-    // Start with PNG for SSR compatibility, will switch to WebP on client
-    if (useWebP) {
-      const { png } = getImageSources(src);
-      return png;
-    }
-    return src.startsWith('/') ? src : `/${src}`;
-  });
+ const [imageSrc, setImageSrc] = useState<string>(() => {
+  const normalizedSrc = src.startsWith("/") ? src : `/${src}`;
+
+  if (!useWebP) {
+    return normalizedSrc;
+  }
+
+  const { png } = getImageSources(src);
+  return png;
+});
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -138,23 +140,24 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   }, [src, useWebP]);
 
   const handleError = () => {
-    // If the current src is WebP, try the PNG fallback automatically
-    try {
-      const { webp, png } = getImageSources(src);
-      if (imageSrc === webp && png && imageSrc !== png) {
-        setImageSrc(png);
-        return;
-      }
-    } catch (e) {
-      // ignore and fallthrough
+  try {
+    const { webp, png } = getImageSources(src);
+
+    if (imageSrc === webp && png && imageSrc !== png) {
+      setImageSrc(png);
+      return;
     }
 
     if (fallbackSrc && imageSrc !== fallbackSrc) {
       setImageSrc(fallbackSrc);
-    } else {
-      setHasError(true);
+      return;
     }
-  };
+  } catch (e) {
+    // ignore
+  }
+
+  setHasError(true);
+};
 
   const handleLoad = () => {
     setIsLoaded(true);
