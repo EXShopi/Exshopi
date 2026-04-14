@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import OptimizedImage from "./OptimizedImage";
+import { getBrandLogoForName, getBrandSlugFromName } from "../data/brandLogos";
 
 export const brands = [
   {
@@ -89,7 +90,11 @@ export default function ShopByBrandSection() {
           className="max-w-full overflow-x-auto px-0 py-2 no-scrollbar md:px-4"
         >
           <div className="flex w-max max-w-full items-center gap-4 sm:gap-6 md:gap-10">
-            {[...brands, ...brands].map((brand, index) => (
+            {[...brands, ...brands].map((brand, index) => {
+              const slug = getBrandSlugFromName(brand.name) || brand.link.replace('/brands/', '');
+              const logoSrc = getBrandLogoForName(brand.name) || brand.logo || `/Banners/${slug}`;
+
+              return (
               <button
                 key={`${brand.name}-${index}`}
                 onClick={() => handleBrandClick(brand.link)}
@@ -98,13 +103,13 @@ export default function ShopByBrandSection() {
                 <div className="flex h-[52px] w-[72px] items-center justify-center sm:h-[58px] sm:w-[80px] md:h-[64px] md:w-[88px]">
                   <div className="flex h-full w-full items-center justify-center rounded-md bg-white/90 p-1">
                     <OptimizedImage
-                      src={brand.logo}
+                      src={logoSrc}
                       alt={brand.name}
                       lazy={true}
                       useWebP={true}
                       className="max-h-full max-w-full object-contain"
-                      width={256}
-                      height={128}
+                      width={160}
+                      height={80}
                     />
                   </div>
                 </div>
@@ -112,7 +117,8 @@ export default function ShopByBrandSection() {
                   {brand.name}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
