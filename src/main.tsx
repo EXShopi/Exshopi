@@ -1,8 +1,8 @@
+import "./index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import "./index.css";
 import { buildApiUrl } from './services/api';
 
 function sanitizeBrowserAuthState() {
@@ -117,6 +117,13 @@ if (root) {
       <App />
     </ErrorBoundary>
   );
+  // Remove the initial loading placeholder immediately after mount
+  try {
+    const loading = document.getElementById('loading');
+    if (loading && loading.parentElement) loading.remove();
+  } catch (err) {
+    // non-critical
+  }
 } else {
   console.error("Root element not found!");
 }

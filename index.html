@@ -116,6 +116,15 @@
           }
         }
       }, 2000);
+      // Remove loading message after app mounts; main.tsx also removes it immediately on mount
+      setTimeout(function() {
+        try {
+          const loading = document.getElementById('loading');
+          if (loading && loading.parentElement) loading.remove();
+        } catch (e) {
+          // ignore
+        }
+      }, 5000);
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -151,7 +151,7 @@ function clearPersistedAuthState() {
   useAuthStore.getState().setRefreshToken(null);
 }
 
-const AUTH_REQUEST_TIMEOUT_MS = 30000;
+const AUTH_REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 60000; // default 60s
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = AUTH_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -171,7 +171,7 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
     return response;
   } catch (error: any) {
     if (error?.name === 'AbortError') {
-      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+      throw new Error(`Request to ${url} timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
     }
     throw error;
   } finally {

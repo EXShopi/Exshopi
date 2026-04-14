@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
   return {
+    // Ensure absolute base so asset links are absolute (prevents broken paths on nested routes)
+    base: '/',
     plugins: [react(), tailwindcss()],
     define: {
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY || ""),
