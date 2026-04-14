@@ -44,3 +44,12 @@ services:
         sync: false
       - key: SEED_INITIAL_PASSWORD
         sync: false
+
+  - type: static
+    name: exshopi-frontend
+    env: static
+    branch: main
+    buildCommand: npm ci && npm run build
+    publishPath: dist
+    # Optional: set the root dir if your frontend is in a subfolder
+    # rootDir: .

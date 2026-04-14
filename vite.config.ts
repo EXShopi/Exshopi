@@ -1,4 +1,3 @@
-import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { defineConfig, loadEnv } from "vite";
@@ -9,7 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     // Ensure absolute base so asset links are absolute (prevents broken paths on nested routes)
     base: '/',
-    plugins: [react(), tailwindcss()],
+    plugins: [react()],
     define: {
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY || ""),
     },
@@ -55,17 +54,17 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           // Optimized chunk naming for better caching
-          entryFileNames: "js/[name]-[hash].js",
-          chunkFileNames: "js/[name]-[hash].js",
+          entryFileNames: "assets/[name]-[hash].js",
+          chunkFileNames: "assets/[name]-[hash].js",
           assetFileNames: (assetInfo) => {
             const info = assetInfo.name.split(".");
             const ext = info[info.length - 1];
             if (/png|jpe?g|gif|svg|webp|ico/.test(ext)) {
-              return `images/[name]-[hash][extname]`;
+              return `assets/images/[name]-[hash][extname]`;
             } else if (/woff|woff2|eot|ttf|otf/.test(ext)) {
-              return `fonts/[name]-[hash][extname]`;
+              return `assets/fonts/[name]-[hash][extname]`;
             } else if (ext === "css") {
-              return `css/[name]-[hash][extname]`;
+              return `assets/[name]-[hash][extname]`;
             }
             return `assets/[name]-[hash][extname]`;
           },
