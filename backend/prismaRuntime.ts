@@ -1124,11 +1124,19 @@ export const prismaRuntime = {
 
   async getProductBySlug(slug: string) {
     if (!enabled) return null;
-    const product = await prisma.product.findUnique({
-      where: { slug },
+    const product = await prisma.product.findFirst({
+      where: {
+        slug,
+        approvalStatus: 'approved',
+        status: 'live',
+        visibilityStatus: 'live',
+      },
       include: { images: true },
     });
-    return product ? mapProduct(product) : null;
+
+    if (!product) return null;
+    const mapped = mapProduct(product);
+    return isSoftDeletedProduct(mapped) ? null : mapped;
   },
 
   async getAllProducts() {

@@ -148,9 +148,31 @@ export const supabaseRuntime = {
 
   async getProductBySlug(slug: string) {
     if (!enabled) return null;
-    const { data, error } = await supabase.from('products').select('*').eq('slug', slug).maybeSingle();
-    if (error) throw error;
-    return data ? mapRowToProduct(data) : null;
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('slug', slug)
+        .eq('status', 'live')
+        .eq('approval_status', 'approved')
+        .eq('visibility_status', 'live')
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+      const mapped = mapRowToProduct(data);
+      return isSoftDeletedProduct(mapped) ? null : mapped;
+    } catch (err) {
+      // Fallback: attempt an unfiltered fetch then validate client-side
+      const { data, error } = await supabase.from('products').select('*').eq('slug', slug).maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const mapped = mapRowToProduct(data);
+      if (String(mapped.status) !== 'live' || String(mapped.approvalStatus) !== 'approved' || String(mapped.visibilityStatus) !== 'live') {
+        return null;
+      }
+      return isSoftDeletedProduct(mapped) ? null : mapped;
+    }
   },
 
   async getAllProducts() {
