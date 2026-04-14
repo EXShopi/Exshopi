@@ -35,7 +35,10 @@ export default function BrandPage() {
   // Resolve brand name + logo via centralized mapping
   const brandInfo = brands.find((item) => normalizeBrandKey(item.name) === brandSlug);
   const brandName = brandInfo?.name || titleFromSlug(brandSlug);
-  const brandLogo = getBrandLogoForName(brandName) || getBrandLogoForName(brandSlug) || null;
+  const brandLogo =
+    getBrandLogoForName(brandName) ||
+    getBrandLogoForName(brandSlug) ||
+    (brandSlug ? `/Banners/${brandSlug}` : null);
 
   useEffect(() => {
     let mounted = true;
