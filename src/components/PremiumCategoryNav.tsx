@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronDown, Flame, Laptop2, Smartphone, Tablet, Headphones, Cpu, BadgePercent, Gamepad2, Tags, Sparkles } from "lucide-react";
 import { categoryData, mainNavItems, NavItem } from "../data/categoryStructure";
@@ -27,23 +28,65 @@ const extraNavItems: NavItem[] = [
 export default function PremiumCategoryNav() {
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const departmentsRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panelPos, setPanelPos] = useState<{ left: number; top: number; width: number } | null>(null);
   const location = useLocation();
   const { lang } = useLanguageStore();
 
   // Close mega menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
       if (
         departmentsRef.current &&
-        !departmentsRef.current.contains(e.target as Node)
+        (departmentsRef.current.contains(target) || panelRef.current?.contains(target))
       ) {
-        setDepartmentsOpen(false);
+        return;
       }
+      setDepartmentsOpen(false);
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Close on route change
+  useEffect(() => {
+    setDepartmentsOpen(false);
+  }, [location.pathname]);
+
+  // Calculate panel position when opening and on resize/scroll
+  useEffect(() => {
+    if (!departmentsOpen) {
+      setPanelPos(null);
+      return;
+    }
+
+    const compute = () => {
+      const trigger = departmentsRef.current;
+      if (!trigger) return setPanelPos(null);
+      const rect = trigger.getBoundingClientRect();
+      const margin = 16;
+      const maxWidth = Math.min(window.innerWidth - margin * 2, 1150);
+      let left = rect.left + window.scrollX;
+      // Ensure panel stays within viewport
+      if (left + maxWidth > window.scrollX + window.innerWidth - margin) {
+        left = window.scrollX + window.innerWidth - margin - maxWidth;
+      }
+      if (left < window.scrollX + margin) left = window.scrollX + margin;
+
+      const top = rect.bottom + window.scrollY;
+      setPanelPos({ left, top, width: maxWidth });
+    };
+
+    compute();
+    window.addEventListener("resize", compute);
+    window.addEventListener("scroll", compute, { passive: true });
+    return () => {
+      window.removeEventListener("resize", compute);
+      window.removeEventListener("scroll", compute);
+    };
+  }, [departmentsOpen]);
 
   const isActiveRoute = (route?: string) => {
     if (!route) return false;
@@ -85,16 +128,20 @@ export default function PremiumCategoryNav() {
               />
             </button>
 
-            {/* Premium Departments Mega Menu */}
-            {departmentsOpen && (
+            {/* Premium Departments Mega Menu rendered in portal to avoid clipping */}
+            {departmentsOpen && panelPos && createPortal(
               <>
                 {/* Backdrop overlay */}
-                <div className="fixed inset-0 z-40 bg-transparent" />
+                <div className="fixed inset-0 z-[1100] bg-transparent" />
 
-                {/* Mega Menu Dropdown Panel */}
+                {/* Mega Menu Dropdown Panel (fixed, positioned by JS) */}
                 <div
-                  className="absolute left-0 top-full z-50 mt-2 w-screen max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                  ref={panelRef}
+                  className="fixed z-[1110] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
                   style={{
+                    left: panelPos.left,
+                    top: panelPos.top,
+                    width: panelPos.width,
                     animation: "slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
                   }}
                 >
@@ -148,7 +195,8 @@ export default function PremiumCategoryNav() {
                     </Link>
                   </div>
                 </div>
-              </>
+              </>,
+              document.body
             )}
           </div>
 

@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import ProductCard from "../components/ProductCard";
+import OptimizedImage from "../components/OptimizedImage";
 import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { brands } from "../components/ShopByBrandSection";
 import { productAPI } from "../services/api";
@@ -74,7 +75,9 @@ export default function BrandPage() {
           <div className="grid gap-6 md:grid-cols-[120px_1fr] md:items-center">
             <div className="flex h-28 w-28 items-center justify-center rounded-[28px] border border-white/70 bg-white/80 shadow-[0_20px_40px_rgba(15,23,42,0.10)] backdrop-blur">
               {brandInfo ? (
-                <img src={brandInfo.logo} alt={brandName} className="max-h-16 max-w-16 object-contain" />
+                <div className="flex h-20 w-20 items-center justify-center rounded-md bg-white/90 p-2">
+                  <OptimizedImage src={brandInfo.logo} alt={brandName} useWebP lazy className="max-h-full max-w-full object-contain" width={160} height={80} />
+                </div>
               ) : (
                 <span className="text-3xl font-black text-slate-900">{brandName.slice(0, 1)}</span>
               )}

@@ -186,6 +186,20 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     decoding: 'async' as const,
   };
 
+  if (hasError) {
+    const fallbackText = (alt || "").slice(0, 1).toUpperCase() || "";
+    return (
+      <div
+        role="img"
+        aria-label={alt}
+        className={`flex items-center justify-center bg-slate-100 text-slate-700 ${className}`}
+        style={{ width, height }}
+      >
+        <span className="text-lg font-bold">{fallbackText}</span>
+      </div>
+    );
+  }
+
   return <img {...imgProps} />;
 };
 
