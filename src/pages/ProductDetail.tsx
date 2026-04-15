@@ -20,6 +20,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+
 import { useCartStore } from "../store/cart";
 import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { useWishlistStore } from "../store/wishlist";
@@ -27,10 +28,13 @@ import { useAuthStore } from "../store/auth";
 import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
 import { formatAED, formatAEDPlain } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
-import { buildDetailedSpecificationGroups, getSpecificationTemplate, humanizeSpecificationValue } from "../lib/productSpecifications";
-import { getCategoryPath } from "../lib/seo";
+import {
+  buildDetailedSpecificationGroups,
+  getSpecificationTemplate,
+  humanizeSpecificationValue,
+} from "../lib/productSpecifications";
+import { buildProductPath, buildAbsoluteUrl, getCategoryPath } from "../lib/seo";
 import SEO from "../components/SEO";
-import { buildProductPath } from "../lib/seo";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
 import ProductSpecificationTable from "../components/product/ProductSpecificationTable";
 
@@ -478,26 +482,31 @@ export default function ProductDetail() {
     sku: product?.sku,
     brand: product?.brand,
   });
-  const canonicalProductPath = product ? buildProductPath(product) : `/product/${identifier || ""}`;
-  // Ensure canonical uses the category-aware product path (full path) unless explicitly overridden
-  const finalCanonical =
-    (productSeo.canonicalUrl && productSeo.canonicalUrl.startsWith('http'))
-      ? productSeo.canonicalUrl
-      : buildAbsoluteUrl(canonicalProductPath);
-  const productSchema = product
-    ? buildProductJsonLd({
-        title: product.title,
-        shortDescription: productSpecs?.shortDescription,
-        description: product.description,
-        slug: product.slug,
-        canonicalUrl: finalCanonical,
-        image: product.image,
-        price: product.price,
-        stock: product.stock,
-        sku: product.sku,
-        brand: product.brand,
-      })
-    : null;
+  const canonicalProductPath = product
+  ? buildProductPath(product)
+  : `/product/${identifier || ""}`;
+
+// Ensure canonical uses category-aware path unless overridden
+const finalCanonical =
+  productSeo?.canonicalUrl && productSeo.canonicalUrl.startsWith("http")
+    ? productSeo.canonicalUrl
+    : buildAbsoluteUrl(canonicalProductPath);
+
+const productSchema = product
+  ? buildProductJsonLd({
+      title: product.title,
+      shortDescription: productSpecs?.shortDescription,
+      description: product.description,
+      slug: product.slug,
+      canonicalUrl: finalCanonical,
+      image: product.image,
+      price: product.price,
+      stock: product.stock,
+      sku: product.sku,
+      brand: product.brand,
+    })
+  : null;
+    
   const baseSpecifications = productSpecs?.specifications || product?.specifications || {};
   const baseAttributes = {
     ...(productSpecs?.attributes || {}),

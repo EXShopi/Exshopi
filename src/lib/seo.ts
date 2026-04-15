@@ -128,6 +128,8 @@ export function getSiteUrl() {
 }
 
 export function buildAbsoluteUrl(pathname: string) {
+  if (!pathname) return getSiteUrl();
+  if (pathname.startsWith("http://") || pathname.startsWith("https://")) return pathname;
   const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
   return `${getSiteUrl()}${normalizedPath}`;
 }
@@ -225,8 +227,8 @@ export function generateProductMeta(product: any) {
       const loweredTitle = title.toLowerCase();
       return (
         keyword.includes("electronics") ||
-        keyword.includes("laptop") && /laptop|macbook|notebook/.test(loweredTitle) ||
-        keyword.includes("iphone") && /iphone|phone|mobile/.test(loweredTitle)
+        (keyword.includes("laptop") && /laptop|macbook|notebook/.test(loweredTitle)) ||
+        (keyword.includes("iphone") && /iphone|phone|mobile/.test(loweredTitle))
       );
     }),
   ]);
@@ -348,10 +350,6 @@ export function getDefaultPageDescription(pathname: string) {
   return "Discover premium marketplace products, category collections, and trusted seller offers across ExShopi in the UAE.";
 }
 
-/**
- * Generate Organization structured data (JSON-LD)
- * Helps Google understand ExShopi as a legitimate business
- */
 export function buildOrganizationSchema() {
   return {
     "@context": "https://schema.org",
@@ -359,7 +357,8 @@ export function buildOrganizationSchema() {
     name: "ExShopi",
     url: getSiteUrl(),
     logo: `${getSiteUrl()}/logo.png`,
-    description: "ExShopi is a UAE-based online marketplace offering electronics, mobiles, laptops, and accessories with trusted sellers, fast delivery, and cash on delivery (COD) options.",
+    description:
+      "ExShopi is a UAE-based online marketplace offering electronics, mobiles, laptops, and accessories with trusted sellers, fast delivery, and cash on delivery (COD) options.",
     sameAs: [
       "https://www.instagram.com/exshopi",
       "https://www.facebook.com/exshopi",
@@ -379,10 +378,6 @@ export function buildOrganizationSchema() {
   };
 }
 
-/**
- * Generate WebSite structured data (JSON-LD) with SearchAction
- * Helps Google show sitelinks and understand search functionality
- */
 export function buildWebsiteSchema() {
   return {
     "@context": "https://schema.org",
@@ -400,9 +395,6 @@ export function buildWebsiteSchema() {
   };
 }
 
-/**
- * Generate Breadcrumb structured data for navigation hierarchy
- */
 export function buildBreadcrumbSchema(items: Array<{ name: string; url: string }>) {
   return {
     "@context": "https://schema.org",
@@ -416,12 +408,6 @@ export function buildBreadcrumbSchema(items: Array<{ name: string; url: string }
   };
 }
 
-/**
- * Generate combined schema array for all structured data
- */
 export function buildHomepageSchemas() {
-  return [
-    buildOrganizationSchema(),
-    buildWebsiteSchema(),
-  ];
+  return [buildOrganizationSchema(), buildWebsiteSchema()];
 }
