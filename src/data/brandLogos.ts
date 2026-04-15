@@ -3,7 +3,7 @@ export const BRAND_LOGOS: Record<string, string> = {
   apple: '/Banners/apple',
   samsung: '/Banners/samsung',
   dell: '/Banners/dell',
-  hp: '/Banners/hp',
+  hp: '/Banners/hp.png',
   lenovo: '/Banners/lenovo',
   gaming: '/Banners/gaming',
   acer: '/Banners/acer',

@@ -96,6 +96,40 @@ export default function OrderSuccess() {
 
   const activeOrder = currentOrder || restoredOrder;
 
+  useEffect(() => {
+    // Fire Google Ads conversion only for non-Stripe (COD) orders
+    if (!activeOrder) return;
+    if (isStripeReturn) return; // do not fire for Stripe returns
+
+    const value = Number(activeOrder?.summary?.total ?? activeOrder?.totalAmount ?? 1.0) || 1.0;
+    const transactionId = String(activeOrder?.id || '');
+
+    const sendConversion = () => {
+      if ((window as any).gtag) {
+        (window as any).gtag('event', 'conversion', {
+          send_to: 'AW-18086868869/ywagCOqVrJwcEIXvvrBD',
+          value,
+          currency: 'AED',
+          transaction_id: transactionId,
+        });
+        return true;
+      }
+      return false;
+    };
+
+    if (!sendConversion()) {
+      // Retry a few times in case gtag hasn't loaded yet
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts += 1;
+        if (sendConversion() || attempts >= 5) {
+          clearInterval(interval);
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [activeOrder, isStripeReturn]);
+
   if (!activeOrder) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">

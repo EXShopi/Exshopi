@@ -21,8 +21,8 @@ export const brands = [
   },
   {
     name: "HP",
-    logo: "/Banners/hp",
-    link: "/brands/hp",
+    logo: "/Banners/hp.png",
+    link: "/brands/hp.png",
   },
   {
     name: "Lenovo",
