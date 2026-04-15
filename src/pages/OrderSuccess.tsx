@@ -103,8 +103,8 @@ export default function OrderSuccess() {
     const firedKey = `exshopi_ads_conversion_${activeOrder.id}`;
     if (window.sessionStorage.getItem(firedKey)) return;
 
-    // Replace with your actual Google Ads conversion label:
-    const CONVERSION_LABEL = 'REPLACE_WITH_CONVERSION_LABEL'; // e.g. 'ywagCOqVrJwcEIXvvrBD'
+    // Google Ads conversion label for Purchase event:
+    const CONVERSION_LABEL = 'LkqOCPSB0JwcEIXvvrBD';
 
     const value = Number(activeOrder?.summary?.total ?? activeOrder?.totalAmount ?? 0) || 0;
     const transactionId = String(activeOrder?.id || '');
@@ -132,19 +132,6 @@ export default function OrderSuccess() {
           clearInterval(interval);
         }
       }, 1000);
-      // Also inject an inline script into <head> as a page-load fallback (per Google Ads instruction)
-      try {
-        const script = document.createElement('script');
-        script.setAttribute('data-exshopi-ads', 'conversion');
-        script.type = 'text/javascript';
-        script.text = `gtag('event', 'conversion', { send_to: 'AW-18086868869/${CONVERSION_LABEL}', value: ${JSON.stringify(
-          value
-        )}, currency: 'AED', transaction_id: ${JSON.stringify(transactionId)} });`;
-        document.head.appendChild(script);
-        window.sessionStorage.setItem(firedKey, '1');
-      } catch (e) {
-        // ignore DOM injection errors
-      }
       return () => clearInterval(interval);
     }
 
