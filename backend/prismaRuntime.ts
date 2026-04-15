@@ -1124,15 +1124,57 @@ export const prismaRuntime = {
 
   async getProductBySlug(slug: string) {
     if (!enabled) return null;
-    const product = await prisma.product.findFirst({
+    // Normalize incoming slug: accept full path and only use the last segment
+    const raw = String(slug || '').trim();
+    const last = raw.split('/').filter(Boolean).pop() || raw;
+
+    // Try a fast DB lookup by slug first
+    let product: any = await prisma.product.findFirst({
       where: {
-        slug,
+        slug: last,
         approvalStatus: 'approved',
         status: 'live',
         visibilityStatus: 'live',
       },
       include: { images: true },
     });
+
+    // If not found, do a safer in-memory scan of recent approved products
+    if (!product) {
+      const candidates = await prisma.product.findMany({
+        where: {
+          approvalStatus: 'approved',
+          status: 'live',
+          visibilityStatus: 'live',
+        },
+        include: { images: true },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+      });
+
+      const normalize = (v: any) =>
+        String(v || '')
+          .toLowerCase()
+          .trim()
+          .replace(/&/g, ' and ')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 120);
+
+      const match = candidates.find((p: any) => {
+        const specs = (p.specsJson || p.specs) || {};
+        const candidatesToTest = [
+          p.slug,
+          specs?.slug,
+          specs?.seoSlug,
+          specs?.seo?.slug,
+          normalize(p.title),
+        ].filter(Boolean);
+        return candidatesToTest.map(normalize).includes(normalize(last));
+      });
+
+      product = match || null;
+    }
 
     if (!product) return null;
     const mapped = mapProduct(product);

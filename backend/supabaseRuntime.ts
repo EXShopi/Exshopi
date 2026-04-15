@@ -148,30 +148,61 @@ export const supabaseRuntime = {
 
   async getProductBySlug(slug: string) {
     if (!enabled) return null;
+    const raw = String(slug || '').trim();
+    const last = raw.split('/').filter(Boolean).pop() || raw;
+
     try {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('slug', slug)
+        .eq('slug', last)
         .eq('status', 'live')
         .eq('approval_status', 'approved')
         .eq('visibility_status', 'live')
         .maybeSingle();
 
       if (error) throw error;
-      if (!data) return null;
-      const mapped = mapRowToProduct(data);
-      return isSoftDeletedProduct(mapped) ? null : mapped;
-    } catch (err) {
-      // Fallback: attempt an unfiltered fetch then validate client-side
-      const { data, error } = await supabase.from('products').select('*').eq('slug', slug).maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      const mapped = mapRowToProduct(data);
-      if (String(mapped.status) !== 'live' || String(mapped.approvalStatus) !== 'approved' || String(mapped.visibilityStatus) !== 'live') {
-        return null;
+      if (data) {
+        const mapped = mapRowToProduct(data);
+        return isSoftDeletedProduct(mapped) ? null : mapped;
       }
-      return isSoftDeletedProduct(mapped) ? null : mapped;
+    } catch (err) {
+      console.warn('[supabaseRuntime] primary slug lookup failed', err);
+    }
+
+    // Fallback: fetch a limited recent set and scan client-side for normalized matches
+    try {
+      const { data: rows, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'live')
+        .eq('approval_status', 'approved')
+        .eq('visibility_status', 'live')
+        .order('createdAt', { ascending: false })
+        .limit(2000);
+
+      if (error) throw error;
+      const normalize = (v: any) =>
+        String(v || '')
+          .toLowerCase()
+          .trim()
+          .replace(/&/g, ' and ')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 120);
+
+      const target = normalize(last);
+      const mappedRows = (rows || []).map(mapRowToProduct);
+      const found = mappedRows.find((p: any) => {
+        const specs = p.specs || {};
+        const candidates = [p.slug, specs.slug, specs.seoSlug, specs?.seo?.slug, p.title].filter(Boolean);
+        return candidates.map(normalize).includes(target);
+      });
+
+      return found && !isSoftDeletedProduct(found) ? found : null;
+    } catch (err) {
+      console.warn('[supabaseRuntime] fallback scan failed', err);
+      return null;
     }
   },
 
