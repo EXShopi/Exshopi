@@ -112,6 +112,12 @@ export default function PrivacyPolicy() {
           </a>
           .
         </p>
+
+        <h3 className="mt-10 text-xl font-black text-slate-900">Cookie Declaration</h3>
+        <div className="mt-4">
+          {/* CookieHub declaration embed */}
+          <div className="cookiehub-declaration"></div>
+        </div>
       </div>
     </div>
   );
