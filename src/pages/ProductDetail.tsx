@@ -1017,7 +1017,7 @@ const structuredTemplate = getSpecificationTemplate(
           <div className="flex items-center gap-2 overflow-x-auto text-sm text-slate-600">
             <Link to="/" className="whitespace-nowrap hover:text-blue-600">Home</Link>
             <ChevronRight className="h-4 w-4 flex-shrink-0" />
-            <Link to="/category/electronics" className="whitespace-nowrap hover:text-blue-600">Electronics</Link>
+            <Link to={getCategoryPath('electronics')} className="whitespace-nowrap hover:text-blue-600">Electronics</Link>
             <ChevronRight className="h-4 w-4 flex-shrink-0" />
             <Link to={`/vendor/${sellerLinkSlug}`} className="whitespace-nowrap hover:text-blue-600">{product.sellerName || sellerProfile.name}</Link>
             <ChevronRight className="h-4 w-4 flex-shrink-0" />

@@ -1,41 +1,42 @@
 import OptimizedImage from "./OptimizedImage";
+import { getCategoryPath } from "../lib/seo";
 
 const accessories = [
   {
     name: "Phone Covers",
     image: "/Accessories/phonecover",
     slug: "phone-covers",
-    link: "/category/phone-covers",
+    link: getCategoryPath('phone-covers'),
   },
   {
     name: "Cables & Connectors",
     image: "/Accessories/cables&connector",
     slug: "cables-connectors",
-    link: "/category/cables-connectors",
+    link: getCategoryPath('cables-connectors'),
   },
   {
     name: "Keyboards & Mouse",
     image: "/Accessories/keyboard&mouse",
     slug: "keyboards-mouse",
-    link: "/category/keyboards-mouse",
+    link: getCategoryPath('keyboards-mouse'),
   },
   {
     name: "Hard Disk & Memory Cards",
     image: "/Accessories/harddisk",
     slug: "hard-disk-memory-cards",
-    link: "/category/hard-disk-memory-cards",
+    link: getCategoryPath('hard-disk-memory-cards'),
   },
   {
     name: "Bags & Sleeves",
     image: "/Accessories/bag&sleeves",
     slug: "bags-sleeves",
-    link: "/category/bags-sleeves",
+    link: getCategoryPath('bags-sleeves'),
   },
   {
     name: "True Wireless",
     image: "/Accessories/truewireless",
     slug: "true-wireless",
-    link: "/category/true-wireless",
+    link: getCategoryPath('true-wireless'),
   },
 ];
 

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { getCategoryPath } from "../lib/seo";
 import { ChevronDown } from "lucide-react";
 
 const departmentCategories = [
@@ -13,10 +14,10 @@ const departmentCategories = [
 
 const navItems = [
   { label: "Departments", route: null, hasDropdown: true },
-  { label: "Laptops", route: "/category/laptops" },
-  { label: "Mobiles", route: "/category/mobiles" },
-  { label: "Tablets", route: "/category/tablets" },
-  { label: "Accessories", route: "/category/accessories" },
+  { label: "Laptops", route: getCategoryPath('laptops') },
+  { label: "Mobiles", route: getCategoryPath('mobiles') },
+  { label: "Tablets", route: getCategoryPath('tablets') },
+  { label: "Accessories", route: getCategoryPath('accessories') },
   { label: "Vendors", route: "/vendors" },
   { label: "Today Deals", route: "/deals" },
 ];
@@ -76,7 +77,7 @@ export default function CategoryNav() {
                             {departmentCategories.map((dept) => (
                               <Link
                                 key={dept.name}
-                                to={`/category/${dept.name.toLowerCase()}`}
+                                to={getCategoryPath(dept.name.toLowerCase())}
                                 onClick={() => setDropdownOpen(false)}
                                 className="group/item flex items-center gap-3 rounded-xl p-3 transition-all hover:bg-blue-50"
                               >

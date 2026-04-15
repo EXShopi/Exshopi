@@ -13,6 +13,8 @@ export type BlogPost = {
   }>;
 };
 
+import { getCategoryPath } from './seo';
+
 export const BLOG_POSTS: BlogPost[] = [
   {
     slug: "best-laptops-uae",
@@ -34,8 +36,8 @@ export const BLOG_POSTS: BlogPost[] = [
       "If you need a student or office machine, focus first on processor generation, RAM, SSD storage, and battery condition. For creative work, display size, color accuracy, graphics, and thermal performance matter more. Refurbished MacBook buyers in Dubai often get the best value by comparing year, chipset, storage tier, and cosmetic condition before looking at accessories or bundled offers.",
       "Shoppers searching for refurbished laptops UAE should also pay attention to delivery support, return clarity, and whether the product listing includes structured specifications. Clear specs are not just useful for buyers. They also help search engines understand the product, which improves discovery and makes the marketplace easier to trust.",
     ],
-    relatedLinks: [
-      { label: "Shop laptops", href: "/category/electronics/laptops" },
+      relatedLinks: [
+      { label: "Shop laptops", href: getCategoryPath('electronics', 'laptops') },
       { label: "Browse all products", href: "/products" },
     ],
   },
@@ -60,7 +62,7 @@ export const BLOG_POSTS: BlogPost[] = [
       "For search-driven shoppers looking for used MacBook Dubai or refurbished laptops UAE, strong metadata, clean product URLs, and related category links also make discovery easier. Better SEO and better product clarity often support the same outcome: higher trust and higher conversions.",
     ],
     relatedLinks: [
-      { label: "See MacBook-ready laptop deals", href: "/category/electronics/laptops" },
+      { label: "See MacBook-ready laptop deals", href: getCategoryPath('electronics', 'laptops') },
       { label: "Read all ExShopi blog posts", href: "/blog" },
     ],
   },
