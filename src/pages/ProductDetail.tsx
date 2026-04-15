@@ -489,7 +489,7 @@ export default function ProductDetail() {
         shortDescription: productSpecs?.shortDescription,
         description: product.description,
         slug: product.slug,
-        canonicalUrl: productSeo.canonicalUrl,
+        canonicalUrl: finalCanonical,
         image: product.image,
         price: product.price,
         stock: product.stock,
