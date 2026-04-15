@@ -1,7 +1,17 @@
 import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { homepageCategories } from "../data/homepageCategories";
-import { OptimizedImage } from "./OptimizedImage";
+import OptimizedImage from "./OptimizedImage";
+
+type MegaCategoryItem = {
+  title: string;
+  image: string;
+  link: string;
+  badge?: string;
+};
+
+const megaCategories: MegaCategoryItem[] = [
+  {
+    title: "Wearables",
     image: "/Category Card/wearable",
     link: "/category/wearables",
   },
@@ -227,7 +237,6 @@ import { OptimizedImage } from "./OptimizedImage";
     link: "/category/laundry-dishwashing",
   },
 ];
-
 export default function MegaCategoryCarousel() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -272,9 +281,8 @@ export default function MegaCategoryCarousel() {
           className="max-w-full overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory scroll-px-1"
         >
           <div className="flex w-max gap-4 pb-2 sm:gap-5">
-            {homepageCategories.map((item) => (
-              <a
-                key={item.slug}
+{megaCategories.map((item) => (              <a
+key={item.title}
                 href={item.link}
                 className="group min-w-[132px] max-w-[132px] snap-start text-center sm:min-w-[144px] sm:max-w-[144px] md:min-w-[156px] md:max-w-[156px]"
               >
@@ -282,8 +290,7 @@ export default function MegaCategoryCarousel() {
                   <div className="relative flex items-center justify-center overflow-visible px-3 sm:px-4" style={{aspectRatio: '1 / 1.2'}}>
                     <OptimizedImage
                       src={item.image}
-                      alt={item.name}
-                      lazy={true}
+alt={item.title}                      lazy={true}
                       useWebP={true}
                       width={120}
                       height={120}
@@ -293,7 +300,7 @@ export default function MegaCategoryCarousel() {
                 </div>
 
                 <h3 className="mx-auto mt-3 max-w-[124px] text-[15px] font-semibold leading-5 text-slate-800 sm:max-w-[138px] sm:text-[16px] md:mt-4 md:max-w-[145px] md:text-[17px] md:leading-6">
-                  {item.name}
+{item.title}
                 </h3>
               </a>
             ))}
