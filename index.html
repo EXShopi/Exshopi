@@ -1,25 +1,24 @@
 <!doctype html>
 <html lang="en">
   <head>
-  <!-- CookieHub -->
-  <script src="https://cdn.cookiehub.eu/c2/3063b2a1.js"></script>
-  <script type="text/javascript">
-    document.addEventListener("DOMContentLoaded", function() {
-      var cpm = {};
-      window.cookiehub.load(cpm);
-    });
-  </script>
+    <!-- CookieHub -->
+    <script src="https://cdn.cookiehub.eu/c2/3063b2a1.js"></script>
+    <script type="text/javascript">
+      document.addEventListener("DOMContentLoaded", function() {
+        var cpm = {};
+        window.cookiehub.load(cpm);
+      });
+    </script>
 
-  <!-- Google tag -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-PG08TBT74Q"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-PG08TBT74Q');
-    gtag('config', 'AW-18086868869');
-  </script>
-</head>
+    <!-- Google tag -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PG08TBT74Q"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-PG08TBT74Q');
+      gtag('config', 'AW-18086868869');
+    </script>
 
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -28,52 +27,38 @@
     <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    
+
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://exshopi.com/" />
     <meta property="og:title" content="ExShopi UAE | Online Shopping for Electronics, Mobiles, Laptops & More" />
     <meta property="og:description" content="Shop electronics, mobiles, refurbished laptops, accessories and more in the UAE on ExShopi. Trusted sellers, fast delivery, and cash on delivery." />
     <meta property="og:image" content="https://exshopi.com/logo.png" />
-    
+
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
     <meta property="twitter:url" content="https://exshopi.com/" />
     <meta property="twitter:title" content="ExShopi UAE | Online Shopping for Electronics, Mobiles, Laptops & More" />
     <meta property="twitter:description" content="Shop electronics, mobiles, refurbished laptops, accessories and more in the UAE on ExShopi. Trusted sellers, fast delivery, and cash on delivery." />
     <meta property="twitter:image" content="https://exshopi.com/logo.png" />
-    
-    <!-- Favicon - Versioned to avoid browser cache issues -->
-    <!-- Standard favicon for browsers -->
+
     <link rel="icon" type="image/x-icon" href="/favicon-v2.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32-v2.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16-v2.png" />
-    
-    <!-- Apple Touch Icon (iOS home screen) -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
-    
-    <!-- Android Chrome & PWA -->
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192-v2.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512x512-v2.png" />
-    
-    <!-- PWA Manifest -->
     <link rel="manifest" href="/site.webmanifest" />
-    
-    <!-- Microsoft Tiles -->
     <meta name="msapplication-TileImage" content="/favicon-32x32-v2.png" />
     <meta name="msapplication-TileColor" content="#000000" />
-    
-    <!-- Canonical managed dynamically by SPA SEO component -->
-    
-    <!-- Preconnect to improve performance -->
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    
-    <!-- Load fonts asynchronously to prevent render blocking -->
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'" />
-    
+
     <title>ExShopi UAE | Online Shopping for Electronics, Mobiles, Laptops & More</title>
+
     <style>
       body {
         margin: 0;
@@ -103,11 +88,8 @@
         font-family: monospace;
       }
     </style>
-    
-    <!-- Preload critical LCP image for better performance (WebP preferred) -->
+
     <link rel="preload" as="image" href="/hero/hero-1.webp" type="image/webp" fetchpriority="high" />
-    
-    <!-- DNS Prefetch for external services to improve connection speed -->
     <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.google-analytics.com" />
@@ -115,37 +97,6 @@
     <link rel="dns-prefetch" href="https://www.stripe.com" />
   </head>
   <body>
-    <div id="root">
-      <div id="loading">Loading ExShopi...</div>
-      <div id="error"></div>
-    </div>
-    <script>
-      window.addEventListener('error', function(event) {
-        const errorDiv = document.getElementById('error');
-        errorDiv.style.display = 'block';
-        errorDiv.innerHTML = `<strong>Error:</strong><br>${event.message}<br><br><pre>${event.filename}:${event.lineno}</pre>`;
-      });
-      
-      // Remove loading message after app mounts
-      setTimeout(function() {
-        const loading = document.getElementById('loading');
-        if (loading && loading.parentElement) {
-          if (document.getElementById('root').childElementCount > 1) {
-            loading.remove();
-          }
-        }
-      }, 2000);
-      // Remove loading message after app mounts; main.tsx also removes it immediately on mount
-      setTimeout(function() {
-        try {
-          const loading = document.getElementById('loading');
-          if (loading && loading.parentElement) loading.remove();
-        } catch (e) {
-          // ignore
-        }
-      }, 5000);
-    </script>
-    <script type="module" src="/src/main.tsx"></script>
+    ...
   </body>
 </html>
-
