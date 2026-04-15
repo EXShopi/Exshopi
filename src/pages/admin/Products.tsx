@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
 import { AlertCircle, CheckCircle2, Copy, Eye, Package2, Pencil, Search, Store, Trash2, XCircle } from 'lucide-react';
 import { formatAED } from '../../lib/currency';
+import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
 
@@ -425,7 +426,7 @@ export function AdminProducts() {
                             Copy
                           </button>
                           <button
-                            onClick={() => window.open(`/product/${product.slug || product.id}`, '_blank')}
+                            onClick={() => window.open(buildProductPath(product), '_blank')}
                             className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-700"
                           >
                             <Eye size={14} />

@@ -17,6 +17,7 @@ import {
   Check,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { buildProductPath } from "../lib/seo";
 import { useWishlistStore } from "../store/wishlist";
 import { formatAEDPlain } from "../lib/currency";
 import { productAPI } from "../services/api";
@@ -387,7 +388,7 @@ export default function Wishlist() {
                           </button>
 
                           <Link
-                            to={item.slug ? `/product/${item.slug}` : "#"}
+                            to={item.slug ? buildProductPath(item) : "#"}
                             className="block"
                           >
                             <div className="flex h-[290px] items-center justify-center p-6">
@@ -408,7 +409,7 @@ export default function Wishlist() {
                           </div>
 
                           <Link
-                            to={item.slug ? `/product/${item.slug}` : "#"}
+                            to={item.slug ? buildProductPath(item) : "#"}
                             className="mt-2 block"
                           >
                             <h3 className="min-h-[84px] text-[1.42rem] font-black leading-7 tracking-tight text-slate-900 transition group-hover:text-slate-700">
@@ -483,7 +484,7 @@ export default function Wishlist() {
                         className="grid gap-5 rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition hover:shadow-[0_16px_38px_rgba(15,23,42,0.07)] md:grid-cols-[220px_1fr_auto]"
                       >
                         <Link
-                          to={item.slug ? `/product/${item.slug}` : "#"}
+                          to={item.slug ? buildProductPath(item) : "#"}
                           className="overflow-hidden rounded-[24px] bg-slate-50"
                         >
                           <div className="flex h-full min-h-[220px] items-center justify-center p-4">
@@ -507,7 +508,7 @@ export default function Wishlist() {
                             )}
                           </div>
 
-                          <Link to={item.slug ? `/product/${item.slug}` : "#"}>
+                          <Link to={item.slug ? buildProductPath(item) : "#"}>
                             <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900 transition hover:text-slate-700">
                               {item.name}
                             </h3>

@@ -195,10 +195,10 @@ export default function CategoryPage() {
             <Link to="/" className="hover:text-slate-900">Home</Link>
             <span>/</span>
             <Link to="/categories" className="hover:text-slate-900">Categories</Link>
-            {effectiveCategoryKey && (
+                {effectiveCategoryKey && (
               <>
                 <span>/</span>
-                <Link to={`/category/${effectiveCategoryKey}`} className="font-semibold text-slate-900">{titleFromSlug(effectiveCategoryKey)}</Link>
+                    <Link to={getCategoryPath(effectiveCategoryKey)} className="font-semibold text-slate-900">{titleFromSlug(effectiveCategoryKey)}</Link>
               </>
             )}
             {effectiveSubcategoryKey && (
@@ -244,7 +244,7 @@ export default function CategoryPage() {
                     ]).map((entry) => (
                   <Link
                     key={entry.slug}
-                    to={`/category/${effectiveCategoryKey}/${entry.slug}`}
+                    to={getCategoryPath(effectiveCategoryKey, entry.slug)}
                     className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-600"
                   >
                     <span>{entry.name}</span>

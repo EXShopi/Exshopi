@@ -126,8 +126,30 @@ export default function OrderSuccess() {
           clearInterval(interval);
         }
       }, 1000);
+      // Also inject an inline script into <head> as a page-load fallback (per Google Ads instruction)
+      try {
+        const script = document.createElement('script');
+        script.setAttribute('data-exshopi-ads', 'conversion');
+        script.type = 'text/javascript';
+        script.text = `gtag('event', 'conversion', { send_to: 'AW-18086868869/ywagCOqVrJwcEIXvvrBD', value: ${JSON.stringify(
+          value
+        )}, currency: 'AED', transaction_id: ${JSON.stringify(transactionId)} });`;
+        document.head.appendChild(script);
+      } catch (e) {
+        // ignore DOM injection errors
+      }
       return () => clearInterval(interval);
     }
+
+    return () => {
+      // cleanup any injected script
+      try {
+        const injected = document.head.querySelectorAll('script[data-exshopi-ads="conversion"]');
+        injected.forEach((n) => n.remove());
+      } catch (e) {
+        // ignore
+      }
+    };
   }, [activeOrder, isStripeReturn]);
 
   if (!activeOrder) {

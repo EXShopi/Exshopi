@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { getCategoryPath } from "../lib/seo";
 import { ChevronDown, X } from "lucide-react";
 import { categoryData, mainNavItems, NavItem } from "../data/categoryStructure";
 
@@ -105,7 +106,7 @@ export default function MobileCategoryNav({
                         {category.subcategories.map((sub) => (
                           <Link
                             key={sub.slug}
-                            to={`/category/${category.slug}/${sub.slug}`}
+                            to={getCategoryPath(category.slug, sub.slug)}
                             onClick={handleNavigate}
                             className="block py-2 text-sm text-slate-600 transition hover:text-blue-600 hover:font-medium active:text-blue-700"
                           >

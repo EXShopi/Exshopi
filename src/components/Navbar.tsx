@@ -9,6 +9,7 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
+import { buildProductPath, getCategoryPath } from "../lib/seo";
 import PremiumAccountButton from "./Premium/PremiumAccountButton";
 import CartIcon from "./Premium/CartIcon";
 import NavbarWishlistIcon from "./Premium/NavbarWishlistIcon";
@@ -129,11 +130,9 @@ export default function Navbar() {
   };
 
   const navigateToCategory = (categoryName: string, itemName?: string) => {
-    const categorySlug = slugifyValue(categoryName);
-    const itemSlug = itemName ? slugifyValue(itemName) : "";
     setMegaOpen(false);
     setSidebarOpen(false);
-    navigate(itemSlug ? `/category/${categorySlug}/${itemSlug}` : `/category/${categorySlug}`);
+    navigate(getCategoryPath(categoryName, itemName));
   };
 
   const quickSuggestions = useMemo(
@@ -356,11 +355,11 @@ export default function Navbar() {
                         {storefrontT(lang, "search")}
                       </div>
                       <div className="p-3">
-                        {quickSuggestions.map((product) => (
+                          {quickSuggestions.map((product) => (
                           <button
                             key={product.id}
                             type="button"
-                            onClick={() => navigate(`/product/${product.slug}`)}
+                            onClick={() => navigate(buildProductPath(product))}
                             className="flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
                           >
                             <div className="flex items-center gap-3">

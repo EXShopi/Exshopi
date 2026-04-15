@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { productAPI, sellerAPI } from '../../services/api';
 import { AlertCircle, Archive, CheckCircle, Clock3, Copy, Edit, Eye, PackageSearch, Search, Trash2, XCircle } from 'lucide-react';
+import { buildProductPath } from '../../lib/seo';
 import { useAuthStore } from '../../store/auth';
 import { formatAED } from '../../lib/currency';
 
@@ -377,7 +378,7 @@ export default function SellerProducts() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => navigate(`/product/${product.id}`)}
+                            onClick={() => navigate(buildProductPath(product))}
                             className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                           >
                             <Eye className="h-4 w-4" />

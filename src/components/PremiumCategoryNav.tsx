@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronDown, Flame, Laptop2, Smartphone, Tablet, Headphones, Cpu, BadgePercent, Gamepad2, Tags, Sparkles } from "lucide-react";
 import { categoryData, mainNavItems, NavItem } from "../data/categoryStructure";
+import { getCategoryPath } from "../lib/seo";
 import { useLanguageStore } from "../store/language";
 import { storefrontT } from "../lib/storefrontCopy";
 
@@ -154,7 +155,7 @@ export default function PremiumCategoryNav() {
                       >
                         {/* Category Title - Clickable */}
                         <Link
-                          to={`/category/${category.slug}`}
+                          to={getCategoryPath(category.slug)}
                           onClick={handleCategoryClick}
                           className="group/cat mb-4 flex items-center gap-2 transition-all"
                         >
@@ -171,7 +172,7 @@ export default function PremiumCategoryNav() {
                           {category.subcategories.map((subcategory) => (
                             <Link
                               key={subcategory.slug}
-                              to={`/category/${category.slug}/${subcategory.slug}`}
+                              to={getCategoryPath(category.slug, subcategory.slug)}
                               onClick={handleCategoryClick}
                               className="block text-sm font-medium text-slate-600 transition-all duration-150 hover:text-blue-600 hover:translate-x-1"
                             >
