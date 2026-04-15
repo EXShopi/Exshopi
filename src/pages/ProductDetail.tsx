@@ -33,9 +33,26 @@ import {
   getSpecificationTemplate,
   humanizeSpecificationValue,
 } from "../lib/productSpecifications";
-import { buildProductPath, buildAbsoluteUrl, getCategoryPath } from "../lib/seo";
+import { buildProductPath, buildAbsoluteUrl } from "../lib/seo";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
+// Local helpers for safe category path and slugification
+function slugifyLocal(value?: string) {
+  return String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function safeCategoryPath(categorySlug?: string, subcategorySlug?: string) {
+  const cat = slugifyLocal(categorySlug);
+  const sub = slugifyLocal(subcategorySlug);
+  if (cat && sub) return `/category/${cat}/${sub}`;
+  if (cat) return `/category/${cat}`;
+  return "/categories";
+}
 import ProductSpecificationTable from "../components/product/ProductSpecificationTable";
 
 
@@ -298,6 +315,20 @@ export default function ProductDetail() {
   const authUser = useAuthStore((state) => state.user);
   const cacheKey = identifier ? String(identifier) : "";
   const cachedProduct = cacheKey ? productDetailCache.get(cacheKey) : null;
+  // ...existing state and hooks...
+  // ...existing state and hooks...
+
+  // ...existing state and hooks...
+
+  // Breadcrumb helpers: assign only after productSpecs and product are declared
+  let breadcrumbCategorySlug: string;
+  let breadcrumbCategoryLabel: string;
+  let breadcrumbCategoryLink: string;
+
+  // ...existing code...
+
+  // After productSpecs and product are initialized (after all useState/useMemo)
+  // Place this block just before the return statement
 
   const [product, setProduct] = useState<any>(() => cachedProduct || null);
   const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -1003,6 +1034,11 @@ const structuredTemplate = getSpecificationTemplate(
     }
   };
 
+  // Breadcrumb assignments (must be after productSpecs and product are available)
+  breadcrumbCategorySlug = productSpecs?.parentCategorySlug || productSpecs?.categorySlug || product?.category || "electronics";
+  breadcrumbCategoryLabel = productSpecs?.parentCategoryName || productSpecs?.categoryName || product?.category || "Electronics";
+  breadcrumbCategoryLink = safeCategoryPath(breadcrumbCategorySlug);
+
   return (
     <>
       {product ? (
@@ -1012,8 +1048,8 @@ const structuredTemplate = getSpecificationTemplate(
           metaTitle={productSeo.metaTitle}
           metaDescription={productSeo.metaDescription}
           metaKeywords={productSeo.metaKeywords}
-            pathname={canonicalProductPath}
-            canonicalUrl={finalCanonical}
+          pathname={canonicalProductPath}
+          canonicalUrl={finalCanonical}
           ogTitle={productSeo.ogTitle}
           ogDescription={productSeo.ogDescription}
           ogImage={productSeo.ogImage}
@@ -1026,11 +1062,11 @@ const structuredTemplate = getSpecificationTemplate(
         <div className="mx-auto max-w-[1800px] px-4 py-3 md:px-6">
           <div className="flex items-center gap-2 overflow-x-auto text-sm text-slate-600">
             <Link to="/" className="whitespace-nowrap hover:text-blue-600">Home</Link>
-            <ChevronRight className="h-4 w-4 flex-shrink-0" />
-            <Link to={getCategoryPath('electronics')} className="whitespace-nowrap hover:text-blue-600">Electronics</Link>
-            <ChevronRight className="h-4 w-4 flex-shrink-0" />
+            <ChevronRight className="h-4 w-4 shrink-0" />
+            <Link to={breadcrumbCategoryLink} className="whitespace-nowrap hover:text-blue-600">{breadcrumbCategoryLabel}</Link>
+            <ChevronRight className="h-4 w-4 shrink-0" />
             <Link to={`/vendor/${sellerLinkSlug}`} className="whitespace-nowrap hover:text-blue-600">{product.sellerName || sellerProfile.name}</Link>
-            <ChevronRight className="h-4 w-4 flex-shrink-0" />
+            <ChevronRight className="h-4 w-4 shrink-0" />
             <span className="truncate font-semibold text-slate-900">{product.title}</span>
           </div>
         </div>
