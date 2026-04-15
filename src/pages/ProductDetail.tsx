@@ -280,7 +280,11 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
 };
 
 export default function ProductDetail() {
-  const { identifier } = useParams<{ identifier: string }>();
+  const { identifier, category: paramCategory, subcategory: paramSubcategory } = useParams<{
+    identifier: string;
+    category?: string;
+    subcategory?: string;
+  }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { addItem } = useCartStore();
@@ -343,8 +347,28 @@ export default function ProductDetail() {
           setLoading(false);
           return;
         }
+        // If direct product lookup failed, try slug-based lookup using route params
+        if ((paramCategory || paramSubcategory) && String(identifier || '').trim()) {
+          try {
+            const candidates = await productAPI.getBySlug(paramCategory || String(paramCategory || ''), paramSubcategory || String(paramSubcategory || ''));
+            const match = (candidates || []).find((p: any) => {
+              const pSlug = String(p?.slug || p?.id || '').trim().toLowerCase();
+              const ident = String(identifier || '').trim().toLowerCase();
+              return pSlug === ident || String(p?.id) === ident;
+            });
+            if (match) {
+              const normalizedProduct = normalizeMarketplaceProduct(match);
+              productDetailCache.set(cacheKey, normalizedProduct);
+              setProduct(normalizedProduct);
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('Slug-based fallback failed:', e);
+          }
+        }
 
-        throw new Error("Product not found");
+        throw new Error('Product not found');
       } catch (_error: any) {
         if (!active || controller.signal.aborted) return;
 
@@ -786,18 +810,27 @@ const structuredTemplate = getSpecificationTemplate(
 
   if (!loading && !product) {
     return (
-      <div className="flex items-center justify-center px-4 py-24">
-        <div className="text-center">
-          <h1 className="mb-4 text-3xl font-bold text-slate-900">Product Not Found</h1>
-          <p className="mb-6 text-slate-600">The product you&apos;re looking for doesn&apos;t exist.</p>
-          <button
-            onClick={() => navigate("/")}
-            className="rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
-          >
-            Back to Home
-          </button>
+      <>
+        <SEO
+          title="Product Not Found"
+          description={`The product you're looking for doesn't exist.`}
+          pathname={location.pathname}
+          noindex={true}
+        />
+
+        <div className="flex items-center justify-center px-4 py-24">
+          <div className="text-center">
+            <h1 className="mb-4 text-3xl font-bold text-slate-900">Product Not Found</h1>
+            <p className="mb-6 text-slate-600">The product you&apos;re looking for doesn&apos;t exist.</p>
+            <button
+              onClick={() => navigate("/")}
+              className="rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
+            >
+              Back to Home
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
