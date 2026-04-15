@@ -25,6 +25,14 @@ export function useProactiveTokenRefresh() {
     // Token expires at 15 minutes, so this gives 2 minute buffer
     const REFRESH_INTERVAL = 13 * 60 * 1000; // 13 minutes in milliseconds
 
+    // Only attempt proactive refresh if a refresh token is known to the client
+    const storedRefreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
+    if (!storedRefreshToken) {
+      // Skip proactive refresh when no client-side refresh token is present
+      // This avoids forcing silent refresh attempts that may clear valid server-side sessions
+      return;
+    }
+
     timerRef.current = setTimeout(async () => {
       const now = Date.now();
       const timeSinceLastRefresh = now - lastRefreshRef.current;
@@ -35,19 +43,19 @@ export function useProactiveTokenRefresh() {
         return;
       }
 
-      try {
-        console.log('[TOKEN] Proactive refresh starting...');
-        lastRefreshRef.current = now;
+        try {
+          console.log('[TOKEN] Proactive refresh starting...');
+          lastRefreshRef.current = now;
 
-        const response = await userAPI.refresh();
-        if (response?.accessToken) {
-          setAccessToken(response.accessToken);
-          console.log('[TOKEN] Proactive refresh successful');
+          const response = await userAPI.refresh();
+          if (response?.accessToken) {
+            setAccessToken(response.accessToken);
+            console.log('[TOKEN] Proactive refresh successful');
+          }
+        } catch (error) {
+          // Don't force logout on refresh error from proactive hook — just log
+          console.warn('[TOKEN] Proactive refresh failed:', error);
         }
-      } catch (error) {
-        // Don't force logout on refresh error, let 401 interceptor handle it
-        console.warn('[TOKEN] Proactive refresh failed:', error);
-      }
     }, REFRESH_INTERVAL);
 
     return () => {
