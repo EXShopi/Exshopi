@@ -8,6 +8,7 @@ import {
   Check,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { buildProductPath } from "../lib/seo";
 import { useWishlistStore } from "../store/wishlist";
 import { useCartStore } from "../store/cart";
 import { useSettingsStore } from "../store/settings";
@@ -105,7 +106,7 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
 
   return (
     <Link
-      to={`/product/${item.slug || item.id}`}
+      to={buildProductPath(item)}
       className="group block w-full max-w-full overflow-hidden rounded-[18px] border border-[#d4c9f2] bg-white shadow-[0_8px_20px_rgba(36,20,84,0.08)] transition hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(36,20,84,0.12)] no-underline md:max-w-[190px] md:min-w-[190px]"
     >
       <div className="p-2.5">

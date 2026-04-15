@@ -1465,7 +1465,7 @@ export function AdminDashboard() {
                           <td className="px-8 py-5 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Link 
-                                to={`/product/${product.id}`}
+                                to={buildProductPath(product)}
                                 target="_blank"
                                 className="flex items-center gap-2 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition-all font-bold text-xs"
                                 title="View on Website"

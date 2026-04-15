@@ -9,6 +9,7 @@ import {
   Check,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { buildProductPath } from "../lib/seo";
 import { useWishlistStore } from "../store/wishlist";
 import { useCartStore } from "../store/cart";
 import { productAPI } from "../services/api";
@@ -62,7 +63,7 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
 
   return (
     <Link
-      to={`/product/${product.slug || product.id}`}
+      to={buildProductPath(product)}
       className="group block w-full max-w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] no-underline md:max-w-[246px] md:min-w-[246px] md:rounded-[24px]"
     >
       <div className="relative overflow-hidden bg-white px-3 pb-3 pt-3 md:px-4 md:pb-4 md:pt-4">
@@ -104,10 +105,10 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
 
         <button
           type="button"
-          onClick={(e) => {
+            onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            navigate(`/product/${product.slug || product.id}`);
+            navigate(buildProductPath(product));
           }}
           className="absolute right-2.5 top-12 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-md transition hover:bg-white md:right-4 md:top-16 md:h-11 md:w-11"
           aria-label={`View ${product.title}`}

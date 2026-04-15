@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { buildProductPath } from "../lib/seo";
 import {
   Trash2,
   ShieldCheck,
@@ -164,7 +165,7 @@ export default function Cart() {
                 <div className="flex gap-6">
                   {/* Product Image */}
                   <Link
-                    to={`/product/${item.slug || item.id}`}
+                    to={buildProductPath(item)}
                     className="h-28 w-28 flex-shrink-0 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden hover:border-blue-300 transition"
                   >
                     <img
@@ -178,7 +179,7 @@ export default function Cart() {
                   {/* Product Info */}
                   <div className="flex-1">
                     <Link
-                      to={`/product/${item.slug || item.id}`}
+                      to={buildProductPath(item)}
                       className="text-lg font-bold text-slate-900 hover:text-blue-600 transition line-clamp-2 mb-2"
                     >
                       {item.title}

@@ -9,6 +9,7 @@ import {
   Check,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { buildProductPath } from "../lib/seo";
 import { useWishlistStore } from "../store/wishlist";
 import { useCartStore } from "../store/cart";
 import { formatAEDPlain } from "../lib/currency";
@@ -115,7 +116,7 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
 
   return (
     <Link
-      to={`/product/${product.slug || product.id}`}
+      to={buildProductPath(product)}
       className="group block w-full max-w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] no-underline md:max-w-[264px] md:min-w-[264px] md:rounded-[26px]"
     >
       <div className="relative overflow-hidden bg-slate-100 p-3 md:p-4">
@@ -138,10 +139,10 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
         <button
           type="button"
             onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            window.location.href = `/product/${product.slug || product.id}`;
-          }}
+              e.preventDefault();
+              e.stopPropagation();
+              window.location.href = buildProductPath(product);
+            }}
           className="absolute right-2.5 top-12 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-md transition hover:bg-white md:right-4 md:top-16 md:h-11 md:w-11"
         >
           <Eye className="h-4 w-4 md:h-5 md:w-5" />

@@ -6,6 +6,7 @@ import {
   ChevronRight, Filter, AlertCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { buildProductPath } from '../lib/seo';
 import { formatAEDPlain } from '../lib/currency';
 
 interface AISearchModalProps {
@@ -215,7 +216,7 @@ className="flex-1 px-2 py-2 bg-transparent text-lg flex-1 h-full px-2 bg-transpa
                         {results.results.map((product: any) => (
                           <Link
                             key={product.id}
-                            to={`/product/${product.id}`}
+                            to={buildProductPath(product)}
                             onClick={onClose}
                             className="group flex gap-6 p-6 bg-slate-50 hover:bg-white rounded-[2rem] border border-transparent hover:border-slate-200 hover:shadow-xl transition-all duration-500"
                           >
