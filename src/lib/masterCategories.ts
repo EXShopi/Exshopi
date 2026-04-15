@@ -384,6 +384,12 @@ export function filterProductsByCategoryTree(
       if (product.specs.categorySlug) values.push(normalizeCategorySlug(product.specs.categorySlug));
       if (product.specs.subcategorySlug) values.push(normalizeCategorySlug(product.specs.subcategorySlug));
       if (product.specs.childCategorySlug) values.push(normalizeCategorySlug(product.specs.childCategorySlug));
+        // additional spec fields seen in legacy data
+        if (product.specs.templateId) values.push(normalizeCategorySlug(String(product.specs.templateId)));
+        if (product.specs.parentCategoryName) values.push(normalizeCategorySlug(String(product.specs.parentCategoryName)));
+        if (product.specs.categoryName) values.push(normalizeCategorySlug(String(product.specs.categoryName)));
+        if (product.specs.categoryPath) values.push(...String(product.specs.categoryPath || '').split('/').map((s:any)=>normalizeCategorySlug(String(s))));
+        if (product.specs.parentCategory) values.push(normalizeCategorySlug(String(product.specs.parentCategory)));
       // legacy attribute buckets
       if (product.specs.attributes) {
         if (product.specs.attributes.category) values.push(normalizeCategorySlug(String(product.specs.attributes.category)));
@@ -394,6 +400,14 @@ export function filterProductsByCategoryTree(
     // 3) legacy top-level textual fields
     if (product?.category) values.push(normalizeCategorySlug(String(product.category)));
     if (product?.subcategory) values.push(normalizeCategorySlug(String(product.subcategory)));
+      // common alternate fields
+      if (product?.brand) values.push(normalizeCategorySlug(String(product.brand)));
+      if (product?.tags && Array.isArray(product.tags)) {
+        for (const t of product.tags) values.push(normalizeCategorySlug(String(t)));
+      }
+      if (product?.labels && Array.isArray(product.labels)) {
+        for (const l of product.labels) values.push(normalizeCategorySlug(String(l)));
+      }
 
     // de-duplicate
     const uniq = Array.from(new Set(values.filter(Boolean)));
