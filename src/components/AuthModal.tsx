@@ -271,7 +271,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       }
 
       setStep('success');
-      setTimeout(() => onClose(), 2000);
+      setTimeout(() => {
+        onClose();
+        window.location.href = '/checkout';
+      }, 2000);
     } catch (error: any) {
       console.error('Profile update failed:', error);
       alert(`Failed to save profile: ${error.message || 'Unknown error'}`);
