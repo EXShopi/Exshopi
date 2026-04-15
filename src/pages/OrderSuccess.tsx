@@ -96,22 +96,28 @@ export default function OrderSuccess() {
 
   const activeOrder = currentOrder || restoredOrder;
 
+  // --- Google Ads Purchase Conversion Tracking ---
   useEffect(() => {
-    // Fire Google Ads conversion only for non-Stripe (COD) orders
     if (!activeOrder) return;
-    if (isStripeReturn) return; // do not fire for Stripe returns
+    // Only fire once per order (by id)
+    const firedKey = `exshopi_ads_conversion_${activeOrder.id}`;
+    if (window.sessionStorage.getItem(firedKey)) return;
 
-    const value = Number(activeOrder?.summary?.total ?? activeOrder?.totalAmount ?? 1.0) || 1.0;
+    // Replace with your actual Google Ads conversion label:
+    const CONVERSION_LABEL = 'REPLACE_WITH_CONVERSION_LABEL'; // e.g. 'ywagCOqVrJwcEIXvvrBD'
+
+    const value = Number(activeOrder?.summary?.total ?? activeOrder?.totalAmount ?? 0) || 0;
     const transactionId = String(activeOrder?.id || '');
 
     const sendConversion = () => {
-      if ((window as any).gtag) {
+      if (typeof window !== 'undefined' && (window as any).gtag) {
         (window as any).gtag('event', 'conversion', {
-          send_to: 'AW-18086868869/ywagCOqVrJwcEIXvvrBD',
+          send_to: `AW-18086868869/${CONVERSION_LABEL}`,
           value,
           currency: 'AED',
           transaction_id: transactionId,
         });
+        window.sessionStorage.setItem(firedKey, '1');
         return true;
       }
       return false;
@@ -131,10 +137,11 @@ export default function OrderSuccess() {
         const script = document.createElement('script');
         script.setAttribute('data-exshopi-ads', 'conversion');
         script.type = 'text/javascript';
-        script.text = `gtag('event', 'conversion', { send_to: 'AW-18086868869/ywagCOqVrJwcEIXvvrBD', value: ${JSON.stringify(
+        script.text = `gtag('event', 'conversion', { send_to: 'AW-18086868869/${CONVERSION_LABEL}', value: ${JSON.stringify(
           value
         )}, currency: 'AED', transaction_id: ${JSON.stringify(transactionId)} });`;
         document.head.appendChild(script);
+        window.sessionStorage.setItem(firedKey, '1');
       } catch (e) {
         // ignore DOM injection errors
       }
@@ -150,7 +157,7 @@ export default function OrderSuccess() {
         // ignore
       }
     };
-  }, [activeOrder, isStripeReturn]);
+  }, [activeOrder]);
 
   if (!activeOrder) {
     return (
