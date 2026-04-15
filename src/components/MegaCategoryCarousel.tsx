@@ -1,83 +1,7 @@
 import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import OptimizedImage from "./OptimizedImage";
-
-type MegaCategoryItem = {
-  title: string;
-  image: string;
-  link: string;
-  badge?: string;
-};
-
-const megaCategories: MegaCategoryItem[] = [
-  {
-    title: "Deals",
-    image: "/Category Card/clearncestore",
-    link: "/category/deals",
-    badge: "SALE",
-  },
-  {
-    title: "Global Store",
-    image: "/Category Card/electronics",
-    link: "/category/global-store",
-  },
-  {
-    title: "Grocery",
-    image: "/Category Card/Grocery",
-    link: "/category/grocery",
-  },
-  {
-    title: "Electronics",
-    image: "/Category Card/electronics",
-    link: "/category/electronics",
-  },
-  {
-    title: "Mobiles",
-    image: "/Category Card/Mobile",
-    link: "/category/mobiles",
-  },
-  {
-    title: "Laptops & Desktops",
-    image: "/Category Card/Laptop",
-    link: "/category/laptops-desktops",
-  },
-  {
-    title: "Beauty",
-    image: "/Category Card/beauty",
-    link: "/category/beauty",
-  },
-  {
-    title: "Gift Cards",
-    image: "/Category Card/Gift",
-    link: "/category/gift-cards",
-  },
-  {
-    title: "Home & Kitchen",
-    image: "/Category Card/home&kitchen",
-    link: "/category/home-kitchen",
-  },
-  {
-    title: "Women's Fashion",
-    image: "/Category Card/women fashion",
-    link: "/category/womens-fashion",
-  },
-  {
-    title: "Men's Fashion",
-    image: "/Category Card/manfashion",
-    link: "/category/mens-fashion",
-  },
-  {
-    title: "Home Appliances",
-    image: "/Category Card/Homeappliances",
-    link: "/category/home-appliances",
-  },
-  {
-    title: "Health & Nutrition",
-    image: "/Category Card/healthnutrition",
-    link: "/category/health-nutrition",
-  },
-  {
-    title: "Wearables",
+import { homepageCategories } from "../data/homepageCategories";
+import { OptimizedImage } from "./OptimizedImage";
     image: "/Category Card/wearable",
     link: "/category/wearables",
   },
@@ -306,6 +230,7 @@ const megaCategories: MegaCategoryItem[] = [
 
 export default function MegaCategoryCarousel() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
   const CARD_WIDTH = 156;
   const CARD_GAP = 20;
 
@@ -347,23 +272,17 @@ export default function MegaCategoryCarousel() {
           className="max-w-full overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory scroll-px-1"
         >
           <div className="flex w-max gap-4 pb-2 sm:gap-5">
-            {megaCategories.map((item) => (
+            {homepageCategories.map((item) => (
               <a
-                key={item.title}
+                key={item.slug}
                 href={item.link}
                 className="group min-w-[132px] max-w-[132px] snap-start text-center sm:min-w-[144px] sm:max-w-[144px] md:min-w-[156px] md:max-w-[156px]"
               >
                 <div className="relative overflow-hidden rounded-[26px] border border-[#efc7b7] bg-[linear-gradient(180deg,#f7cbbd_0%,#f8d4c8_58%,#ffffff_100%)] shadow-[0_6px_18px_rgba(15,23,42,0.10)] transition-shadow duration-300 hover:shadow-[0_14px_28px_rgba(15,23,42,0.14)]" style={{aspectRatio: '1 / 1.2'}}>
-                  {item.badge ? (
-                    <div className="absolute left-3 top-3 z-10 rounded-full bg-[#ff4d4f] px-3 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-white shadow-sm">
-                      {item.badge}
-                    </div>
-                  ) : null}
-
                   <div className="relative flex items-center justify-center overflow-visible px-3 sm:px-4" style={{aspectRatio: '1 / 1.2'}}>
                     <OptimizedImage
                       src={item.image}
-                      alt={item.title}
+                      alt={item.name}
                       lazy={true}
                       useWebP={true}
                       width={120}
@@ -374,7 +293,7 @@ export default function MegaCategoryCarousel() {
                 </div>
 
                 <h3 className="mx-auto mt-3 max-w-[124px] text-[15px] font-semibold leading-5 text-slate-800 sm:max-w-[138px] sm:text-[16px] md:mt-4 md:max-w-[145px] md:text-[17px] md:leading-6">
-                  {item.title}
+                  {item.name}
                 </h3>
               </a>
             ))}
