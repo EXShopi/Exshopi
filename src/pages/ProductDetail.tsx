@@ -478,6 +478,11 @@ export default function ProductDetail() {
     brand: product?.brand,
   });
   const canonicalProductPath = product ? buildProductPath(product) : `/product/${identifier || ""}`;
+  // Ensure canonical uses the category-aware product path (full path) unless explicitly overridden
+  const finalCanonical =
+    (productSeo.canonicalUrl && productSeo.canonicalUrl.startsWith('http'))
+      ? productSeo.canonicalUrl
+      : buildAbsoluteUrl(canonicalProductPath);
   const productSchema = product
     ? buildProductJsonLd({
         title: product.title,
@@ -997,8 +1002,8 @@ const structuredTemplate = getSpecificationTemplate(
           metaTitle={productSeo.metaTitle}
           metaDescription={productSeo.metaDescription}
           metaKeywords={productSeo.metaKeywords}
-          pathname={canonicalProductPath}
-          canonicalUrl={productSeo.canonicalUrl}
+            pathname={canonicalProductPath}
+            canonicalUrl={finalCanonical}
           ogTitle={productSeo.ogTitle}
           ogDescription={productSeo.ogDescription}
           ogImage={productSeo.ogImage}

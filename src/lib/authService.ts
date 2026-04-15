@@ -420,11 +420,15 @@ export class AuthService {
       }
 
       try {
-        const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
-        if (backendSession) {
-          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-          useAuthStore.getState().setRefreshToken(null);
-          return backendSession;
+        // Only attempt backend refresh if we have evidence of a client-side refresh token
+        const storedRefresh = typeof window !== 'undefined' ? (localStorage.getItem('refreshToken') || null) : null;
+        if (storedRefresh) {
+          const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
+          if (backendSession) {
+            useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+            useAuthStore.getState().setRefreshToken(null);
+            return backendSession;
+          }
         }
       } catch (backendRefreshError: any) {
         // Silently handle 401/403 on public pages - don't log warnings
