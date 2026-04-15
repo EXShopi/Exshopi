@@ -28,6 +28,7 @@ import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
 import { formatAED, formatAEDPlain } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
 import { buildDetailedSpecificationGroups, getSpecificationTemplate, humanizeSpecificationValue } from "../lib/productSpecifications";
+import { getCategoryPath } from "../lib/seo";
 import SEO from "../components/SEO";
 import { buildProductPath } from "../lib/seo";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
