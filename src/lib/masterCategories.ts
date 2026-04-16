@@ -10,12 +10,12 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
   {
     slug: 'electronics',
     name: 'Electronics',
-    description: 'Computers, mobiles, TV & more',
+    description: 'Computers, mobiles, TV, cameras, audio and gaming',
     subcategories: [
       {
         slug: 'computers',
         name: 'Computers',
-        subcategories: [
+        childCategories: [
           { slug: 'laptops', name: 'Laptops' },
           { slug: 'desktop-pcs', name: 'Desktop PCs' },
           { slug: 'all-in-one', name: 'All-in-One PCs' },
@@ -26,9 +26,9 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
         ],
       },
       {
-        slug: 'mobiles',
+        slug: 'mobiles-tablets',
         name: 'Mobiles & Tablets',
-        subcategories: [
+        childCategories: [
           { slug: 'smartphones', name: 'Smartphones' },
           { slug: 'refurbished-phones', name: 'Refurbished Phones' },
           { slug: 'feature-phones', name: 'Feature Phones' },
@@ -40,13 +40,13 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
           { slug: 'chargers', name: 'Chargers' },
           { slug: 'cables', name: 'Cables' },
           { slug: 'power-banks', name: 'Power Banks' },
-          { slug: 'earbuds', name: 'Earbuds / Mobile Audio' },
+          { slug: 'earbuds-mobile-audio', name: 'Earbuds / Mobile Audio' },
         ],
       },
       {
         slug: 'tv-video',
         name: 'TV & Video',
-        subcategories: [
+        childCategories: [
           { slug: 'tvs', name: 'TVs' },
           { slug: 'smart-tvs', name: 'Smart TVs' },
           { slug: 'tv-accessories', name: 'TV Accessories' },
@@ -56,9 +56,9 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
         ],
       },
       {
-        slug: 'cameras',
+        slug: 'cameras-photo',
         name: 'Cameras & Photo',
-        subcategories: [
+        childCategories: [
           { slug: 'dslr', name: 'DSLR' },
           { slug: 'mirrorless', name: 'Mirrorless' },
           { slug: 'action-cameras', name: 'Action Cameras' },
@@ -71,9 +71,9 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
       {
         slug: 'audio',
         name: 'Audio',
-        subcategories: [
+        childCategories: [
           { slug: 'headphones', name: 'Headphones' },
-          { slug: 'earbuds', name: 'Earbuds' },
+          { slug: 'earbuds-audio', name: 'Earbuds' },
           { slug: 'bluetooth-speakers', name: 'Bluetooth Speakers' },
           { slug: 'soundbars', name: 'Soundbars' },
           { slug: 'microphones', name: 'Microphones' },
@@ -82,7 +82,7 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
       {
         slug: 'gaming',
         name: 'Gaming',
-        subcategories: [
+        childCategories: [
           { slug: 'consoles', name: 'Consoles' },
           { slug: 'controllers', name: 'Controllers' },
           { slug: 'gaming-headsets', name: 'Gaming Headsets' },
@@ -96,73 +96,257 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
   {
     slug: 'fashion',
     name: 'Fashion',
+    description: 'Clothing, footwear, bags, watches and accessories',
     subcategories: [
-      { slug: 'men', name: "Men's" },
-      { slug: 'women', name: "Women's" },
-      { slug: 'kids', name: "Kids" },
-      { slug: 'shoes', name: 'Shoes' },
-      { slug: 'bags', name: 'Bags' },
-      { slug: 'watches', name: 'Watches' },
-      { slug: 'fashion-accessories', name: 'Accessories' },
+      {
+        slug: 'mens-fashion',
+        name: "Men's Fashion",
+        childCategories: [
+          { slug: 'mens-clothing', name: "Men's Clothing" },
+          { slug: 'mens-shoes', name: "Men's Shoes" },
+          { slug: 'mens-accessories', name: "Men's Accessories" },
+        ],
+      },
+      {
+        slug: 'womens-fashion',
+        name: "Women's Fashion",
+        childCategories: [
+          { slug: 'womens-clothing', name: "Women's Clothing" },
+          { slug: 'womens-shoes', name: "Women's Shoes" },
+          { slug: 'womens-bags', name: "Women's Bags" },
+          { slug: 'womens-accessories', name: "Women's Accessories" },
+        ],
+      },
+      {
+        slug: 'kids-fashion',
+        name: 'Kids Fashion',
+        childCategories: [
+          { slug: 'kids-clothing', name: 'Kids Clothing' },
+          { slug: 'kids-shoes', name: 'Kids Shoes' },
+        ],
+      },
+      {
+        slug: 'watches',
+        name: 'Watches',
+        childCategories: [
+          { slug: 'mens-watches', name: "Men's Watches" },
+          { slug: 'womens-watches', name: "Women's Watches" },
+          { slug: 'smart-watches', name: 'Smart Watches' },
+        ],
+      },
+      {
+        slug: 'fashion-accessories',
+        name: 'Fashion Accessories',
+        childCategories: [
+          { slug: 'bags', name: 'Bags' },
+          { slug: 'belts', name: 'Belts' },
+          { slug: 'sunglasses', name: 'Sunglasses' },
+        ],
+      },
     ],
   },
   {
     slug: 'home-kitchen',
-    name: 'Home / Kitchen / Appliances',
+    name: 'Home & Kitchen',
+    description: 'Furniture, appliances, décor and home essentials',
     subcategories: [
-      { slug: 'kitchen-appliances', name: 'Kitchen Appliances' },
-      { slug: 'home-appliances', name: 'Home Appliances' },
-      { slug: 'furniture', name: 'Furniture' },
-      { slug: 'decor', name: 'Decor' },
-      { slug: 'cleaning', name: 'Cleaning' },
-      { slug: 'storage', name: 'Storage & Organization' },
+      {
+        slug: 'kitchen-dining',
+        name: 'Kitchen & Dining',
+        childCategories: [
+          { slug: 'kitchen-appliances', name: 'Kitchen Appliances' },
+          { slug: 'cookware', name: 'Cookware' },
+          { slug: 'tableware', name: 'Tableware' },
+        ],
+      },
+      {
+        slug: 'home-appliances',
+        name: 'Home Appliances',
+        childCategories: [
+          { slug: 'large-appliances', name: 'Large Appliances' },
+          { slug: 'small-appliances', name: 'Small Appliances' },
+        ],
+      },
+      {
+        slug: 'furniture-decor',
+        name: 'Furniture & Decor',
+        childCategories: [
+          { slug: 'furniture', name: 'Furniture' },
+          { slug: 'decor', name: 'Decor' },
+          { slug: 'lighting', name: 'Lighting' },
+        ],
+      },
+      {
+        slug: 'storage-cleaning',
+        name: 'Storage & Cleaning',
+        childCategories: [
+          { slug: 'storage-organization', name: 'Storage & Organization' },
+          { slug: 'cleaning-supplies', name: 'Cleaning Supplies' },
+        ],
+      },
     ],
   },
   {
     slug: 'beauty-health',
-    name: 'Beauty / Health',
+    name: 'Beauty & Personal Care',
+    description: 'Beauty, grooming, wellness and personal care',
     subcategories: [
-      { slug: 'makeup', name: 'Makeup' },
-      { slug: 'skincare', name: 'Skincare' },
-      { slug: 'haircare', name: 'Haircare' },
-      { slug: 'grooming', name: 'Grooming' },
-      { slug: 'perfumes', name: 'Perfumes' },
+      {
+        slug: 'makeup',
+        name: 'Makeup',
+        childCategories: [
+          { slug: 'face-makeup', name: 'Face Makeup' },
+          { slug: 'eye-makeup', name: 'Eye Makeup' },
+          { slug: 'lip-makeup', name: 'Lip Makeup' },
+        ],
+      },
+      {
+        slug: 'skincare',
+        name: 'Skincare',
+        childCategories: [
+          { slug: 'cleansers', name: 'Cleansers' },
+          { slug: 'moisturizers', name: 'Moisturizers' },
+          { slug: 'serums', name: 'Serums' },
+        ],
+      },
+      {
+        slug: 'haircare',
+        name: 'Haircare',
+        childCategories: [
+          { slug: 'shampoo', name: 'Shampoo' },
+          { slug: 'conditioner', name: 'Conditioner' },
+          { slug: 'hair-styling', name: 'Hair Styling' },
+        ],
+      },
+      {
+        slug: 'grooming',
+        name: 'Grooming',
+        childCategories: [
+          { slug: 'mens-grooming', name: "Men's Grooming" },
+          { slug: 'personal-care-devices', name: 'Personal Care Devices' },
+        ],
+      },
+      {
+        slug: 'fragrance-wellness',
+        name: 'Fragrance & Wellness',
+        childCategories: [
+          { slug: 'perfumes', name: 'Perfumes' },
+          { slug: 'wellness', name: 'Wellness' },
+        ],
+      },
     ],
   },
   {
     slug: 'grocery',
-    name: 'Grocery / Daily Use',
+    name: 'Grocery & Daily Essentials',
+    description: 'Food, beverages and daily household essentials',
     subcategories: [
-      { slug: 'snacks', name: 'Snacks' },
-      { slug: 'beverages', name: 'Beverages' },
-      { slug: 'household-essentials', name: 'Household essentials' },
+      {
+        slug: 'food-beverages',
+        name: 'Food & Beverages',
+        childCategories: [
+          { slug: 'snacks', name: 'Snacks' },
+          { slug: 'beverages', name: 'Beverages' },
+          { slug: 'packaged-food', name: 'Packaged Food' },
+        ],
+      },
+      {
+        slug: 'household-essentials',
+        name: 'Household Essentials',
+        childCategories: [
+          { slug: 'cleaning-household', name: 'Cleaning & Household' },
+          { slug: 'paper-products', name: 'Paper Products' },
+        ],
+      },
     ],
   },
   {
     slug: 'baby-toys',
-    name: 'Baby / Toys',
+    name: 'Baby & Toys',
+    description: 'Baby care, kids products and toys',
     subcategories: [
-      { slug: 'baby-products', name: 'Baby products' },
-      { slug: 'kids-products', name: 'Kids products' },
-      { slug: 'toys', name: 'Toys' },
+      {
+        slug: 'baby-care',
+        name: 'Baby Care',
+        childCategories: [
+          { slug: 'baby-feeding', name: 'Baby Feeding' },
+          { slug: 'diapering', name: 'Diapering' },
+          { slug: 'baby-gear', name: 'Baby Gear' },
+        ],
+      },
+      {
+        slug: 'kids-products',
+        name: 'Kids Products',
+        childCategories: [
+          { slug: 'school-supplies', name: 'School Supplies' },
+          { slug: 'kids-accessories', name: 'Kids Accessories' },
+        ],
+      },
+      {
+        slug: 'toys-games',
+        name: 'Toys & Games',
+        childCategories: [
+          { slug: 'educational-toys', name: 'Educational Toys' },
+          { slug: 'outdoor-toys', name: 'Outdoor Toys' },
+          { slug: 'action-figures', name: 'Action Figures' },
+        ],
+      },
     ],
   },
   {
     slug: 'sports-outdoors',
-    name: 'Sports / Outdoors',
+    name: 'Sports & Outdoors',
+    description: 'Fitness, outdoor gear and sports accessories',
     subcategories: [
-      { slug: 'fitness', name: 'Fitness' },
-      { slug: 'outdoor-gear', name: 'Outdoor gear' },
-      { slug: 'sports-accessories', name: 'Sports accessories' },
+      {
+        slug: 'fitness',
+        name: 'Fitness',
+        childCategories: [
+          { slug: 'exercise-equipment', name: 'Exercise Equipment' },
+          { slug: 'fitness-accessories', name: 'Fitness Accessories' },
+        ],
+      },
+      {
+        slug: 'outdoor-gear',
+        name: 'Outdoor Gear',
+        childCategories: [
+          { slug: 'camping-hiking', name: 'Camping & Hiking' },
+          { slug: 'travel-outdoor-gear', name: 'Travel Outdoor Gear' },
+        ],
+      },
+      {
+        slug: 'sports-accessories',
+        name: 'Sports Accessories',
+        childCategories: [
+          { slug: 'team-sports', name: 'Team Sports' },
+          { slug: 'individual-sports', name: 'Individual Sports' },
+        ],
+      },
     ],
   },
   {
     slug: 'automotive-tools',
-    name: 'Automotive / Tools',
+    name: 'Automotive & Tools',
+    description: 'Car accessories, DIY and workshop tools',
     subcategories: [
-      { slug: 'car-accessories', name: 'Car accessories' },
-      { slug: 'tools', name: 'Tools' },
-      { slug: 'diy', name: 'DIY' },
+      {
+        slug: 'automotive',
+        name: 'Automotive',
+        childCategories: [
+          { slug: 'car-accessories', name: 'Car Accessories' },
+          { slug: 'car-care', name: 'Car Care' },
+          { slug: 'interior-accessories', name: 'Interior Accessories' },
+        ],
+      },
+      {
+        slug: 'tools-diy',
+        name: 'Tools & DIY',
+        childCategories: [
+          { slug: 'hand-tools', name: 'Hand Tools' },
+          { slug: 'power-tools', name: 'Power Tools' },
+          { slug: 'diy-accessories', name: 'DIY Accessories' },
+        ],
+      },
     ],
   },
 ];
@@ -182,13 +366,19 @@ export function normalizeCategorySlug(value?: string) {
 // Backwards-compatible alias
 export const normalizeSlug = normalizeCategorySlug;
 
-function findNodeBySlug(list: CategoryNode[], slug: string): { node?: CategoryNode; parent?: CategoryNode | null } {
+function findNodeBySlug(
+  list: CategoryNode[],
+  slug: string
+): { node?: CategoryNode; parent?: CategoryNode | null } {
   const target = normalizeCategorySlug(slug);
+
   for (const node of list || []) {
     if (normalizeCategorySlug(node.slug) === target) return { node, parent: null };
+
     if (Array.isArray(node.subcategories)) {
       for (const sub of node.subcategories) {
         if (normalizeCategorySlug(sub.slug) === target) return { node: sub, parent: node };
+
         if (Array.isArray(sub.childCategories)) {
           for (const child of sub.childCategories) {
             if (normalizeCategorySlug(child.slug) === target) return { node: child, parent: sub };
@@ -197,6 +387,7 @@ function findNodeBySlug(list: CategoryNode[], slug: string): { node?: CategoryNo
       }
     }
   }
+
   return {};
 }
 
@@ -210,14 +401,20 @@ export function getCategoryBySlug(slug: string) {
 }
 
 export function getSubcategories(parentSlug: string) {
-  const parent = MASTER_CATEGORIES.find((p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(parentSlug));
+  const parent = MASTER_CATEGORIES.find(
+    (p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(parentSlug)
+  );
   return parent?.subcategories || [];
 }
 
 export function getChildCategories(parentSlug: string, subSlug: string) {
-  const parent = MASTER_CATEGORIES.find((p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(parentSlug));
+  const parent = MASTER_CATEGORIES.find(
+    (p) => normalizeCategorySlug(p.slug) === normalizeCategorySlug(parentSlug)
+  );
   if (!parent) return [];
-  const sub = parent.subcategories?.find((s) => normalizeCategorySlug(s.slug) === normalizeCategorySlug(subSlug));
+  const sub = parent.subcategories?.find(
+    (s) => normalizeCategorySlug(s.slug) === normalizeCategorySlug(subSlug)
+  );
   return sub?.childCategories || [];
 }
 
@@ -245,64 +442,135 @@ const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> 
 
   // Monitors / Printers
   monitor: [{ category: 'computers', subcategory: 'monitors' }],
+  monitors: [{ category: 'computers', subcategory: 'monitors' }],
   printer: [{ category: 'computers', subcategory: 'printers' }],
+  printers: [{ category: 'computers', subcategory: 'printers' }],
 
-  // Mobiles
-  phone: [{ category: 'mobiles', subcategory: 'smartphones' }],
-  phones: [{ category: 'mobiles', subcategory: 'smartphones' }],
-  mobile: [{ category: 'mobiles', subcategory: 'smartphones' }],
-  mobiles: [{ category: 'mobiles', subcategory: 'smartphones' }],
-  smartphone: [{ category: 'mobiles', subcategory: 'smartphones' }],
-  iphone: [{ category: 'mobiles', subcategory: 'smartphones' }],
-  android: [{ category: 'mobiles', subcategory: 'smartphones' }],
-  tablet: [{ category: 'mobiles', subcategory: 'tablets' }],
-  ipad: [{ category: 'mobiles', subcategory: 'tablets' }],
+  // Mobiles & tablets
+  phone: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  phones: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  mobile: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  mobiles: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  smartphone: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  smartphones: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  iphone: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  android: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  tablet: [{ category: 'mobiles-tablets', subcategory: 'tablets' }],
+  tablets: [{ category: 'mobiles-tablets', subcategory: 'tablets' }],
+  ipad: [{ category: 'mobiles-tablets', subcategory: 'ipads' }],
+  ipads: [{ category: 'mobiles-tablets', subcategory: 'ipads' }],
 
   // Mobile accessories
-  charger: [{ category: 'mobiles', subcategory: 'chargers' }],
-  chargers: [{ category: 'mobiles', subcategory: 'chargers' }],
-  cable: [{ category: 'mobiles', subcategory: 'cables' }],
-  cables: [{ category: 'mobiles', subcategory: 'cables' }],
-  case: [{ category: 'mobiles', subcategory: 'cases' }],
-  'screen-protector': [{ category: 'mobiles', subcategory: 'screen-protectors' }],
+  charger: [{ category: 'mobiles-tablets', subcategory: 'chargers' }],
+  chargers: [{ category: 'mobiles-tablets', subcategory: 'chargers' }],
+  cable: [{ category: 'mobiles-tablets', subcategory: 'cables' }],
+  cables: [{ category: 'mobiles-tablets', subcategory: 'cables' }],
+  case: [{ category: 'mobiles-tablets', subcategory: 'cases' }],
+  cases: [{ category: 'mobiles-tablets', subcategory: 'cases' }],
+  'screen-protector': [{ category: 'mobiles-tablets', subcategory: 'screen-protectors' }],
+  'screen-protectors': [{ category: 'mobiles-tablets', subcategory: 'screen-protectors' }],
+  'power-bank': [{ category: 'mobiles-tablets', subcategory: 'power-banks' }],
+  'power-banks': [{ category: 'mobiles-tablets', subcategory: 'power-banks' }],
 
   // TV / Video / Projector
   tv: [{ category: 'tv-video', subcategory: 'tvs' }],
+  tvs: [{ category: 'tv-video', subcategory: 'tvs' }],
+  'smart-tv': [{ category: 'tv-video', subcategory: 'smart-tvs' }],
+  'smart-tvs': [{ category: 'tv-video', subcategory: 'smart-tvs' }],
   projector: [{ category: 'tv-video', subcategory: 'projectors' }],
+  projectors: [{ category: 'tv-video', subcategory: 'projectors' }],
 
   // Cameras
-  camera: [{ category: 'cameras', subcategory: 'dslr' }],
-  'camera-lens': [{ category: 'cameras', subcategory: 'lenses' }],
+  camera: [{ category: 'cameras-photo', subcategory: 'dslr' }],
+  cameras: [{ category: 'cameras-photo', subcategory: 'dslr' }],
+  dslr: [{ category: 'cameras-photo', subcategory: 'dslr' }],
+  mirrorless: [{ category: 'cameras-photo', subcategory: 'mirrorless' }],
+  drone: [{ category: 'cameras-photo', subcategory: 'drones' }],
+  drones: [{ category: 'cameras-photo', subcategory: 'drones' }],
+  'camera-lens': [{ category: 'cameras-photo', subcategory: 'lenses' }],
+  lenses: [{ category: 'cameras-photo', subcategory: 'lenses' }],
+
+  // Audio
+  headphone: [{ category: 'audio', subcategory: 'headphones' }],
+  headphones: [{ category: 'audio', subcategory: 'headphones' }],
+  earbuds: [{ category: 'audio', subcategory: 'earbuds-audio' }],
+  speaker: [{ category: 'audio', subcategory: 'bluetooth-speakers' }],
+  speakers: [{ category: 'audio', subcategory: 'bluetooth-speakers' }],
+  soundbar: [{ category: 'audio', subcategory: 'soundbars' }],
+  soundbars: [{ category: 'audio', subcategory: 'soundbars' }],
 
   // Gaming
   gaming: [{ category: 'gaming', subcategory: 'consoles' }],
+  console: [{ category: 'gaming', subcategory: 'consoles' }],
+  consoles: [{ category: 'gaming', subcategory: 'consoles' }],
+  controller: [{ category: 'gaming', subcategory: 'controllers' }],
+  controllers: [{ category: 'gaming', subcategory: 'controllers' }],
 
-  // Others
+  // Fashion
   clothing: [{ category: 'fashion' }],
   fashion: [{ category: 'fashion' }],
+  shoes: [{ category: 'fashion' }],
+  bags: [{ category: 'fashion' }],
+  watches: [{ category: 'fashion', subcategory: 'watches' }],
+
+  // Home
   kitchen: [{ category: 'home-kitchen' }],
   home: [{ category: 'home-kitchen' }],
+  furniture: [{ category: 'home-kitchen' }],
+  decor: [{ category: 'home-kitchen' }],
+  appliance: [{ category: 'home-kitchen' }],
+  appliances: [{ category: 'home-kitchen' }],
+
+  // Beauty
   beauty: [{ category: 'beauty-health' }],
+  makeup: [{ category: 'beauty-health', subcategory: 'makeup' }],
+  skincare: [{ category: 'beauty-health', subcategory: 'skincare' }],
+  haircare: [{ category: 'beauty-health', subcategory: 'haircare' }],
+  grooming: [{ category: 'beauty-health', subcategory: 'grooming' }],
+  perfume: [{ category: 'beauty-health', subcategory: 'fragrance-wellness' }],
+  perfumes: [{ category: 'beauty-health', subcategory: 'fragrance-wellness' }],
+
+  // Grocery
   grocery: [{ category: 'grocery' }],
+  groceries: [{ category: 'grocery' }],
+  snacks: [{ category: 'grocery', subcategory: 'food-beverages' }],
+  beverages: [{ category: 'grocery', subcategory: 'food-beverages' }],
+
+  // Baby / Toys
+  baby: [{ category: 'baby-toys' }],
+  toys: [{ category: 'baby-toys', subcategory: 'toys-games' }],
+  kids: [{ category: 'baby-toys' }],
+
+  // Sports
+  sports: [{ category: 'sports-outdoors' }],
+  fitness: [{ category: 'sports-outdoors', subcategory: 'fitness' }],
+  outdoor: [{ category: 'sports-outdoors', subcategory: 'outdoor-gear' }],
+
+  // Automotive / tools
+  automotive: [{ category: 'automotive-tools', subcategory: 'automotive' }],
+  tools: [{ category: 'automotive-tools', subcategory: 'tools-diy' }],
+  diy: [{ category: 'automotive-tools', subcategory: 'tools-diy' }],
 };
 
 export function mapLegacyCategory(value: string) {
   const v = normalizeCategorySlug(value || '');
   if (!v) return null;
 
-  // exact map
   if (LEGACY_MAP[v]) return LEGACY_MAP[v][0] || null;
 
-  // tokenise and try tokens
   const tokens = v.split(/[-_\s]+/).filter(Boolean);
   for (const t of tokens) {
     if (LEGACY_MAP[t]) return LEGACY_MAP[t][0] || null;
   }
 
-  // fallback: if matches any category/subcategory slug directly
   const direct = findNodeBySlug(MASTER_CATEGORIES, v);
   if (direct.node) {
-    if (direct.parent) return { category: normalizeCategorySlug(direct.parent.slug), subcategory: normalizeCategorySlug(direct.node.slug) };
+    if (direct.parent) {
+      return {
+        category: normalizeCategorySlug(direct.parent.slug),
+        subcategory: normalizeCategorySlug(direct.node.slug),
+      };
+    }
     return { category: normalizeCategorySlug(direct.node.slug) };
   }
 
@@ -311,35 +579,41 @@ export function mapLegacyCategory(value: string) {
 
 export function gatherSlugsUnder(categorySlug: string) {
   const cacheKey = normalizeCategorySlug(categorySlug || '');
-  // simple in-memory cache to avoid recomputing the tree walk repeatedly
-  if (!gatherSlugsUnder['_cache']) {
-    (gatherSlugsUnder as any)['_cache'] = new Map<string, Set<string>>();
+
+  if (!(gatherSlugsUnder as any)._cache) {
+    (gatherSlugsUnder as any)._cache = new Map<string, Set<string>>();
   }
-  const cache: Map<string, Set<string>> = (gatherSlugsUnder as any)['_cache'];
+
+  const cache: Map<string, Set<string>> = (gatherSlugsUnder as any)._cache;
   if (cache.has(cacheKey)) return new Set(cache.get(cacheKey));
 
   const set = new Set<string>();
   if (!categorySlug) return set;
+
   const found = findNodeBySlug(MASTER_CATEGORIES, categorySlug);
   if (!found.node) return set;
 
   function walk(node: CategoryNode | undefined) {
     if (!node) return;
     set.add(normalizeCategorySlug(node.slug));
+
     if (Array.isArray(node.subcategories)) {
       for (const s of node.subcategories) walk(s);
     }
+
     if (Array.isArray(node.childCategories)) {
       for (const c of node.childCategories) walk(c);
     }
   }
 
   walk(found.node);
+
   try {
     cache.set(cacheKey, new Set(set));
-  } catch (e) {
+  } catch {
     // ignore caching errors
   }
+
   return set;
 }
 
@@ -349,21 +623,17 @@ export function filterProductsByCategoryTree(
   subcategorySlug?: string | null,
   backendCategories?: any[]
 ) {
-  // strict behavior: if no categorySlug provided, return empty (avoids accidental full-catalog fallbacks)
   if (!categorySlug) return [];
 
   const normCat = normalizeCategorySlug(categorySlug);
   const normSub = subcategorySlug ? normalizeCategorySlug(subcategorySlug) : null;
 
-  // gather allowed slugs starting from the most specific node
   const allowed = new Set<string>();
-  // If a specific subcategory was provided, gather its slugs; otherwise gather from the provided category
   const slugsUnder = gatherSlugsUnder(normSub || normCat);
+
   for (const s of slugsUnder) allowed.add(s);
-  // also include selected node itself
   allowed.add(normSub || normCat);
 
-  // debug counters
   let matchedCount = 0;
   let legacyMappedCount = 0;
   let unmatchedCount = 0;
@@ -371,48 +641,56 @@ export function filterProductsByCategoryTree(
   const result = (products || []).filter((product) => {
     const values: string[] = [];
 
-    // 1) backend category id -> slug (from backendCategories list)
     const catId = product?.categoryId || product?.specs?.backendCategoryId || null;
     if (catId && backendCategories && Array.isArray(backendCategories)) {
-      const byId = backendCategories.find((c) => String(c.id) === String(catId) || String(c.slug) === String(catId));
-      if (byId && byId.slug) values.push(normalizeCategorySlug(byId.slug));
+      const byId = backendCategories.find(
+        (c) => String(c.id) === String(catId) || String(c.slug) === String(catId)
+      );
+      if (byId?.slug) values.push(normalizeCategorySlug(byId.slug));
     }
 
-    // 2) structured specs fields (preferred)
     if (product?.specs) {
       if (product.specs.parentCategorySlug) values.push(normalizeCategorySlug(product.specs.parentCategorySlug));
       if (product.specs.categorySlug) values.push(normalizeCategorySlug(product.specs.categorySlug));
       if (product.specs.subcategorySlug) values.push(normalizeCategorySlug(product.specs.subcategorySlug));
       if (product.specs.childCategorySlug) values.push(normalizeCategorySlug(product.specs.childCategorySlug));
-        // additional spec fields seen in legacy data
-        if (product.specs.templateId) values.push(normalizeCategorySlug(String(product.specs.templateId)));
-        if (product.specs.parentCategoryName) values.push(normalizeCategorySlug(String(product.specs.parentCategoryName)));
-        if (product.specs.categoryName) values.push(normalizeCategorySlug(String(product.specs.categoryName)));
-        if (product.specs.categoryPath) values.push(...String(product.specs.categoryPath || '').split('/').map((s:any)=>normalizeCategorySlug(String(s))));
-        if (product.specs.parentCategory) values.push(normalizeCategorySlug(String(product.specs.parentCategory)));
-      // legacy attribute buckets
+
+      if (product.specs.templateId) values.push(normalizeCategorySlug(String(product.specs.templateId)));
+      if (product.specs.parentCategoryName) values.push(normalizeCategorySlug(String(product.specs.parentCategoryName)));
+      if (product.specs.categoryName) values.push(normalizeCategorySlug(String(product.specs.categoryName)));
+      if (product.specs.categoryPath) {
+        values.push(
+          ...String(product.specs.categoryPath || '')
+            .split('/')
+            .map((s: any) => normalizeCategorySlug(String(s)))
+        );
+      }
+      if (product.specs.parentCategory) values.push(normalizeCategorySlug(String(product.specs.parentCategory)));
+
       if (product.specs.attributes) {
-        if (product.specs.attributes.category) values.push(normalizeCategorySlug(String(product.specs.attributes.category)));
-        if (product.specs.attributes.subcategory) values.push(normalizeCategorySlug(String(product.specs.attributes.subcategory)));
+        if (product.specs.attributes.category) {
+          values.push(normalizeCategorySlug(String(product.specs.attributes.category)));
+        }
+        if (product.specs.attributes.subcategory) {
+          values.push(normalizeCategorySlug(String(product.specs.attributes.subcategory)));
+        }
       }
     }
 
-    // 3) legacy top-level textual fields
     if (product?.category) values.push(normalizeCategorySlug(String(product.category)));
     if (product?.subcategory) values.push(normalizeCategorySlug(String(product.subcategory)));
-      // common alternate fields
-      if (product?.brand) values.push(normalizeCategorySlug(String(product.brand)));
-      if (product?.tags && Array.isArray(product.tags)) {
-        for (const t of product.tags) values.push(normalizeCategorySlug(String(t)));
-      }
-      if (product?.labels && Array.isArray(product.labels)) {
-        for (const l of product.labels) values.push(normalizeCategorySlug(String(l)));
-      }
+    if (product?.brand) values.push(normalizeCategorySlug(String(product.brand)));
 
-    // de-duplicate
+    if (product?.tags && Array.isArray(product.tags)) {
+      for (const t of product.tags) values.push(normalizeCategorySlug(String(t)));
+    }
+
+    if (product?.labels && Array.isArray(product.labels)) {
+      for (const l of product.labels) values.push(normalizeCategorySlug(String(l)));
+    }
+
     const uniq = Array.from(new Set(values.filter(Boolean)));
 
-    // direct match with allowed slugs
     for (const s of uniq) {
       if (allowed.has(s)) {
         matchedCount += 1;
@@ -420,12 +698,20 @@ export function filterProductsByCategoryTree(
       }
     }
 
-    // 4) try safe legacy mapping using mapLegacyCategory on conservative fields
-    const legacySource = product?.category || product?.specs?.attributes?.subcategory || product?.specs?.attributes?.category || product?.specs?.backendCategoryId || product?.title || product?.description || '';
+    const legacySource =
+      product?.category ||
+      product?.specs?.attributes?.subcategory ||
+      product?.specs?.attributes?.category ||
+      product?.specs?.backendCategoryId ||
+      product?.title ||
+      product?.description ||
+      '';
+
     const mapped = mapLegacyCategory(String(legacySource || ''));
     if (mapped && mapped.category) {
       const mappedCat = normalizeCategorySlug(mapped.category);
       const mappedSub = mapped.subcategory ? normalizeCategorySlug(mapped.subcategory) : null;
+
       if (mappedCat === normCat || (mappedSub && allowed.has(mappedSub))) {
         legacyMappedCount += 1;
         return true;
@@ -436,11 +722,20 @@ export function filterProductsByCategoryTree(
     return false;
   });
 
-  // temporary debug output
   try {
-    console.debug('[category-filter] requested:', { categorySlug: categorySlug, subcategorySlug: subcategorySlug });
-    console.debug('[category-filter] results:', { totalProducts: (products || []).length, matched: result.length, matchedCount, legacyMappedCount, unmatchedCount });
-  } catch (e) {
+    console.debug('[category-filter] requested:', {
+      categorySlug,
+      subcategorySlug,
+    });
+
+    console.debug('[category-filter] results:', {
+      totalProducts: (products || []).length,
+      matched: result.length,
+      matchedCount,
+      legacyMappedCount,
+      unmatchedCount,
+    });
+  } catch {
     // ignore logging errors
   }
 
