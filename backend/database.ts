@@ -971,7 +971,7 @@ private data!: DatabaseSchema;
         storeSlug: 'exshopi-official',
         description: 'Official ExShopi storefront for first-party marketplace products and curated launches.',
         logo: '/logo.png',
-        banner: '/hero/hero-1.png',
+        banner: '/hero/hero-5.png',
         city: 'Dubai',
         country: 'UAE',
         phone: '+971522608063',

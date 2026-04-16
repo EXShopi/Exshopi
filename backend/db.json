@@ -204,7 +204,7 @@
       "storeSlug": "exshopi-official",
       "description": "Official ExShopi storefront for first-party marketplace products and curated launches.",
       "logo": "/logo.png",
-      "banner": "/hero/hero-1.png",
+      "banner": "/hero/hero-5.png",
       "city": "Dubai",
       "country": "UAE",
       "phone": "+971522608063",
@@ -250,7 +250,7 @@
         "/uploads/test-doc.pdf"
       ],
       "logo": "/logo.png",
-      "banner": "/hero/hero-1.png",
+      "banner": "/hero/hero-.png",
       "about": "Premium electronics and accessories seller for UAE marketplace operations.",
       "policies": {
         "returns": "7 days",
@@ -283,7 +283,7 @@
         "/uploads/test-doc.pdf"
       ],
       "logo": "/logo.png",
-      "banner": "/hero/hero-1.png",
+      "banner": "/hero/hero-5.png",
       "about": "Premium electronics and accessories seller for UAE marketplace operations.",
       "policies": {
         "returns": "7 days",
@@ -9561,7 +9561,7 @@
         "subtitle": "Shop top electronics, gadgets, and more.",
         "primaryCtaText": "Shop Now",
         "primaryCtaLink": "/products",
-        "productImageUrl": "/hero/hero-1.png"
+        "productImageUrl": "/hero/hero-5.png"
       },
       "sections": [
         {

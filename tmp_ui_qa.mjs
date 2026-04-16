@@ -34,7 +34,7 @@ const application = await api('/seller-applications', {
   token:sellerToken,
   body:{
     businessName:'UI Seller LLC', ownerName:'UI Seller', email:sellerEmail, phone:'+971500009999', businessType:'llc',
-    country:'UAE', city:'Dubai', warehouseAddress:'Marina', vatTrn:'TRNUI', documents:[], logo:'/logo.png', banner:'/hero/hero-1.png', about:'UI Seller', policies:{}, bankDetails:{ iban:'AE070331234567890123456' }
+    country:'UAE', city:'Dubai', warehouseAddress:'Marina', vatTrn:'TRNUI', documents:[], logo:'/logo.png', banner:'/hero/hero-5.png', about:'UI Seller', policies:{}, bankDetails:{ iban:'AE070331234567890123456' }
   }
 });
 await api(`/admin/seller-applications/${application.id}/approve`, { method:'POST', token:admin.accessToken, body:{ notes:'ui qa approve' }});

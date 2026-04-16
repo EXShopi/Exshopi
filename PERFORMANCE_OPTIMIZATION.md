@@ -41,7 +41,7 @@ Successfully implemented comprehensive performance optimizations to improve Goog
 | clearncestore.png | 11.48 MB | 1.13 MB | 90.2% |
 | traditionalwear.png | 9.26 MB | 418.99 KB | 95.6% |
 | furniture.png | 6.9 MB | 295.7 KB | 95.8% |
-| hero-1.png | 1.71 MB | 70.21 KB | 96.0% |
+| hero-5.png | 1.71 MB | 70.21 KB | 96.0% |
 | babcare.png | 5.93 MB | 566.89 KB | 90.7% |
 
 **Total Impact**: Estimated **100-200 MB+ savings** in page load for typical user session.
@@ -104,7 +104,7 @@ Successfully implemented comprehensive performance optimizations to improve Goog
 ```html
 <!-- Preload critical LCP images for better performance -->
 <link rel="preload" as="image" href="/hero/hero-1.webp" type="image/webp" />
-<link rel="preload" as="image" href="/hero/hero-1.png" type="image/png" />
+<link rel="preload" as="image" href="/hero/hero-5.png" type="image/png" />
 <link rel="preload" as="image" href="/Category Card/electronics.webp" />
 <link rel="preload" as="image" href="/Category Card/Mobile.webp" />
 <link rel="preload" as="image" href="/Category Card/Laptop.webp" />

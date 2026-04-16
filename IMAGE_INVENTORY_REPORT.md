@@ -22,7 +22,7 @@ This report catalogs all JSX/TSX components using images from `public/hero/`, `p
 - **Image Tag Structure**:
   ```javascript
   // Fallback images (lines 51-62)
-  const images = ['/hero/hero-1.png', '/hero/hero-2.png', '/hero/hero-3.png', '/hero/hero-4.png', '/hero/hero-5.png'];
+  const images = ['/hero/hero-5.png', '/hero/hero-2.png', '/hero/hero-3.png', '/hero/hero-4.png', '/hero/hero-5.png'];
   
   // Used in slide mapping with fallback
   image: banner.image || settings.homepage.hero.productImageUrl
