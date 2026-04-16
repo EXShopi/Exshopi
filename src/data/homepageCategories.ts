@@ -1,68 +1,53 @@
 // src/data/homepageCategories.ts
-// Canonical homepage category list and image mapping for ExShopi
-// --- RESTORED STATIC CATEGORY LIST AND IMAGE PATHS (PREMIUM UI) ---
 export const homepageCategories = [
   {
-    slug: 'electronics',
-    name: 'Electronics',
-    image: '/Category Card/electronics.png',
-    link: '/category/electronics',
+    slug: 'computers',
+    name: 'Computers',
+    image: '/Category Card/Computer.png',
+    link: '/category/computers',
   },
   {
-    slug: 'mobiles',
-    name: 'Mobiles',
-    image: '/Category Card/Mobile.png',
+    slug: 'cell-phones',
+    name: 'Cell Phones',
+    image: '/Category Card/Cellphone.png',
     link: '/category/mobiles',
   },
   {
-    slug: 'laptops',
-    name: 'Laptops',
-    image: '/Category Card/Laptop.png',
-    link: '/category/laptops',
-  },
-  {
-    slug: 'gaming',
-    name: 'Gaming',
-    image: '/Category Card/Gamingpc.png',
-    link: '/category/gaming',
-  },
-  {
-    slug: 'beauty',
-    name: 'Beauty',
-    image: '/Category Card/beauty.png',
-    link: '/category/beauty',
+    slug: 'cameras',
+    name: 'Cameras & Photo',
+    image: '/Category Card/Camera.png',
+    link: '/category/cameras',
   },
   {
     slug: 'fashion',
-    name: 'Fashion',
-    image: '/Category Card/women fashion.png',
+    name: 'Tshirts & Clothing',
+    image: '/Category Card/Clothing.png',
     link: '/category/fashion',
   },
   {
-    slug: 'mens-fashion',
-    name: "Men's Fashion",
-    image: '/Category Card/manfashion.png',
-    link: '/category/mens-fashion',
+    slug: 'tv-video',
+    name: 'TVs / Video',
+    image: '/Category Card/Tv.png',
+    link: '/category/tv-video',
   },
   {
-    slug: 'home-appliances',
-    name: 'Home Appliances',
-    image: '/Category Card/Homeappliances.png',
+    slug: 'gaming',
+    name: 'Video Games',
+    image: '/Category Card/Gaming.png',
+    link: '/category/gaming',
+  },
+  {
+    slug: 'kitchen',
+    name: 'Kitchen Appliances',
+    image: '/Category Card/Kitchen_Appliances.png',
     link: '/category/home-appliances',
   },
   {
-    slug: 'grocery',
-    name: 'Grocery',
-    image: '/Category Card/Grocery.png',
-    link: '/category/grocery',
+    slug: 'projectors',
+    name: 'Projectors',
+    image: '/Category Card/Projector.png',
+    link: '/category/projectors',
   },
-  {
-    slug: 'accessories',
-    name: 'Accessories',
-    image: '/Category Card/computeracessories.png',
-    link: '/category/accessories',
-  },
-  // ...add all other original categories and images as before
 ];
 
 export function getHomepageCategory(slug: string) {
