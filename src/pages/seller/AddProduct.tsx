@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { MASTER_CATEGORIES } from '../../lib/masterCategories';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -324,100 +325,7 @@ function moveArrayItem<T>(items: T[], index: number, direction: -1 | 1) {
   return next;
 }
 
-const MASTER_CATEGORIES: LiveCategory[] = [
-  {
-    id: 'electronics',
-    name: 'Electronics',
-    slug: 'electronics',
-    subcategories: [
-      { id: 'computers', name: 'Computers', slug: 'computers' },
-      { id: 'mobiles-tablets', name: 'Mobiles & Tablets', slug: 'mobiles-tablets' },
-      { id: 'tv-video', name: 'TV & Video', slug: 'tv-video' },
-      { id: 'cameras-photo', name: 'Cameras & Photo', slug: 'cameras-photo' },
-      { id: 'audio', name: 'Audio', slug: 'audio' },
-      { id: 'gaming', name: 'Gaming', slug: 'gaming' },
-    ],
-  },
-  {
-    id: 'fashion',
-    name: 'Fashion',
-    slug: 'fashion',
-    subcategories: [
-      { id: 'mens', name: "Men's", slug: 'mens' },
-      { id: 'womens', name: "Women's", slug: 'womens' },
-      { id: 'kids', name: 'Kids', slug: 'kids' },
-      { id: 'shoes', name: 'Shoes', slug: 'shoes' },
-      { id: 'bags', name: 'Bags', slug: 'bags' },
-      { id: 'watches', name: 'Watches', slug: 'watches' },
-      { id: 'accessories', name: 'Accessories', slug: 'accessories' },
-    ],
-  },
-  {
-    id: 'home-kitchen-appliances',
-    name: 'Home / Kitchen / Appliances',
-    slug: 'home-kitchen-appliances',
-    subcategories: [
-      { id: 'kitchen-appliances', name: 'Kitchen Appliances', slug: 'kitchen-appliances' },
-      { id: 'home-appliances', name: 'Home Appliances', slug: 'home-appliances' },
-      { id: 'furniture', name: 'Furniture', slug: 'furniture' },
-      { id: 'decor', name: 'Decor', slug: 'decor' },
-      { id: 'cleaning', name: 'Cleaning', slug: 'cleaning' },
-      { id: 'storage-organization', name: 'Storage & Organization', slug: 'storage-organization' },
-    ],
-  },
-  {
-    id: 'beauty-health',
-    name: 'Beauty / Health',
-    slug: 'beauty-health',
-    subcategories: [
-      { id: 'makeup', name: 'Makeup', slug: 'makeup' },
-      { id: 'skincare', name: 'Skincare', slug: 'skincare' },
-      { id: 'haircare', name: 'Haircare', slug: 'haircare' },
-      { id: 'grooming', name: 'Grooming', slug: 'grooming' },
-      { id: 'perfumes', name: 'Perfumes', slug: 'perfumes' },
-    ],
-  },
-  {
-    id: 'grocery-daily-use',
-    name: 'Grocery / Daily Use',
-    slug: 'grocery-daily-use',
-    subcategories: [
-      { id: 'snacks', name: 'Snacks', slug: 'snacks' },
-      { id: 'beverages', name: 'Beverages', slug: 'beverages' },
-      { id: 'household-essentials', name: 'Household essentials', slug: 'household-essentials' },
-    ],
-  },
-  {
-    id: 'baby-toys',
-    name: 'Baby / Toys',
-    slug: 'baby-toys',
-    subcategories: [
-      { id: 'baby-products', name: 'Baby products', slug: 'baby-products' },
-      { id: 'kids-products', name: 'Kids products', slug: 'kids-products' },
-      { id: 'toys', name: 'Toys', slug: 'toys' },
-    ],
-  },
-  {
-    id: 'sports-outdoors',
-    name: 'Sports / Outdoors',
-    slug: 'sports-outdoors',
-    subcategories: [
-      { id: 'fitness', name: 'Fitness', slug: 'fitness' },
-      { id: 'outdoor-gear', name: 'Outdoor gear', slug: 'outdoor-gear' },
-      { id: 'sports-accessories', name: 'Sports accessories', slug: 'sports-accessories' },
-    ],
-  },
-  {
-    id: 'automotive-tools',
-    name: 'Automotive / Tools',
-    slug: 'automotive-tools',
-    subcategories: [
-      { id: 'car-accessories', name: 'Car accessories', slug: 'car-accessories' },
-      { id: 'tools', name: 'Tools', slug: 'tools' },
-      { id: 'diy', name: 'DIY', slug: 'diy' },
-    ],
-  },
-];
+
 
 const initialFormState: FormState = {
   title: '',
@@ -814,11 +722,11 @@ useEffect(() => {
       if (normalized.length > 0) {
         setCategories(normalized);
       } else {
-        setCategories(MASTER_CATEGORIES);
+        setCategories([]);
       }
     } catch {
       if (mounted) {
-        setCategories(MASTER_CATEGORIES);
+        setCategories([]);
       }
     }
   };
@@ -829,6 +737,7 @@ useEffect(() => {
     mounted = false;
   };
 }, []);
+
   useEffect(() => {
     if (editingId || copyingId) return;
     const rawDraft = localStorage.getItem(draftStorageKey);
