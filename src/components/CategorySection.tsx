@@ -12,20 +12,18 @@ export default function CategorySection() {
             to={category.link}
             className="group rounded-[22px] border border-slate-200 bg-[#f3f4f6] p-3.5 shadow-sm transition hover:shadow-md md:rounded-[26px] md:p-6"
           >
-            {/* IMAGE */}
             <div className="flex h-[92px] items-center justify-center md:h-[200px]">
               <OptimizedImage
                 src={category.image}
                 alt={category.name}
                 lazy={true}
-                useWebP={false} // ✅ FIXED (IMPORTANT)
+                useWebP={false}
                 width={120}
                 height={120}
                 className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
               />
             </div>
 
-            {/* NAME */}
             <div className="mt-2.5 text-center text-[12px] font-semibold leading-4 text-slate-900 md:mt-4 md:text-[15px]">
               {category.name}
             </div>
