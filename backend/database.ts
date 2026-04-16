@@ -551,7 +551,7 @@ function defaultSiteSettings(): SiteSettings {
         subtitle: 'Shop top electronics, gadgets, and more.',
         primaryCtaText: 'Shop Now',
         primaryCtaLink: '/products',
-        productImageUrl: '/hero/hero-1.png',
+        productImageUrl: '/hero/hero-5.png',
       },
       sections: [
         { id: 'featured-products', title: 'Featured Products', subtitle: 'Curated marketplace picks', type: 'products', show: true, order: 1 },

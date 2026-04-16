@@ -1,5 +1,13 @@
-// src/data/homepageCategories.ts
-export const homepageCategories = [
+// Canonical homepage categories for ExShopi (FINAL CLEAN VERSION)
+
+export type HomepageCategory = {
+  slug: string;
+  name: string;
+  image: string;
+  link: string;
+};
+
+export const homepageCategories: HomepageCategory[] = [
   {
     slug: 'computers',
     name: 'Computers',
@@ -27,7 +35,7 @@ export const homepageCategories = [
   {
     slug: 'tv-video',
     name: 'TVs / Video',
-    image: '/categories/Tv.png',
+    image: '/categories/Tv.png', // ⚠️ Make sure this file is NOT broken
     link: '/category/tv-video',
   },
   {
@@ -50,6 +58,9 @@ export const homepageCategories = [
   },
 ];
 
-export function getHomepageCategory(slug: string) {
+/**
+ * Safe getter (prevents undefined crashes)
+ */
+export function getHomepageCategory(slug: string): HomepageCategory | undefined {
   return homepageCategories.find((cat) => cat.slug === slug);
 }
