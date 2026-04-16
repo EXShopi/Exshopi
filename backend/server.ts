@@ -769,8 +769,7 @@ app.use(helmet({
       ],
       mediaSrc: ["'self'", "https:"],
       objectSrc: ["'none'"],
-      // Only set upgradeInsecureRequests if needed and in correct format
-      ...(process.env.NODE_ENV === "production" ? { upgradeInsecureRequests: true } : {}),
+      // Removed upgradeInsecureRequests for helmet@8 compatibility
     },
     reportOnly: process.env.NODE_ENV !== "production",
   },
