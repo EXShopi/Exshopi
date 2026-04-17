@@ -379,8 +379,7 @@ const createVariantRow = (): VariantRow => ({
 
 const normalizeLiveCategories = (items: unknown[]): LiveCategory[] => {
   const source = Array.isArray(items) ? items : [];
-
-  return source
+  const liveCategories = source
     .map((item) => {
       const category = asRecord(item);
       const rawSubs =
@@ -407,6 +406,40 @@ const normalizeLiveCategories = (items: unknown[]): LiveCategory[] => {
       };
     })
     .filter((category: LiveCategory) => category.name && category.slug);
+
+  const mergedBySlug = new Map<string, LiveCategory>();
+
+  (MASTER_CATEGORIES || []).forEach((category: any) => {
+    mergedBySlug.set(String(category.slug), {
+      id: String(category.id || category.slug || category.name || ''),
+      name: String(category.name || ''),
+      slug: String(category.slug || ''),
+      subcategories: Array.isArray(category.subcategories)
+        ? category.subcategories
+            .map((subcategory: any) => ({
+              id: String(subcategory.id || subcategory.slug || subcategory.name || ''),
+              name: String(subcategory.name || ''),
+              slug: String(subcategory.slug || ''),
+            }))
+            .filter((subcategory: Subcategory) => subcategory.name && subcategory.slug)
+        : [],
+    });
+  });
+
+  liveCategories.forEach((category) => {
+    const canonical = mergedBySlug.get(category.slug);
+    if (canonical) {
+      mergedBySlug.set(category.slug, {
+        ...canonical,
+        id: category.id || canonical.id,
+      });
+      return;
+    }
+
+    mergedBySlug.set(category.slug, category);
+  });
+
+  return Array.from(mergedBySlug.values());
 };
 
 const toBulletList = (value: string) =>

@@ -1,3 +1,5 @@
+import { getCategoryPath } from '../lib/seo';
+
 // Canonical homepage categories for ExShopi (FINAL CLEAN VERSION)
 
 export type HomepageCategory = {
@@ -12,7 +14,7 @@ export const homepageCategories: HomepageCategory[] = [
     slug: 'computers',
     name: 'Computers',
     image: '/categories/Computer.png',
-    link: '/category/computers',
+    link: getCategoryPath('computers'),
   },
   {
     slug: 'cell-phones',

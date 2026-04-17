@@ -1,5 +1,5 @@
 import { buildRichProductTitle, cleanSeoSlug } from "./seoMarketplace";
-import { resolveCanonicalCategoryAssignment } from "./masterCategories";
+import { getCategoryRouteInfo, resolveCanonicalCategoryAssignment } from "./masterCategories";
 
 const DEFAULT_SITE_NAME = "ExShopi";
 const DEFAULT_SITE_URL =
@@ -147,7 +147,9 @@ export function getProductCategorySlugs(product: any) {
 
   const subcategorySlug = String(
     resolved.subcategorySlug ||
+      resolved.categorySlug ||
       specs.subcategorySlug ||
+      specs.categorySlug ||
       specs.templateId ||
       product?.subcategory ||
       "products"
@@ -179,6 +181,10 @@ export function buildProductPath(product: any) {
 }
 
 export function getCategoryPath(categorySlug?: string, subcategorySlug?: string) {
+  const routeInfo = getCategoryRouteInfo(categorySlug, subcategorySlug);
+  if (routeInfo) {
+    return routeInfo.canonicalPath;
+  }
   if (categorySlug && subcategorySlug) {
     return `/category/${slugifySeo(categorySlug)}/${slugifySeo(subcategorySlug)}`;
   }

@@ -33,7 +33,7 @@ import {
   getSpecificationTemplate,
   humanizeSpecificationValue,
 } from "../lib/productSpecifications";
-import { buildProductPath, buildAbsoluteUrl, buildProductBreadcrumbSchema } from "../lib/seo";
+import { buildProductPath, buildAbsoluteUrl, buildProductBreadcrumbSchema, getCategoryPath } from "../lib/seo";
 import { findProductRouteMatch } from "../lib/productRouteResolution";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
@@ -52,9 +52,7 @@ function slugifyLocal(value?: string) {
 function safeCategoryPath(categorySlug?: string, subcategorySlug?: string) {
   const cat = slugifyLocal(categorySlug);
   const sub = slugifyLocal(subcategorySlug);
-  if (cat && sub) return `/category/${cat}/${sub}`;
-  if (cat) return `/category/${cat}`;
-  return "/categories";
+  return getCategoryPath(cat, sub || undefined);
 }
 import ProductSpecificationTable from "../components/product/ProductSpecificationTable";
 
@@ -1253,8 +1251,16 @@ const structuredTemplate = getSpecificationTemplate(
 
   // Breadcrumb assignments (must be after productSpecs and product are available)
   breadcrumbCategorySlug = productSpecs?.parentCategorySlug || productSpecs?.categorySlug || product?.category || "electronics";
-  breadcrumbCategoryLabel = productSpecs?.parentCategoryName || productSpecs?.categoryName || product?.category || "Electronics";
-  breadcrumbCategoryLink = safeCategoryPath(breadcrumbCategorySlug);
+  breadcrumbCategoryLabel =
+    productSpecs?.subcategoryName ||
+    productSpecs?.categoryName ||
+    productSpecs?.parentCategoryName ||
+    product?.category ||
+    "Electronics";
+  breadcrumbCategoryLink = safeCategoryPath(
+    breadcrumbCategorySlug,
+    productSpecs?.subcategorySlug || productSpecs?.categorySlug || product?.subcategory || ""
+  );
 
   return (
     <>

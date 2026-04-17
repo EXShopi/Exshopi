@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowRight, Layers3, SlidersHorizontal } from "lucide-react";
 import ProductCard from "../components/ProductCard";
 import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
 import CategoryComingSoon from "./CategoryComingSoon";
 import { categoryData } from "../data/categoryStructure";
-import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
+import { debugCategoryAssignment, filterProductsByCategoryTree, getCategoryRouteInfo } from "../lib/masterCategories";
 import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { categoryAPI, productAPI } from "../services/api";
 import SEOHead from "../components/seo/SEOHead";
@@ -55,13 +55,58 @@ function normalizeText(value: string) {
 
 const PAGE_SIZE = 12;
 
+const CATEGORY_CONTENT: Record<
+  string,
+  {
+    title: string;
+    hero: string;
+    seoTitle: string;
+    seoDescription: string;
+    seoKeywords: string[];
+  }
+> = {
+  electronics: {
+    title: "Electronics",
+    hero: "Shop electronics with curated marketplace offers, structured product specifications, and trusted UAE seller support.",
+    seoTitle: "Electronics in UAE | ExShopi",
+    seoDescription: "Browse electronics in UAE on ExShopi with clean category architecture, trusted marketplace listings, and clear paths into computers, PC, and laptop products.",
+    seoKeywords: ["electronics UAE", "buy electronics UAE", "electronics Dubai", "ExShopi electronics"],
+  },
+  computers: {
+    title: "Computers",
+    hero: "Shop computers with marketplace-ready listings for everyday computing, office setups, and reliable UAE delivery support.",
+    seoTitle: "Computers in UAE | ExShopi",
+    seoDescription: "Shop computers in UAE on ExShopi with dedicated category filtering, clear product classification, and clean internal links for discovery.",
+    seoKeywords: ["computers UAE", "buy computers UAE", "computer deals Dubai", "ExShopi computers"],
+  },
+  pc: {
+    title: "PC",
+    hero: "Shop PC listings with desktop-ready performance, workstation options, and structured specifications for UAE buyers.",
+    seoTitle: "PC in UAE | ExShopi",
+    seoDescription: "Explore PC products in UAE on ExShopi with a dedicated PC category, accurate breadcrumbs, and clearer desktop computing discovery.",
+    seoKeywords: ["PC UAE", "desktop PC UAE", "buy PC Dubai", "ExShopi PC"],
+  },
+  laptops: {
+    title: "Laptops",
+    hero: "Shop laptops with curated marketplace offers, structured product specifications, and trusted UAE seller support.",
+    seoTitle: "Laptops in UAE | ExShopi",
+    seoDescription: "Shop laptops in UAE on ExShopi with dedicated laptop category filtering, clean canonical routing, and trusted marketplace discovery.",
+    seoKeywords: ["laptops UAE", "buy laptops UAE", "refurbished laptops Dubai", "ExShopi laptops"],
+  },
+};
+
 export default function CategoryPage() {
   const { category, subcategory } = useParams<{ category?: string; subcategory?: string }>();
+  const routeInfo = useMemo(() => getCategoryRouteInfo(category, subcategory), [category, subcategory]);
+  const canonicalCategoryKey = routeInfo?.canonicalCategorySlug || (category || "categories").toLowerCase();
+  const canonicalSubcategoryKey = routeInfo?.canonicalSubcategorySlug || "";
+  const canonicalPath =
+    routeInfo?.canonicalPath || getCategoryPath(canonicalCategoryKey, canonicalSubcategoryKey || undefined);
   const routeSnapshot = readRouteSnapshot();
   const snapshotCategoryProducts =
     routeSnapshot?.kind === "category" &&
-    routeSnapshot.category?.slug === category &&
-    (routeSnapshot.category?.subcategorySlug || "") === (subcategory || "")
+    routeSnapshot.category?.slug === canonicalCategoryKey &&
+    (routeSnapshot.category?.subcategorySlug || "") === canonicalSubcategoryKey
       ? routeSnapshot.products || []
       : [];
   const snapshotCategories =
@@ -75,26 +120,44 @@ export default function CategoryPage() {
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const rawCategoryKey = (category || "categories").toLowerCase();
-  const rawSubcategoryKey = (subcategory || "").toLowerCase();
-
-  // map legacy route slugs to canonical master category when possible
-  const legacyMap = mapLegacyCategory(rawCategoryKey);
-  const effectiveCategoryKey = (legacyMap && legacyMap.category) ? String(legacyMap.category) : rawCategoryKey;
-  const effectiveSubcategoryKey = rawSubcategoryKey || (legacyMap && legacyMap.subcategory ? String(legacyMap.subcategory) : '');
+  const effectiveCategoryKey = canonicalCategoryKey;
+  const effectiveSubcategoryKey = canonicalSubcategoryKey;
 
   const categoryInfo = categoryData.find((entry) => entry.slug === effectiveCategoryKey);
   const subcategoryInfo = categoryInfo?.subcategories.find((entry) => entry.slug === effectiveSubcategoryKey);
   const liveCategory = categories.find((entry) => entry.slug === effectiveCategoryKey);
   const isComingSoon = Boolean(category && liveCategory && liveCategory.active === false);
-  const displayTitle = subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || titleFromSlug(effectiveCategoryKey);
-  const heroDescription =
-    `Shop ${displayTitle.toLowerCase()} with curated marketplace offers, structured product specifications, and trusted UAE seller support.`;
-  const seoDescription =
-    buildCategorySeoDescription(
-      subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || displayTitle
-    );
-  const seo = generateCategorySeo(displayTitle, effectiveSubcategoryKey || effectiveCategoryKey);
+  const categoryContent = CATEGORY_CONTENT[effectiveSubcategoryKey || effectiveCategoryKey];
+  const displayTitle = categoryContent?.title || subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || titleFromSlug(effectiveSubcategoryKey || effectiveCategoryKey);
+  const heroDescription = categoryContent?.hero || `Shop ${displayTitle.toLowerCase()} with curated marketplace offers, structured product specifications, and trusted UAE seller support.`;
+  const seoDescription = categoryContent?.seoDescription || buildCategorySeoDescription(displayTitle);
+  const generatedSeo = generateCategorySeo(displayTitle, effectiveSubcategoryKey || effectiveCategoryKey);
+  const seo = {
+    ...generatedSeo,
+    metaTitle: categoryContent?.seoTitle || generatedSeo.metaTitle,
+    metaDescription: seoDescription,
+    metaKeywords: Array.from(
+      new Set([
+        ...(categoryContent?.seoKeywords || []),
+        ...String(generatedSeo.metaKeywords || "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ])
+    ).join(", "),
+  };
+
+  useEffect(() => {
+    debugCategoryAssignment("category-route", {
+      requestedCategory: category,
+      requestedSubcategory: subcategory,
+      routeInfo,
+    });
+  }, [category, subcategory, routeInfo]);
+
+  if (routeInfo && (category !== routeInfo.canonicalCategorySlug || (subcategory || "") !== (routeInfo.canonicalSubcategorySlug || ""))) {
+    return <Navigate to={routeInfo.canonicalPath} replace />;
+  }
 
   useEffect(() => {
     if (!snapshotCategoryProducts.length) return;
@@ -183,7 +246,7 @@ export default function CategoryPage() {
     return () => {
       mounted = false;
     };
-  }, [rawCategoryKey, rawSubcategoryKey, effectiveCategoryKey, effectiveSubcategoryKey]);
+  }, [category, subcategory, effectiveCategoryKey, effectiveSubcategoryKey]);
 
   const filteredProducts = useMemo(() => {
     if (effectiveCategoryKey === "categories") return catalog;
@@ -224,6 +287,16 @@ export default function CategoryPage() {
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const relatedSubcategories = categoryInfo?.subcategories || [];
 
+  useEffect(() => {
+    debugCategoryAssignment("category-page-products", {
+      route: canonicalPath,
+      effectiveCategoryKey,
+      effectiveSubcategoryKey,
+      rawProducts: rawProducts.length,
+      filteredProducts: filteredProducts.length,
+    });
+  }, [canonicalPath, effectiveCategoryKey, effectiveSubcategoryKey, filteredProducts.length, rawProducts.length]);
+
   if (!loading && isComingSoon) {
     return <CategoryComingSoon category={liveCategory} />;
   }
@@ -234,9 +307,9 @@ export default function CategoryPage() {
         title={seo.metaTitle}
         description={seoDescription}
         keywords={seo.metaKeywords}
-        pathname={getCategoryPath(effectiveCategoryKey, effectiveSubcategoryKey || undefined)}
+        pathname={canonicalPath}
         type="website"
-        canonicalUrl={buildAbsoluteUrl(getCategoryPath(effectiveCategoryKey, effectiveSubcategoryKey || undefined))}
+        canonicalUrl={buildAbsoluteUrl(canonicalPath)}
       />
       <section className="border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_32%),linear-gradient(135deg,#ffffff,#eef4ff)]">
         <div className="mx-auto max-w-7xl px-4 py-10 md:px-6 lg:py-14">

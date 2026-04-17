@@ -21,6 +21,7 @@ import {
   generateProductMeta,
   getCategoryPath,
 } from "../src/lib/seo";
+import { productMatchesCategoryAssignment, MASTER_CATEGORIES } from "../src/lib/masterCategories";
 import { getProductRouteAliases } from "../src/lib/productRouteResolution";
 
 const ROOT = process.cwd();
@@ -225,6 +226,11 @@ Sitemap: ${SITE_URL}/sitemap.xml
   const categoryRedirects = [
     `/mobiles /category/electronics/mobiles 301!`,
     `/laptops /category/electronics/laptops 301!`,
+    `/computers /category/electronics/computers 301!`,
+    `/pc /category/electronics/pc 301!`,
+    `/category/laptops /category/electronics/laptops 301!`,
+    `/category/computers /category/electronics/computers 301!`,
+    `/category/pc /category/electronics/pc 301!`,
     `/electronics /category/electronics 301!`,
     `/tablets /category/electronics/tablets 301!`,
     `/accessories /category/electronics/accessories 301!`,
@@ -313,7 +319,16 @@ Sitemap: ${SITE_URL}/sitemap.xml
 async function main() {
   const template = await fs.readFile(path.join(DIST_DIR, "index.html"), "utf8");
   const db = JSON.parse(await fs.readFile(path.join(ROOT, "backend", "db.json"), "utf8"));
-  const categories = Array.isArray(db.categories) ? db.categories : [];
+  const categories = (MASTER_CATEGORIES || []).map((category) => ({
+    slug: category.slug,
+    name: category.name,
+    subcategories: Array.isArray(category.subcategories)
+      ? category.subcategories.map((subcategory) => ({
+          slug: subcategory.slug,
+          name: subcategory.name,
+        }))
+      : [],
+  }));
   const liveProducts = (Array.isArray(db.products) ? db.products : [])
     .filter(isLiveProduct)
     .map(productCardData);
@@ -382,10 +397,9 @@ async function main() {
   await writeRouteFile("/products", listingHtml);
 
   for (const category of categories) {
-    const categoryProducts = liveProducts.filter((product) => {
-      const specs = product.specs || {};
-      return cleanSeoSlug(specs.parentCategorySlug || specs.categorySlug || product.category) === cleanSeoSlug(category.slug);
-    });
+    const categoryProducts = liveProducts.filter((product) =>
+      productMatchesCategoryAssignment(product, category.slug)
+    );
 
     const categorySeo = generateCategorySeo(category.name, category.slug);
     const categoryBody = buildCategorySeoBody({
@@ -427,13 +441,9 @@ async function main() {
     );
 
     for (const sub of category.subcategories || []) {
-      const subProducts = liveProducts.filter((product) => {
-        const specs = product.specs || {};
-        return (
-          cleanSeoSlug(specs.parentCategorySlug || specs.categorySlug || product.category) === cleanSeoSlug(category.slug) &&
-          cleanSeoSlug(specs.subcategorySlug || specs.templateId || sub.slug) === cleanSeoSlug(sub.slug)
-        );
-      });
+      const subProducts = liveProducts.filter((product) =>
+        productMatchesCategoryAssignment(product, category.slug, sub.slug)
+      );
       const routePath = getCategoryPath(category.slug, sub.slug);
       const subSeo = generateCategorySeo(sub.name, sub.slug);
       const subBody = buildCategorySeoBody({

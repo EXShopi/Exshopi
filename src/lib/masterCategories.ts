@@ -6,6 +6,18 @@ export type CategoryNode = {
   childCategories?: CategoryNode[];
 };
 
+export type CategoryRouteInfo = {
+  canonicalCategorySlug: string;
+  canonicalSubcategorySlug?: string;
+  canonicalPath: string;
+  displayKey: string;
+  displayName: string;
+  parentName?: string;
+  aliases: string[];
+};
+
+const CANONICAL_ALIAS_CHILDREN = new Set(['computers', 'pc', 'laptops', 'desktop-pcs', 'all-in-one', 'workstations', 'mini-pc']);
+
 export type CanonicalCategoryAssignment = {
   parentCategorySlug: string;
   categorySlug: string;
@@ -27,15 +39,23 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
       {
         slug: 'computers',
         name: 'Computers',
+        description: 'General-purpose computers, business systems, and everyday computing products.',
+      },
+      {
+        slug: 'pc',
+        name: 'PC',
+        description: 'Desktop PCs, towers, workstations, and performance computer setups.',
         childCategories: [
-          { slug: 'laptops', name: 'Laptops' },
           { slug: 'desktop-pcs', name: 'Desktop PCs' },
           { slug: 'all-in-one', name: 'All-in-One PCs' },
-          { slug: 'monitors', name: 'Monitors' },
-          { slug: 'printers', name: 'Printers' },
-          { slug: 'storage', name: 'Storage / SSD / HDD' },
-          { slug: 'computer-accessories', name: 'Computer Accessories' },
+          { slug: 'workstations', name: 'Workstations' },
+          { slug: 'mini-pc', name: 'Mini PC' },
         ],
+      },
+      {
+        slug: 'laptops',
+        name: 'Laptops',
+        description: 'Portable laptops, notebooks, ultrabooks, and MacBook-ready computing deals.',
       },
       {
         slug: 'mobiles-tablets',
@@ -430,6 +450,79 @@ export function getChildCategories(parentSlug: string, subSlug: string) {
   return sub?.childCategories || [];
 }
 
+export function getCategoryRouteInfo(categorySlug?: string | null, subcategorySlug?: string | null): CategoryRouteInfo | null {
+  const normalizedCategory = normalizeCategorySlug(categorySlug || '');
+  const normalizedSubcategory = normalizeCategorySlug(subcategorySlug || '');
+
+  if (normalizedSubcategory) {
+    const parentLookup = findCanonicalPathBySlug(normalizedCategory) || (CANONICAL_ALIAS_CHILDREN.has(normalizedCategory) ? findCanonicalPathByLegacyValue(normalizedCategory) : null);
+    const childLookup = findCanonicalPathBySlug(normalizedSubcategory) || (CANONICAL_ALIAS_CHILDREN.has(normalizedSubcategory) ? findCanonicalPathByLegacyValue(normalizedSubcategory) : null);
+    const canonicalCategorySlug = normalizeCategorySlug(
+      parentLookup?.parentCategorySlug ||
+        parentLookup?.categorySlug ||
+        childLookup?.parentCategorySlug ||
+        normalizedCategory
+    );
+    const canonicalSubcategorySlug = normalizeCategorySlug(
+      childLookup?.depth === 1
+        ? childLookup.parentCategorySlug
+        : childLookup?.depth && childLookup.depth >= 2
+        ? childLookup.categorySlug
+        : normalizedSubcategory
+    );
+    const displayName = childLookup?.depth && childLookup.depth >= 2 ? childLookup.categoryName : childLookup?.parentCategoryName || normalizedSubcategory;
+    const parentName = childLookup?.parentCategoryName || parentLookup?.parentCategoryName || '';
+    const aliases = Array.from(
+      new Set([
+        `/category/${canonicalSubcategorySlug}`,
+        `/category/${canonicalCategorySlug}/${canonicalSubcategorySlug}`,
+      ])
+    );
+
+    return {
+      canonicalCategorySlug,
+      canonicalSubcategorySlug,
+      canonicalPath: `/category/${canonicalCategorySlug}/${canonicalSubcategorySlug}`,
+      displayKey: canonicalSubcategorySlug,
+      displayName,
+      parentName,
+      aliases,
+    };
+  }
+
+  const resolved =
+    findCanonicalPathBySlug(normalizedCategory) ||
+    (CANONICAL_ALIAS_CHILDREN.has(normalizedCategory) ? findCanonicalPathByLegacyValue(normalizedCategory) : null);
+  if (!resolved) return null;
+
+  if (resolved.depth >= 2) {
+    const aliases = Array.from(
+      new Set([
+        `/category/${resolved.categorySlug}`,
+        `/category/${resolved.parentCategorySlug}/${resolved.categorySlug}`,
+      ])
+    );
+
+    return {
+      canonicalCategorySlug: resolved.parentCategorySlug,
+      canonicalSubcategorySlug: resolved.categorySlug,
+      canonicalPath: `/category/${resolved.parentCategorySlug}/${resolved.categorySlug}`,
+      displayKey: resolved.categorySlug,
+      displayName: resolved.categoryName,
+      parentName: resolved.parentCategoryName,
+      aliases,
+    };
+  }
+
+  return {
+    canonicalCategorySlug: resolved.parentCategorySlug || resolved.categorySlug,
+    canonicalPath: `/category/${resolved.parentCategorySlug || resolved.categorySlug}`,
+    displayKey: resolved.parentCategorySlug || resolved.categorySlug,
+    displayName: resolved.parentCategoryName || resolved.categoryName,
+    aliases: [`/category/${resolved.parentCategorySlug || resolved.categorySlug}`],
+  };
+}
+
 function buildAssignmentFromPath(
   parent?: CategoryNode | null,
   category?: CategoryNode | null,
@@ -566,15 +659,14 @@ export function resolveCanonicalCategoryAssignment(input: Record<string, any> | 
   const templateInput = source.templateId || specs.templateId || "";
 
   const candidates = [
-    { value: subcategoryInput, label: "subcategory" },
     { value: templateInput, label: "template" },
+    { value: attributes.subcategory, label: "attribute-subcategory" },
+    { value: subcategoryInput, label: "subcategory" },
     { value: categoryPathParts[2], label: "path-subcategory" },
     { value: categoryInput, label: "category" },
     { value: categoryPathParts[1], label: "path-category" },
     { value: parentInput, label: "parent" },
     { value: categoryPathParts[0], label: "path-parent" },
-    { value: attributes.subcategory, label: "attribute-subcategory" },
-    { value: source.title || specs.templateName || "", label: "title" },
   ].filter((entry) => normalizeCategorySlug(entry.value));
 
   const resolvedCandidates = candidates
@@ -603,8 +695,14 @@ export function resolveCanonicalCategoryAssignment(input: Record<string, any> | 
     if (right.depth !== left.depth) return right.depth - left.depth;
     return right.matchedBy.length - left.matchedBy.length;
   });
-
-  const best = ranked[0] || null;
+  const titleFallback =
+    ranked[0] ||
+    (() => {
+      const titleValue = normalizeCategorySlug(source.title || specs.templateName || "");
+      if (!titleValue) return null;
+      return findCanonicalPathByLegacyValue(titleValue) || findCanonicalPathBySlug(titleValue);
+    })();
+  const best = titleFallback || null;
   const explicitParent = findCanonicalPathBySlug(parentInput) || findCanonicalPathByLegacyValue(parentInput);
   const explicitCategory = findCanonicalPathBySlug(categoryInput) || findCanonicalPathByLegacyValue(categoryInput);
 
@@ -618,8 +716,8 @@ export function resolveCanonicalCategoryAssignment(input: Record<string, any> | 
   );
 
   const categorySlug = normalizeCategorySlug(
-    (explicitCategory && explicitCategory.depth >= 2 ? explicitCategory.categorySlug : "") ||
-      (best && best.depth >= 2 ? best.categorySlug : "") ||
+    (best && best.depth >= 2 ? best.categorySlug : "") ||
+      (explicitCategory && explicitCategory.depth >= 2 ? explicitCategory.categorySlug : "") ||
       (explicitCategory?.depth === 1 ? explicitCategory.parentCategorySlug : "") ||
       parentCategorySlug
   );
@@ -627,7 +725,11 @@ export function resolveCanonicalCategoryAssignment(input: Record<string, any> | 
   const subcategorySlug = normalizeCategorySlug(
     (best && best.depth >= 3 ? best.subcategorySlug : "") ||
       categoryPathParts[2] ||
-      (normalizeCategorySlug(subcategoryInput) !== categorySlug ? subcategoryInput : "")
+      (best && best.depth >= 2
+        ? ""
+        : normalizeCategorySlug(subcategoryInput) !== categorySlug
+        ? subcategoryInput
+        : "")
   );
 
   const canonicalSubPath = subcategorySlug ? findCanonicalPathBySlug(subcategorySlug) : null;
@@ -698,31 +800,36 @@ export function productMatchesCategoryAssignment(
 
 const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> = {
   // Computers / Laptops
-  laptop: [{ category: 'computers', subcategory: 'laptops' }],
-  laptops: [{ category: 'computers', subcategory: 'laptops' }],
-  macbook: [{ category: 'computers', subcategory: 'laptops' }],
-  notebook: [{ category: 'computers', subcategory: 'laptops' }],
-  ultrabook: [{ category: 'computers', subcategory: 'laptops' }],
+  laptop: [{ category: 'electronics', subcategory: 'laptops' }],
+  laptops: [{ category: 'electronics', subcategory: 'laptops' }],
+  macbook: [{ category: 'electronics', subcategory: 'laptops' }],
+  notebook: [{ category: 'electronics', subcategory: 'laptops' }],
+  ultrabook: [{ category: 'electronics', subcategory: 'laptops' }],
+  computer: [{ category: 'electronics', subcategory: 'computers' }],
+  computers: [{ category: 'electronics', subcategory: 'computers' }],
 
   // Desktop / Workstation
-  desktop: [{ category: 'computers', subcategory: 'desktop-pcs' }],
-  desktops: [{ category: 'computers', subcategory: 'desktop-pcs' }],
-  pc: [{ category: 'computers', subcategory: 'desktop-pcs' }],
-  tower: [{ category: 'computers', subcategory: 'desktop-pcs' }],
-  workstation: [{ category: 'computers', subcategory: 'desktop-pcs' }],
-  'all-in-one': [{ category: 'computers', subcategory: 'all-in-one' }],
+  desktop: [{ category: 'electronics', subcategory: 'pc' }],
+  desktops: [{ category: 'electronics', subcategory: 'pc' }],
+  pc: [{ category: 'electronics', subcategory: 'pc' }],
+  tower: [{ category: 'electronics', subcategory: 'pc' }],
+  workstation: [{ category: 'electronics', subcategory: 'pc' }],
+  workstations: [{ category: 'electronics', subcategory: 'pc' }],
+  'desktop-pcs': [{ category: 'electronics', subcategory: 'pc' }],
+  'all-in-one': [{ category: 'electronics', subcategory: 'pc' }],
+  'mini-pc': [{ category: 'electronics', subcategory: 'pc' }],
 
   // Storage / drives
-  ssd: [{ category: 'computers', subcategory: 'storage' }],
-  hdd: [{ category: 'computers', subcategory: 'storage' }],
-  storage: [{ category: 'computers', subcategory: 'storage' }],
-  'hard-drive': [{ category: 'computers', subcategory: 'storage' }],
+  ssd: [{ category: 'electronics', subcategory: 'pc' }],
+  hdd: [{ category: 'electronics', subcategory: 'pc' }],
+  storage: [{ category: 'electronics', subcategory: 'pc' }],
+  'hard-drive': [{ category: 'electronics', subcategory: 'pc' }],
 
   // Monitors / Printers
-  monitor: [{ category: 'computers', subcategory: 'monitors' }],
-  monitors: [{ category: 'computers', subcategory: 'monitors' }],
-  printer: [{ category: 'computers', subcategory: 'printers' }],
-  printers: [{ category: 'computers', subcategory: 'printers' }],
+  monitor: [{ category: 'electronics', subcategory: 'pc' }],
+  monitors: [{ category: 'electronics', subcategory: 'pc' }],
+  printer: [{ category: 'electronics', subcategory: 'pc' }],
+  printers: [{ category: 'electronics', subcategory: 'pc' }],
 
   // Mobiles & tablets
   phone: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
@@ -919,6 +1026,30 @@ export function filterProductsByCategoryTree(
   const result = (products || []).filter((product) => {
     const values: string[] = [];
     const resolvedAssignment = resolveCanonicalCategoryAssignment(product);
+    const hasResolvedAssignment = Boolean(
+      resolvedAssignment.parentCategorySlug || resolvedAssignment.categorySlug || resolvedAssignment.subcategorySlug
+    );
+
+    if (hasResolvedAssignment) {
+      const matchesResolved = productMatchesCategoryAssignment(product, categorySlug, subcategorySlug);
+      if (matchesResolved) {
+        matchedCount += 1;
+        return true;
+      }
+
+      unmatchedCount += 1;
+      debugCategoryAssignment("excluded-product", {
+        productId: product?.id || product?.slug || product?.title || "unknown-product",
+        requestedCategory: categorySlug,
+        requestedSubcategory: subcategorySlug,
+        availableValues: values,
+        resolvedAssignment,
+        status: product?.status || product?.productStatus || "",
+        approvalStatus: product?.approvalStatus || product?.approval_status || "",
+        visibilityStatus: product?.visibilityStatus || product?.visibility_status || "",
+      });
+      return false;
+    }
 
     const catId = product?.categoryId || product?.specs?.backendCategoryId || null;
     if (catId && backendCategories && Array.isArray(backendCategories)) {
@@ -999,7 +1130,7 @@ export function filterProductsByCategoryTree(
       const mappedCat = normalizeCategorySlug(mapped.category);
       const mappedSub = mapped.subcategory ? normalizeCategorySlug(mapped.subcategory) : null;
 
-      if (mappedCat === normCat || (mappedSub && allowed.has(mappedSub))) {
+      if ((normSub && mappedSub && allowed.has(mappedSub)) || (!normSub && mappedCat === normCat)) {
         legacyMappedCount += 1;
         return true;
       }

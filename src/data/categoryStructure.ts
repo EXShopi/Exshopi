@@ -1,4 +1,5 @@
 import { MASTER_CATEGORIES } from '../lib/masterCategories';
+import { getCategoryPath } from '../lib/seo';
 
 export interface Subcategory {
   name: string;
@@ -32,10 +33,10 @@ export const categoryData: Category[] = (MASTER_CATEGORIES || []).map((parent) =
 // Main navigation items (departments + a few quick links)
 export const mainNavItems: NavItem[] = [
   { name: 'Departments', slug: 'departments', hasMenu: true },
-  { name: 'Laptops', slug: 'laptops', route: '/category/laptops' },
-  { name: 'Mobiles', slug: 'mobiles', route: '/category/mobiles' },
-  { name: 'Tablets', slug: 'tablets', route: '/category/tablets' },
-  { name: 'Accessories', slug: 'accessories', route: '/category/accessories' },
-  { name: 'Electronics', slug: 'electronics', route: '/category/electronics' },
+  { name: 'Laptops', slug: 'laptops', route: getCategoryPath('laptops') },
+  { name: 'Mobiles', slug: 'mobiles', route: getCategoryPath('mobiles') },
+  { name: 'Tablets', slug: 'tablets', route: getCategoryPath('tablets') },
+  { name: 'Accessories', slug: 'accessories', route: getCategoryPath('accessories') },
+  { name: 'Electronics', slug: 'electronics', route: getCategoryPath('electronics') },
   { name: 'Today Deals', slug: 'deals', route: '/deals' },
 ];

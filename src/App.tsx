@@ -253,6 +253,9 @@ function AppContent() {
             <Route path="/refurbished-laptops-uae" element={<LandingPage />} />
             <Route path="/cheap-macbook-dubai" element={<LandingPage />} />
             <Route path="/electronics-online-uae" element={<LandingPage />} />
+            <Route path="/category/laptops" element={<Navigate to="/category/electronics/laptops" replace />} />
+            <Route path="/category/computers" element={<Navigate to="/category/electronics/computers" replace />} />
+            <Route path="/category/pc" element={<Navigate to="/category/electronics/pc" replace />} />
             <Route path="/category/:category" element={<CategoryPage />} />
             <Route path="/category/:category/:subcategory" element={<CategoryPage />} />
             <Route path="/vendors" element={<VendorStorefront />} />
@@ -261,7 +264,9 @@ function AppContent() {
             
             {/* SEO Redirects: Old category paths to new canonical paths */}
             <Route path="/mobiles" element={<Navigate to="/category/mobiles" replace />} />
-            <Route path="/laptops" element={<Navigate to="/category/laptops" replace />} />
+            <Route path="/laptops" element={<Navigate to="/category/electronics/laptops" replace />} />
+            <Route path="/computers" element={<Navigate to="/category/electronics/computers" replace />} />
+            <Route path="/pc" element={<Navigate to="/category/electronics/pc" replace />} />
             <Route path="/electronics" element={<Navigate to="/category/electronics" replace />} />
             <Route path="/tablets" element={<Navigate to="/category/tablets" replace />} />
             <Route path="/accessories" element={<Navigate to="/category/accessories" replace />} />

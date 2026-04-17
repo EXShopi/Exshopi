@@ -48,7 +48,7 @@ import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, 
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
-import { productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
+import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -6273,9 +6273,12 @@ Sitemap: https://exshopi.com/sitemap.xml
 app.get('/sitemap.xml', async (_req: Request, res: Response) => {
   try {
     const siteUrl = 'https://exshopi.com';
-    const categories = prismaRuntime.enabled
-      ? await prismaRuntime.getCategories()
-      : db.getCategories();
+    const categories = (MASTER_CATEGORIES || []).map((category) => ({
+      slug: category.slug,
+      subcategories: Array.isArray(category.subcategories)
+        ? category.subcategories.map((subcategory) => ({ slug: subcategory.slug }))
+        : [],
+    }));
     const products = prismaRuntime.enabled
       ? await prismaRuntime.getAllProducts()
       : supabaseRuntime.enabled

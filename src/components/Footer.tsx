@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone } from 'lucide-react';
 import { useLanguageStore } from '../store/language';
 import { storefrontT } from '../lib/storefrontCopy';
+import { getCategoryPath } from '../lib/seo';
 
 export default function Footer() {
   const { lang } = useLanguageStore();
@@ -71,10 +72,10 @@ export default function Footer() {
             {
               title: storefrontT(lang, "shop"),
               links: [
-                { name: storefrontT(lang, "laptops"), to: "/category/laptops" },
-                { name: storefrontT(lang, "mobiles"), to: "/category/mobiles" },
-                { name: storefrontT(lang, "accessories"), to: "/category/accessories" },
-                { name: "Electronics", to: "/category/electronics" },
+                { name: storefrontT(lang, "laptops"), to: getCategoryPath('laptops') },
+                { name: storefrontT(lang, "mobiles"), to: getCategoryPath('mobiles') },
+                { name: storefrontT(lang, "accessories"), to: getCategoryPath('accessories') },
+                { name: "Electronics", to: getCategoryPath('electronics') },
               ],
             },
             {
