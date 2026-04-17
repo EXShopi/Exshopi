@@ -21,6 +21,7 @@ import {
   generateProductMeta,
   getCategoryPath,
 } from "../src/lib/seo";
+import { getProductRouteAliases } from "../src/lib/productRouteResolution";
 
 const ROOT = process.cwd();
 const DIST_DIR = path.join(ROOT, "dist");
@@ -201,27 +202,7 @@ function textParagraphs(paragraphs: string[]) {
 
 function productAliasRedirects(product: PrerenderedProduct) {
   const canonicalPath = buildProductPath(product);
-  const parentSlug = cleanSeoSlug(product.specs?.parentCategorySlug || product.specs?.categorySlug || product.category);
-  const subcategorySlug = cleanSeoSlug(product.specs?.subcategorySlug || product.specs?.templateId || product.category);
-
-  const aliases = new Set<string>([
-    `/product/${product.id}`,
-    `/product/${product.slug}`,
-    `/product/${product.slug}-copy`,
-    `/product/${product.slug}-copy-2`,
-    `/${parentSlug}/${subcategorySlug}/${product.slug}-copy`,
-    `/${parentSlug}/${subcategorySlug}/${product.slug}-copy-2`,
-  ]);
-
-  if (product.rawSlug) {
-    aliases.add(`/product/${cleanSeoSlug(product.rawSlug)}`);
-    aliases.add(`/${parentSlug}/${subcategorySlug}/${cleanSeoSlug(product.rawSlug)}`);
-  }
-
-  if (product.rawSlug && cleanSeoSlug(product.rawSlug) !== product.slug) {
-    aliases.add(`/product/${cleanSeoSlug(product.rawSlug)}-copy`);
-    aliases.add(`/${parentSlug}/${subcategorySlug}/${cleanSeoSlug(product.rawSlug)}-copy`);
-  }
+  const aliases = new Set<string>(getProductRouteAliases(product));
 
   aliases.delete(canonicalPath);
 
@@ -233,7 +214,7 @@ function productAliasRedirects(product: PrerenderedProduct) {
 
 async function writeSupportFiles(input: {
   homeHtml: string;
-  productRedirects: string[];
+  productRedirects: Array<{ alias: string; canonicalPath: string }>;
 }) {
   const robots = `User-agent: *
 Allow: /
@@ -286,13 +267,18 @@ Sitemap: ${SITE_URL}/sitemap.xml
 
   const redirects = [
     ...categoryRedirects,
-    ...input.productRedirects.sort(),
+    ...input.productRedirects
+      .map((item) => `${item.alias} ${item.canonicalPath} 301!`)
+      .sort(),
     ...spaRewrites,
     "/404 /404.html 404",
     "/* /404.html 404",
   ].join("\n");
 
   await fs.writeFile(path.join(DIST_DIR, "_redirects"), redirects, "utf8");
+  console.log(
+    `[seo-prerender] Generated ${input.productRedirects.length} product redirects to canonical URLs.`
+  );
 
   const notFoundHtml = buildHeadMeta(input.homeHtml, {
     title: "Page Not Found | ExShopi",
@@ -490,7 +476,7 @@ async function main() {
     }
   }
 
-  const productRedirects = new Set<string>();
+  const productRedirects = new Map<string, string>();
 
   for (const product of liveProducts) {
     const canonicalPath = buildProductPath(product);
@@ -550,7 +536,19 @@ async function main() {
     );
 
     for (const redirect of productAliasRedirects(product)) {
-      productRedirects.add(redirect);
+      const [alias, canonicalPath] = redirect.split(/\s+/);
+      if (!alias || !canonicalPath) continue;
+
+      const existingCanonicalPath = productRedirects.get(alias);
+      if (existingCanonicalPath && existingCanonicalPath !== canonicalPath) {
+        console.warn(
+          `[seo-prerender] Skipping ambiguous redirect alias ${alias} (${existingCanonicalPath} vs ${canonicalPath})`
+        );
+        productRedirects.delete(alias);
+        continue;
+      }
+
+      productRedirects.set(alias, canonicalPath);
     }
   }
 
@@ -659,7 +657,13 @@ ${Array.from(sitemapUrls)
 </urlset>`;
 
   await fs.writeFile(path.join(DIST_DIR, "sitemap.xml"), sitemap, "utf8");
-  await writeSupportFiles({ homeHtml, productRedirects: Array.from(productRedirects) });
+  await writeSupportFiles({
+    homeHtml,
+    productRedirects: Array.from(productRedirects.entries()).map(([alias, canonicalPath]) => ({
+      alias,
+      canonicalPath,
+    })),
+  });
 }
 
 void main().catch((error) => {

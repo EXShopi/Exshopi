@@ -34,6 +34,7 @@ import {
   humanizeSpecificationValue,
 } from "../lib/productSpecifications";
 import { buildProductPath, buildAbsoluteUrl, buildProductBreadcrumbSchema } from "../lib/seo";
+import { findProductRouteMatch } from "../lib/productRouteResolution";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
 import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
@@ -473,10 +474,24 @@ export default function ProductDetail() {
     const controller = new AbortController();
 
     const fetchProduct = async () => {
+      const logRouteMatch = (message: string, extra?: Record<string, unknown>) => {
+        if (import.meta.env.PROD) return;
+        console.info("[product-route]", message, {
+          identifier,
+          category: paramCategory,
+          subcategory: paramSubcategory,
+          ...extra,
+        });
+      };
+
       if (cachedProduct || snapshotProduct) {
         setProduct(cachedProduct || snapshotProduct);
         setLoading(false);
         setHasAttemptedLoad(true);
+        logRouteMatch("resolved from snapshot/cache", {
+          productId: String((cachedProduct || snapshotProduct)?.id || ""),
+          canonicalPath: buildProductPath(cachedProduct || snapshotProduct),
+        });
       } else {
         setProduct(null);
         setLoading(true);
@@ -495,6 +510,10 @@ export default function ProductDetail() {
           setProduct(normalizedProduct);
           setLoading(false);
           setHasAttemptedLoad(true);
+          logRouteMatch("resolved from direct lookup", {
+            productId: String(normalizedProduct?.id || ""),
+            canonicalPath: buildProductPath(normalizedProduct),
+          });
           return;
         }
         // If direct product lookup failed, try slug-based lookup using route params
@@ -512,11 +531,47 @@ export default function ProductDetail() {
               setProduct(normalizedProduct);
               setLoading(false);
               setHasAttemptedLoad(true);
+              logRouteMatch("resolved from category-aware lookup", {
+                productId: String(normalizedProduct?.id || ""),
+                canonicalPath: buildProductPath(normalizedProduct),
+              });
               return;
             }
           } catch (e) {
             console.warn('Slug-based fallback failed:', e);
           }
+        }
+
+        try {
+          const allProducts = await productAPI.getAll({ signal: controller.signal });
+          if (!active) return;
+
+          const normalizedProducts = Array.isArray(allProducts)
+            ? allProducts.map((item: any) => normalizeMarketplaceProduct(item))
+            : [];
+          const matchedRoute = findProductRouteMatch(
+            normalizedProducts,
+            String(identifier || ""),
+            paramCategory,
+            paramSubcategory
+          );
+
+          if (matchedRoute?.product) {
+            const normalizedProduct = matchedRoute.product;
+            productDetailCache.set(cacheKey, normalizedProduct);
+            setProduct(normalizedProduct);
+            setLoading(false);
+            setHasAttemptedLoad(true);
+            logRouteMatch("resolved from route alias lookup", {
+              productId: String(normalizedProduct?.id || ""),
+              canonicalPath: matchedRoute.canonicalPath,
+              matchedAlias: matchedRoute.matchedAlias,
+              redirected: !matchedRoute.isCanonical,
+            });
+              return;
+            }
+        } catch (allProductsError) {
+          console.warn("All-products alias lookup failed:", allProductsError);
         }
 
         throw new Error('Product not found');

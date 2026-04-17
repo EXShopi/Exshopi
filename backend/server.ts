@@ -47,6 +47,7 @@ import { ensureUniqueSlug, normalizeSlugInput, slugifyProduct } from './utils/sl
 import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, uniqueSeoKeywords } from './utils/seo';
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
+import { findProductRouteMatch, getProductCanonicalPath } from '../src/lib/productRouteResolution';
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -2996,6 +2997,21 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
             String(p.slug || p.id) === param ||
             seoSlugify(String(p.slug || p.title || p.id)) === seoSlugify(param)
         ) || null;
+
+      if (!product) {
+        const routeMatch = findProductRouteMatch(all, param);
+        if (routeMatch?.product) {
+          product = routeMatch.product;
+          if (!IS_PRODUCTION) {
+            console.info('[api] route alias matched live product', {
+              requested: param,
+              productId: String((product as any)?.id || ''),
+              matchedAlias: routeMatch.matchedAlias,
+              canonicalPath: routeMatch.canonicalPath,
+            });
+          }
+        }
+      }
     }
 
     if (!product || isSoftDeletedProduct(product)) {
@@ -3004,7 +3020,11 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
     }
 
     console.debug('[api] product found, returning', (product as any).id || (product as any).slug);
-    res.json(await serializeMarketplaceProductAsync(product));
+    const serialized = await serializeMarketplaceProductAsync(product);
+    res.json({
+      ...serialized,
+      canonicalPath: getProductCanonicalPath(serialized),
+    });
   } catch (error) {
     console.error('[api] error fetching product:', error);
     res.status(500).json({ error: String(error) });

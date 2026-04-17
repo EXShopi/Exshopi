@@ -1,7 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { findProductRouteMatch, getProductRouteAliases } from "../src/lib/productRouteResolution";
 
 const DIST_DIR = path.join(process.cwd(), "dist");
+const TARGETED_LEGACY_PRODUCT_PATHS = [
+  "/electronics/laptops/apple-macbook-pro-a1708-2017-laptop-with-13-3-inch-display-intel-core-i5-processor-7th-gen-8gb-ram-128gb-ssd-1-5gb-intel",
+];
 
 type ValidationIssue = {
   file: string;
@@ -80,6 +84,14 @@ function stripHtml(html: string) {
 async function main() {
   const files = await collectHtmlFiles(DIST_DIR);
   const issues: ValidationIssue[] = [];
+  const productSnapshots: Array<{ path: string; product: any }> = [];
+  let redirectsContent = "";
+
+  try {
+    redirectsContent = await fs.readFile(path.join(DIST_DIR, "_redirects"), "utf8");
+  } catch {
+    issues.push({ file: "_redirects", message: "Missing _redirects file" });
+  }
 
   for (const file of files) {
     const html = await fs.readFile(file, "utf8");
@@ -112,6 +124,13 @@ async function main() {
     }
 
     if (hasRouteKind(html, "product")) {
+      if (routeSnapshot?.product && routeSnapshot?.path) {
+        productSnapshots.push({
+          path: String(routeSnapshot.path),
+          product: routeSnapshot.product,
+        });
+      }
+
       const expectedPath = routeSnapshot?.path || `/${relative.replace(/\/index\.html$/, "").replace(/^index\.html$/, "")}`;
       const expectedCanonical = `https://exshopi.com${expectedPath === "/" ? "" : expectedPath}`;
       const productTitle = String(routeSnapshot?.product?.title || "").trim();
@@ -154,6 +173,64 @@ async function main() {
 
       if (textLength < 500) {
         issues.push({ file: relative, message: "Static crawlable body content too thin" });
+      }
+    }
+  }
+
+  if (redirectsContent) {
+    const safeRedirectExpectations = new Map<string, string>();
+    const ambiguousAliases = new Set<string>();
+
+    for (const snapshot of productSnapshots) {
+      const aliases = getProductRouteAliases(snapshot.product).filter(
+        (alias) => alias && alias !== snapshot.path
+      );
+
+      for (const alias of aliases) {
+        const currentExpectedPath = safeRedirectExpectations.get(alias);
+        if (currentExpectedPath && currentExpectedPath !== snapshot.path) {
+          ambiguousAliases.add(alias);
+          safeRedirectExpectations.delete(alias);
+          continue;
+        }
+
+        if (!ambiguousAliases.has(alias)) {
+          safeRedirectExpectations.set(alias, snapshot.path);
+        }
+      }
+    }
+
+    for (const [alias, targetPath] of safeRedirectExpectations.entries()) {
+      const expectedRedirect = `${alias} ${targetPath} 301!`;
+      if (!redirectsContent.includes(expectedRedirect)) {
+        issues.push({
+          file: "_redirects",
+          message: `Missing product redirect: ${expectedRedirect}`,
+        });
+      }
+    }
+
+    for (const legacyPath of TARGETED_LEGACY_PRODUCT_PATHS) {
+      const segments = legacyPath.split("/").filter(Boolean);
+      const match = findProductRouteMatch(
+        productSnapshots.map((item) => item.product),
+        segments.at(-1),
+        segments.at(-3),
+        segments.at(-2)
+      );
+
+      if (match?.canonicalPath) {
+        const expectedRedirect = `${legacyPath} ${match.canonicalPath} 301!`;
+        if (!redirectsContent.includes(expectedRedirect)) {
+          issues.push({
+            file: "_redirects",
+            message: `Targeted legacy product URL is not redirected: ${expectedRedirect}`,
+          });
+        }
+      } else {
+        console.warn(
+          `[seo-validate] Targeted legacy product path did not map to a live product in the current catalog: ${legacyPath}`
+        );
       }
     }
   }
