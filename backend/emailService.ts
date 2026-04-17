@@ -13,6 +13,7 @@ type TransactionalEmailInput = {
   ctaLabel?: string;
   ctaUrl?: string;
   outro?: string;
+  text?: string;
 };
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -88,6 +89,32 @@ function renderEmailHtml(input: TransactionalEmailInput) {
   `;
 }
 
+function renderEmailText(input: TransactionalEmailInput) {
+  const factLines = (input.facts || [])
+    .filter((fact) => fact.label && fact.value)
+    .map((fact) => `${fact.label}: ${fact.value}`);
+
+  const bulletLines = (input.bullets || []).filter(Boolean).map((bullet) => `- ${bullet}`);
+
+  return [
+    `ExShopi Marketplace`,
+    ``,
+    input.title,
+    ``,
+    input.intro,
+    ``,
+    ...factLines,
+    factLines.length ? `` : '',
+    ...bulletLines,
+    input.ctaLabel && input.ctaUrl ? `` : '',
+    input.ctaLabel && input.ctaUrl ? `${input.ctaLabel}: ${input.ctaUrl}` : '',
+    input.outro ? `` : '',
+    input.outro || '',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
 export function isEmailEnabled() {
   return Boolean(RESEND_API_KEY && MAIL_FROM);
 }
@@ -115,6 +142,7 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput) {
         to: recipients,
         subject: input.subject,
         html: renderEmailHtml(input),
+        text: input.text || renderEmailText(input),
       }),
     });
 
@@ -130,4 +158,3 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput) {
     return { ok: false, skipped: false, reason: String(error) };
   }
 }
-

@@ -1,145 +1,135 @@
-import React from 'react';
-import { formatAED } from '../../lib/currency';
+import React, { useMemo, useState } from 'react';
+import { Download, FileText, Printer, ScanLine } from 'lucide-react';
+import {
+  AdminOrderLike,
+  OrderLabelTemplate,
+  buildOrderAddress,
+  buildOrderLabelHtml,
+  downloadOrderInvoicePdf,
+  downloadOrderLabelPdf,
+  printOrderDocuments,
+} from '../../lib/orderAdmin';
 
 interface OrderDetailsShippingLabelProps {
-  order: any;
+  order: AdminOrderLike;
 }
 
-export const OrderDetailsShippingLabel: React.FC<OrderDetailsShippingLabelProps> = ({ order }) => {
-  const shipmentAddress = order.shippingAddressJson 
-    ? (typeof order.shippingAddressJson === 'string' ? JSON.parse(order.shippingAddressJson) : order.shippingAddressJson)
-    : order.shippingAddress || {};
+const TEMPLATE_OPTIONS: Array<{ value: OrderLabelTemplate; label: string; note: string }> = [
+  { value: 'a4', label: 'A4 Dispatch', note: 'Full operations label for office printers' },
+  { value: 'compact', label: '4x6 Courier', note: 'Compact thermal-friendly courier format' },
+  { value: 'packing-slip', label: 'Packing Slip', note: 'Internal packing summary for warehouse use' },
+];
 
-  const fullAddress = [
-    shipmentAddress.addressLine || '',
-    shipmentAddress.building || '',
-    shipmentAddress.flat || '',
-    shipmentAddress.area || '',
-    shipmentAddress.emirate || '',
-  ].filter(Boolean).join(', ');
+export const OrderDetailsShippingLabel: React.FC<OrderDetailsShippingLabelProps> = ({ order }) => {
+  const [template, setTemplate] = useState<OrderLabelTemplate>('a4');
+  const address = useMemo(() => buildOrderAddress(order), [order]);
+  const itemCount = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
   return (
-    <div className="space-y-4">
-      <div
-        id="order-label"
-        className="bg-white p-8 border-2 border-black"
-        style={{ width: '600px', margin: '0 auto' }}
-      >
-        {/* Label Header */}
-        <div className="mb-6 pb-4 border-b-2 border-black">
-          <div className="text-center mb-4">
-            <h1 className="text-4xl font-black">ExShopi</h1>
-            <p className="text-sm font-semibold">DISPATCH LABEL</p>
-          </div>
-        </div>
-
-        {/* Order & Tracking Info */}
-        <div className="grid grid-cols-2 gap-6 mb-6">
+    <div className="space-y-6">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase text-gray-600">Order ID</p>
-            <p className="text-lg font-mono font-bold">{order.orderNumber || order.id}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Label Workspace</p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">Dispatch & Shipping Documents</h3>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              Print a clean pickup label, download a PDF, or export a packing slip without leaving the order workspace.
+            </p>
           </div>
-          <div>
-            <p className="text-xs font-bold uppercase text-gray-600">Tracking Code</p>
-            <p className="text-lg font-mono font-bold">{order.trackingCode || 'N/A'}</p>
-          </div>
-        </div>
-
-        {/* Barcode Area */}
-        <div className="border-2 border-black p-4 mb-6 text-center bg-gray-50">
-          <p className="text-xs text-gray-600 mb-2">TRACKING BARCODE</p>
-          <p className="text-3xl font-mono tracking-widest">{(order.trackingCode || 'EXSHOPI').substring(0, 10)}</p>
-        </div>
-
-        {/* From/To */}
-        <div className="grid grid-cols-2 gap-6 mb-6">
-          {/* From */}
-          <div>
-            <p className="text-xs font-bold uppercase mb-2 text-gray-600">From (Seller)</p>
-            <div className="border border-gray-400 p-3 rounded">
-              <p className="font-semibold text-sm">{order.sellerName || 'ExShopi'}</p>
-              <p className="text-xs text-gray-700 mt-1">Dubai, UAE</p>
-              <p className="text-xs text-gray-700">ExShopi Fulfillment</p>
-            </div>
-          </div>
-
-          {/* To */}
-          <div>
-            <p className="text-xs font-bold uppercase mb-2 text-gray-600">To (Customer)</p>
-            <div className="border-2 border-black p-3 rounded font-semibold">
-              <p className="text-sm">{order.customerName}</p>
-              <p className="text-xs mt-2">{fullAddress}</p>
-              <p className="text-xs font-mono mt-2">Tel: {order.customerPhone}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Order Details */}
-        <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
-          <div className="border border-gray-300 p-2">
-            <p className="font-bold text-gray-600">ITEMS</p>
-            <p className="text-lg font-bold">{order.items?.length || 1}</p>
-          </div>
-          <div className="border border-gray-300 p-2">
-            <p className="font-bold text-gray-600">TOTAL VALUE</p>
-            <p className="text-lg font-bold">{formatAED(order.totalAmount)}</p>
-          </div>
-          <div className="border border-gray-300 p-2">
-            <p className="font-bold text-gray-600">DELIVERY TYPE</p>
-            <p className="font-semibold">{order.deliveryType || 'Standard'}</p>
-          </div>
-          <div className="border border-gray-300 p-2">
-            <p className="font-bold text-gray-600">PAYMENT</p>
-            <p className="font-semibold">{order.paymentMethod?.toUpperCase() || 'COD'}</p>
-          </div>
-        </div>
-
-        {/* Item List */}
-        <div className="mb-6 text-xs">
-          <p className="font-bold text-gray-600 mb-2">ITEMS ORDERED</p>
-          <div className="border border-gray-300">
-            {order.items && order.items.map((item: any, idx: number) => (
-              <div key={idx} className={`p-2 flex justify-between ${idx > 0 ? 'border-t border-gray-300' : ''}`}>
-                <span>{item.quantity}x {item.title?.substring(0, 30)}</span>
-                <span className="font-semibold">{formatAED(item.unitPrice * item.quantity)}</span>
-              </div>
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setTemplate(option.value)}
+                className={`rounded-full px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] transition ${
+                  template === option.value
+                    ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
+                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {option.label}
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Dispatch Info */}
-        <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
-          <div>
-            <p className="font-bold text-gray-600">DISPATCH DATE</p>
-            <p>{new Date(order.createdAt).toLocaleDateString('en-AE')}</p>
+        <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Order</p>
+                <p className="mt-2 text-lg font-black text-slate-900">{order.orderNumber || order.id}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Tracking</p>
+                <p className="mt-2 text-lg font-black text-slate-900">{order.trackingCode || 'Pending'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Recipient</p>
+                <p className="mt-2 text-base font-black text-slate-900">{order.customerName || 'Customer'}</p>
+                <p className="mt-1 text-sm font-medium text-slate-500">{order.customerPhone || 'No phone'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Shipment</p>
+                <p className="mt-2 text-base font-black text-slate-900">{itemCount} items</p>
+                <p className="mt-1 text-sm font-medium text-slate-500">{order.courierPartner || 'Courier pending'}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[1.5rem] border border-dashed border-slate-300 bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Destination</p>
+              <p className="mt-2 text-sm font-semibold leading-7 text-slate-700">
+                {address.full || 'No delivery address available for this order yet.'}
+              </p>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={() => printOrderDocuments([order], template)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-white transition hover:bg-blue-600"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </button>
+              <button
+                onClick={() => downloadOrderLabelPdf(order, template)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-slate-700 transition hover:bg-slate-50"
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
+              </button>
+              <button
+                onClick={() => downloadOrderInvoicePdf(order)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-slate-700 transition hover:bg-slate-50"
+              >
+                <FileText className="h-4 w-4" />
+                Export Invoice
+              </button>
+            </div>
           </div>
-          <div>
-            <p className="font-bold text-gray-600">COURIER</p>
-            <p>{order.courierPartner || 'ExShopi Logistics'}</p>
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Live Preview</p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  {TEMPLATE_OPTIONS.find((option) => option.value === template)?.note}
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">
+                <ScanLine className="h-4 w-4" />
+                Print-ready
+              </div>
+            </div>
+
+            <iframe
+              title="Shipping label preview"
+              srcDoc={buildOrderLabelHtml(order, template)}
+              className="h-[760px] w-full rounded-[1.5rem] border border-slate-200 bg-white"
+            />
           </div>
         </div>
-
-        {/* Special Instructions */}
-        {order.dispatchNotes && (
-          <div className="bg-yellow-50 border border-yellow-300 p-2 mb-6 text-xs">
-            <p className="font-bold">SPECIAL NOTES</p>
-            <p>{order.dispatchNotes}</p>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="border-t-2 border-black pt-4 text-center text-xs">
-          <p className="font-semibold">Please scan this label at pickup</p>
-          <p className="text-gray-600 mt-1">For inquiries: support@exshopi.com</p>
-          <p className="text-gray-600 text-xs mt-2">✓ Handle with care • ✓ Keep dry • ✓ Deliver as addressed</p>
-        </div>
-      </div>
-
-      {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
-        <p><span className="font-semibold">Print Instructions:</span> Use A4 paper, normal quality, ensure barcode is clear</p>
-        <p className="mt-2 text-xs">This label is used for courier pickup and delivery tracking</p>
-      </div>
+      </section>
     </div>
   );
 };

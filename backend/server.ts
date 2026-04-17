@@ -439,6 +439,93 @@ const sendCustomerNotice = async (
   });
 };
 
+const hasAdminOrderNotificationEvent = (events: Array<{ status?: string }> = []) =>
+  events.some((event) => String(event?.status || '').toLowerCase() === 'admin_order_notified');
+
+const notifyAdminsOfNewOrder = async (order: any, seller?: any) => {
+  try {
+    const trackingEvents = prismaRuntime.enabled
+      ? await prismaRuntime.getOrderTracking(order.id)
+      : db.getOrderTracking(order.id);
+
+    if (hasAdminOrderNotificationEvent(trackingEvents)) {
+      console.info('[orders.notify-admin] Skipping duplicate order email', {
+        orderId: order.id,
+        orderNumber: order.orderId || order.orderNumber,
+      });
+      return { ok: true, skipped: true, reason: 'already_sent' };
+    }
+
+    const shippingAddress = order.shippingAddress || {};
+    const deliveryAddress = [
+      shippingAddress.addressLine,
+      shippingAddress.building,
+      shippingAddress.flat,
+      shippingAddress.area,
+      shippingAddress.emirate,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    const result = await sendNewOrderNotificationToAdmin({
+      orderId: String(order.id || ''),
+      orderNumber: order.orderId || order.orderNumber || String(order.id || '').slice(-8),
+      customerName: order.customerName || 'Customer',
+      customerPhone: normalizePhone(order.customerPhone || ''),
+      customerEmail: order.customerEmail || '',
+      deliveryAddress: deliveryAddress || 'No address provided',
+      emirate: shippingAddress.emirate || 'UAE',
+      paymentMethod: order.paymentMethod || 'cod',
+      paymentStatus: order.paymentStatus || 'pending',
+      deliveryType: order.deliveryType || shippingAddress.method || 'Standard Delivery',
+      orderStatus: formatOperationalStatusLabel(deriveOperationalStatus(order, trackingEvents)),
+      trackingCode: order.trackingCode || '',
+      sellerName: seller?.storeName || order.sellerName || 'ExShopi Official',
+      items: Array.isArray(order.items)
+        ? order.items.map((item: any) => ({
+            title: item.title || 'Marketplace item',
+            quantity: Number(item.quantity || 1),
+            unitPrice: Number(item.unitPrice || 0),
+            lineTotal: Number(item.subtotal || Number(item.unitPrice || 0) * Number(item.quantity || 1)),
+            sku: item.sku || '',
+            variant: '',
+          }))
+        : [],
+      subtotal: Number(order.subtotal || 0),
+      deliveryFee: Number(order.shippingCost || order.deliveryFee || 0),
+      vatAmount: Number(order.vatAmount || 0),
+      discountAmount: Number(order.discountAmount || 0),
+      totalAmount: Number(order.totalAmount || 0),
+      commission: Number(order.commission || 0),
+      sellerPayoutAmount: Number(order.sellerAmount || 0),
+      orderDate: order.createdAt || new Date().toISOString(),
+    });
+
+    console.info('[orders.notify-admin] Order email result', {
+      orderId: order.id,
+      orderNumber: order.orderId || order.orderNumber,
+      recipients: result.recipients,
+      ok: result.ok,
+      skipped: result.skipped,
+      reason: result.reason || '',
+    });
+
+    if (result.ok) {
+      const note = `Admin order email sent to ${(result.recipients || []).join(', ')}`;
+      if (prismaRuntime.enabled) {
+        await prismaRuntime.addTrackingEvent(order.id, 'admin_order_notified', new Date().toISOString(), note);
+      } else {
+        db.addTrackingEvent(order.id, 'admin_order_notified', new Date().toISOString(), note);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.warn('[orders.notify-admin] Failed to send admin order email:', error);
+    return { ok: false, skipped: false, reason: String(error) };
+  }
+};
+
 const normalizeCategoryPayload = (payload: any) => {
   const slug = slugifyProduct(payload?.slug || payload?.name || 'category');
   return {
@@ -4180,38 +4267,15 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       ]
     );
 
-    // Send professional new order notification email to admin
-    try {
-      const shippingAddressStr = shippingAddress ? 
-        [shippingAddress.addressLine, shippingAddress.building, shippingAddress.area, shippingAddress.emirate]
-          .filter(Boolean)
-          .join(', ') : 'No address provided';
-      
-      await sendNewOrderNotificationToAdmin({
-        orderId: orderPayload.id || order.id,
-        orderNumber: orderPayload.orderId || order.orderId || String(order.id).slice(-8),
-        customerName,
-        customerPhone: normalizePhone(customerPhone),
-        customerEmail,
-        deliveryAddress: shippingAddressStr,
-        emirate: shippingAddress?.emirate || 'UAE',
-        items: (orderPayload.items || []).map((item: any) => ({
-          title: item.title,
-          quantity: item.quantity,
-          price: Number(item.unitPrice || 0),
-        })),
-        subtotal: Number(orderPayload.subtotal || 0),
-        deliveryFee: Number(shippingCost || 0),
-        vatAmount: Number(orderPayload.vatAmount || 0),
-        totalAmount: Number(orderPayload.totalAmount || 0),
-        paymentMethod: paymentMethod || 'cod',
-        deliveryType: payload.deliveryType || shippingAddress?.method || 'Standard Delivery',
-        orderDate: orderPayload.createdAt || timestamp,
-      });
-    } catch (emailError) {
-      console.warn('[orders.create] Failed to send new order notification email:', emailError);
-      // Don't fail the order creation if email fails
-    }
+    await notifyAdminsOfNewOrder(
+      {
+        ...order,
+        ...orderPayload,
+        id: order.id,
+        createdAt: order.createdAt || orderPayload.createdAt || timestamp,
+      },
+      seller
+    );
     if (seller?.email) {
       await sendSellerNotice(
         seller.email,
@@ -4407,6 +4471,20 @@ app.post('/api/payments/stripe/webhook', async (req: Request, res: Response) => 
             paidAt: new Date().toISOString(),
           } as any);
           db.addTrackingEvent(orderId, 'confirmed', new Date().toISOString(), 'Stripe payment confirmed');
+        }
+
+        try {
+          const latestForEmail = prismaRuntime.enabled ? await prismaRuntime.getOrder(orderId) : db.getOrder(orderId);
+          const seller = latestForEmail?.sellerId
+            ? prismaRuntime.enabled
+              ? await prismaRuntime.getSeller(latestForEmail.sellerId)
+              : db.getSeller(latestForEmail.sellerId)
+            : null;
+          if (latestForEmail) {
+            await notifyAdminsOfNewOrder(latestForEmail, seller);
+          }
+        } catch (emailError) {
+          console.warn('[stripe.webhook] Failed to send admin order email:', emailError);
         }
 
         // Notify admin UIs about the order update

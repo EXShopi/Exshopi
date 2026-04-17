@@ -1,6 +1,42 @@
 import { sendTransactionalEmail } from './emailService';
 
-// New order notification for admin when customer places an order
+const DEFAULT_ADMIN_ORDER_EMAIL = 'ahsansajid295@gmail.com';
+
+function toCurrency(value: number) {
+  return `AED ${Number(value || 0).toFixed(2)}`;
+}
+
+function normalizeEmailList(value: string) {
+  return value
+    .split(',')
+    .map((entry) => String(entry || '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getAdminOrderRecipients() {
+  const recipients = new Set<string>([DEFAULT_ADMIN_ORDER_EMAIL]);
+
+  normalizeEmailList(process.env.ADMIN_ORDER_EMAILS || '').forEach((email) => recipients.add(email));
+  normalizeEmailList(process.env.ADMIN_EMAIL || '').forEach((email) => recipients.add(email));
+  normalizeEmailList(process.env.ADMIN_ALERT_EMAIL || '').forEach((email) => recipients.add(email));
+
+  return Array.from(recipients);
+}
+
+function resolveAdminOrderUrl(orderNumber: string) {
+  const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'https://exshopi.com';
+  return `${appUrl.replace(/\/$/, '')}/admin/orders?search=${encodeURIComponent(orderNumber)}`;
+}
+
+type AdminOrderEmailItem = {
+  title: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  sku?: string;
+  variant?: string;
+};
+
 export async function sendNewOrderNotificationToAdmin(orderData: {
   orderId: string;
   orderNumber: string;
@@ -9,54 +45,120 @@ export async function sendNewOrderNotificationToAdmin(orderData: {
   customerEmail: string;
   deliveryAddress: string;
   emirate: string;
-  items: Array<{ title: string; quantity: number; price: number }>;
+  paymentMethod: string;
+  paymentStatus: string;
+  deliveryType: string;
+  orderStatus: string;
+  trackingCode?: string;
+  sellerName: string;
+  items: AdminOrderEmailItem[];
   subtotal: number;
   deliveryFee: number;
   vatAmount: number;
+  discountAmount?: number;
   totalAmount: number;
-  paymentMethod: string;
-  deliveryType: string;
+  commission?: number;
+  sellerPayoutAmount?: number;
   orderDate: string;
 }) {
+  const recipients = getAdminOrderRecipients();
+  const orderUrl = resolveAdminOrderUrl(orderData.orderNumber);
   const itemsList = orderData.items
-    .map((item) => `${item.quantity}x ${item.title} - AED ${(item.price * item.quantity).toFixed(2)}`)
+    .map((item) => {
+      const itemBits = [
+        `${item.quantity}x ${item.title}`,
+        item.variant ? `Variant: ${item.variant}` : '',
+        item.sku ? `SKU: ${item.sku}` : '',
+        `Unit: ${toCurrency(item.unitPrice)}`,
+        `Line: ${toCurrency(item.lineTotal)}`,
+      ].filter(Boolean);
+      return itemBits.join(' • ');
+    })
     .join('\n');
 
-  const adminEmail = process.env.ADMIN_EMAIL || 'ahsansajid295@gmail.com';
+  const text = [
+    `New Order Received – ExShopi – Order #${orderData.orderNumber}`,
+    ``,
+    `Order ID: ${orderData.orderNumber}`,
+    `Placed: ${new Date(orderData.orderDate).toLocaleString('en-AE')}`,
+    `Status: ${orderData.orderStatus}`,
+    `Payment: ${String(orderData.paymentMethod || '').toUpperCase()} (${orderData.paymentStatus})`,
+    `Delivery Type: ${orderData.deliveryType}`,
+    `Tracking: ${orderData.trackingCode || 'Pending'}`,
+    `Seller / Store: ${orderData.sellerName}`,
+    ``,
+    `Customer: ${orderData.customerName}`,
+    `Email: ${orderData.customerEmail}`,
+    `Phone: ${orderData.customerPhone}`,
+    `Delivery Address: ${orderData.deliveryAddress}`,
+    `Emirate: ${orderData.emirate}`,
+    ``,
+    `Items`,
+    itemsList,
+    ``,
+    `Subtotal: ${toCurrency(orderData.subtotal)}`,
+    `VAT: ${toCurrency(orderData.vatAmount)}`,
+    `Shipping: ${toCurrency(orderData.deliveryFee)}`,
+    `Discount: ${toCurrency(orderData.discountAmount || 0)}`,
+    `Grand Total: ${toCurrency(orderData.totalAmount)}`,
+    `Commission: ${toCurrency(orderData.commission || 0)}`,
+    `Seller Payout: ${toCurrency(orderData.sellerPayoutAmount || 0)}`,
+    ``,
+    `Open in Admin: ${orderUrl}`,
+  ].join('\n');
 
-  return sendTransactionalEmail({
-    to: adminEmail,
-    subject: `🛒 New Order Received – ExShopi (Order #${orderData.orderNumber})`,
-    title: 'New Order Received',
-    intro: `A new order has been placed on ExShopi. Please review and process it as soon as possible.`,
-    facts: [
-      { label: 'Order ID', value: orderData.orderNumber },
-      { label: 'Customer Name', value: orderData.customerName },
-      { label: 'Customer Phone', value: orderData.customerPhone },
-      { label: 'Customer Email', value: orderData.customerEmail },
-      { label: 'Delivery Address', value: orderData.deliveryAddress },
-      { label: 'Emirate', value: orderData.emirate },
-      { label: 'Delivery Type', value: orderData.deliveryType },
-      { label: 'Items', value: orderData.items.length.toString() },
-      { label: 'Subtotal', value: `AED ${orderData.subtotal.toFixed(2)}` },
-      { label: 'Delivery Fee', value: `AED ${orderData.deliveryFee.toFixed(2)}` },
-      { label: 'VAT (5%)', value: `AED ${orderData.vatAmount.toFixed(2)}` },
-      { label: 'Total Amount', value: `AED ${orderData.totalAmount.toFixed(2)}` },
-      { label: 'Payment Method', value: orderData.paymentMethod.toUpperCase() },
-      { label: 'Order Date', value: new Date(orderData.orderDate).toLocaleString('en-AE') },
-    ],
-    bullets: [
-      `Items ordered (${orderData.items.length} items): ${itemsList}`,
-      `Payment Status: Pending - ${orderData.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Payment Method'}`,
-      `Next Step: Review order details and confirm acceptance in admin panel`,
-    ],
-    ctaLabel: 'View Order in Admin Panel',
-    ctaUrl: `https://exshopi.com/admin/orders?search=${orderData.orderNumber}`,
-    outro: 'Please ensure to process this order promptly to maintain customer satisfaction and marketplace reputation.',
-  });
+  return {
+    recipients,
+    ...(await sendTransactionalEmail({
+      to: recipients,
+      subject: `New Order Received – ExShopi – Order #${orderData.orderNumber}`,
+      title: 'New Order Received',
+      intro:
+        'A real customer order has been placed successfully on ExShopi and is ready for operations review, fulfillment, and dispatch handling.',
+      facts: [
+        { label: 'Order ID', value: orderData.orderNumber },
+        { label: 'Placed At', value: new Date(orderData.orderDate).toLocaleString('en-AE') },
+        { label: 'Customer', value: orderData.customerName },
+        { label: 'Customer Email', value: orderData.customerEmail },
+        { label: 'Customer Phone', value: orderData.customerPhone },
+        { label: 'Seller / Store', value: orderData.sellerName },
+        { label: 'Delivery Address', value: orderData.deliveryAddress },
+        { label: 'Emirate', value: orderData.emirate },
+        { label: 'Payment Method', value: String(orderData.paymentMethod || '').toUpperCase() },
+        { label: 'Payment Status', value: orderData.paymentStatus },
+        { label: 'Delivery Type', value: orderData.deliveryType },
+        { label: 'Order Status', value: orderData.orderStatus },
+        { label: 'Tracking Code', value: orderData.trackingCode || 'Pending' },
+        { label: 'Subtotal', value: toCurrency(orderData.subtotal) },
+        { label: 'VAT', value: toCurrency(orderData.vatAmount) },
+        { label: 'Shipping Fee', value: toCurrency(orderData.deliveryFee) },
+        { label: 'Discount', value: toCurrency(orderData.discountAmount || 0) },
+        { label: 'Grand Total', value: toCurrency(orderData.totalAmount) },
+        { label: 'Commission', value: toCurrency(orderData.commission || 0) },
+        { label: 'Seller Payout', value: toCurrency(orderData.sellerPayoutAmount || 0) },
+      ],
+      bullets: [
+        `${orderData.items.length} line items in this order`,
+        ...orderData.items.map((item) =>
+          [
+            `${item.quantity}x ${item.title}`,
+            item.variant ? `Variant: ${item.variant}` : '',
+            item.sku ? `SKU: ${item.sku}` : '',
+            `Line total: ${toCurrency(item.lineTotal)}`,
+          ]
+            .filter(Boolean)
+            .join(' • ')
+        ),
+      ],
+      ctaLabel: 'Open Order in Admin',
+      ctaUrl: orderUrl,
+      outro:
+        'This notification was generated from the successful order creation flow. If dispatch or payment review is needed, open the order workspace from the admin panel.',
+      text,
+    })),
+  };
 }
 
-// Seller signup confirmation email sent to seller after successful registration
 export async function sendSellerSignupConfirmationEmail(sellerData: {
   businessName: string;
   ownerName: string;
@@ -92,7 +194,6 @@ export async function sendSellerSignupConfirmationEmail(sellerData: {
   });
 }
 
-// Admin notification when new seller applies
 export async function sendSellerApplicationNotificationToAdmin(sellerData: {
   businessName: string;
   ownerName: string;
@@ -103,11 +204,11 @@ export async function sendSellerApplicationNotificationToAdmin(sellerData: {
   applicationId: string;
   isResubmission: boolean;
 }) {
-  const adminEmail = process.env.ADMIN_EMAIL || 'ahsansajid295@gmail.com';
+  const recipients = getAdminOrderRecipients();
 
   return sendTransactionalEmail({
-    to: adminEmail,
-    subject: `${sellerData.isResubmission ? '📝 Seller Resubmission' : '🔔 New Seller Application'} – ${sellerData.businessName}`,
+    to: recipients,
+    subject: `${sellerData.isResubmission ? 'Seller Resubmission' : 'New Seller Application'} – ${sellerData.businessName}`,
     title: sellerData.isResubmission ? 'Seller Resubmission Received' : 'New Seller Application Received',
     intro: `A ${sellerData.isResubmission ? 'resubmitted' : 'new'} seller application requires your review and approval.`,
     facts: [
