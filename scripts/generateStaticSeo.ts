@@ -23,6 +23,7 @@ import {
 } from "../src/lib/seo";
 import { productMatchesCategoryAssignment, MASTER_CATEGORIES } from "../src/lib/masterCategories";
 import { getProductRouteAliases } from "../src/lib/productRouteResolution";
+import { loadPrerenderProducts } from "./lib/prerenderData";
 
 const ROOT = process.cwd();
 const DIST_DIR = path.join(ROOT, "dist");
@@ -61,23 +62,6 @@ function normalizeUrl(value?: string) {
   if (!input) return `${SITE_URL}/logo.png`;
   if (/^https?:\/\//i.test(input)) return input;
   return `${SITE_URL}${input.startsWith("/") ? input : `/${input}`}`;
-}
-
-function isLiveProduct(product: any) {
-  const specs = product?.specs || {};
-  const deletionMeta = specs?.__deletion || {};
-  if (product?.isDeleted || product?.deletedAt || deletionMeta?.isDeleted || deletionMeta?.deletedAt) {
-    return false;
-  }
-
-  const status = String(product?.status || product?.productStatus || "").toLowerCase();
-  const approval = String(product?.approvalStatus || "").toLowerCase();
-  const visibility = String(product?.visibilityStatus || "").toLowerCase();
-
-  if (["draft", "pending", "pending_approval", "rejected", "archived"].includes(status)) return false;
-  if (approval === "rejected") return false;
-  if (visibility && !["live", "public", "visible"].includes(visibility)) return false;
-  return status === "live" || approval === "approved";
 }
 
 function productCardData(product: any): PrerenderedProduct {
@@ -318,7 +302,6 @@ Sitemap: ${SITE_URL}/sitemap.xml
 
 async function main() {
   const template = await fs.readFile(path.join(DIST_DIR, "index.html"), "utf8");
-  const db = JSON.parse(await fs.readFile(path.join(ROOT, "backend", "db.json"), "utf8"));
   const categories = (MASTER_CATEGORIES || []).map((category) => ({
     slug: category.slug,
     name: category.name,
@@ -329,10 +312,13 @@ async function main() {
         }))
       : [],
   }));
-  const liveProducts = (Array.isArray(db.products) ? db.products : [])
-    .filter(isLiveProduct)
-    .map(productCardData);
+  const { products: prerenderProducts, source: prerenderSource } = await loadPrerenderProducts();
+  const liveProducts = prerenderProducts.map(productCardData);
   const now = new Date().toISOString().slice(0, 10);
+
+  console.log(
+    `[seo-prerender] Loaded ${liveProducts.length} live products from ${prerenderSource}.`
+  );
 
   const homeSeo = generateHomepageSeo();
   const homeHtml = htmlDocument(template, {

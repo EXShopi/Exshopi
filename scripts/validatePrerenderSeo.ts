@@ -1,8 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { findProductRouteMatch, getProductRouteAliases } from "../src/lib/productRouteResolution";
+import { buildProductPath } from "../src/lib/seo";
+import { loadPrerenderProducts } from "./lib/prerenderData";
 
 const DIST_DIR = path.join(process.cwd(), "dist");
+const TARGETED_CANONICAL_PRODUCT_PATHS = [
+  "/electronics/laptops/apple-macbook-pro-a1708-2017",
+];
 const TARGETED_LEGACY_PRODUCT_PATHS = [
   "/electronics/laptops/apple-macbook-pro-a1708-2017-laptop-with-13-3-inch-display-intel-core-i5-processor-7th-gen-8gb-ram-128gb-ssd-1-5gb-intel",
 ];
@@ -81,11 +86,23 @@ function stripHtml(html: string) {
     .trim();
 }
 
+function normalizeText(value: string) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function main() {
   const files = await collectHtmlFiles(DIST_DIR);
   const issues: ValidationIssue[] = [];
   const productSnapshots: Array<{ path: string; product: any }> = [];
+  const productPathsInDist = new Set<string>();
   let redirectsContent = "";
+  const { products: sourceProducts, source: prerenderSource } = await loadPrerenderProducts();
+
+  console.log(
+    `[seo-validate] Validating prerender output against ${sourceProducts.length} live products from ${prerenderSource}.`
+  );
 
   try {
     redirectsContent = await fs.readFile(path.join(DIST_DIR, "_redirects"), "utf8");
@@ -129,11 +146,12 @@ async function main() {
           path: String(routeSnapshot.path),
           product: routeSnapshot.product,
         });
+        productPathsInDist.add(String(routeSnapshot.path));
       }
 
       const expectedPath = routeSnapshot?.path || `/${relative.replace(/\/index\.html$/, "").replace(/^index\.html$/, "")}`;
       const expectedCanonical = `https://exshopi.com${expectedPath === "/" ? "" : expectedPath}`;
-      const productTitle = String(routeSnapshot?.product?.title || "").trim();
+      const productTitle = normalizeText(String(routeSnapshot?.product?.title || ""));
 
       if (/Product Not Found/i.test(html)) {
         issues.push({ file: relative, message: 'Product page contains "Product Not Found"' });
@@ -149,7 +167,7 @@ async function main() {
       }
       if (!productTitle) {
         issues.push({ file: relative, message: "Missing product title in route snapshot" });
-      } else if (!pageText.includes(productTitle)) {
+      } else if (!normalizeText(pageText).includes(productTitle)) {
         issues.push({ file: relative, message: "Prerendered HTML does not contain the product title text" });
       }
       if (!/"@type":"Product"/.test(html)) {
@@ -174,6 +192,25 @@ async function main() {
       if (textLength < 500) {
         issues.push({ file: relative, message: "Static crawlable body content too thin" });
       }
+    }
+  }
+
+  for (const product of sourceProducts) {
+    const canonicalPath = buildProductPath(product);
+    if (!productPathsInDist.has(canonicalPath)) {
+      issues.push({
+        file: canonicalPath,
+        message: "Live product is missing a prerendered canonical HTML route",
+      });
+    }
+  }
+
+  for (const targetPath of TARGETED_CANONICAL_PRODUCT_PATHS) {
+    if (!productPathsInDist.has(targetPath)) {
+      issues.push({
+        file: targetPath,
+        message: "Targeted canonical product URL is missing prerendered HTML",
+      });
     }
   }
 
@@ -213,13 +250,16 @@ async function main() {
     for (const legacyPath of TARGETED_LEGACY_PRODUCT_PATHS) {
       const segments = legacyPath.split("/").filter(Boolean);
       const match = findProductRouteMatch(
-        productSnapshots.map((item) => item.product),
+        sourceProducts,
         segments.at(-1),
         segments.at(-3),
         segments.at(-2)
       );
 
       if (match?.canonicalPath) {
+        if (match.canonicalPath === legacyPath) {
+          continue;
+        }
         const expectedRedirect = `${legacyPath} ${match.canonicalPath} 301!`;
         if (!redirectsContent.includes(expectedRedirect)) {
           issues.push({
