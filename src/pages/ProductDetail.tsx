@@ -629,15 +629,29 @@ export default function ProductDetail() {
     sku: product?.sku,
     brand: product?.brand,
   });
+  const isProductLoading = loading || !hasAttemptedLoad;
+  const isMissingProduct = !isProductLoading && !product;
+  const productTitle = String(product?.title || product?.name || "").trim();
+  const safeProductDescription =
+    String(productSpecs?.shortDescription || "").trim() ||
+    String(product?.shortDescription || "").trim() ||
+    String(product?.description || "").replace(/\s+/g, " ").trim() ||
+    productSeo.metaDescription;
+  const resolvedProductMetaTitle = productTitle
+    ? `${productTitle} | Buy in UAE | ExShopi`
+    : productSeo.metaTitle;
+  const loadingMetaTitle = "ExShopi UAE | Trusted Marketplace for Electronics";
+  const loadingMetaDescription =
+    "Shop verified products on ExShopi UAE with trusted sellers, delivery options, and marketplace-ready product details.";
   const canonicalProductPath = product
-  ? buildProductPath(product)
-  : `/product/${identifier || ""}`;
+    ? buildProductPath(product)
+    : location.pathname || `/product/${identifier || ""}`;
 
-// Ensure canonical uses category-aware path unless overridden
-const finalCanonical =
-  productSeo?.canonicalUrl && productSeo.canonicalUrl.startsWith("http")
-    ? productSeo.canonicalUrl
-    : buildAbsoluteUrl(canonicalProductPath);
+  // Ensure canonical uses category-aware path unless overridden.
+  const finalCanonical =
+    productSeo?.canonicalUrl && productSeo.canonicalUrl.startsWith("http")
+      ? productSeo.canonicalUrl
+      : buildAbsoluteUrl(canonicalProductPath);
 
 const productSchema = product
   ? [
@@ -982,21 +996,33 @@ const structuredTemplate = getSpecificationTemplate(
 
   const latestReviewCards = useMemo(() => reviews.slice(0, 3), [reviews]);
 
-  if ((loading || !hasAttemptedLoad) && !product) {
+  if (isProductLoading && !product) {
     return (
-      <div className="flex items-center justify-center px-4 py-24">
-        <OrbitLoader label="Loading product..." size={28} variant="normal" />
-      </div>
+      <>
+        <SEO
+          title={loadingMetaTitle}
+          description={loadingMetaDescription}
+          metaTitle={loadingMetaTitle}
+          metaDescription={loadingMetaDescription}
+          pathname={location.pathname}
+          canonicalUrl={buildAbsoluteUrl(location.pathname)}
+          noindex={false}
+        />
+        <div className="flex items-center justify-center px-4 py-24">
+          <OrbitLoader label="Loading product..." size={28} variant="normal" />
+        </div>
+      </>
     );
   }
 
-  if (hasAttemptedLoad && !loading && !product) {
+  if (isMissingProduct) {
     return (
       <>
         <SEO
           title="Product Not Found"
           description={`The product you're looking for doesn't exist.`}
           pathname={location.pathname}
+          canonicalUrl={buildAbsoluteUrl(location.pathname)}
           noindex={true}
         />
 
@@ -1179,18 +1205,19 @@ const structuredTemplate = getSpecificationTemplate(
     <>
       {product ? (
         <SEO
-          title={product.title}
-          description={product.description}
-          metaTitle={productSeo.metaTitle}
-          metaDescription={productSeo.metaDescription}
+          title={productTitle}
+          description={safeProductDescription}
+          metaTitle={resolvedProductMetaTitle}
+          metaDescription={safeProductDescription}
           metaKeywords={productSeo.metaKeywords}
           pathname={canonicalProductPath}
           canonicalUrl={finalCanonical}
-          ogTitle={productSeo.ogTitle}
-          ogDescription={productSeo.ogDescription}
+          ogTitle={resolvedProductMetaTitle}
+          ogDescription={safeProductDescription}
           ogImage={productSeo.ogImage}
           image={product?.image}
           type="product"
+          noindex={false}
           jsonLd={productSchema || undefined}
         />
       ) : null}
