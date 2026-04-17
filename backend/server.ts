@@ -47,7 +47,8 @@ import { ensureUniqueSlug, normalizeSlugInput, slugifyProduct } from './utils/sl
 import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, uniqueSeoKeywords } from './utils/seo';
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
-import { findProductRouteMatch, getProductCanonicalPath } from '../src/lib/productRouteResolution';
+import { findProductRouteMatch } from '../src/lib/productRouteResolution';
+import { productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -612,11 +613,20 @@ const getProductSeoMeta = (product: any) => {
 };
 
 const getProductCanonicalPath = (product: any) => {
+  const canonicalAssignment = resolveCanonicalCategoryAssignment(product);
   const parentSlug = slugifyProduct(
-    product?.specs?.parentCategorySlug || product?.specs?.categorySlug || product?.category || 'electronics'
+    canonicalAssignment.parentCategorySlug ||
+      product?.specs?.parentCategorySlug ||
+      product?.specs?.categorySlug ||
+      product?.category ||
+      'electronics'
   );
   const subcategorySlug = slugifyProduct(
-    product?.specs?.subcategorySlug || product?.specs?.templateId || product?.subcategory || 'products'
+    canonicalAssignment.subcategorySlug ||
+      product?.specs?.subcategorySlug ||
+      product?.specs?.templateId ||
+      product?.subcategory ||
+      'products'
   );
   const seo = getProductSeoMeta(product);
   return `/${parentSlug}/${subcategorySlug}/${seo.slug}`;
@@ -1351,9 +1361,46 @@ const serializeMarketplaceProduct = (product: any) => {
   const sellerName = seller?.storeName || (isOfficialStore ? 'ExShopi Official' : 'Marketplace Seller');
   const sellerStoreSlug = seller?.storeSlug || (isOfficialStore ? 'exshopi-official' : 'marketplace-seller');
   const seo = getProductSeoMeta(product);
+  const canonicalAssignment = resolveCanonicalCategoryAssignment(product);
+  const mergedSpecs = {
+    ...(product.specs || {}),
+    parentCategorySlug:
+      canonicalAssignment.parentCategorySlug ||
+      product.specs?.parentCategorySlug ||
+      product.specs?.categorySlug ||
+      '',
+    categorySlug:
+      canonicalAssignment.categorySlug ||
+      product.specs?.categorySlug ||
+      product.specs?.parentCategorySlug ||
+      '',
+    subcategorySlug:
+      canonicalAssignment.subcategorySlug ||
+      product.specs?.subcategorySlug ||
+      product.specs?.templateId ||
+      '',
+    parentCategoryName:
+      canonicalAssignment.parentCategoryName ||
+      product.specs?.parentCategoryName ||
+      '',
+    categoryName:
+      canonicalAssignment.categoryName ||
+      product.specs?.categoryName ||
+      '',
+    subcategoryName:
+      canonicalAssignment.subcategoryName ||
+      product.specs?.subcategoryName ||
+      product.specs?.templateName ||
+      '',
+    categoryPath:
+      canonicalAssignment.categoryPath ||
+      product.specs?.categoryPath ||
+      '',
+  };
 
   return {
     ...product,
+    specs: mergedSpecs,
     slug: seo.slug,
     isDeleted: isSoftDeletedProduct(product),
     deletedAt: product.deletedAt || product.specs?.__deletion?.deletedAt || '',
@@ -1390,11 +1437,11 @@ const serializeMarketplaceProduct = (product: any) => {
     ogTitle: seo.ogTitle,
     ogDescription: seo.ogDescription,
     ogImage: seo.ogImage,
-    canonicalPath: getProductCanonicalPath({ ...product, slug: seo.slug }),
+    canonicalPath: getProductCanonicalPath({ ...product, slug: seo.slug, specs: mergedSpecs }),
     specifications:
       product.specifications ||
-      product.specs?.specifications ||
-      product.specs?.attributes ||
+      mergedSpecs.specifications ||
+      mergedSpecs.attributes ||
       {},
   };
 };
@@ -3053,37 +3100,16 @@ app.get('/api/products', async (req: Request, res: Response) => {
         products = products.filter((product: any) => String(product.categoryId || product.specs?.backendCategoryId || '') === categoryId);
       }
     } else if (categorySlug || subcategorySlug || parentSlug) {
-      // Query by canonical slugs
-      if (prismaRuntime.enabled) {
-        products = await prismaRuntime.getProductsByCategorySlugs(parentSlug || null, categorySlug || null, subcategorySlug || null);
-      } else if (supabaseRuntime.enabled) {
-        products = await supabaseRuntime.getProductsByCategorySlugs(parentSlug || null, categorySlug || null, subcategorySlug || null);
-      } else {
-        const all = db.getAllProducts();
-        products = all.filter((product: any) => {
-          const specs = product.specs || (product.specsJson as any) || {};
-          const pParent = String(specs.parentCategorySlug || specs.parentCategory || '');
-          const pCategory = String(specs.categorySlug || specs.category || '');
-          const pSub = String(specs.subcategorySlug || specs.subcategory || '');
+      // Query by canonical slugs using the resolved category assignment so legacy and malformed records still match.
+      const allProducts = prismaRuntime.enabled
+        ? await prismaRuntime.getAllProducts()
+        : supabaseRuntime.enabled
+        ? await supabaseRuntime.getAllProducts()
+        : db.getAllProducts();
 
-          if (categorySlug && !parentSlug && !subcategorySlug) {
-            return pParent === categorySlug || pCategory === categorySlug || pSub === categorySlug;
-          }
-          if (parentSlug && !categorySlug && !subcategorySlug) {
-            return pParent === parentSlug;
-          }
-          if (categorySlug && subcategorySlug) {
-            return pCategory === categorySlug && pSub === subcategorySlug;
-          }
-          if (categorySlug) {
-            return pCategory === categorySlug || pParent === categorySlug;
-          }
-          if (subcategorySlug) {
-            return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
-          }
-          return false;
-        });
-      }
+      products = allProducts.filter((product: any) =>
+        productMatchesCategoryAssignment(product, categorySlug || null, subcategorySlug || null, parentSlug || null)
+      );
     } else {
       // No filters: return global marketplace products
       if (prismaRuntime.enabled) {

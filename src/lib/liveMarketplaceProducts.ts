@@ -11,23 +11,57 @@ function normalizeMarketplaceValue(value: any) {
   return String(value || '').trim().toLowerCase();
 }
 
-export function isLiveMarketplaceProduct(product: any) {
-  if (!product) return false;
+function shouldDebugVisibility() {
+  try {
+    return typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.DEV);
+  } catch {
+    return false;
+  }
+}
+
+function getMarketplaceVisibilityDecision(product: any) {
+  if (!product) return { visible: false, reason: 'missing-product' };
 
   const deletionMeta = product.specs?.__deletion || {};
   if (product.isDeleted || product.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt) {
-    return false;
+    return { visible: false, reason: 'deleted' };
   }
 
   const status = normalizeMarketplaceValue(product.status || product.productStatus || product.product_status);
   const approval = normalizeMarketplaceValue(product.approval_status || product.approvalStatus);
   const visibility = normalizeMarketplaceValue(product.visibility_status || product.visibilityStatus);
 
-  if (['draft', 'pending', 'pending_approval', 'rejected', 'archived'].includes(status)) return false;
-  if (approval === 'rejected' || visibility === 'archived') return false;
-  if (visibility && !['live', 'public', 'visible'].includes(visibility)) return false;
+  if (['draft', 'pending', 'pending_approval', 'rejected', 'archived'].includes(status)) {
+    return { visible: false, reason: `status:${status || 'unknown'}` };
+  }
+  if (approval === 'rejected') {
+    return { visible: false, reason: 'approval:rejected' };
+  }
+  if (visibility === 'archived') {
+    return { visible: false, reason: 'visibility:archived' };
+  }
+  if (visibility && !['live', 'public', 'visible'].includes(visibility)) {
+    return { visible: false, reason: `visibility:${visibility}` };
+  }
+  if (status === 'live' || approval === 'approved') {
+    return { visible: true, reason: status === 'live' ? 'status:live' : 'approval:approved' };
+  }
 
-  return status === 'live' || approval === 'approved';
+  return { visible: false, reason: 'not-live-or-approved' };
+}
+
+export function isLiveMarketplaceProduct(product: any) {
+  const decision = getMarketplaceVisibilityDecision(product);
+  if (!decision.visible && shouldDebugVisibility()) {
+    console.debug('[marketplace-visibility] excluded', {
+      productId: product?.id || product?.slug || product?.title || 'unknown-product',
+      reason: decision.reason,
+      status: product?.status || product?.productStatus || product?.product_status || '',
+      approvalStatus: product?.approvalStatus || product?.approval_status || '',
+      visibilityStatus: product?.visibilityStatus || product?.visibility_status || '',
+    });
+  }
+  return decision.visible;
 }
 
 export function mapLiveMarketplaceProduct(product: any): LiveMarketplaceProduct {

@@ -105,8 +105,17 @@ export default function ProductListing() {
     if (!q) return products;
 
     return products.filter((product) =>
-      [product.title, product.specs?.brand, product.description]
+      [
+        product.title,
+        product.sku,
+        product.specs?.brand,
+        product.description,
+        product.specs?.searchTags,
+        product.specs?.attributes?.model,
+        product.specs?.specifications,
+      ]
         .filter(Boolean)
+        .map((value) => (Array.isArray(value) ? value.join(" ") : typeof value === "object" ? Object.values(value).join(" ") : value))
         .join(" ")
         .toLowerCase()
         .includes(q)

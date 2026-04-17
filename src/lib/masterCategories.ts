@@ -6,6 +6,18 @@ export type CategoryNode = {
   childCategories?: CategoryNode[];
 };
 
+export type CanonicalCategoryAssignment = {
+  parentCategorySlug: string;
+  categorySlug: string;
+  subcategorySlug: string;
+  parentCategoryName: string;
+  categoryName: string;
+  subcategoryName: string;
+  categoryPath: string;
+  depth: 0 | 1 | 2 | 3;
+  matchedBy: string[];
+};
+
 export const MASTER_CATEGORIES: CategoryNode[] = [
   {
     slug: 'electronics',
@@ -418,6 +430,272 @@ export function getChildCategories(parentSlug: string, subSlug: string) {
   return sub?.childCategories || [];
 }
 
+function buildAssignmentFromPath(
+  parent?: CategoryNode | null,
+  category?: CategoryNode | null,
+  subcategory?: CategoryNode | null,
+  matchedBy: string[] = []
+): CanonicalCategoryAssignment | null {
+  if (!parent && !category && !subcategory) return null;
+
+  const resolvedParent = parent || (category && !subcategory ? category : null) || null;
+  const resolvedCategory = category || null;
+  const resolvedSubcategory = subcategory || null;
+
+  const depth = resolvedSubcategory ? 3 : resolvedCategory ? (resolvedParent && resolvedCategory !== resolvedParent ? 2 : 1) : resolvedParent ? 1 : 0;
+  const categoryPathParts = [
+    resolvedParent?.slug || "",
+    resolvedCategory && resolvedCategory !== resolvedParent ? resolvedCategory.slug : "",
+    resolvedSubcategory?.slug || "",
+  ].filter(Boolean);
+
+  return {
+    parentCategorySlug: normalizeCategorySlug(resolvedParent?.slug || ""),
+    categorySlug: normalizeCategorySlug(
+      (resolvedCategory && resolvedCategory !== resolvedParent ? resolvedCategory.slug : resolvedParent?.slug) || ""
+    ),
+    subcategorySlug: normalizeCategorySlug(resolvedSubcategory?.slug || ""),
+    parentCategoryName: String(resolvedParent?.name || ""),
+    categoryName: String(
+      (resolvedCategory && resolvedCategory !== resolvedParent ? resolvedCategory.name : resolvedParent?.name) || ""
+    ),
+    subcategoryName: String(resolvedSubcategory?.name || ""),
+    categoryPath: categoryPathParts.map((value) => normalizeCategorySlug(value)).join("/"),
+    depth: depth as 0 | 1 | 2 | 3,
+    matchedBy: Array.from(new Set(matchedBy.filter(Boolean))),
+  };
+}
+
+function findCanonicalPathBySlug(value?: string | null) {
+  const target = normalizeCategorySlug(value || "");
+  if (!target) return null;
+
+  for (const parent of MASTER_CATEGORIES) {
+    if (normalizeCategorySlug(parent.slug) === target) {
+      return buildAssignmentFromPath(parent, parent, null, [`direct:${target}`]);
+    }
+
+    for (const category of parent.subcategories || []) {
+      if (normalizeCategorySlug(category.slug) === target) {
+        return buildAssignmentFromPath(parent, category, null, [`direct:${target}`]);
+      }
+
+      for (const subcategory of category.childCategories || []) {
+        if (normalizeCategorySlug(subcategory.slug) === target) {
+          return buildAssignmentFromPath(parent, category, subcategory, [`direct:${target}`]);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function findCanonicalPathByLegacyValue(value?: string | null) {
+  const normalized = normalizeCategorySlug(value || "");
+  if (!normalized) return null;
+
+  const mapped = mapLegacyCategory(normalized);
+  if (!mapped) return null;
+
+  if (mapped.subcategory) {
+    const subPath = findCanonicalPathBySlug(mapped.subcategory);
+    if (subPath) {
+      return {
+        ...subPath,
+        matchedBy: Array.from(new Set([...subPath.matchedBy, `legacy:${normalized}`])),
+      };
+    }
+  }
+
+  if (mapped.category) {
+    const categoryPath = findCanonicalPathBySlug(mapped.category);
+    if (categoryPath) {
+      return {
+        ...categoryPath,
+        matchedBy: Array.from(new Set([...categoryPath.matchedBy, `legacy:${normalized}`])),
+      };
+    }
+  }
+
+  return null;
+}
+
+function shouldDebugCategoryLogs() {
+  try {
+    if (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV) return true;
+  } catch {
+    // ignore import.meta access in non-browser runtimes
+  }
+
+  return (
+    typeof process !== "undefined" &&
+    process.env?.NODE_ENV !== "production" &&
+    /^(1|true|yes|on)$/i.test(String(process.env.EXSHOPI_DEBUG_CATEGORY || ""))
+  );
+}
+
+export function debugCategoryAssignment(label: string, payload: Record<string, unknown>) {
+  if (!shouldDebugCategoryLogs()) return;
+  try {
+    console.debug(`[category-debug] ${label}`, payload);
+  } catch {
+    // ignore logging errors
+  }
+}
+
+export function resolveCanonicalCategoryAssignment(input: Record<string, any> | null | undefined) {
+  const source = input && typeof input === "object" ? input : {};
+  const specs = source.specs && typeof source.specs === "object" ? source.specs : {};
+  const attributes = specs.attributes && typeof specs.attributes === "object" ? specs.attributes : {};
+  const rawCategoryPath = String(source.categoryPath || specs.categoryPath || "").trim();
+  const categoryPathParts = rawCategoryPath
+    .split("/")
+    .map((part) => normalizeCategorySlug(part))
+    .filter(Boolean);
+
+  const parentInput = source.parentCategorySlug || specs.parentCategorySlug || source.parentSlug || "";
+  const categoryInput = source.categorySlug || specs.categorySlug || source.category || specs.category || "";
+  const subcategoryInput =
+    source.subcategorySlug ||
+    specs.subcategorySlug ||
+    source.subcategory ||
+    specs.subcategory ||
+    attributes.subcategory ||
+    "";
+  const templateInput = source.templateId || specs.templateId || "";
+
+  const candidates = [
+    { value: subcategoryInput, label: "subcategory" },
+    { value: templateInput, label: "template" },
+    { value: categoryPathParts[2], label: "path-subcategory" },
+    { value: categoryInput, label: "category" },
+    { value: categoryPathParts[1], label: "path-category" },
+    { value: parentInput, label: "parent" },
+    { value: categoryPathParts[0], label: "path-parent" },
+    { value: attributes.subcategory, label: "attribute-subcategory" },
+    { value: source.title || specs.templateName || "", label: "title" },
+  ].filter((entry) => normalizeCategorySlug(entry.value));
+
+  const resolvedCandidates = candidates
+    .map((entry) => {
+      const direct = findCanonicalPathBySlug(entry.value);
+      if (direct) {
+        return {
+          ...direct,
+          matchedBy: Array.from(new Set([...direct.matchedBy, entry.label])),
+        };
+      }
+
+      const legacy = findCanonicalPathByLegacyValue(entry.value);
+      if (legacy) {
+        return {
+          ...legacy,
+          matchedBy: Array.from(new Set([...legacy.matchedBy, entry.label])),
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean) as CanonicalCategoryAssignment[];
+
+  const ranked = resolvedCandidates.sort((left, right) => {
+    if (right.depth !== left.depth) return right.depth - left.depth;
+    return right.matchedBy.length - left.matchedBy.length;
+  });
+
+  const best = ranked[0] || null;
+  const explicitParent = findCanonicalPathBySlug(parentInput) || findCanonicalPathByLegacyValue(parentInput);
+  const explicitCategory = findCanonicalPathBySlug(categoryInput) || findCanonicalPathByLegacyValue(categoryInput);
+
+  const parentCategorySlug = normalizeCategorySlug(
+    explicitParent?.parentCategorySlug ||
+      explicitParent?.categorySlug ||
+      best?.parentCategorySlug ||
+      best?.categorySlug ||
+      categoryPathParts[0] ||
+      ""
+  );
+
+  const categorySlug = normalizeCategorySlug(
+    (explicitCategory && explicitCategory.depth >= 2 ? explicitCategory.categorySlug : "") ||
+      (best && best.depth >= 2 ? best.categorySlug : "") ||
+      (explicitCategory?.depth === 1 ? explicitCategory.parentCategorySlug : "") ||
+      parentCategorySlug
+  );
+
+  const subcategorySlug = normalizeCategorySlug(
+    (best && best.depth >= 3 ? best.subcategorySlug : "") ||
+      categoryPathParts[2] ||
+      (normalizeCategorySlug(subcategoryInput) !== categorySlug ? subcategoryInput : "")
+  );
+
+  const canonicalSubPath = subcategorySlug ? findCanonicalPathBySlug(subcategorySlug) : null;
+  const canonicalCategoryPath = categorySlug ? findCanonicalPathBySlug(categorySlug) : null;
+  const canonicalParentPath = parentCategorySlug ? findCanonicalPathBySlug(parentCategorySlug) : null;
+
+  const finalParent = canonicalSubPath?.parentCategoryName || canonicalCategoryPath?.parentCategoryName || canonicalParentPath?.parentCategoryName || "";
+  const finalCategory =
+    canonicalSubPath?.categoryName ||
+    (canonicalCategoryPath?.depth >= 2 ? canonicalCategoryPath.categoryName : "") ||
+    canonicalParentPath?.parentCategoryName ||
+    "";
+  const finalSubcategory = canonicalSubPath?.subcategoryName || "";
+  const finalPath = [
+    canonicalSubPath?.parentCategorySlug || canonicalCategoryPath?.parentCategorySlug || canonicalParentPath?.parentCategorySlug || parentCategorySlug,
+    canonicalSubPath?.categorySlug || (canonicalCategoryPath?.depth >= 2 ? canonicalCategoryPath.categorySlug : categorySlug),
+    canonicalSubPath?.subcategorySlug || subcategorySlug,
+  ]
+    .filter(Boolean)
+    .join("/");
+
+  return {
+    parentCategorySlug,
+    categorySlug,
+    subcategorySlug,
+    parentCategoryName: finalParent,
+    categoryName: finalCategory,
+    subcategoryName: finalSubcategory,
+    categoryPath: finalPath,
+    depth: canonicalSubPath ? 3 : canonicalCategoryPath?.depth === 2 ? 2 : parentCategorySlug ? 1 : 0,
+    matchedBy: Array.from(new Set(ranked.flatMap((item) => item.matchedBy))),
+  };
+}
+
+export function productMatchesCategoryAssignment(
+  product: any,
+  categorySlug?: string | null,
+  subcategorySlug?: string | null,
+  parentSlug?: string | null
+) {
+  const requestedCategory = normalizeCategorySlug(categorySlug || "");
+  const requestedSubcategory = normalizeCategorySlug(subcategorySlug || "");
+  const requestedParent = normalizeCategorySlug(parentSlug || "");
+
+  const assignment = resolveCanonicalCategoryAssignment(product);
+  if (!assignment.parentCategorySlug && !assignment.categorySlug && !assignment.subcategorySlug) {
+    return false;
+  }
+
+  if (requestedParent && assignment.parentCategorySlug !== requestedParent) {
+    return false;
+  }
+
+  const pivot = requestedSubcategory || requestedCategory || requestedParent;
+  if (!pivot) return false;
+
+  const allowed = gatherSlugsUnder(pivot);
+  allowed.add(pivot);
+
+  const values = [
+    assignment.parentCategorySlug,
+    assignment.categorySlug,
+    assignment.subcategorySlug,
+  ].filter(Boolean);
+
+  return values.some((value) => allowed.has(value));
+}
+
 const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> = {
   // Computers / Laptops
   laptop: [{ category: 'computers', subcategory: 'laptops' }],
@@ -640,6 +918,7 @@ export function filterProductsByCategoryTree(
 
   const result = (products || []).filter((product) => {
     const values: string[] = [];
+    const resolvedAssignment = resolveCanonicalCategoryAssignment(product);
 
     const catId = product?.categoryId || product?.specs?.backendCategoryId || null;
     if (catId && backendCategories && Array.isArray(backendCategories)) {
@@ -691,6 +970,14 @@ export function filterProductsByCategoryTree(
 
     const uniq = Array.from(new Set(values.filter(Boolean)));
 
+    for (const assignmentValue of [
+      resolvedAssignment.parentCategorySlug,
+      resolvedAssignment.categorySlug,
+      resolvedAssignment.subcategorySlug,
+    ]) {
+      if (assignmentValue) uniq.push(assignmentValue);
+    }
+
     for (const s of uniq) {
       if (allowed.has(s)) {
         matchedCount += 1;
@@ -719,25 +1006,28 @@ export function filterProductsByCategoryTree(
     }
 
     unmatchedCount += 1;
+    debugCategoryAssignment("excluded-product", {
+      productId: product?.id || product?.slug || product?.title || "unknown-product",
+      requestedCategory: categorySlug,
+      requestedSubcategory: subcategorySlug,
+      availableValues: uniq,
+      resolvedAssignment,
+      status: product?.status || product?.productStatus || "",
+      approvalStatus: product?.approvalStatus || product?.approval_status || "",
+      visibilityStatus: product?.visibilityStatus || product?.visibility_status || "",
+    });
     return false;
   });
 
-  try {
-    console.debug('[category-filter] requested:', {
-      categorySlug,
-      subcategorySlug,
-    });
-
-    console.debug('[category-filter] results:', {
-      totalProducts: (products || []).length,
-      matched: result.length,
-      matchedCount,
-      legacyMappedCount,
-      unmatchedCount,
-    });
-  } catch {
-    // ignore logging errors
-  }
+  debugCategoryAssignment("filter-results", {
+    categorySlug,
+    subcategorySlug,
+    totalProducts: (products || []).length,
+    matched: result.length,
+    matchedCount,
+    legacyMappedCount,
+    unmatchedCount,
+  });
 
   return result;
 }

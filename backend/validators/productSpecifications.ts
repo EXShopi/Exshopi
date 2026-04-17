@@ -9,6 +9,7 @@ import {
   type SpecificationTemplate,
   type VariantDimensionKey,
 } from '../../shared/productSpecifications';
+import { resolveCanonicalCategoryAssignment } from '../../src/lib/masterCategories';
 
 type VariantRecord = {
   id?: string;
@@ -127,12 +128,20 @@ export function normalizeProductSpecifications(
   context: ProductSpecificationContext
 ) {
   const specs = inputSpecs && typeof inputSpecs === 'object' ? inputSpecs : {};
+  const canonicalAssignment = resolveCanonicalCategoryAssignment({
+    ...specs,
+    parentCategorySlug: context.parentCategorySlug || specs.parentCategorySlug || specs.categorySlug || '',
+    categorySlug: context.categorySlug || specs.categorySlug || context.parentCategorySlug || '',
+    subcategorySlug: context.subcategorySlug || specs.subcategorySlug || specs.templateId || '',
+    categoryPath: specs.categoryPath || '',
+    title: context.title || '',
+  });
 
   const template = getSpecificationTemplate(
-    context.parentCategorySlug || context.categorySlug || '',
-    context.subcategorySlug || specs.templateId || '',
-    context.subcategoryName || specs.templateName || '',
-    context.categorySlug || context.parentCategorySlug || ''
+    canonicalAssignment.parentCategorySlug || context.parentCategorySlug || context.categorySlug || '',
+    canonicalAssignment.subcategorySlug || context.subcategorySlug || specs.templateId || '',
+    canonicalAssignment.subcategoryName || context.subcategoryName || specs.templateName || '',
+    canonicalAssignment.categorySlug || context.categorySlug || context.parentCategorySlug || ''
   );
 
   const sourceValues = {
@@ -177,15 +186,16 @@ export function normalizeProductSpecifications(
               specs.attributes?.brand ||
               ''
           ).trim(),
-        subcategory: context.subcategorySlug || specs.attributes?.subcategory || '',
+        subcategory: canonicalAssignment.subcategorySlug || context.subcategorySlug || specs.attributes?.subcategory || '',
       },
-      parentCategorySlug: context.parentCategorySlug || specs.parentCategorySlug || specs.categorySlug || '',
-      categorySlug: context.categorySlug || context.parentCategorySlug || specs.categorySlug || '',
-      subcategorySlug: context.subcategorySlug || specs.subcategorySlug || '',
-      parentCategoryName: context.parentCategoryName || specs.parentCategoryName || '',
-      categoryName: context.categoryName || context.parentCategoryName || specs.categoryName || '',
-      subcategoryName: context.subcategoryName || specs.subcategoryName || '',
+      parentCategorySlug: canonicalAssignment.parentCategorySlug || context.parentCategorySlug || specs.parentCategorySlug || specs.categorySlug || '',
+      categorySlug: canonicalAssignment.categorySlug || context.categorySlug || context.parentCategorySlug || specs.categorySlug || '',
+      subcategorySlug: canonicalAssignment.subcategorySlug || context.subcategorySlug || specs.subcategorySlug || '',
+      parentCategoryName: canonicalAssignment.parentCategoryName || context.parentCategoryName || specs.parentCategoryName || '',
+      categoryName: canonicalAssignment.categoryName || context.categoryName || context.parentCategoryName || specs.categoryName || '',
+      subcategoryName: canonicalAssignment.subcategoryName || context.subcategoryName || specs.subcategoryName || '',
       categoryPath:
+        canonicalAssignment.categoryPath ||
         specs.categoryPath ||
         [context.parentCategorySlug || context.categorySlug || '', context.subcategorySlug || ''].filter(Boolean).join('/'),
     },

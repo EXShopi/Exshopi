@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "validate:category-assignment": "node --import tsx scripts/validateCategoryAssignment.ts",
     "start": "tsx backend/server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

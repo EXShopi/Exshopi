@@ -1,5 +1,6 @@
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
+import { productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../lib/masterCategories';
 
 const DEFAULT_PROD_API_BASE = 'https://exshopi-api.onrender.com/api';
 const DEFAULT_DEV_API_BASE = 'http://localhost:3001/api';
@@ -940,20 +941,13 @@ export const productAPI = {
 
         const all = data || [];
         return all
-          .filter((product: any) => {
-            const specs = product.specs || {};
-            if (subcategorySlug) {
-              return (
-                specs.categorySlug === categorySlug &&
-                specs.subcategorySlug === subcategorySlug
-              );
-            }
-            return (
-              specs.parentCategorySlug === categorySlug ||
-              specs.categorySlug === categorySlug ||
-              specs.subcategorySlug === categorySlug
-            );
-          })
+          .filter((product: any) =>
+            productMatchesCategoryAssignment(
+              { ...product, specs: { ...(product.specs || {}), ...resolveCanonicalCategoryAssignment(product) } },
+              categorySlug,
+              subcategorySlug
+            )
+          )
           .filter((r: any) => isPubliclyVisibleMarketplaceProduct(r));
       } catch (e) {
         console.warn('Supabase slug fetch failed:', e);

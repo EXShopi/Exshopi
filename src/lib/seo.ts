@@ -1,4 +1,5 @@
 import { buildRichProductTitle, cleanSeoSlug } from "./seoMarketplace";
+import { resolveCanonicalCategoryAssignment } from "./masterCategories";
 
 const DEFAULT_SITE_NAME = "ExShopi";
 const DEFAULT_SITE_URL =
@@ -131,10 +132,12 @@ export function buildAbsoluteUrl(pathname: string) {
 }
 
 export function getProductCategorySlugs(product: any) {
+  const resolved = resolveCanonicalCategoryAssignment(product);
   const specs = product?.specs || {};
 
   const parentSlug = String(
-    specs.parentCategorySlug ||
+    resolved.parentCategorySlug ||
+      specs.parentCategorySlug ||
       specs.categorySlug ||
       product?.category ||
       "electronics"
@@ -143,7 +146,8 @@ export function getProductCategorySlugs(product: any) {
     .toLowerCase();
 
   const subcategorySlug = String(
-    specs.subcategorySlug ||
+    resolved.subcategorySlug ||
+      specs.subcategorySlug ||
       specs.templateId ||
       product?.subcategory ||
       "products"

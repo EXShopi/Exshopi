@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MASTER_CATEGORIES } from '../../lib/masterCategories';
+import { MASTER_CATEGORIES, resolveCanonicalCategoryAssignment } from '../../lib/masterCategories';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -773,13 +773,16 @@ useEffect(() => {
       try {
         const product = (await productAPI.get(sourceId)) as ProductRecord | null;
         if (!product || !mounted) return;
+        const resolvedAssignment = resolveCanonicalCategoryAssignment(product);
 
         const nextParentSlug =
+          resolvedAssignment.parentCategorySlug ||
           product?.specs?.parentCategorySlug ||
           product?.specs?.categorySlug ||
           product?.category ||
           null;
         const nextSubcategorySlug =
+          resolvedAssignment.subcategorySlug ||
           product?.specs?.subcategorySlug ||
           product?.specs?.attributes?.subcategory ||
           product?.subcategory ||
@@ -1217,9 +1220,13 @@ useEffect(() => {
     const parentSlug = e.target.value || null;
     const parentCategory = categoryOptions.find((item) => item.slug === parentSlug) || null;
     const nextTemplate = getSpecificationTemplate(parentSlug, '', '', parentSlug);
+    const nextCategoryId =
+      parentCategory && typeof parentCategory === 'object' && 'id' in parentCategory
+        ? String(parentCategory.id || '')
+        : '';
 
     setSelectedParentSlug(parentSlug);
-    setSelectedCategoryId(parentCategory?.id || null);
+    setSelectedCategoryId(nextCategoryId || null);
     setSelectedSubcategorySlug(null);
     setSpecificationValues((current) => preserveMatchingSpecificationValues(current, nextTemplate));
     setCustomSpecificationGroups([]);
@@ -1387,6 +1394,13 @@ useEffect(() => {
       formData.longDescription.trim(),
       normalizedHighlights.length ? `Key Features:\n- ${normalizedHighlights.join('\n- ')}` : '',
     ].filter(Boolean);
+    const resolvedAssignment = resolveCanonicalCategoryAssignment({
+      parentCategorySlug: selectedParentSlug,
+      categorySlug: selectedParentSlug,
+      subcategorySlug: selectedSubcategorySlug,
+      templateId: selectedSubcategorySlug,
+      title: formData.title.trim(),
+    });
 
     return {
       categoryId: selectedCategoryId,
@@ -1455,13 +1469,15 @@ useEffect(() => {
         sellerNotes: formData.sellerNotes.trim(),
         listingCompleteness,
         seoScore,
-        parentCategorySlug: selectedParentSlug,
-        categorySlug: selectedParentSlug,
-        subcategorySlug: selectedSubcategorySlug,
-        parentCategoryName: selectedParentCategory?.name || '',
-        categoryName: selectedParentCategory?.name || '',
-        subcategoryName: selectedSubcategory?.name || '',
-        categoryPath: `${selectedParentSlug}/${selectedSubcategorySlug}`,
+        parentCategorySlug: resolvedAssignment.parentCategorySlug || selectedParentSlug || '',
+        categorySlug: resolvedAssignment.categorySlug || selectedParentSlug || '',
+        subcategorySlug: resolvedAssignment.subcategorySlug || selectedSubcategorySlug || '',
+        parentCategoryName: resolvedAssignment.parentCategoryName || selectedParentCategory?.name || '',
+        categoryName: resolvedAssignment.categoryName || selectedParentCategory?.name || '',
+        subcategoryName: resolvedAssignment.subcategoryName || selectedSubcategory?.name || '',
+        categoryPath:
+          resolvedAssignment.categoryPath ||
+          [selectedParentSlug, resolvedAssignment.categorySlug, selectedSubcategorySlug].filter(Boolean).join('/'),
         approvalStatus: mode === 'admin' ? 'approved' : 'pending',
         productStatus:
           mode === 'admin'
