@@ -2,6 +2,13 @@ import { supabase } from '../supabaseClient';
 import { userAPI } from '../services/api';
 import { useAuthStore } from '../store/auth';
 
+const IS_DEV = import.meta.env.DEV;
+
+function logAuthDev(level: 'warn' | 'debug' | 'error', message: string, ...args: any[]) {
+  if (!IS_DEV) return;
+  console[level](message, ...args);
+}
+
 interface AuthUser {
   id: string;
   email: string;
@@ -147,7 +154,7 @@ function mapBackendSessionToAuthResult(session: BackendSessionResponse): AuthRes
 async function getCurrentAccessToken(): Promise<string | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error) {
-    console.warn('[AUTH] Could not read session token:', error.message);
+    logAuthDev('warn', '[AUTH] Could not read session token:', error.message);
     return null;
   }
   return data.session?.access_token || null;
@@ -228,14 +235,14 @@ export class AuthService {
 
         if (backendSession) {
           useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-          useAuthStore.getState().setRefreshToken(null);
+          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
           return backendSession;
         }
       } catch (backendError: any) {
         if (requireBackendSession) {
           throw backendError;
         }
-        console.warn('[AUTH] Backend sign-in fallback:', backendError?.message || backendError);
+        logAuthDev('warn', '[AUTH] Backend sign-in fallback:', backendError?.message || backendError);
       }
 
       if (requireBackendSession) {
@@ -267,7 +274,7 @@ export class AuthService {
         storedRole: isPersistedAdminEmail(normalizedEmail) ? 'admin' : useAuthStore.getState().role,
       });
     } catch (error: any) {
-      console.error('[AUTH] Sign-in error:', error?.message || error);
+      logAuthDev('error', '[AUTH] Sign-in error:', error?.message || error);
 
       const msg = String(error?.message || 'Failed to sign in');
 
@@ -314,11 +321,11 @@ export class AuthService {
 
         if (backendSession) {
           useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-          useAuthStore.getState().setRefreshToken(null);
+          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
           return backendSession;
         }
       } catch (backendError: any) {
-        console.warn('[AUTH] Backend sign-up fallback:', backendError?.message || backendError);
+        logAuthDev('warn', '[AUTH] Backend sign-up fallback:', backendError?.message || backendError);
       }
 
       const { data, error } = await supabase.auth.signUp({
@@ -360,7 +367,7 @@ export class AuthService {
         storedRole: 'customer',
       });
     } catch (error: any) {
-      console.error('[AUTH] Sign-up error:', error?.message || error);
+      logAuthDev('error', '[AUTH] Sign-up error:', error?.message || error);
 
       const msg = String(error?.message || 'Failed to register user');
 
@@ -385,7 +392,7 @@ export class AuthService {
       await userAPI.logout().catch(() => null);
       await supabase.auth.signOut();
     } catch (error) {
-      console.error('[AUTH] Sign out error:', error);
+      logAuthDev('error', '[AUTH] Sign out error:', error);
     } finally {
       localStorage.removeItem('sellerId');
       localStorage.removeItem('adminId');
@@ -397,45 +404,29 @@ export class AuthService {
 
   static async restoreSession() {
     try {
-      const storedAccessToken =
-        useAuthStore.getState().accessToken ||
-        (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
-
       try {
-        if (storedAccessToken) {
-          const backendSession = mapBackendSessionToAuthResult(await userAPI.getSession());
-          if (backendSession) {
-            useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-            useAuthStore.getState().setRefreshToken(null);
-            return backendSession;
-          }
+        const backendSession = mapBackendSessionToAuthResult(await userAPI.getSession());
+        if (backendSession) {
+          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
+          return backendSession;
         }
       } catch (backendSessionError: any) {
-        // Silently handle 401/403 on public pages - don't log warnings
         if (backendSessionError?.status !== 401 && backendSessionError?.status !== 403) {
-          if (process.env.NODE_ENV === 'development') {
-            console.debug('[AUTH] Backend session check:', backendSessionError?.message);
-          }
+          logAuthDev('debug', '[AUTH] Backend session check:', backendSessionError?.message);
         }
       }
 
       try {
-        // Only attempt backend refresh if we have evidence of a client-side refresh token
-        const storedRefresh = typeof window !== 'undefined' ? (localStorage.getItem('refreshToken') || null) : null;
-        if (storedRefresh) {
-          const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
-          if (backendSession) {
-            useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
-            useAuthStore.getState().setRefreshToken(null);
-            return backendSession;
-          }
+        const backendSession = mapBackendSessionToAuthResult(await userAPI.refresh());
+        if (backendSession) {
+          useAuthStore.getState().setAccessToken(backendSession.accessToken || null);
+          useAuthStore.getState().setRefreshToken(backendSession.refreshToken || null);
+          return backendSession;
         }
       } catch (backendRefreshError: any) {
-        // Silently handle 401/403 on public pages - don't log warnings
         if (backendRefreshError?.status !== 401 && backendRefreshError?.status !== 403) {
-          if (process.env.NODE_ENV === 'development') {
-            console.debug('[AUTH] Backend session restore:', backendRefreshError?.message);
-          }
+          logAuthDev('debug', '[AUTH] Backend session restore:', backendRefreshError?.message);
         }
       }
 
@@ -465,9 +456,7 @@ export class AuthService {
       });
     } catch (error) {
       // Silently fail on public pages
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('[AUTH] Session restore skipped');
-      }
+      logAuthDev('debug', '[AUTH] Session restore skipped');
       useAuthStore.getState().setAccessToken(null);
       useAuthStore.getState().setRefreshToken(null);
       return null;
@@ -511,7 +500,7 @@ export class AuthService {
     }
 
     if (!token) {
-      console.warn('[AUTH] Reset password called without explicit token. Proceeding with recovery session if present.');
+      logAuthDev('warn', '[AUTH] Reset password called without explicit token. Proceeding with recovery session if present.');
     }
 
     const { error } = await supabase.auth.updateUser({

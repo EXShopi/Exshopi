@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Award,
@@ -84,6 +84,105 @@ type ProductVariant = {
   sku?: string;
   image?: string;
 };
+
+type VariantSelection = {
+  color: string;
+  size: string;
+  storage: string;
+  ram: string;
+  processor: string;
+};
+
+const EMPTY_VARIANT_SELECTION: VariantSelection = {
+  color: "",
+  size: "",
+  storage: "",
+  ram: "",
+  processor: "",
+};
+
+const VARIANT_SELECTION_KEYS: Array<keyof VariantSelection> = [
+  "color",
+  "size",
+  "storage",
+  "ram",
+  "processor",
+];
+
+function normalizeVariantValue(value?: string | null) {
+  return String(value || "").trim();
+}
+
+function buildDefaultVariantSelection(
+  variants: ProductVariant[],
+  baseAttributes: Record<string, any>
+): VariantSelection {
+  const firstVariant = variants[0];
+
+  return {
+    color: normalizeVariantValue(firstVariant?.color || baseAttributes.color),
+    size: normalizeVariantValue(firstVariant?.size || baseAttributes.size || baseAttributes.Size),
+    storage: normalizeVariantValue(
+      firstVariant?.storage || baseAttributes.storage || baseAttributes.Storage
+    ),
+    ram: normalizeVariantValue(firstVariant?.ram || baseAttributes.ram || baseAttributes.RAM),
+    processor: normalizeVariantValue(
+      firstVariant?.processor || baseAttributes.processor || baseAttributes.Processor
+    ),
+  };
+}
+
+function variantToSelection(variant?: ProductVariant | null): VariantSelection {
+  if (!variant) return EMPTY_VARIANT_SELECTION;
+
+  return {
+    color: normalizeVariantValue(variant.color),
+    size: normalizeVariantValue(variant.size),
+    storage: normalizeVariantValue(variant.storage),
+    ram: normalizeVariantValue(variant.ram),
+    processor: normalizeVariantValue(variant.processor),
+  };
+}
+
+function selectionsEqual(left: VariantSelection, right: VariantSelection) {
+  return VARIANT_SELECTION_KEYS.every((key) => left[key] === right[key]);
+}
+
+function findBestVariantMatch(
+  variants: ProductVariant[],
+  desiredSelection: VariantSelection,
+  requiredKeys: Array<keyof VariantSelection> = []
+) {
+  if (!variants.length) return null;
+
+  const requiredCandidates = variants.filter((variant) =>
+    requiredKeys.every((key) => {
+      const desiredValue = desiredSelection[key];
+      return !desiredValue || normalizeVariantValue(String(variant[key] || "")) === desiredValue;
+    })
+  );
+
+  const candidates = requiredCandidates.length ? requiredCandidates : variants;
+
+  let bestVariant: ProductVariant | null = null;
+  let bestScore = -1;
+
+  candidates.forEach((variant) => {
+    const score = VARIANT_SELECTION_KEYS.reduce((total, key) => {
+      const desiredValue = desiredSelection[key];
+      if (!desiredValue) return total;
+
+      return normalizeVariantValue(String(variant[key] || "")) === desiredValue ? total + 1 : total;
+    }, 0);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestVariant = variant;
+    }
+  });
+
+  return bestVariant || candidates[0] || null;
+}
 
 const COLOR_HEX_MAP: Record<string, string> = {
   black: "#111827",
@@ -359,11 +458,7 @@ export default function ProductDetail() {
   const [reviewSuccess, setReviewSuccess] = useState("");
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [selectedColor, setSelectedColor] = useState("");
-  const [selectedSize, setSelectedSize] = useState("");
-  const [selectedStorage, setSelectedStorage] = useState("");
-  const [selectedRam, setSelectedRam] = useState("");
-  const [selectedProcessor, setSelectedProcessor] = useState("");
+  const [selectedOptions, setSelectedOptions] = useState<VariantSelection>(EMPTY_VARIANT_SELECTION);
   const [mainImage, setMainImage] = useState(0);
   const [activeTab, setActiveTab] = useState<"overview" | "specifications" | "reviews" | "delivery" | "seller">("overview");
   const [wishlistActive, setWishlistActive] = useState(false);
@@ -562,15 +657,26 @@ const productSchema = product
     ]
   : null;
     
-  const baseSpecifications = productSpecs?.specifications || product?.specifications || {};
-  const baseAttributes = {
-    ...(productSpecs?.attributes || {}),
-    ...(baseSpecifications || {}),
-  };
+  const baseSpecifications = useMemo(
+    () => productSpecs?.specifications || product?.specifications || {},
+    [product?.specifications, productSpecs?.specifications]
+  );
+  const baseAttributes = useMemo(
+    () => ({
+      ...(productSpecs?.attributes || {}),
+      ...(baseSpecifications || {}),
+    }),
+    [baseSpecifications, productSpecs?.attributes]
+  );
   const variants = useMemo<ProductVariant[]>(
     () => (Array.isArray(productSpecs?.variants) ? productSpecs.variants : []),
     [productSpecs]
   );
+  const variantDefaults = useMemo(
+    () => buildDefaultVariantSelection(variants, baseAttributes),
+    [variants, baseAttributes]
+  );
+  const initializedProductRef = useRef<string | null>(null);
 
   const colorOptions = useMemo(
     () =>
@@ -640,56 +746,62 @@ const productSchema = product
   );
 
   useEffect(() => {
-    const firstVariant = variants[0];
-    setSelectedColor(String(firstVariant?.color || baseAttributes.color || ""));
-    setSelectedSize(String(firstVariant?.size || baseAttributes.size || baseAttributes.Size || ""));
-    setSelectedStorage(String(firstVariant?.storage || baseAttributes.storage || baseAttributes.Storage || ""));
-    setSelectedRam(String(firstVariant?.ram || baseAttributes.ram || baseAttributes.RAM || ""));
-    setSelectedProcessor(
-      String(firstVariant?.processor || baseAttributes.processor || baseAttributes.Processor || "")
-    );
-  }, [
-    variants,
-    baseAttributes.color,
-    baseAttributes.size,
-    baseAttributes.Size,
-    baseAttributes.storage,
-    baseAttributes.Storage,
-    baseAttributes.ram,
-    baseAttributes.RAM,
-    baseAttributes.processor,
-    baseAttributes.Processor,
-    product?.id,
-  ]);
+    const productId = product?.id ? String(product.id) : "";
+
+    if (!productId) {
+      initializedProductRef.current = null;
+      setSelectedOptions(EMPTY_VARIANT_SELECTION);
+      return;
+    }
+
+    setSelectedOptions((previous) => {
+      if (initializedProductRef.current !== productId) {
+        initializedProductRef.current = productId;
+        return variantDefaults;
+      }
+
+      if (!variants.length) {
+        return selectionsEqual(previous, variantDefaults) ? previous : variantDefaults;
+      }
+
+      const bestVariant = findBestVariantMatch(variants, previous);
+      if (!bestVariant) {
+        return selectionsEqual(previous, variantDefaults) ? previous : variantDefaults;
+      }
+
+      const nextSelection = variantToSelection(bestVariant);
+      return selectionsEqual(previous, nextSelection) ? previous : nextSelection;
+    });
+  }, [product?.id, variantDefaults, variants]);
+
+  const updateSelectedOption = (key: keyof VariantSelection, value: string) => {
+    const normalizedValue = normalizeVariantValue(value);
+
+    setSelectedOptions((previous) => {
+      const desiredSelection = {
+        ...previous,
+        [key]: normalizedValue,
+      };
+
+      if (!variants.length) return desiredSelection;
+
+      const bestVariant = findBestVariantMatch(variants, desiredSelection, [key]);
+      if (!bestVariant) return desiredSelection;
+
+      const nextSelection = variantToSelection(bestVariant);
+      return selectionsEqual(previous, nextSelection) ? previous : nextSelection;
+    });
+  };
+
+  const selectedColor = selectedOptions.color;
+  const selectedSize = selectedOptions.size;
+  const selectedStorage = selectedOptions.storage;
+  const selectedRam = selectedOptions.ram;
+  const selectedProcessor = selectedOptions.processor;
 
   const activeVariant = useMemo(() => {
-    if (!variants.length) return null;
-
-    const exactMatch =
-      variants.find(
-        (variant) =>
-          (!selectedColor || String(variant.color || "").trim() === selectedColor) &&
-          (!selectedSize || String(variant.size || "").trim() === selectedSize) &&
-          (!selectedStorage || String(variant.storage || "").trim() === selectedStorage) &&
-          (!selectedRam || String(variant.ram || "").trim() === selectedRam) &&
-          (!selectedProcessor || String(variant.processor || "").trim() === selectedProcessor)
-      ) ||
-      variants.find(
-        (variant) =>
-          (!selectedColor || String(variant.color || "").trim() === selectedColor) &&
-          (!selectedSize || String(variant.size || "").trim() === selectedSize) &&
-          (!selectedStorage || String(variant.storage || "").trim() === selectedStorage)
-      ) ||
-      variants.find(
-        (variant) =>
-          (!selectedColor || String(variant.color || "").trim() === selectedColor) &&
-          (!selectedSize || String(variant.size || "").trim() === selectedSize)
-      ) ||
-      variants.find((variant) => !selectedColor || String(variant.color || "").trim() === selectedColor) ||
-      variants[0];
-
-    return exactMatch || null;
-  }, [variants, selectedColor, selectedSize, selectedStorage, selectedRam, selectedProcessor]);
+    return findBestVariantMatch(variants, selectedOptions);
+  }, [variants, selectedOptions]);
 
   const displayPrice = Number(activeVariant?.price ?? product?.price ?? 0);
   const displayOriginalPrice = Number(
@@ -1246,7 +1358,7 @@ const structuredTemplate = getSpecificationTemplate(
                       {colorOptions.map((color) => (
                         <button
                           key={color.name}
-                          onClick={() => setSelectedColor(color.label)}
+                          onClick={() => updateSelectedOption("color", color.label)}
                           className={`h-12 w-12 rounded-full border-2 transition ${
                             selectedColorLabel === color.label
                               ? "border-blue-600 ring-2 ring-blue-200"
@@ -1267,7 +1379,7 @@ const structuredTemplate = getSpecificationTemplate(
                       {storageOptions.map((size) => (
                         <button
                           key={size}
-                          onClick={() => setSelectedStorage(size)}
+                          onClick={() => updateSelectedOption("storage", size)}
                           className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
                             selectedStorage === size
                               ? "border-blue-600 bg-blue-50 text-blue-600"
@@ -1288,7 +1400,7 @@ const structuredTemplate = getSpecificationTemplate(
                       {sizeOptions.map((size) => (
                         <button
                           key={size}
-                          onClick={() => setSelectedSize(size)}
+                          onClick={() => updateSelectedOption("size", size)}
                           className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
                             selectedSize === size
                               ? "border-blue-600 bg-blue-50 text-blue-600"
@@ -1309,7 +1421,7 @@ const structuredTemplate = getSpecificationTemplate(
                         {ramOptions.map((size) => (
                           <button
                             key={size}
-                            onClick={() => setSelectedRam(size)}
+                            onClick={() => updateSelectedOption("ram", size)}
                             className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
                               selectedRam === size
                                 ? "border-blue-600 bg-blue-50 text-blue-600"
@@ -1330,7 +1442,7 @@ const structuredTemplate = getSpecificationTemplate(
                         {processorOptions.map((processor) => (
                           <button
                             key={processor}
-                            onClick={() => setSelectedProcessor(processor)}
+                            onClick={() => updateSelectedOption("processor", processor)}
                             className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
                               selectedProcessor === processor
                                 ? "border-blue-600 bg-blue-50 text-blue-600"

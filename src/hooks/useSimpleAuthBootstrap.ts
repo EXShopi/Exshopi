@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import AuthService from '../lib/authService';
 
+const IS_DEV = import.meta.env.DEV;
+
 /**
  * Simple app-level auth bootstrap
  * Restores session from backend on initial load (once only, handles page refresh)
@@ -17,11 +19,13 @@ export function useSimpleAuthBootstrap() {
     (async () => {
       try {
         const restored = await AuthService.restoreSession();
-        if (restored) {
-          console.log('[AUTH] Session restored silently:', restored.user?.email);
+        if (restored && IS_DEV) {
+          console.debug('[AUTH] Session restored silently:', restored.user?.email);
         }
       } catch (error) {
-        console.debug('[AUTH] Silent restore failed (expected for logged-out users):', error);
+        if (IS_DEV) {
+          console.debug('[AUTH] Silent restore failed (expected for logged-out users):', error);
+        }
       }
     })();
   }, []);

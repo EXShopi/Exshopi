@@ -3,6 +3,12 @@ import { supabase } from '../supabaseClient';
 
 const DEFAULT_PROD_API_BASE = 'https://exshopi-api.onrender.com/api';
 const DEFAULT_DEV_API_BASE = 'http://localhost:3001/api';
+const IS_DEV = import.meta.env.DEV;
+
+function logDev(level: 'info' | 'warn' | 'debug', message: string, ...args: any[]) {
+  if (!IS_DEV) return;
+  console[level](message, ...args);
+}
 
 function readPersistedAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -93,7 +99,7 @@ function isPubliclyVisibleMarketplaceProduct(product: any) {
 }
 
 if (typeof window !== 'undefined') {
-  console.info('[api] API_BASE', API_BASE);
+  logDev('info', '[api] API_BASE', API_BASE);
 }
 
 export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
@@ -112,7 +118,7 @@ export async function safeFetchApi(pathOrUrl: string, init?: RequestInit) {
 
   try {
     const response = await fetch(url, init);
-    console.info('[api] response', {
+    logDev('info', '[api] response', {
       url,
       status: response.status,
       ok: response.ok,
@@ -137,7 +143,9 @@ function persistAuthTokens(data: { accessToken?: string | null; refreshToken?: s
   }
 
   useAuthStore.getState().setAccessToken(accessToken);
-  useAuthStore.getState().setRefreshToken(null);
+  useAuthStore.getState().setRefreshToken(
+    typeof data?.refreshToken === 'string' ? data.refreshToken : null
+  );
 }
 
 function clearPersistedAuthState() {
@@ -162,7 +170,7 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
       ...init,
       signal: init.signal || controller.signal,
     });
-    console.info('[api] response', {
+    logDev('info', '[api] response', {
       url,
       status: response.status,
       ok: response.ok,
@@ -196,7 +204,7 @@ async function parseApiResponse(res: Response) {
 
   if (!looksLikeJson) {
     const preview = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
-    console.warn('Non-JSON response from API:', {
+    logDev('warn', 'Non-JSON response from API:', {
       status: res.status,
       contentType,
       preview,
@@ -210,7 +218,7 @@ async function parseApiResponse(res: Response) {
   try {
     data = rawText ? JSON.parse(rawText) : null;
   } catch {
-    console.warn('Failed to parse JSON response from API:', {
+    logDev('warn', 'Failed to parse JSON response from API:', {
       status: res.status,
       contentType,
     });
@@ -253,10 +261,16 @@ async function refreshAccessToken() {
           : {}
       ),
     });
+
+    if (res.status === 401 || res.status === 403) {
+      clearPersistedAuthState();
+      throw new Error('Session expired. Please sign in again.');
+    }
+
     const data = await parseApiResponse(res);
     persistAuthTokens({
       accessToken: data?.accessToken || null,
-      refreshToken: null,
+      refreshToken: data?.refreshToken || null,
     });
     return data;
   })();
@@ -299,42 +313,21 @@ export async function authFetch(path: string, options: RequestInit = {}) {
   let response = await makeRequest(token || undefined);
 
   if (response.status === 401) {
-    // Only attempt a token refresh if we have an explicit refresh token stored
-    // (legacy support). In many deployments refresh is done via HttpOnly cookies
-    // — but calling the refresh endpoint blindly when the client has no token
-    // can cause repeated 401s. Protect against that by checking local state.
-    const storedRefresh = useAuthStore.getState().refreshToken || (typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null);
-    if (!storedRefresh) {
-      // No client-side refresh token known — abort and force sign-in
+    try {
+      const refreshData = await refreshAccessToken();
+      const newToken = typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : '';
+
+      if (!newToken) {
+        clearPersistedAuthState();
+        throw new Error('Session expired. Please sign in again.');
+      }
+
+      token = newToken;
+      response = await makeRequest(newToken);
+    } catch (error) {
       clearPersistedAuthState();
-      throw new Error('Session expired. Please sign in again.');
+      throw error instanceof Error ? error : new Error('Session expired. Please sign in again.');
     }
-
-    const refreshUrl = buildApiUrl('/auth/refresh');
-    if (!refreshUrl) {
-      clearPersistedAuthState();
-      throw new Error('Session expired. Please sign in again.');
-    }
-
-    const refreshRes = await fetchWithTimeout(refreshUrl, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: storedRefresh }),
-    });
-
-    const refreshData = await parseJsonSafe(refreshRes);
-    const newToken = typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : '';
-
-    if (!refreshRes.ok || !newToken) {
-      clearPersistedAuthState();
-      throw new Error('Session expired. Please sign in again.');
-    }
-
-    useAuthStore.getState().setAccessToken(newToken);
-
-    token = newToken;
-    response = await makeRequest(newToken);
 
     if (response.status === 401) {
       clearPersistedAuthState();
