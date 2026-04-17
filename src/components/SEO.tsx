@@ -107,7 +107,7 @@ export default function SEO({
 
     setMetaName(
       "robots",
-      noindex ? "noindex,nofollow" : "index,follow,max-image-preview:large"
+      noindex ? "noindex, nofollow" : "index, follow"
     );
     setMetaName("description", seo.metaDescription || "");
     setMetaName("keywords", seo.metaKeywords || "");

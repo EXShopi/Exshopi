@@ -65,6 +65,9 @@ const seoSlugify = (value: string) =>
   String(value || '')
     .toLowerCase()
     .trim()
+    .replace(/\bcopy\b/g, '')
+    .replace(/-copy(?:-\d+)?$/g, '')
+    .replace(/copy-\d+$/g, '')
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
@@ -2900,7 +2903,12 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
         ? await supabaseRuntime.getAllProducts()
         : db.getAllProducts();
       product =
-        all.find((p: any) => String(p.id) === param || String(p.slug || p.id) === param) || null;
+        all.find(
+          (p: any) =>
+            String(p.id) === param ||
+            String(p.slug || p.id) === param ||
+            seoSlugify(String(p.slug || p.title || p.id)) === seoSlugify(param)
+        ) || null;
     }
 
     if (!product || isSoftDeletedProduct(product)) {

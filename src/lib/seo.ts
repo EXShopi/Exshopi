@@ -1,6 +1,8 @@
+import { buildRichProductTitle, cleanSeoSlug } from "./seoMarketplace";
+
 const DEFAULT_SITE_NAME = "ExShopi";
 const DEFAULT_SITE_URL =
-  (typeof import.meta !== "undefined" && String(import.meta.env.VITE_SITE_URL || "").trim()) ||
+  (typeof import.meta !== "undefined" && String(import.meta?.env?.VITE_SITE_URL || "").trim()) ||
   "https://exshopi.com";
 
 const UAE_KEYWORDS = [
@@ -21,13 +23,7 @@ const FOCUS_KEYWORDS = [
 ];
 
 export function slugifySeo(value: string) {
-  return String(value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 120);
+  return cleanSeoSlug(value).slice(0, 120);
 }
 
 function toTitleCase(value: string) {
@@ -206,7 +202,7 @@ export function generateProductMeta(product: any) {
 
   const generatedTitle = clampText(
     storedTitle ||
-      `${title}${brand && !title.toLowerCase().includes(brand.toLowerCase()) ? ` by ${brand}` : ""} | Buy in UAE | ${DEFAULT_SITE_NAME}`,
+      `${buildRichProductTitle(product) || title}${brand && !title.toLowerCase().includes(brand.toLowerCase()) ? ` ${brand}` : ""} | ${DEFAULT_SITE_NAME}`,
     60
   );
 

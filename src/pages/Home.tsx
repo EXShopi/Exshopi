@@ -15,6 +15,7 @@ import { useSettingsStore } from "../store/settings";
 import SEOHead from "../components/seo/SEOHead";
 import { generateHomepageSeo, buildHomepageSchemas } from "../lib/seo";
 import { LazyComponent } from "../components/LazyComponent";
+import { UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
 
 export default function Home() {
   const { settings, fetchSettings } = useSettingsStore();
@@ -93,6 +94,43 @@ export default function Home() {
         <AllProductsSection />
       </LazyComponent>
       <section className="mx-auto mt-10 max-w-7xl px-4 pb-12 md:px-6">
+        <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">UAE Trusted Marketplace</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {UAE_TRUST_SIGNALS.map((signal) => (
+              <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                {signal}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
+        <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Landing Pages</p>
+          <h2 className="mt-3 text-3xl font-black text-slate-950">High-intent UAE shopping routes</h2>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
+            Explore search-focused marketplace pages built around buyers looking for iPhones, refurbished laptops, MacBooks, and electronics online in the UAE.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link to="/buy-iphone-uae" className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+              Buy iPhone UAE
+            </Link>
+            <Link to="/refurbished-laptops-uae" className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+              Refurbished Laptops UAE
+            </Link>
+            <Link to="/cheap-macbook-dubai" className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+              Cheap MacBook Dubai
+            </Link>
+            <Link to="/electronics-online-uae" className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+              Electronics Online UAE
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
         <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">From The Blog</p>
           <h2 className="mt-3 text-3xl font-black text-slate-950">UAE shopping guides that support SEO and trust</h2>

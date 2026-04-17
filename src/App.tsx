@@ -37,6 +37,7 @@ const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
 const TrackOrder = lazy(() => import("./pages/TrackOrder"));
 const BlogIndex = lazy(() => import("./pages/BlogIndex"));
 const BlogPost = lazy(() => import("./pages/BlogPost"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 const CustomerLogin = lazy(() => import("./pages/auth/Login"));
 const CustomerRegister = lazy(() => import("./pages/auth/Register"));
 
@@ -238,6 +239,10 @@ function AppContent() {
             <Route path="/promotions" element={<PromotionsPage />} />
             <Route path="/blog" element={<BlogIndex />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
+            <Route path="/buy-iphone-uae" element={<LandingPage />} />
+            <Route path="/refurbished-laptops-uae" element={<LandingPage />} />
+            <Route path="/cheap-macbook-dubai" element={<LandingPage />} />
+            <Route path="/electronics-online-uae" element={<LandingPage />} />
             <Route path="/category/:category" element={<CategoryPage />} />
             <Route path="/category/:category/:subcategory" element={<CategoryPage />} />
             <Route path="/vendors" element={<VendorStorefront />} />

@@ -8,19 +8,14 @@ import {
   DEFAULT_SITE_URL,
 } from "../constants/defaultSeo";
 import type { ProductSeoFields, ProductSeoInput, SeoFieldStatus, SeoPreviewData } from "../types/seo";
+import { buildRichProductTitle, cleanSeoSlug } from "../lib/seoMarketplace";
 
 export function normalizeSeoText(value: string) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 export function slugifySeo(value: string) {
-  return normalizeSeoText(String(value || ""))
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 140);
+  return cleanSeoSlug(value);
 }
 
 export function clampSeoText(value: string, maxLength: number) {
@@ -87,16 +82,28 @@ export function generateProductSeo(input: ProductSeoInput): ProductSeoFields {
   const category = normalizeSeoText(input.category || "");
   const subcategory = normalizeSeoText(input.subcategory || "");
   const nextSlug = slugifySeo(input.slug || title);
+  const richTitle = buildRichProductTitle({
+    title,
+    brand: input.brand,
+    year: (input as any)?.year,
+    specs: {
+      attributes: {
+        processor: (input as any)?.processor,
+        ram: (input as any)?.ram,
+        storage: (input as any)?.storage,
+      },
+    },
+  });
 
   const generatedTitle = clampSeoText(
     input.metaTitle ||
-      `${title} ${DEFAULT_PRODUCT_SEO_TITLE_SUFFIX}`.replace(/\s+/g, " ").trim(),
+      `${richTitle || title} | ${DEFAULT_SITE_NAME}`.replace(/\s+/g, " ").trim(),
     DEFAULT_PRODUCT_TITLE_RANGE.max
   );
 
   const generatedDescription = clampSeoText(
     input.metaDescription ||
-      `${shortDescription || title} Shop now on ${DEFAULT_SITE_NAME} with trusted UAE delivery, clear product details, and marketplace-ready support.`,
+      `${shortDescription || title} Shop on ${DEFAULT_SITE_NAME} with UAE delivery, COD-ready checkout, verified seller support, and structured product details for better comparison.`,
     DEFAULT_PRODUCT_DESCRIPTION_RANGE.max
   );
 

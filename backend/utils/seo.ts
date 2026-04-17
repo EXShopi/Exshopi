@@ -34,13 +34,16 @@ export function generateProductSeoPayload(input: {
   const shortDescription = normalizeSeoText(input.shortDescription || input.description || "");
   const category = normalizeSeoText(input.category || "");
   const subcategory = normalizeSeoText(input.subcategory || "");
+  const brand = normalizeSeoText((input as any).brand || "");
+  const yearMatch = title.match(/\b(19\d{2}|20\d{2})\b/);
+  const titleBits = [brand, title.replace(new RegExp(`^${brand}`, "i"), "").trim(), yearMatch?.[0], "UAE"].filter(Boolean);
   const metaTitle = clampSeoText(
-    input.metaTitle || `${title} | Buy in UAE | ExShopi`,
+    input.metaTitle || `${titleBits.join(" ")} | ExShopi`,
     60
   );
   const metaDescription = clampSeoText(
     input.metaDescription ||
-      `${shortDescription || title} Shop now on ExShopi with UAE delivery, trusted support, and premium marketplace product details.`,
+      `${shortDescription || title} Shop now on ExShopi with UAE delivery, COD-ready checkout, verified seller support, and premium marketplace product details.`,
     160
   );
   const metaKeywords = uniqueSeoKeywords([

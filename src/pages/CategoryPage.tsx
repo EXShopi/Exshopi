@@ -10,6 +10,8 @@ import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { categoryAPI, productAPI } from "../services/api";
 import SEOHead from "../components/seo/SEOHead";
 import { buildCategorySeoDescription, generateCategorySeo, getCategoryPath, buildAbsoluteUrl } from "../lib/seo";
+import { buildCategorySeoBody, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
+import { readRouteSnapshot } from "../lib/routeSnapshot";
 
 type CatalogProduct = {
   id: string;
@@ -55,10 +57,21 @@ const PAGE_SIZE = 12;
 
 export default function CategoryPage() {
   const { category, subcategory } = useParams<{ category?: string; subcategory?: string }>();
+  const routeSnapshot = readRouteSnapshot();
+  const snapshotCategoryProducts =
+    routeSnapshot?.kind === "category" &&
+    routeSnapshot.category?.slug === category &&
+    (routeSnapshot.category?.subcategorySlug || "") === (subcategory || "")
+      ? routeSnapshot.products || []
+      : [];
+  const snapshotCategories =
+    routeSnapshot?.kind === "category" && Array.isArray(routeSnapshot.categories)
+      ? routeSnapshot.categories
+      : [];
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [rawProducts, setRawProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<any[]>(snapshotCategories);
+  const [loading, setLoading] = useState(snapshotCategoryProducts.length === 0);
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -82,6 +95,35 @@ export default function CategoryPage() {
       subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || displayTitle
     );
   const seo = generateCategorySeo(displayTitle, effectiveSubcategoryKey || effectiveCategoryKey);
+
+  useEffect(() => {
+    if (!snapshotCategoryProducts.length) return;
+    const seeded = snapshotCategoryProducts.map(
+      (product: any): CatalogProduct => ({
+        id: String(product.id),
+        slug: product.slug || String(product.id),
+        parentCategorySlug: product.specs?.parentCategorySlug || product.specs?.categorySlug,
+        subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
+        title: product.title,
+        price: Number(product.price || 0),
+        oldPrice:
+          Number(product.originalPrice || 0) > Number(product.price || 0)
+            ? Number(product.originalPrice || 0)
+            : undefined,
+        rating: Number(product.rating || 0),
+        reviews: Number(product.reviews || product.reviewsCount || 0),
+        image: product.image || product.images?.[0] || "",
+        category: product.specs?.categoryName || product.specs?.parentCategoryName || product.brand || "Marketplace",
+        stock: Number(product.stock || 0) > 0 ? "In stock" : "Out of stock",
+        seller: product.sellerName || "Marketplace Seller",
+        badge: product.badges?.[0] || product.badge,
+      })
+    );
+
+    setRawProducts(snapshotCategoryProducts);
+    setCatalog(seeded);
+    setLoading(false);
+  }, [snapshotCategoryProducts]);
 
   useEffect(() => {
     let mounted = true;
@@ -141,7 +183,7 @@ export default function CategoryPage() {
     return () => {
       mounted = false;
     };
-  }, [rawCategoryKey, rawSubcategoryKey]);
+  }, [rawCategoryKey, rawSubcategoryKey, effectiveCategoryKey, effectiveSubcategoryKey]);
 
   const filteredProducts = useMemo(() => {
     if (effectiveCategoryKey === "categories") return catalog;
@@ -171,6 +213,13 @@ export default function CategoryPage() {
       return [];
     }
   }, [catalog, effectiveCategoryKey, effectiveSubcategoryKey, categories]);
+
+  const seoBody = buildCategorySeoBody({
+    categoryName: displayTitle,
+    categorySlug: effectiveCategoryKey,
+    subcategorySlug: effectiveSubcategoryKey,
+    productCount: filteredProducts.length,
+  });
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const relatedSubcategories = categoryInfo?.subcategories || [];
@@ -316,11 +365,42 @@ export default function CategoryPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">About This Category</p>
-          <div className="mt-4 text-sm leading-8 text-slate-600">
-            {seoDescription}
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">About This Category</p>
+            <div className="mt-4 space-y-4">
+              {seoBody.map((paragraph) => (
+                <p key={paragraph.slice(0, 32)} className="text-sm leading-8 text-slate-600">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
           </div>
+
+          <aside className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">UAE Trust Signals</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {UAE_TRUST_SIGNALS.map((signal) => (
+                <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                  {signal}
+                </span>
+              ))}
+            </div>
+            <div className="mt-6 rounded-[24px] border border-blue-100 bg-blue-50 p-5">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-blue-700">Helpful links</p>
+              <div className="mt-4 flex flex-col gap-3">
+                <Link to="/" className="text-sm font-semibold text-slate-800 hover:text-blue-600">
+                  Homepage
+                </Link>
+                <Link to="/products" className="text-sm font-semibold text-slate-800 hover:text-blue-600">
+                  All products
+                </Link>
+                <Link to="/blog" className="text-sm font-semibold text-slate-800 hover:text-blue-600">
+                  UAE buying guides
+                </Link>
+              </div>
+            </div>
+          </aside>
         </div>
       </section>
     </div>

@@ -36,6 +36,8 @@ import {
 import { buildProductPath, buildAbsoluteUrl } from "../lib/seo";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
+import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
+import { readRouteSnapshot } from "../lib/routeSnapshot";
 // Local helpers for safe category path and slugification
 function slugifyLocal(value?: string) {
   return String(value || "")
@@ -57,6 +59,10 @@ import ProductSpecificationTable from "../components/product/ProductSpecificatio
 
 
 const productDetailCache = new Map<string, any>();
+
+function normalizeRouteIdentifier(value?: string) {
+  return cleanSeoSlug(String(value || ""));
+}
 
 const productHighlights = [
   "Premium aluminum unibody design",
@@ -315,6 +321,16 @@ export default function ProductDetail() {
   const authUser = useAuthStore((state) => state.user);
   const cacheKey = identifier ? String(identifier) : "";
   const cachedProduct = cacheKey ? productDetailCache.get(cacheKey) : null;
+  const routeSnapshot = readRouteSnapshot();
+  const snapshotProduct =
+    routeSnapshot?.kind === "product" &&
+    normalizeRouteIdentifier(routeSnapshot.product?.slug || routeSnapshot.product?.id) === normalizeRouteIdentifier(identifier)
+      ? normalizeMarketplaceProduct(routeSnapshot.product)
+      : null;
+  const snapshotRelatedProducts =
+    routeSnapshot?.kind === "product" && Array.isArray(routeSnapshot.relatedProducts)
+      ? routeSnapshot.relatedProducts.map((item) => normalizeMarketplaceProduct(item))
+      : [];
   // ...existing state and hooks...
   // ...existing state and hooks...
 
@@ -330,9 +346,10 @@ export default function ProductDetail() {
   // After productSpecs and product are initialized (after all useState/useMemo)
   // Place this block just before the return statement
 
-  const [product, setProduct] = useState<any>(() => cachedProduct || null);
-  const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(() => !cachedProduct);
+  const [product, setProduct] = useState<any>(() => cachedProduct || snapshotProduct || null);
+  const [allProducts, setAllProducts] = useState<any[]>(() => snapshotRelatedProducts);
+  const [loading, setLoading] = useState(() => !(cachedProduct || snapshotProduct));
+  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(() => Boolean(cachedProduct || snapshotProduct));
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewRating, setReviewRating] = useState(5);
@@ -361,9 +378,10 @@ export default function ProductDetail() {
     const controller = new AbortController();
 
     const fetchProduct = async () => {
-      if (cachedProduct) {
-        setProduct(cachedProduct);
+      if (cachedProduct || snapshotProduct) {
+        setProduct(cachedProduct || snapshotProduct);
         setLoading(false);
+        setHasAttemptedLoad(true);
       } else {
         setProduct(null);
         setLoading(true);
@@ -381,6 +399,7 @@ export default function ProductDetail() {
           productDetailCache.set(cacheKey, normalizedProduct);
           setProduct(normalizedProduct);
           setLoading(false);
+          setHasAttemptedLoad(true);
           return;
         }
         // If direct product lookup failed, try slug-based lookup using route params
@@ -388,15 +407,16 @@ export default function ProductDetail() {
           try {
             const candidates = await productAPI.getBySlug(paramCategory || String(paramCategory || ''), paramSubcategory || String(paramSubcategory || ''));
             const match = (candidates || []).find((p: any) => {
-              const pSlug = String(p?.slug || p?.id || '').trim().toLowerCase();
-              const ident = String(identifier || '').trim().toLowerCase();
-              return pSlug === ident || String(p?.id) === ident;
+              const pSlug = normalizeRouteIdentifier(p?.slug || p?.id || "");
+              const ident = normalizeRouteIdentifier(identifier || "");
+              return pSlug === ident || String(p?.id) === String(identifier || "");
             });
             if (match) {
               const normalizedProduct = normalizeMarketplaceProduct(match);
               productDetailCache.set(cacheKey, normalizedProduct);
               setProduct(normalizedProduct);
               setLoading(false);
+              setHasAttemptedLoad(true);
               return;
             }
           } catch (e) {
@@ -411,6 +431,7 @@ export default function ProductDetail() {
         console.error("Error fetching product:", _error);
         setProduct(null);
         setLoading(false);
+        setHasAttemptedLoad(true);
       }
     };
 
@@ -420,11 +441,11 @@ export default function ProductDetail() {
       active = false;
       controller.abort();
     };
-  }, [cachedProduct, identifier]);
+  }, [cachedProduct, identifier, snapshotProduct, cacheKey, paramCategory, paramSubcategory]);
 
   useEffect(() => {
     if (!product?.id) {
-      setAllProducts([]);
+      setAllProducts(snapshotRelatedProducts);
       return;
     }
 
@@ -447,7 +468,7 @@ export default function ProductDetail() {
       active = false;
       controller.abort();
     };
-  }, [product?.id]);
+  }, [product?.id, snapshotRelatedProducts]);
 
   useEffect(() => {
     setMainImage(0);
@@ -846,7 +867,7 @@ const structuredTemplate = getSpecificationTemplate(
 
   const latestReviewCards = useMemo(() => reviews.slice(0, 3), [reviews]);
 
-  if (loading && !product) {
+  if ((loading || !hasAttemptedLoad) && !product) {
     return (
       <div className="flex items-center justify-center px-4 py-24">
         <OrbitLoader label="Loading product..." size={28} variant="normal" />
@@ -854,7 +875,7 @@ const structuredTemplate = getSpecificationTemplate(
     );
   }
 
-  if (!loading && !product) {
+  if (hasAttemptedLoad && !loading && !product) {
     return (
       <>
         <SEO
@@ -1193,6 +1214,20 @@ const structuredTemplate = getSpecificationTemplate(
                       </div>
                       <span className="text-sm font-medium text-slate-700">{highlight}</span>
                     </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[30px] border border-slate-200 bg-white p-7 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">UAE Trusted Marketplace</p>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  {buildProductSeoNarrative(product)}
+                </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {UAE_TRUST_SIGNALS.map((signal) => (
+                    <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                      {signal}
+                    </span>
                   ))}
                 </div>
               </div>
