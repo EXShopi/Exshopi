@@ -20,6 +20,17 @@ export default function BlogIndex() {
         <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
           Buying guides, comparison articles, and UAE-focused marketplace content designed to attract organic traffic and help shoppers convert with confidence.
         </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link to="/" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+            Homepage
+          </Link>
+          <Link to="/category/electronics/laptops" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+            Laptop category
+          </Link>
+          <Link to="/refurbished-laptops-uae" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:text-blue-600">
+            Refurbished Laptops UAE
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-6 md:grid-cols-2">

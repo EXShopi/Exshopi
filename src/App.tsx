@@ -10,6 +10,7 @@ import { AdminLayout } from "./layouts/AdminLayout";
 import ProductDetail from "./pages/ProductDetail";
 import GoogleServices from "./components/seo/GoogleServices";
 import { useAuthBootstrap } from "./hooks";
+import SEOHead from "./components/seo/SEOHead";
 
 const Home = lazy(() => import("./pages/Home"));
 const ProductListing = lazy(() => import("./pages/ProductListing"));
@@ -155,20 +156,29 @@ function RouteDebugLogger() {
 
 function NotFound() {
   return (
-    <div className="min-h-[70vh] bg-slate-50 flex items-center justify-center px-4">
-      <div className="max-w-xl text-center">
-        <h1 className="text-3xl font-black text-slate-900">Page not found</h1>
-        <p className="mt-4 text-slate-500 font-semibold">
-          The page you requested is unavailable or may have moved.
-        </p>
-        <a
-          href="/"
-          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-4 font-bold text-white transition hover:bg-blue-700"
-        >
-          Back to Home
-        </a>
+    <>
+      <SEOHead
+        title="Page Not Found | ExShopi"
+        description="This page is not available on ExShopi."
+        pathname={typeof window !== "undefined" ? window.location.pathname : "/404"}
+        noindex={true}
+        canonicalUrl={typeof window !== "undefined" ? `${window.location.origin}/404` : "https://exshopi.com/404"}
+      />
+      <div className="min-h-[70vh] bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-xl text-center">
+          <h1 className="text-3xl font-black text-slate-900">Page not found</h1>
+          <p className="mt-4 text-slate-500 font-semibold">
+            The page you requested is unavailable or may have moved.
+          </p>
+          <a
+            href="/"
+            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-4 font-bold text-white transition hover:bg-blue-700"
+          >
+            Back to Home
+          </a>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

@@ -4,15 +4,16 @@ import { BLOG_POSTS } from "../src/lib/blog";
 import {
   buildCategorySeoBody,
   buildProductSeoNarrative,
-  buildRichProductTitle,
   cleanSeoSlug,
   LANDING_PAGES,
   UAE_TRUST_SIGNALS,
 } from "../src/lib/seoMarketplace";
 import {
   buildAbsoluteUrl,
+  buildBreadcrumbSchema,
   buildCategorySeoDescription,
   buildHomepageSchemas,
+  buildProductBreadcrumbSchema,
   buildProductPath,
   buildProductSchema,
   generateCategorySeo,
@@ -24,6 +25,25 @@ import {
 const ROOT = process.cwd();
 const DIST_DIR = path.join(ROOT, "dist");
 const SITE_URL = "https://exshopi.com";
+
+type PrerenderedProduct = {
+  id: string;
+  rawSlug: string;
+  slug: string;
+  title: string;
+  image: string;
+  price: number;
+  originalPrice: number;
+  sellerName: string;
+  rating: number;
+  reviews: number;
+  stock: number;
+  specs: Record<string, any>;
+  category: string;
+  description: string;
+  brand: string;
+  badges: string[];
+};
 
 function escapeHtml(value: string) {
   return String(value || "")
@@ -58,9 +78,10 @@ function isLiveProduct(product: any) {
   return status === "live" || approval === "approved";
 }
 
-function productCardData(product: any) {
+function productCardData(product: any): PrerenderedProduct {
   return {
     id: String(product.id),
+    rawSlug: String(product.slug || product.id || "").trim(),
     slug: cleanSeoSlug(product.slug || product.title || product.id),
     title: product.title,
     image: normalizeUrl(product.image || product.images?.[0] || "/hero/hero-1.webp"),
@@ -78,6 +99,56 @@ function productCardData(product: any) {
   };
 }
 
+function buildHeadMeta(html: string, input: {
+  title: string;
+  description: string;
+  keywords?: string;
+  canonicalUrl: string;
+  ogImage?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  robots?: string;
+  jsonLd?: unknown;
+}) {
+  let next = html;
+
+  next = next
+    .replace(/<title>[\s\S]*?<\/title>/gi, "")
+    .replace(/<meta[^>]+name=["']description["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+name=["']keywords["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+name=["']robots["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+property=["']og:title["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+property=["']og:description["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+property=["']og:url["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+property=["']og:image["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+name=["']twitter:title["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+name=["']twitter:description["'][^>]*>\s*/gi, "")
+    .replace(/<meta[^>]+name=["']twitter:image["'][^>]*>\s*/gi, "")
+    .replace(/<link[^>]+rel=["']canonical["'][^>]*>\s*/gi, "")
+    .replace(/<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>\s*/gi, "");
+
+  const headInsert = [
+    `<title>${escapeHtml(input.title)}</title>`,
+    `<meta name="description" content="${escapeHtml(input.description)}" />`,
+    `<meta name="keywords" content="${escapeHtml(input.keywords || "")}" />`,
+    `<meta name="robots" content="${escapeHtml(input.robots || "index, follow")}" />`,
+    `<meta property="og:title" content="${escapeHtml(input.ogTitle || input.title)}" />`,
+    `<meta property="og:description" content="${escapeHtml(input.ogDescription || input.description)}" />`,
+    `<meta property="og:url" content="${escapeHtml(input.canonicalUrl)}" />`,
+    `<meta property="og:image" content="${escapeHtml(normalizeUrl(input.ogImage || "/logo.png"))}" />`,
+    `<meta name="twitter:title" content="${escapeHtml(input.ogTitle || input.title)}" />`,
+    `<meta name="twitter:description" content="${escapeHtml(input.ogDescription || input.description)}" />`,
+    `<meta name="twitter:image" content="${escapeHtml(normalizeUrl(input.ogImage || "/logo.png"))}" />`,
+    `<link rel="canonical" href="${escapeHtml(input.canonicalUrl)}" />`,
+  ];
+
+  if (input.jsonLd) {
+    headInsert.push(`<script type="application/ld+json">${JSON.stringify(input.jsonLd)}</script>`);
+  }
+
+  return next.replace("</head>", `  ${headInsert.join("\n  ")}\n</head>`);
+}
+
 function htmlDocument(template: string, input: {
   title: string;
   description: string;
@@ -86,6 +157,7 @@ function htmlDocument(template: string, input: {
   ogImage?: string;
   ogTitle?: string;
   ogDescription?: string;
+  robots?: string;
   jsonLd?: unknown;
   snapshotHtml: string;
   routeData?: unknown;
@@ -93,39 +165,7 @@ function htmlDocument(template: string, input: {
   const bodyMatch = template.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   const bodyScripts = bodyMatch?.[1]?.match(/<script\b[\s\S]*?<\/script>/gi) || [];
 
-  let html = template;
-
-  const replaceOrInsertMeta = (key: string, attr: "name" | "property", value: string) => {
-    const regex = new RegExp(`<meta[^>]+${attr}=["']${key}["'][^>]*>`, "i");
-    const replacement = `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;
-    html = regex.test(html) ? html.replace(regex, replacement) : html.replace("</head>", `  ${replacement}\n</head>`);
-  };
-
-  html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(input.title)}</title>`);
-  replaceOrInsertMeta("description", "name", input.description);
-  replaceOrInsertMeta("keywords", "name", input.keywords || "");
-  replaceOrInsertMeta("robots", "name", "index, follow");
-  replaceOrInsertMeta("og:title", "property", input.ogTitle || input.title);
-  replaceOrInsertMeta("og:description", "property", input.ogDescription || input.description);
-  replaceOrInsertMeta("og:url", "property", input.canonicalUrl);
-  replaceOrInsertMeta("og:image", "property", normalizeUrl(input.ogImage || "/logo.png"));
-  replaceOrInsertMeta("twitter:title", "name", input.ogTitle || input.title);
-  replaceOrInsertMeta("twitter:description", "name", input.ogDescription || input.description);
-  replaceOrInsertMeta("twitter:image", "name", normalizeUrl(input.ogImage || "/logo.png"));
-
-  if (/<link[^>]+rel=["']canonical["'][^>]*>/i.test(html)) {
-    html = html.replace(/<link[^>]+rel=["']canonical["'][^>]*>/i, `<link rel="canonical" href="${escapeHtml(input.canonicalUrl)}" />`);
-  } else {
-    html = html.replace("</head>", `  <link rel="canonical" href="${escapeHtml(input.canonicalUrl)}" />\n</head>`);
-  }
-
-  if (input.jsonLd) {
-    html = html.replace(
-      "</head>",
-      `  <script type="application/ld+json">${JSON.stringify(input.jsonLd)}</script>\n</head>`
-    );
-  }
-
+  let html = buildHeadMeta(template, input);
   html = html.replace(
     /<body[^>]*>[\s\S]*<\/body>/i,
     `<body>
@@ -149,11 +189,148 @@ function renderTrustSignals() {
   return UAE_TRUST_SIGNALS.map((signal) => `<li>${escapeHtml(signal)}</li>`).join("");
 }
 
+function stableProductDescription(product: PrerenderedProduct) {
+  return generateProductMeta(product).metaDescription;
+}
+
+function textParagraphs(paragraphs: string[]) {
+  return paragraphs
+    .map((paragraph) => `<p style="font-size:17px;line-height:1.85;color:#475569;max-width:900px;">${escapeHtml(paragraph)}</p>`)
+    .join("");
+}
+
+function productAliasRedirects(product: PrerenderedProduct) {
+  const canonicalPath = buildProductPath(product);
+  const parentSlug = cleanSeoSlug(product.specs?.parentCategorySlug || product.specs?.categorySlug || product.category);
+  const subcategorySlug = cleanSeoSlug(product.specs?.subcategorySlug || product.specs?.templateId || product.category);
+
+  const aliases = new Set<string>([
+    `/product/${product.id}`,
+    `/product/${product.slug}`,
+    `/product/${product.slug}-copy`,
+    `/product/${product.slug}-copy-2`,
+    `/${parentSlug}/${subcategorySlug}/${product.slug}-copy`,
+    `/${parentSlug}/${subcategorySlug}/${product.slug}-copy-2`,
+  ]);
+
+  if (product.rawSlug) {
+    aliases.add(`/product/${cleanSeoSlug(product.rawSlug)}`);
+    aliases.add(`/${parentSlug}/${subcategorySlug}/${cleanSeoSlug(product.rawSlug)}`);
+  }
+
+  if (product.rawSlug && cleanSeoSlug(product.rawSlug) !== product.slug) {
+    aliases.add(`/product/${cleanSeoSlug(product.rawSlug)}-copy`);
+    aliases.add(`/${parentSlug}/${subcategorySlug}/${cleanSeoSlug(product.rawSlug)}-copy`);
+  }
+
+  aliases.delete(canonicalPath);
+
+  return Array.from(aliases)
+    .filter(Boolean)
+    .filter((alias) => alias !== canonicalPath)
+    .map((alias) => `${alias} ${canonicalPath} 301!`);
+}
+
+async function writeSupportFiles(input: {
+  homeHtml: string;
+  productRedirects: string[];
+}) {
+  const robots = `User-agent: *
+Allow: /
+Sitemap: ${SITE_URL}/sitemap.xml
+`;
+  await fs.writeFile(path.join(DIST_DIR, "robots.txt"), robots, "utf8");
+
+  const categoryRedirects = [
+    `/mobiles /category/electronics/mobiles 301!`,
+    `/laptops /category/electronics/laptops 301!`,
+    `/electronics /category/electronics 301!`,
+    `/tablets /category/electronics/tablets 301!`,
+    `/accessories /category/electronics/accessories 301!`,
+  ];
+
+  const spaRewrites = [
+    "/login /index.html 200",
+    "/register /index.html 200",
+    "/cart /index.html 200",
+    "/checkout /index.html 200",
+    "/order-success /index.html 200",
+    "/invoice/* /index.html 200",
+    "/order-tracking /index.html 200",
+    "/order-tracking/* /index.html 200",
+    "/wishlist /index.html 200",
+    "/account /index.html 200",
+    "/vendor /index.html 200",
+    "/vendor/* /index.html 200",
+    "/support /index.html 200",
+    "/about /index.html 200",
+    "/contact /index.html 200",
+    "/faq /index.html 200",
+    "/privacy /index.html 200",
+    "/terms /index.html 200",
+    "/privacy-policy /index.html 200",
+    "/terms-conditions /index.html 200",
+    "/return-policy /index.html 200",
+    "/warranty /index.html 200",
+    "/track-order /index.html 200",
+    "/brands/* /index.html 200",
+    "/popular/* /index.html 200",
+    "/campaigns/current /index.html 200",
+    "/promotions /index.html 200",
+    "/vendors /index.html 200",
+    "/deals /index.html 200",
+    "/categories /index.html 200",
+    "/seller/* /index.html 200",
+    "/admin/* /index.html 200",
+  ];
+
+  const redirects = [
+    ...categoryRedirects,
+    ...input.productRedirects.sort(),
+    ...spaRewrites,
+    "/404 /404.html 404",
+    "/* /404.html 404",
+  ].join("\n");
+
+  await fs.writeFile(path.join(DIST_DIR, "_redirects"), redirects, "utf8");
+
+  const notFoundHtml = buildHeadMeta(input.homeHtml, {
+    title: "Page Not Found | ExShopi",
+    description: "This page is not available on ExShopi.",
+    canonicalUrl: `${SITE_URL}/404`,
+    robots: "noindex, nofollow",
+    ogImage: "/logo.png",
+    jsonLd: buildBreadcrumbSchema([
+      { name: "Home", url: `${SITE_URL}/` },
+      { name: "404", url: `${SITE_URL}/404` },
+    ]),
+  }).replace(
+    /<body[^>]*>[\s\S]*<\/body>/i,
+    `<body>
+  <div id="root">
+    <main style="max-width:960px;margin:0 auto;padding:80px 20px 96px;font-family:Inter,system-ui,sans-serif;">
+      <h1 style="font-size:42px;line-height:1.1;color:#0f172a;margin-bottom:16px;">Page not found</h1>
+      <p style="font-size:18px;line-height:1.8;color:#475569;max-width:720px;">The page you requested is unavailable. Use the internal links below to continue browsing live marketplace pages on ExShopi.</p>
+      <ul style="margin-top:28px;padding-left:20px;line-height:2;color:#334155;">
+        <li><a href="/">Homepage</a></li>
+        <li><a href="/products">All products</a></li>
+        <li><a href="/category/electronics">Electronics category</a></li>
+        <li><a href="/blog">ExShopi blog</a></li>
+      </ul>
+    </main>
+  </div>
+</body>`
+  );
+  await fs.writeFile(path.join(DIST_DIR, "404.html"), notFoundHtml, "utf8");
+}
+
 async function main() {
   const template = await fs.readFile(path.join(DIST_DIR, "index.html"), "utf8");
   const db = JSON.parse(await fs.readFile(path.join(ROOT, "backend", "db.json"), "utf8"));
   const categories = Array.isArray(db.categories) ? db.categories : [];
-  const liveProducts = (Array.isArray(db.products) ? db.products : []).filter(isLiveProduct).map(productCardData);
+  const liveProducts = (Array.isArray(db.products) ? db.products : [])
+    .filter(isLiveProduct)
+    .map(productCardData);
   const now = new Date().toISOString().slice(0, 10);
 
   const homeSeo = generateHomepageSeo();
@@ -176,10 +353,20 @@ async function main() {
         <section style="margin-top:36px;">
           <h2 style="font-size:28px;color:#0f172a;">Popular routes</h2>
           <ul style="padding-left:20px;line-height:2;">
+            <li><a href="/category/electronics">Electronics category</a></li>
             <li><a href="/category/electronics/laptops">Refurbished laptops UAE</a></li>
             <li><a href="/buy-iphone-uae">Buy iPhone UAE</a></li>
             <li><a href="/cheap-macbook-dubai">Cheap MacBook Dubai</a></li>
             <li><a href="/blog">ExShopi blog</a></li>
+          </ul>
+        </section>
+        <section style="margin-top:36px;">
+          <h2 style="font-size:28px;color:#0f172a;">Featured product routes</h2>
+          <ul style="padding-left:20px;line-height:2;">
+            ${liveProducts
+              .slice(0, 6)
+              .map((product) => `<li><a href="${buildProductPath(product)}">${escapeHtml(product.title)}</a></li>`)
+              .join("")}
           </ul>
         </section>
       </main>`,
@@ -203,6 +390,7 @@ async function main() {
             .map((product) => `<li><a href="${buildProductPath(product)}">${escapeHtml(product.title)}</a></li>`)
             .join("")}
         </ul>
+        <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Explore more through <a href="/category/electronics">category pages</a>, <a href="/blog">UAE buying guides</a>, and dedicated <a href="/electronics-online-uae">landing pages</a>.</p>
       </main>`,
   });
   await writeRouteFile("/products", listingHtml);
@@ -210,9 +398,7 @@ async function main() {
   for (const category of categories) {
     const categoryProducts = liveProducts.filter((product) => {
       const specs = product.specs || {};
-      return (
-        cleanSeoSlug(specs.parentCategorySlug || specs.categorySlug || product.category) === cleanSeoSlug(category.slug)
-      );
+      return cleanSeoSlug(specs.parentCategorySlug || specs.categorySlug || product.category) === cleanSeoSlug(category.slug);
     });
 
     const categorySeo = generateCategorySeo(category.name, category.slug);
@@ -221,27 +407,27 @@ async function main() {
       categorySlug: category.slug,
       productCount: categoryProducts.length,
     });
-    const routeData = {
-      kind: "category",
-      path: getCategoryPath(category.slug),
-      category: { slug: category.slug, name: category.name },
-      products: categoryProducts,
-      categories,
-    };
+    const categoryPath = getCategoryPath(category.slug);
 
     await writeRouteFile(
-      getCategoryPath(category.slug),
+      categoryPath,
       htmlDocument(template, {
         title: categorySeo.metaTitle,
         description: buildCategorySeoDescription(category.name),
         keywords: categorySeo.metaKeywords,
-        canonicalUrl: buildAbsoluteUrl(getCategoryPath(category.slug)),
+        canonicalUrl: buildAbsoluteUrl(categoryPath),
         ogImage: "/logo.png",
-        routeData,
+        routeData: {
+          kind: "category",
+          path: categoryPath,
+          category: { slug: category.slug, name: category.name },
+          products: categoryProducts,
+          categories,
+        },
         snapshotHtml: `
           <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
             <h1 style="font-size:40px;line-height:1.15;color:#0f172a;">${escapeHtml(category.name)} in UAE</h1>
-            ${categoryBody.map((paragraph) => `<p style="font-size:17px;line-height:1.85;color:#475569;max-width:900px;">${escapeHtml(paragraph)}</p>`).join("")}
+            ${textParagraphs(categoryBody)}
             <h2 style="margin-top:28px;font-size:28px;color:#0f172a;">Related products</h2>
             <ul style="padding-left:20px;line-height:2;">
               ${categoryProducts
@@ -249,6 +435,7 @@ async function main() {
                 .map((product) => `<li><a href="${buildProductPath(product)}">${escapeHtml(product.title)}</a></li>`)
                 .join("")}
             </ul>
+            <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.</p>
           </main>`,
       })
     );
@@ -288,7 +475,7 @@ async function main() {
           snapshotHtml: `
             <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
               <h1 style="font-size:40px;line-height:1.15;color:#0f172a;">${escapeHtml(sub.name)} in UAE</h1>
-              ${subBody.map((paragraph) => `<p style="font-size:17px;line-height:1.85;color:#475569;max-width:900px;">${escapeHtml(paragraph)}</p>`).join("")}
+              ${textParagraphs(subBody)}
               <h2 style="margin-top:28px;font-size:28px;color:#0f172a;">Products in this subcategory</h2>
               <ul style="padding-left:20px;line-height:2;">
                 ${subProducts
@@ -296,11 +483,14 @@ async function main() {
                   .map((product) => `<li><a href="${buildProductPath(product)}">${escapeHtml(product.title)}</a></li>`)
                   .join("")}
               </ul>
+              <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.</p>
             </main>`,
         })
       );
     }
   }
+
+  const productRedirects = new Set<string>();
 
   for (const product of liveProducts) {
     const canonicalPath = buildProductPath(product);
@@ -314,15 +504,18 @@ async function main() {
       })
       .slice(0, 8);
 
+    const productJsonLd = buildProductSchema(product, canonicalPath);
+    const breadcrumbJsonLd = buildProductBreadcrumbSchema(product, canonicalPath);
+
     await writeRouteFile(
       canonicalPath,
       htmlDocument(template, {
         title: meta.metaTitle,
-        description: meta.metaDescription,
+        description: stableProductDescription(product),
         keywords: meta.metaKeywords,
         canonicalUrl: buildAbsoluteUrl(canonicalPath),
         ogImage: product.image,
-        jsonLd: buildProductSchema(product, canonicalPath),
+        jsonLd: [productJsonLd, breadcrumbJsonLd],
         routeData: {
           kind: "product",
           path: canonicalPath,
@@ -335,7 +528,7 @@ async function main() {
               <p style="font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#64748b;">UAE Trusted Marketplace</p>
               <h1 style="font-size:38px;line-height:1.18;color:#0f172a;margin:12px 0;">${escapeHtml(product.title)}</h1>
               <p style="font-size:18px;line-height:1.8;color:#475569;max-width:860px;">${escapeHtml(buildProductSeoNarrative(product))}</p>
-              <p style="margin-top:20px;font-size:16px;color:#334155;"><strong>Price:</strong> AED ${Number(product.price || 0).toFixed(2)} | <strong>Seller:</strong> ${escapeHtml(product.sellerName)} | <strong>Status:</strong> ${Number(product.stock || 0) > 0 ? "In stock" : "Out of stock"}</p>
+              <p style="margin-top:20px;font-size:16px;color:#334155;"><strong>Price:</strong> AED ${Number(product.price || 0).toFixed(2)} | <strong>Seller:</strong> ${escapeHtml(product.sellerName)} | <strong>Status:</strong> ${product.stock > 0 ? "In stock" : "Out of stock"}</p>
               <div style="margin-top:24px;display:grid;gap:24px;grid-template-columns:2fr 1fr;">
                 <div>
                   <h2 style="font-size:28px;color:#0f172a;">Product overview</h2>
@@ -344,6 +537,7 @@ async function main() {
                   <ul style="padding-left:20px;line-height:2;">
                     ${relatedProducts.map((item) => `<li><a href="${buildProductPath(item)}">${escapeHtml(item.title)}</a></li>`).join("")}
                   </ul>
+                  <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Continue browsing through <a href="/">homepage</a>, <a href="${getCategoryPath(product.specs?.parentCategorySlug || product.specs?.categorySlug || product.category, product.specs?.subcategorySlug || product.specs?.templateId || undefined)}">matching categories</a>, <a href="/blog">the ExShopi blog</a>, or <a href="/electronics-online-uae">landing pages</a>.</p>
                 </div>
                 <aside>
                   <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.title)}" style="max-width:100%;height:auto;border-radius:20px;background:#fff;" />
@@ -354,6 +548,10 @@ async function main() {
           </main>`,
       })
     );
+
+    for (const redirect of productAliasRedirects(product)) {
+      productRedirects.add(redirect);
+    }
   }
 
   const blogIndexHtml = htmlDocument(template, {
@@ -370,6 +568,7 @@ async function main() {
         <ul style="padding-left:20px;line-height:2;margin-top:24px;">
           ${BLOG_POSTS.map((post) => `<li><a href="/blog/${post.slug}">${escapeHtml(post.title)}</a></li>`).join("")}
         </ul>
+        <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Use the blog alongside <a href="/">homepage</a>, <a href="/category/electronics/laptops">laptop categories</a>, and <a href="/refurbished-laptops-uae">landing pages</a> to navigate the marketplace.</p>
       </main>`,
   });
   await writeRouteFile("/blog", blogIndexHtml);
@@ -389,6 +588,13 @@ async function main() {
             <article>
               <h1 style="font-size:40px;line-height:1.15;color:#0f172a;">${escapeHtml(post.title)}</h1>
               ${post.content.map((paragraph) => `<p style="font-size:17px;line-height:1.85;color:#475569;max-width:860px;">${escapeHtml(paragraph)}</p>`).join("")}
+              <h2 style="margin-top:28px;font-size:28px;color:#0f172a;">Continue browsing</h2>
+              <ul style="padding-left:20px;line-height:2;">
+                <li><a href="/">Homepage</a></li>
+                <li><a href="/blog">Blog index</a></li>
+                <li><a href="/category/electronics/laptops">Laptop category</a></li>
+                <li><a href="/cheap-macbook-dubai">Cheap MacBook Dubai</a></li>
+              </ul>
             </article>
           </main>`,
       })
@@ -419,6 +625,7 @@ async function main() {
               )
               .join("")}
             <ul style="margin-top:24px;padding-left:20px;line-height:1.9;color:#334155;">${renderTrustSignals()}</ul>
+            <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Continue to <a href="/">homepage</a>, <a href="/products">all products</a>, <a href="/blog">buyer guides</a>, and <a href="${getCategoryPath(landingPage.primaryCategorySlug, landingPage.primarySubcategorySlug)}">matching category pages</a>.</p>
           </main>`,
       })
     );
@@ -452,6 +659,7 @@ ${Array.from(sitemapUrls)
 </urlset>`;
 
   await fs.writeFile(path.join(DIST_DIR, "sitemap.xml"), sitemap, "utf8");
+  await writeSupportFiles({ homeHtml, productRedirects: Array.from(productRedirects) });
 }
 
 void main().catch((error) => {

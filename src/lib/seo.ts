@@ -324,6 +324,47 @@ export function buildProductSchema(product: any, pathname?: string) {
   };
 }
 
+export function buildProductBreadcrumbSchema(product: any, pathname?: string) {
+  const parentName =
+    product?.specs?.parentCategoryName ||
+    product?.specs?.categoryName ||
+    product?.category ||
+    "Products";
+  const parentSlug =
+    product?.specs?.parentCategorySlug ||
+    product?.specs?.categorySlug ||
+    product?.category ||
+    "products";
+  const subcategoryName =
+    product?.specs?.subcategoryName ||
+    product?.specs?.templateName ||
+    product?.specs?.subcategorySlug ||
+    "";
+  const subcategorySlug =
+    product?.specs?.subcategorySlug ||
+    product?.specs?.templateId ||
+    "";
+
+  const items = [
+    { name: "Home", url: buildAbsoluteUrl("/") },
+    { name: String(parentName), url: buildAbsoluteUrl(getCategoryPath(parentSlug)) },
+  ];
+
+  if (subcategoryName && subcategorySlug) {
+    items.push({
+      name: String(subcategoryName),
+      url: buildAbsoluteUrl(getCategoryPath(parentSlug, subcategorySlug)),
+    });
+  }
+
+  items.push({
+    name: String(product?.title || "Marketplace Product"),
+    url: buildAbsoluteUrl(pathname || buildProductPath(product)),
+  });
+
+  return buildBreadcrumbSchema(items);
+}
+
 export function getDefaultPageTitle(pathname: string) {
   const normalized = String(pathname || "/").toLowerCase();
   if (normalized === "/") return generateHomepageSeo().metaTitle;

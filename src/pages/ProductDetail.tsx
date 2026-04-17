@@ -33,7 +33,7 @@ import {
   getSpecificationTemplate,
   humanizeSpecificationValue,
 } from "../lib/productSpecifications";
-import { buildProductPath, buildAbsoluteUrl } from "../lib/seo";
+import { buildProductPath, buildAbsoluteUrl, buildProductBreadcrumbSchema } from "../lib/seo";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
 import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
@@ -545,18 +545,21 @@ const finalCanonical =
     : buildAbsoluteUrl(canonicalProductPath);
 
 const productSchema = product
-  ? buildProductJsonLd({
-      title: product.title,
-      shortDescription: productSpecs?.shortDescription,
-      description: product.description,
-      slug: product.slug,
-      canonicalUrl: finalCanonical,
-      image: product.image,
-      price: product.price,
-      stock: product.stock,
-      sku: product.sku,
-      brand: product.brand,
-    })
+  ? [
+      buildProductJsonLd({
+        title: product.title,
+        shortDescription: productSpecs?.shortDescription,
+        description: product.description,
+        slug: product.slug,
+        canonicalUrl: finalCanonical,
+        image: product.image,
+        price: product.price,
+        stock: product.stock,
+        sku: product.sku,
+        brand: product.brand,
+      }),
+      buildProductBreadcrumbSchema(product, canonicalProductPath),
+    ]
   : null;
     
   const baseSpecifications = productSpecs?.specifications || product?.specifications || {};

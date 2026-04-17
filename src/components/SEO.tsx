@@ -53,7 +53,13 @@ export default function SEO({
       create: () => HTMLElement,
       apply: (element: HTMLElement) => void
     ) => {
-      let element = document.head.querySelector(selector) as HTMLElement | null;
+      const matches = Array.from(document.head.querySelectorAll(selector)) as HTMLElement[];
+      const [first, ...rest] = matches;
+      for (const duplicate of rest) {
+        duplicate.remove();
+      }
+
+      let element = first || null;
       if (!element) {
         element = create();
         element.setAttribute("data-exshopi-seo", "true");
