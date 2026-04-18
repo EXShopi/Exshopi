@@ -1395,8 +1395,8 @@ const structuredTemplate = getSpecificationTemplate(
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1800px] px-4 py-8 md:px-6">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <div className="mx-auto max-w-[1800px] px-4 py-7 md:px-6 md:py-8">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-5">
           <div className="xl:col-span-5">
             <div className="sticky top-[150px] overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
               <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)]">
@@ -1432,8 +1432,8 @@ const structuredTemplate = getSpecificationTemplate(
           </div>
 
           <div className="xl:col-span-4">
-            <div className="space-y-5">
-              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+            <div className="space-y-4">
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Sold by</p>
@@ -1446,7 +1446,7 @@ const structuredTemplate = getSpecificationTemplate(
                   </Link>
                 </div>
 
-                <div className="max-w-[26ch]">
+                <div className="max-w-[28ch]">
                   <h1 className="text-[1.14rem] font-semibold leading-[1.22] tracking-[-0.014em] text-slate-950 md:text-[1.45rem] lg:text-[1.62rem]">
                     {product.title}
                   </h1>
@@ -1483,7 +1483,7 @@ const structuredTemplate = getSpecificationTemplate(
                   </button>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
                   {(product.badges || []).map((badge: string, idx: number) => (
                     <span key={`${badge}-${idx}`} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
                       {badge}
@@ -1492,8 +1492,8 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-blue-100/90 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
-                <div className="mb-5 border-b border-blue-100 pb-5">
+              <div className="rounded-[28px] border border-blue-100/90 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+                <div className="mb-4 border-b border-blue-100 pb-4">
                   <div className="flex flex-wrap items-end gap-3">
                     <span className="text-5xl font-black tracking-tight text-slate-950">{formatAEDPlain(displayPrice)}</span>
                     {displayOriginalPrice > displayPrice && (
@@ -1508,7 +1508,7 @@ const structuredTemplate = getSpecificationTemplate(
                   <p className="mt-2 text-sm font-medium text-slate-600">Inclusive of VAT, fees, and marketplace protection</p>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {productHighlights.map((highlight, idx) => (
                     <div key={idx} className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white">
@@ -1520,14 +1520,14 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
-                <div className="space-y-5">
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+                <div className="space-y-4.5">
                   {colorOptions.length > 0 && (
                   <div>
-                    <p className="mb-3 font-semibold text-slate-900">
+                    <p className="mb-2.5 font-semibold text-slate-900">
                       Color: {selectedColorLabel || "Default"}
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2.5">
                       {colorOptions.map((color) => {
                         const isSelected = normalizeVariantValue(color.label) === selectedColor;
                         const isAvailable = isOptionAvailable("color", color.label);
@@ -1554,7 +1554,7 @@ const structuredTemplate = getSpecificationTemplate(
 
                   {storageOptions.length > 0 && (
                   <div>
-                    <p className="mb-3 font-semibold text-slate-900">Storage</p>
+                    <p className="mb-2.5 font-semibold text-slate-900">Storage</p>
                     <div className="flex flex-wrap gap-2">
                       {storageOptions.map((size) => {
                         const isSelected = normalizeVariantValue(size) === selectedStorage;
@@ -1582,7 +1582,7 @@ const structuredTemplate = getSpecificationTemplate(
 
                   {sizeOptions.length > 0 && (
                   <div>
-                    <p className="mb-3 font-semibold text-slate-900">Size</p>
+                    <p className="mb-2.5 font-semibold text-slate-900">Size</p>
                     <div className="flex flex-wrap gap-2">
                       {sizeOptions.map((size) => {
                         const isSelected = normalizeVariantValue(size) === selectedSize;
@@ -1610,7 +1610,7 @@ const structuredTemplate = getSpecificationTemplate(
 
                   {ramOptions.length > 0 && (
                     <div>
-                      <p className="mb-3 font-semibold text-slate-900">RAM</p>
+                      <p className="mb-2.5 font-semibold text-slate-900">RAM</p>
                       <div className="flex flex-wrap gap-2">
                         {ramOptions.map((size) => {
                           const isSelected = normalizeVariantValue(size) === selectedRam;
@@ -1638,7 +1638,7 @@ const structuredTemplate = getSpecificationTemplate(
 
                   {processorOptions.length > 0 && (
                     <div>
-                      <p className="mb-3 font-semibold text-slate-900">Processor</p>
+                      <p className="mb-2.5 font-semibold text-slate-900">Processor</p>
                       <div className="flex flex-wrap gap-2">
                         {processorOptions.map((processor) => {
                           const isSelected = normalizeVariantValue(processor) === selectedProcessor;
@@ -1666,12 +1666,12 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">UAE Trusted Marketplace</p>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   {buildProductSeoNarrative(product)}
                 </p>
-                <div className="mt-5 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
                   {UAE_TRUST_SIGNALS.map((signal) => (
                     <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
                       {signal}
@@ -1680,8 +1680,8 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
-                <div className="space-y-4">
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+                <div className="space-y-3.5">
                   <div className="flex items-start gap-3">
                     <Truck className="mt-0.5 h-5 w-5 text-blue-600" />
                     <div>
@@ -1689,14 +1689,14 @@ const structuredTemplate = getSpecificationTemplate(
                       <p className="text-sm text-slate-600">Wed, 31 Mar - Next day guaranteed</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 border-t border-slate-200 pt-4">
+                  <div className="flex items-start gap-3 border-t border-slate-200 pt-3.5">
                     <RotateCcw className="mt-0.5 h-5 w-5 text-blue-600" />
                     <div>
                       <p className="font-semibold text-slate-900">Easy Returns</p>
                       <p className="text-sm text-slate-600">7 days return policy</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 border-t border-slate-200 pt-4">
+                  <div className="flex items-start gap-3 border-t border-slate-200 pt-3.5">
                     <Shield className="mt-0.5 h-5 w-5 text-blue-600" />
                     <div>
                       <p className="font-semibold text-slate-900">Warranty</p>
@@ -1813,7 +1813,7 @@ const structuredTemplate = getSpecificationTemplate(
           </div>
         </div>
 
-        <div className="mt-10 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
+        <div className="mt-8 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
           <div className="flex overflow-x-auto border-b border-slate-200 bg-white">
             {(["overview", "specifications", "reviews", "delivery", "seller"] as const).map((tab) => (
               <button
@@ -1830,14 +1830,14 @@ const structuredTemplate = getSpecificationTemplate(
             ))}
           </div>
 
-          <div className="p-6 md:p-8">
+          <div className="p-5 md:p-6">
             {activeTab === "overview" && (
-              <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fbff)] p-6">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Product Overview</p>
-                  <div className="space-y-4">
+              <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
+                <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fbff)] p-5">
+                  <p className="mb-2.5 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Product Overview</p>
+                  <div className="space-y-3">
                     {overviewVisibleParagraphs.map((paragraph, index) => (
-                      <p key={`${index}-${paragraph.slice(0, 12)}`} className="text-[15px] leading-8 text-slate-700">
+                      <p key={`${index}-${paragraph.slice(0, 12)}`} className="text-[15px] leading-7 text-slate-700">
                         {paragraph}
                       </p>
                     ))}
@@ -1846,8 +1846,8 @@ const structuredTemplate = getSpecificationTemplate(
                     <button
                       type="button"
                       onClick={() => setOverviewExpanded((current) => !current)}
-                      className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-                    >
+                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                  >
                       {overviewExpanded ? (
                         <>
                           See less <ChevronUp className="h-4 w-4" />
@@ -1860,9 +1860,9 @@ const structuredTemplate = getSpecificationTemplate(
                     </button>
                   )}
                 </div>
-                <div className="rounded-[28px] border border-blue-100 bg-[linear-gradient(180deg,rgba(239,246,255,0.95),rgba(247,250,255,1))] p-6">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Top Highlights</p>
-                  <div className="space-y-3">
+                <div className="rounded-[28px] border border-blue-100 bg-[linear-gradient(180deg,rgba(239,246,255,0.95),rgba(247,250,255,1))] p-5">
+                  <p className="mb-2.5 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Top Highlights</p>
+                  <div className="space-y-2.5">
                     {overviewBullets.map((highlight, idx) => (
                       <div key={idx} className="flex items-start gap-3">
                         <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white">

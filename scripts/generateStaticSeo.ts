@@ -153,8 +153,18 @@ function htmlDocument(template: string, input: {
 
   let html = buildHeadMeta(template, input);
   html = html.replace(
+    "</head>",
+    `  <style>
+    html.exshopi-prerender-loading [data-prerender-human-hidden="true"] { display: none !important; }
+    html.exshopi-prerender-loading [data-prerender-human-shell="true"] { display: block !important; }
+    [data-prerender-human-shell="true"] { display: none; }
+  </style>
+</head>`
+  );
+  html = html.replace(
     /<body[^>]*>[\s\S]*<\/body>/i,
     `<body>
+  <script>document.documentElement.classList.add('exshopi-prerender-loading');</script>
   <div id="root">${input.snapshotHtml}</div>
   <script>window.__EXSHOPI_ROUTE_DATA__=${JSON.stringify(input.routeData || null)};</script>
   ${bodyScripts.join("\n  ")}
@@ -331,13 +341,30 @@ async function main() {
     routeData: { kind: "home", path: "/" },
     snapshotHtml: `
       <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
-        <section>
+        <section data-prerender-human-shell="true" style="padding:28px 0 12px;">
+          <div style="display:grid;gap:20px;grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr);align-items:start;">
+            <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:linear-gradient(180deg,#ffffff,#f8fbff);padding:28px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+              <div style="width:122px;height:12px;border-radius:999px;background:#dbeafe;"></div>
+              <div style="margin-top:16px;width:72%;height:42px;border-radius:18px;background:#e2e8f0;"></div>
+              <div style="margin-top:14px;width:95%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+              <div style="margin-top:10px;width:88%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+              <div style="margin-top:10px;width:68%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+            </div>
+            <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#ffffff;padding:28px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+              <div style="width:100%;height:18px;border-radius:999px;background:#e2e8f0;"></div>
+              <div style="margin-top:18px;width:100%;height:18px;border-radius:999px;background:#e2e8f0;"></div>
+              <div style="margin-top:18px;width:82%;height:18px;border-radius:999px;background:#e2e8f0;"></div>
+              <div style="margin-top:28px;width:100%;height:52px;border-radius:999px;background:#dbeafe;"></div>
+            </div>
+          </div>
+        </section>
+        <section data-prerender-human-hidden="true">
           <p style="font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#64748b;">UAE Trusted Marketplace</p>
           <h1 style="font-size:44px;line-height:1.1;margin:12px 0 16px;color:#0f172a;">ExShopi UAE Online Shopping Marketplace</h1>
           <p style="font-size:18px;line-height:1.8;color:#475569;max-width:760px;">Shop electronics, mobiles, refurbished laptops, and marketplace deals in the UAE with structured product pages, verified seller signals, cash on delivery support, and better internal navigation for search engines and shoppers.</p>
           <ul style="margin:24px 0 0;padding-left:20px;color:#334155;line-height:1.9;">${renderTrustSignals()}</ul>
         </section>
-        <section style="margin-top:36px;">
+        <section data-prerender-human-hidden="true" style="margin-top:36px;">
           <h2 style="font-size:28px;color:#0f172a;">Popular routes</h2>
           <ul style="padding-left:20px;line-height:2;">
             <li><a href="/category/electronics">Electronics category</a></li>
@@ -347,7 +374,7 @@ async function main() {
             <li><a href="/blog">ExShopi blog</a></li>
           </ul>
         </section>
-        <section style="margin-top:36px;">
+        <section data-prerender-human-hidden="true" style="margin-top:36px;">
           <h2 style="font-size:28px;color:#0f172a;">Featured product routes</h2>
           <ul style="padding-left:20px;line-height:2;">
             ${liveProducts
@@ -506,6 +533,21 @@ async function main() {
         },
         snapshotHtml: `
           <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
+            <section data-prerender-human-shell="true" style="display:grid;gap:22px;grid-template-columns:minmax(0,1fr) 340px;align-items:start;">
+              <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#ffffff;padding:28px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+                <div style="width:140px;height:12px;border-radius:999px;background:#dbeafe;"></div>
+                <div style="margin-top:16px;width:65%;height:40px;border-radius:18px;background:#e2e8f0;"></div>
+                <div style="margin-top:14px;width:100%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+                <div style="margin-top:10px;width:92%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+                <div style="margin-top:10px;width:75%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+              </div>
+              <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#ffffff;padding:24px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+                <div style="aspect-ratio:1 / 1;border-radius:24px;background:linear-gradient(180deg,#eff6ff,#f8fafc);"></div>
+                <div style="margin-top:20px;width:100%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+                <div style="margin-top:10px;width:84%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+              </div>
+            </section>
+            <section data-prerender-human-hidden="true">
             <article>
               <p style="font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#64748b;">UAE Trusted Marketplace</p>
               <h1 style="font-size:38px;line-height:1.18;color:#0f172a;margin:12px 0;">${escapeHtml(product.title)}</h1>
@@ -527,6 +569,7 @@ async function main() {
                 </aside>
               </div>
             </article>
+            </section>
           </main>`,
       })
     );

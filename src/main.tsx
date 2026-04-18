@@ -112,13 +112,20 @@ if (typeof window !== 'undefined') {
 const root = document.getElementById("root");
 
 if (root) {
-  ReactDOM.createRoot(root).render(
+  const renderApp = () => (
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
   );
-  // Remove the initial loading placeholder immediately after mount
+
+  if (root.hasChildNodes()) {
+    ReactDOM.hydrateRoot(root, renderApp());
+  } else {
+    ReactDOM.createRoot(root).render(renderApp());
+  }
+
   try {
+    document.documentElement.classList.remove('exshopi-prerender-loading');
     const loading = document.getElementById('loading');
     if (loading && loading.parentElement) loading.remove();
   } catch (err) {
