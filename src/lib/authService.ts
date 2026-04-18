@@ -51,15 +51,19 @@ type PublicUserRow = {
 type BackendSessionResponse = {
   user?: {
     id?: string;
+    uid?: string;
     email?: string;
     name?: string;
     fullName?: string;
+    full_name?: string;
     displayName?: string;
+    display_name?: string;
     phone?: string | null;
     country?: string | null;
     role?: string;
     status?: string;
     sellerApplicationStatus?: string | null;
+    seller_application_status?: string | null;
   } | null;
   role?: string;
   accessToken?: string | null;
@@ -124,23 +128,35 @@ function buildProfileFromAuthUser(authUser: {
 }
 
 function mapBackendSessionToAuthResult(session: BackendSessionResponse): AuthResponse | null {
-  if (!session?.user?.id) return null;
+  const user = session?.user;
+  const userId = user?.id || user?.uid || '';
+  if (!userId) return null;
 
-  const user = session.user;
+  const displayName =
+    user?.displayName ||
+    user?.display_name ||
+    user?.name ||
+    user?.fullName ||
+    user?.full_name ||
+    user?.email ||
+    'User';
 
   return {
     user: {
-      id: user.id,
+      id: userId,
       email: user.email || '',
-      displayName: user.displayName || user.name || user.fullName || user.email || 'User',
-      name: user.name || user.fullName || user.displayName || '',
-      fullName: user.fullName || user.name || user.displayName || '',
+      displayName,
+      name: user.name || user.fullName || user.full_name || user.displayName || user.display_name || '',
+      fullName: user.fullName || user.full_name || user.name || user.displayName || user.display_name || '',
       phone: user.phone || '',
       country: user.country || 'AE',
       role: session.role || user.role || 'customer',
       status: user.status || 'active',
       sellerApplicationStatus:
-        user.sellerApplicationStatus || session.sellerApplication?.status || null,
+        user.sellerApplicationStatus ||
+        user.seller_application_status ||
+        session.sellerApplication?.status ||
+        null,
     },
     role: session.role || user.role || 'customer',
     accessToken: session.accessToken || null,
@@ -229,9 +245,15 @@ export class AuthService {
       const requireBackendSession = Boolean(options?.requireBackendSession);
 
       try {
-        const backendSession = mapBackendSessionToAuthResult(
-          await userAPI.login(normalizedEmail, password)
-        );
+        const backendLoginResponse = await userAPI.login(normalizedEmail, password);
+        let backendSession = mapBackendSessionToAuthResult(backendLoginResponse);
+
+        // Some live backends return a thinner login payload than the session endpoint.
+        // After a successful login we already have the access token, so restore the
+        // canonical session shape before declaring the admin login invalid.
+        if (!backendSession && backendLoginResponse?.accessToken) {
+          backendSession = mapBackendSessionToAuthResult(await userAPI.getSession());
+        }
 
         if (backendSession) {
           useAuthStore.getState().setAccessToken(backendSession.accessToken || null);

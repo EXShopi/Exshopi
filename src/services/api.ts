@@ -5,6 +5,12 @@ import { productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } 
 const DEFAULT_PROD_API_BASE = 'https://exshopi-api.onrender.com/api';
 const DEFAULT_DEV_API_BASE = 'http://localhost:3001/api';
 const IS_DEV = import.meta.env.DEV;
+const KNOWN_FRONTEND_HOSTS = new Set([
+  'exshopi.com',
+  'www.exshopi.com',
+  'exshopi.onrender.com',
+  'exshopi-frontend.onrender.com',
+]);
 
 function logDev(level: 'info' | 'warn' | 'debug', message: string, ...args: any[]) {
   if (!IS_DEV) return;
@@ -42,15 +48,67 @@ export function getAuthHeaders() {
   };
 }
 
-const configuredApiBase =
-  String(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || '').trim();
+function normalizeApiBaseCandidate(value: string): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const url = new URL(raw);
+    const normalizedPath = url.pathname.replace(/\/+$/, '');
+    url.pathname = normalizedPath.endsWith('/api')
+      ? normalizedPath
+      : `${normalizedPath || ''}/api`;
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return raw.replace(/\/+$/, '');
+  }
+}
+
+function isFrontendLikeApiBase(value: string): boolean {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+
+    if (host === 'exshopi-api.onrender.com') return false;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return import.meta.env.PROD;
+    }
+
+    if (KNOWN_FRONTEND_HOSTS.has(host)) {
+      return true;
+    }
+
+    if (typeof window !== 'undefined' && url.origin === window.location.origin) {
+      return import.meta.env.PROD;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+const rawConfiguredApiBase = String(
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || ''
+).trim();
+
+const normalizedConfiguredApiBase = normalizeApiBaseCandidate(rawConfiguredApiBase);
 
 export const API_BASE =
-  configuredApiBase ||
-  (import.meta.env.PROD ? DEFAULT_PROD_API_BASE : DEFAULT_DEV_API_BASE);
+  normalizedConfiguredApiBase && !isFrontendLikeApiBase(normalizedConfiguredApiBase)
+    ? normalizedConfiguredApiBase
+    : import.meta.env.PROD
+      ? DEFAULT_PROD_API_BASE
+      : DEFAULT_DEV_API_BASE;
 
 // Only treat as an explicit API base when an env var was provided
-export const hasExplicitApiBase = Boolean(configuredApiBase);
+export const hasExplicitApiBase = Boolean(
+  normalizedConfiguredApiBase && !isFrontendLikeApiBase(normalizedConfiguredApiBase)
+);
 
 function isLocalDevRuntime() {
   return import.meta.env.DEV;
