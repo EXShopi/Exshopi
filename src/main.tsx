@@ -118,11 +118,7 @@ if (root) {
     </ErrorBoundary>
   );
 
-  if (root.hasChildNodes()) {
-    ReactDOM.hydrateRoot(root, renderApp());
-  } else {
-    ReactDOM.createRoot(root).render(renderApp());
-  }
+  ReactDOM.createRoot(root).render(renderApp());
 
   try {
     document.documentElement.classList.remove('exshopi-prerender-loading');

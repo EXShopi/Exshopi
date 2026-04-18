@@ -195,6 +195,51 @@ function textParagraphs(paragraphs: string[]) {
     .join("");
 }
 
+function renderCategorySnapshot(input: {
+  heading: string;
+  body: string[];
+  products: PrerenderedProduct[];
+  continueText: string;
+}) {
+  return `
+    <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
+      <section data-prerender-human-shell="true" style="display:grid;gap:20px;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);align-items:start;">
+        <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#ffffff;padding:28px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+          <div style="width:132px;height:12px;border-radius:999px;background:#dbeafe;"></div>
+          <div style="margin-top:16px;width:58%;height:40px;border-radius:18px;background:#e2e8f0;"></div>
+          <div style="margin-top:14px;width:100%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+          <div style="margin-top:10px;width:93%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+          <div style="margin-top:10px;width:78%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+        </div>
+        <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#ffffff;padding:24px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+          <div style="width:72%;height:18px;border-radius:999px;background:#e2e8f0;"></div>
+          <div style="margin-top:16px;width:100%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+          <div style="margin-top:10px;width:94%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+          <div style="margin-top:20px;display:grid;gap:12px;">
+            ${Array.from({ length: 4 })
+              .map(
+                () =>
+                  `<div style="height:76px;border-radius:22px;border:1px solid rgba(226,232,240,.9);background:linear-gradient(180deg,#ffffff,#f8fafc);"></div>`
+              )
+              .join("")}
+          </div>
+        </div>
+      </section>
+      <section data-prerender-human-hidden="true">
+        <h1 style="font-size:40px;line-height:1.15;color:#0f172a;">${escapeHtml(input.heading)}</h1>
+        ${textParagraphs(input.body)}
+        <h2 style="margin-top:28px;font-size:28px;color:#0f172a;">Related products</h2>
+        <ul style="padding-left:20px;line-height:2;">
+          ${input.products
+            .slice(0, 10)
+            .map((product) => `<li><a href="${buildProductPath(product)}">${escapeHtml(product.title)}</a></li>`)
+            .join("")}
+        </ul>
+        <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">${input.continueText}</p>
+      </section>
+    </main>`;
+}
+
 function productAliasRedirects(product: PrerenderedProduct) {
   const canonicalPath = buildProductPath(product);
   const aliases = new Set<string>(getProductRouteAliases(product));
@@ -437,21 +482,42 @@ async function main() {
           products: categoryProducts,
           categories,
         },
-        snapshotHtml: `
-          <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
-            <h1 style="font-size:40px;line-height:1.15;color:#0f172a;">${escapeHtml(category.name)} in UAE</h1>
-            ${textParagraphs(categoryBody)}
-            <h2 style="margin-top:28px;font-size:28px;color:#0f172a;">Related products</h2>
-            <ul style="padding-left:20px;line-height:2;">
-              ${categoryProducts
-                .slice(0, 10)
-                .map((product) => `<li><a href="${buildProductPath(product)}">${escapeHtml(product.title)}</a></li>`)
-                .join("")}
-            </ul>
-            <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.</p>
-          </main>`,
+        snapshotHtml: renderCategorySnapshot({
+          heading: `${category.name} in UAE`,
+          body: categoryBody,
+          products: categoryProducts,
+          continueText:
+            'Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.',
+        }),
       })
     );
+
+    if (category.slug === "electronics") {
+      await writeRouteFile(
+        "/electronics",
+        htmlDocument(template, {
+          title: categorySeo.metaTitle,
+          description: buildCategorySeoDescription(category.name),
+          keywords: categorySeo.metaKeywords,
+          canonicalUrl: buildAbsoluteUrl(categoryPath),
+          ogImage: "/logo.png",
+          routeData: {
+            kind: "category",
+            path: "/electronics",
+            category: { slug: category.slug, name: category.name },
+            products: categoryProducts,
+            categories,
+          },
+          snapshotHtml: renderCategorySnapshot({
+            heading: `${category.name} in UAE`,
+            body: categoryBody,
+            products: categoryProducts,
+            continueText:
+              'Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.',
+          }),
+        })
+      );
+    }
 
     for (const sub of category.subcategories || []) {
       const subProducts = liveProducts.filter((product) =>
@@ -481,21 +547,41 @@ async function main() {
             products: subProducts,
             categories,
           },
-          snapshotHtml: `
-            <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
-              <h1 style="font-size:40px;line-height:1.15;color:#0f172a;">${escapeHtml(sub.name)} in UAE</h1>
-              ${textParagraphs(subBody)}
-              <h2 style="margin-top:28px;font-size:28px;color:#0f172a;">Products in this subcategory</h2>
-              <ul style="padding-left:20px;line-height:2;">
-                ${subProducts
-                  .slice(0, 10)
-                  .map((product) => `<li><a href="${buildProductPath(product)}">${escapeHtml(product.title)}</a></li>`)
-                  .join("")}
-              </ul>
-              <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.</p>
-            </main>`,
+          snapshotHtml: renderCategorySnapshot({
+            heading: `${sub.name} in UAE`,
+            body: subBody,
+            products: subProducts,
+            continueText: `Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.`,
+          }),
         })
       );
+
+      if (category.slug === "electronics") {
+        const aliasPath = `/electronics/${sub.slug}`;
+        await writeRouteFile(
+          aliasPath,
+          htmlDocument(template, {
+            title: subSeo.metaTitle,
+            description: buildCategorySeoDescription(sub.name),
+            keywords: subSeo.metaKeywords,
+            canonicalUrl: buildAbsoluteUrl(routePath),
+            ogImage: "/logo.png",
+            routeData: {
+              kind: "category",
+              path: aliasPath,
+              category: { slug: category.slug, subcategorySlug: sub.slug, name: sub.name },
+              products: subProducts,
+              categories,
+            },
+            snapshotHtml: renderCategorySnapshot({
+              heading: `${sub.name} in UAE`,
+              body: subBody,
+              products: subProducts,
+              continueText: `Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.`,
+            }),
+          })
+        );
+      }
     }
   }
 

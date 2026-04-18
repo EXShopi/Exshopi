@@ -270,7 +270,6 @@ function AppContent() {
             <Route path="/laptops" element={<Navigate to="/category/electronics/laptops" replace />} />
             <Route path="/computers" element={<Navigate to="/category/electronics/computers" replace />} />
             <Route path="/pc" element={<Navigate to="/category/electronics/pc" replace />} />
-            <Route path="/electronics" element={<Navigate to="/category/electronics" replace />} />
             <Route path="/tablets" element={<Navigate to="/category/tablets" replace />} />
             <Route path="/accessories" element={<Navigate to="/category/accessories" replace />} />
             <Route path="/gaming" element={<Navigate to="/category/gaming" replace />} />

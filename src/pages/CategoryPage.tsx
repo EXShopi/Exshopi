@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArrowRight, Layers3, SlidersHorizontal } from "lucide-react";
 import ProductCard from "../components/ProductCard";
 import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
@@ -154,10 +154,6 @@ export default function CategoryPage() {
       routeInfo,
     });
   }, [category, subcategory, routeInfo]);
-
-  if (routeInfo && (category !== routeInfo.canonicalCategorySlug || (subcategory || "") !== (routeInfo.canonicalSubcategorySlug || ""))) {
-    return <Navigate to={routeInfo.canonicalPath} replace />;
-  }
 
   useEffect(() => {
     if (!snapshotCategoryProducts.length) return;
