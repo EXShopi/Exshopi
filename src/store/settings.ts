@@ -9,7 +9,11 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>((set) => ({
   settings: defaultSettings,
   fetchSettings: async () => {
-    const settings = await getSiteSettings();
-    set({ settings });
+    try {
+      const settings = await getSiteSettings();
+      set({ settings });
+    } catch {
+      set({ settings: defaultSettings });
+    }
   },
 }));

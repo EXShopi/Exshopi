@@ -23,13 +23,42 @@ export function AdminSettings() {
 
   useEffect(() => {
     const fetchSettings = async () => {
+      setIsLoading(true);
+      setMessage(null);
       try {
-        const data = await getSiteSettings();
-        setSettings(data);
-        const marketplace = await adminOpsAPI.getMarketplaceSettings();
-        setMarketplaceSettings(marketplace);
+        const [siteResult, marketplaceResult] = await Promise.allSettled([
+          getSiteSettings(),
+          adminOpsAPI.getMarketplaceSettings(),
+        ]);
+
+        if (siteResult.status === 'fulfilled') {
+          setSettings(siteResult.value);
+        } else {
+          console.error('Error loading site settings:', siteResult.reason);
+          setSettings(defaultSettings);
+        }
+
+        if (marketplaceResult.status === 'fulfilled' && marketplaceResult.value) {
+          setMarketplaceSettings((prev) => ({
+            ...prev,
+            ...marketplaceResult.value,
+            countries: Array.isArray(marketplaceResult.value?.countries)
+              ? marketplaceResult.value.countries
+              : prev.countries,
+          }));
+        } else if (marketplaceResult.status === 'rejected') {
+          console.error('Error loading marketplace settings:', marketplaceResult.reason);
+          setMessage({
+            type: 'error',
+            text: 'Marketplace settings could not be loaded. Default values are shown until the backend responds.',
+          });
+        }
       } catch (error) {
         console.error('Error loading settings:', error);
+        setMessage({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Failed to load settings.',
+        });
       } finally {
         setIsLoading(false);
       }
@@ -80,7 +109,10 @@ export function AdminSettings() {
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error('Error saving settings:', error);
-      setMessage({ type: 'error', text: 'Failed to update settings. Please try again.' });
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to update settings. Please try again.',
+      });
     } finally {
       setIsSaving(false);
     }

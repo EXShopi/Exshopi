@@ -49,7 +49,6 @@ services:
     name: exshopi-frontend
     env: static
     branch: main
+    rootDir: .
     buildCommand: npm ci && npm run build
     publishPath: dist
-    # Optional: set the root dir if your frontend is in a subfolder
-    # rootDir: .
