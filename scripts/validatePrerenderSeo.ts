@@ -156,6 +156,9 @@ async function main() {
       if (/Product Not Found/i.test(html)) {
         issues.push({ file: relative, message: 'Product page contains "Product Not Found"' });
       }
+      if (/Product unavailable/i.test(html) || /We couldn&apos;t load this product right now/i.test(html)) {
+        issues.push({ file: relative, message: 'Product page contains the unavailable fallback copy' });
+      }
       if (/<meta\s+name="robots"\s+content="noindex/i.test(html)) {
         issues.push({ file: relative, message: "Product page contains noindex" });
       }

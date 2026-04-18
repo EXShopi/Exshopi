@@ -151,13 +151,21 @@ export function getProductSeoPayload(input: ProductSeoInput) {
 export function buildProductJsonLd(input: ProductSeoInput) {
   const seo = generateProductSeo(input);
   const stock = Number(input.stock || 0);
+  const normalizedCondition = String(input.condition || "").trim().toLowerCase();
+  const itemCondition =
+    /used|renewed|refurb/i.test(normalizedCondition)
+      ? "https://schema.org/UsedCondition"
+      : "https://schema.org/NewCondition";
+  const images = Array.from(
+    new Set([input.image, ...(Array.isArray(input.images) ? input.images : [])].filter(Boolean))
+  ) as string[];
 
   return {
     "@context": "https://schema.org",
     "@type": "Product",
     name: input.title || "Marketplace Product",
     description: seo.metaDescription,
-    image: input.image ? [input.image] : [],
+    image: images,
     sku: input.sku || undefined,
     brand: input.brand
       ? {
@@ -172,6 +180,13 @@ export function buildProductJsonLd(input: ProductSeoInput) {
       availability:
         stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: seo.canonicalUrl || buildProductPreviewUrl(seo.slug || ""),
+      itemCondition,
+      seller: input.seller
+        ? {
+            "@type": "Organization",
+            name: input.seller,
+          }
+        : undefined,
     },
   };
 }

@@ -38,7 +38,7 @@ import { findProductRouteMatch } from "../lib/productRouteResolution";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
 import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
-import { readRouteSnapshot } from "../lib/routeSnapshot";
+import { readRouteSnapshot, resolveProductSnapshot } from "../lib/routeSnapshot";
 // Local helpers for safe category path and slugification
 function slugifyLocal(value?: string) {
   return String(value || "")
@@ -61,6 +61,23 @@ const productDetailCache = new Map<string, any>();
 
 function normalizeRouteIdentifier(value?: string) {
   return cleanSeoSlug(String(value || ""));
+}
+
+function getLookupErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "Unknown product lookup error");
+}
+
+function isProductLookupAbort(error: unknown) {
+  return /abort/i.test(getLookupErrorMessage(error));
+}
+
+function isProductLookupNotFound(error: unknown) {
+  const message = getLookupErrorMessage(error);
+  return /product not found/i.test(message) || /\b404\b/.test(message);
+}
+
+function isResolvableProductEntity(value: any) {
+  return Boolean(value && !value.error && (value.id || value.slug || value.title));
 }
 
 const productHighlights = [
@@ -473,11 +490,15 @@ export default function ProductDetail() {
   const cacheKey = identifier ? String(identifier) : "";
   const cachedProduct = cacheKey ? productDetailCache.get(cacheKey) : null;
   const routeSnapshot = readRouteSnapshot();
-  const snapshotProduct =
-    routeSnapshot?.kind === "product" &&
-    normalizeRouteIdentifier(routeSnapshot.product?.slug || routeSnapshot.product?.id) === normalizeRouteIdentifier(identifier)
-      ? normalizeMarketplaceProduct(routeSnapshot.product)
-      : null;
+  const snapshotProduct = useMemo(() => {
+    const resolvedProduct = resolveProductSnapshot(routeSnapshot, {
+      identifier,
+      pathname: location.pathname,
+      category: paramCategory,
+      subcategory: paramSubcategory,
+    });
+    return resolvedProduct ? normalizeMarketplaceProduct(resolvedProduct) : null;
+  }, [identifier, location.pathname, paramCategory, paramSubcategory, routeSnapshot]);
   const snapshotRelatedProducts =
     routeSnapshot?.kind === "product" && Array.isArray(routeSnapshot.relatedProducts)
       ? routeSnapshot.relatedProducts.map((item) => normalizeMarketplaceProduct(item))
@@ -501,6 +522,9 @@ export default function ProductDetail() {
   const [allProducts, setAllProducts] = useState<any[]>(() => snapshotRelatedProducts);
   const [loading, setLoading] = useState(() => !(cachedProduct || snapshotProduct));
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(() => Boolean(cachedProduct || snapshotProduct));
+  const [productResolution, setProductResolution] = useState<"loading" | "ready" | "retryable-error" | "missing">(
+    cachedProduct || snapshotProduct ? "ready" : "loading"
+  );
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewRating, setReviewRating] = useState(5);
@@ -517,12 +541,18 @@ export default function ProductDetail() {
   const [contactOpen, setContactOpen] = useState(false);
   const [contactSent, setContactSent] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  const [lookupDiagnostics, setLookupDiagnostics] = useState<{
+    source?: string;
+    reason?: string;
+    retryable?: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!identifier) return;
 
     let active = true;
     const controller = new AbortController();
+    const seededProduct = cachedProduct || snapshotProduct || null;
 
     const fetchProduct = async () => {
       const logRouteMatch = (message: string, extra?: Record<string, unknown>) => {
@@ -535,61 +565,96 @@ export default function ProductDetail() {
         });
       };
 
-      if (cachedProduct || snapshotProduct) {
-        setProduct(cachedProduct || snapshotProduct);
+      if (seededProduct) {
+        setProduct(seededProduct);
         setLoading(false);
         setHasAttemptedLoad(true);
+        setProductResolution("ready");
+        setLookupDiagnostics({
+          source: cachedProduct ? "cache" : "prerender-snapshot",
+        });
         logRouteMatch("resolved from snapshot/cache", {
-          productId: String((cachedProduct || snapshotProduct)?.id || ""),
-          canonicalPath: buildProductPath(cachedProduct || snapshotProduct),
+          productId: String(seededProduct?.id || ""),
+          canonicalPath: buildProductPath(seededProduct),
         });
       } else {
         setProduct(null);
         setLoading(true);
+        setProductResolution("loading");
+        setLookupDiagnostics(null);
       }
 
-      try {
-        const directProduct = await productAPI.get(String(identifier), {
-          signal: controller.signal,
-        });
+      const notFoundErrors: string[] = [];
+      const transientErrors: string[] = [];
 
-        if (!active) return;
+      const noteLookupFailure = (source: string, error: unknown) => {
+        if (isProductLookupAbort(error)) return;
 
-        if (directProduct && !directProduct.error && (directProduct.id || directProduct.slug)) {
-          const normalizedProduct = normalizeMarketplaceProduct(directProduct);
-          productDetailCache.set(cacheKey, normalizedProduct);
-          setProduct(normalizedProduct);
-          setLoading(false);
-          setHasAttemptedLoad(true);
-          logRouteMatch("resolved from direct lookup", {
-            productId: String(normalizedProduct?.id || ""),
-            canonicalPath: buildProductPath(normalizedProduct),
-          });
-          return;
+        const message = getLookupErrorMessage(error);
+        if (isProductLookupNotFound(error)) {
+          notFoundErrors.push(`${source}: ${message}`);
+        } else {
+          transientErrors.push(`${source}: ${message}`);
         }
-        // If direct product lookup failed, try slug-based lookup using route params
-        if ((paramCategory || paramSubcategory) && String(identifier || '').trim()) {
+
+        logRouteMatch("lookup failed", {
+          source,
+          message,
+          notFound: isProductLookupNotFound(error),
+        });
+      };
+
+      const commitResolvedProduct = (resolvedProduct: any, source: string, extra?: Record<string, unknown>) => {
+        const normalizedProduct = normalizeMarketplaceProduct(resolvedProduct);
+        productDetailCache.set(cacheKey, normalizedProduct);
+        setProduct(normalizedProduct);
+        setLoading(false);
+        setHasAttemptedLoad(true);
+        setProductResolution("ready");
+        setLookupDiagnostics({ source });
+        logRouteMatch(`resolved from ${source}`, {
+          productId: String(normalizedProduct?.id || ""),
+          canonicalPath: buildProductPath(normalizedProduct),
+          ...extra,
+        });
+      };
+
+      try {
+        try {
+          const directProduct = await productAPI.get(String(identifier), {
+            signal: controller.signal,
+          });
+
+          if (!active) return;
+
+          if (isResolvableProductEntity(directProduct)) {
+            commitResolvedProduct(directProduct, "direct-lookup");
+            return;
+          }
+        } catch (error) {
+          if (!active || controller.signal.aborted) return;
+          noteLookupFailure("direct-lookup", error);
+        }
+
+        if ((paramCategory || paramSubcategory) && String(identifier || "").trim()) {
           try {
-            const candidates = await productAPI.getBySlug(paramCategory || String(paramCategory || ''), paramSubcategory || String(paramSubcategory || ''));
+            const candidates = await productAPI.getBySlug(
+              paramCategory || String(paramCategory || ""),
+              paramSubcategory || String(paramSubcategory || "")
+            );
             const match = (candidates || []).find((p: any) => {
               const pSlug = normalizeRouteIdentifier(p?.slug || p?.id || "");
               const ident = normalizeRouteIdentifier(identifier || "");
               return pSlug === ident || String(p?.id) === String(identifier || "");
             });
+
             if (match) {
-              const normalizedProduct = normalizeMarketplaceProduct(match);
-              productDetailCache.set(cacheKey, normalizedProduct);
-              setProduct(normalizedProduct);
-              setLoading(false);
-              setHasAttemptedLoad(true);
-              logRouteMatch("resolved from category-aware lookup", {
-                productId: String(normalizedProduct?.id || ""),
-                canonicalPath: buildProductPath(normalizedProduct),
-              });
+              commitResolvedProduct(match, "category-aware-lookup");
               return;
             }
-          } catch (e) {
-            console.warn('Slug-based fallback failed:', e);
+          } catch (error) {
+            if (!active || controller.signal.aborted) return;
+            noteLookupFailure("category-aware-lookup", error);
           }
         }
 
@@ -608,29 +673,83 @@ export default function ProductDetail() {
           );
 
           if (matchedRoute?.product) {
-            const normalizedProduct = matchedRoute.product;
-            productDetailCache.set(cacheKey, normalizedProduct);
-            setProduct(normalizedProduct);
-            setLoading(false);
-            setHasAttemptedLoad(true);
-            logRouteMatch("resolved from route alias lookup", {
-              productId: String(normalizedProduct?.id || ""),
+            commitResolvedProduct(matchedRoute.product, "route-alias-lookup", {
               canonicalPath: matchedRoute.canonicalPath,
               matchedAlias: matchedRoute.matchedAlias,
               redirected: !matchedRoute.isCanonical,
             });
-              return;
-            }
-        } catch (allProductsError) {
-          console.warn("All-products alias lookup failed:", allProductsError);
+            return;
+          }
+        } catch (error) {
+          if (!active || controller.signal.aborted) return;
+          noteLookupFailure("route-alias-lookup", error);
         }
 
-        throw new Error('Product not found');
-      } catch (_error: any) {
+        if (!active) return;
+
+        setLoading(false);
+        setHasAttemptedLoad(true);
+
+        if (seededProduct) {
+          setProduct(seededProduct);
+          setProductResolution("ready");
+          setLookupDiagnostics({
+            source: cachedProduct ? "cache" : "prerender-snapshot",
+            reason: [...transientErrors, ...notFoundErrors].join(" | ") || "Preserved seeded product content during route revalidation.",
+            retryable: transientErrors.length > 0,
+          });
+          logRouteMatch("preserved seeded product after route revalidation", {
+            transientErrors,
+            notFoundErrors,
+          });
+          return;
+        }
+
+        if (transientErrors.length) {
+          setProduct(null);
+          setProductResolution("retryable-error");
+          setLookupDiagnostics({
+            source: "network-fallback",
+            reason: transientErrors.join(" | "),
+            retryable: true,
+          });
+          logRouteMatch("retryable lookup failure", {
+            errors: transientErrors,
+          });
+          return;
+        }
+
+        setProduct(null);
+        setProductResolution("missing");
+        setLookupDiagnostics({
+          source: "confirmed-missing",
+          reason: notFoundErrors.join(" | ") || "No live product matched the requested route.",
+          retryable: false,
+        });
+        logRouteMatch("confirmed missing product", {
+          errors: notFoundErrors,
+        });
+      } catch (error: any) {
         if (!active || controller.signal.aborted) return;
 
-        console.error("Error fetching product:", _error);
-        setProduct(null);
+        console.error("Error fetching product:", error);
+        if (seededProduct) {
+          setProduct(seededProduct);
+          setProductResolution("ready");
+          setLookupDiagnostics({
+            source: cachedProduct ? "cache" : "prerender-snapshot",
+            reason: getLookupErrorMessage(error),
+            retryable: true,
+          });
+        } else {
+          setProduct(null);
+          setProductResolution("retryable-error");
+          setLookupDiagnostics({
+            source: "unexpected-failure",
+            reason: getLookupErrorMessage(error),
+            retryable: true,
+          });
+        }
         setLoading(false);
         setHasAttemptedLoad(true);
       }
@@ -662,7 +781,7 @@ export default function ProductDetail() {
       .catch((error) => {
         if (!active || controller.signal.aborted) return;
         console.error("Error fetching related products:", error);
-        setAllProducts([]);
+        setAllProducts((current) => (current.length ? current : snapshotRelatedProducts));
       });
 
     return () => {
@@ -741,9 +860,15 @@ export default function ProductDetail() {
     stock: product?.stock,
     sku: product?.sku,
     brand: product?.brand,
+    seller: product?.sellerName || product?.seller,
+    condition: productSpecs?.attributes?.condition || product?.condition,
+    images: Array.isArray(product?.images) ? product.images : [],
   });
-  const isProductLoading = loading || !hasAttemptedLoad;
-  const isMissingProduct = !isProductLoading && !product;
+  const isProductLoading =
+    productResolution === "loading" ||
+    (productResolution === "retryable-error" && !product) ||
+    (!hasAttemptedLoad && !product);
+  const isMissingProduct = productResolution === "missing" && !product;
   const productTitle = String(product?.title || product?.name || "").trim();
   const safeProductDescription =
     String(productSpecs?.shortDescription || "").trim() ||
@@ -775,10 +900,13 @@ const productSchema = product
         slug: product.slug,
         canonicalUrl: finalCanonical,
         image: product.image,
+        images: Array.isArray(product?.images) ? product.images : [],
         price: product.price,
         stock: product.stock,
         sku: product.sku,
         brand: product.brand,
+        seller: product.sellerName || product.seller,
+        condition: productSpecs?.attributes?.condition || product?.condition,
       }),
       buildProductBreadcrumbSchema(product, canonicalProductPath),
     ]
@@ -985,6 +1113,19 @@ const productSchema = product
       .catch(() => undefined);
   }, [product?.id, product?.sellerId, product?.title]);
 
+  useEffect(() => {
+    if (!import.meta.env.DEV || !identifier) return;
+    console.info("[product-route] diagnostics", {
+      identifier,
+      pathname: location.pathname,
+      resolution: productResolution,
+      hasProduct: Boolean(product?.id),
+      source: lookupDiagnostics?.source || null,
+      reason: lookupDiagnostics?.reason || null,
+      retryable: lookupDiagnostics?.retryable || false,
+    });
+  }, [identifier, location.pathname, lookupDiagnostics, product?.id, productResolution]);
+
   const sellerProfile = useMemo(
     () => getSellerProfile(product?.seller || "ExShopi Official"),
     [product?.seller]
@@ -1166,17 +1307,17 @@ const structuredTemplate = getSpecificationTemplate(
     return (
       <>
         <SEO
-          title="Product Unavailable | ExShopi"
-          description="This product is temporarily unavailable right now."
+          title="Product Not Found | ExShopi"
+          description="This product page is no longer available on ExShopi."
           pathname={location.pathname}
           canonicalUrl={buildAbsoluteUrl(location.pathname)}
-          noindex={false}
+          noindex={true}
         />
 
         <div className="flex items-center justify-center px-4 py-24">
           <div className="text-center">
-            <h1 className="mb-4 text-3xl font-bold text-slate-900">Product unavailable</h1>
-            <p className="mb-6 text-slate-600">We couldn&apos;t load this product right now. Please try again in a moment.</p>
+            <h1 className="mb-4 text-3xl font-bold text-slate-900">Product not found</h1>
+            <p className="mb-6 text-slate-600">This product page is unavailable or may have moved.</p>
             <button
               onClick={() => navigate("/")}
               className="rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"

@@ -18,10 +18,13 @@ export interface ProductSeoInput extends ProductSeoFields {
   category?: string;
   subcategory?: string;
   image?: string;
+  images?: string[];
   price?: number | string | null;
   stock?: number | string | null;
   sku?: string;
   brand?: string;
+  seller?: string;
+  condition?: string;
   pathname?: string;
 }
 

@@ -308,12 +308,33 @@ export function generateHomepageSeo() {
 export function buildProductSchema(product: any, pathname?: string) {
   const seo = generateProductMeta(product);
   const stock = Number(product?.stock || 0);
+  const conditionText = String(
+    product?.specs?.attributes?.condition ||
+      product?.condition ||
+      product?.specs?.condition ||
+      ""
+  ).trim();
+  const sellerName = String(
+    product?.sellerName ||
+      product?.seller ||
+      product?.specs?.ownership?.sellerName ||
+      "ExShopi"
+  ).trim();
+  const itemCondition =
+    /used|renewed|refurb/i.test(conditionText)
+      ? "https://schema.org/UsedCondition"
+      : "https://schema.org/NewCondition";
+  const description = String(
+    product?.specs?.shortDescription ||
+      product?.description ||
+      seo.metaDescription
+  ).trim();
 
   return {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product?.title || "Marketplace Product",
-    description: seo.metaDescription,
+    description,
     image: [product?.image, ...(Array.isArray(product?.images) ? product.images : [])].filter(Boolean),
     sku: product?.sku || undefined,
     brand: product?.brand
@@ -329,7 +350,13 @@ export function buildProductSchema(product: any, pathname?: string) {
       availability:
         stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: buildAbsoluteUrl(pathname || buildProductPath(product)),
-      itemCondition: "https://schema.org/UsedCondition",
+      itemCondition,
+      seller: sellerName
+        ? {
+            "@type": "Organization",
+            name: sellerName,
+          }
+        : undefined,
     },
   };
 }
