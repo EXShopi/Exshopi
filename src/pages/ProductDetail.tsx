@@ -1432,8 +1432,8 @@ const structuredTemplate = getSpecificationTemplate(
           </div>
 
           <div className="xl:col-span-4">
-            <div className="space-y-6">
-              <div className="rounded-[30px] border border-slate-200 bg-white p-7 shadow-sm">
+            <div className="space-y-5">
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Sold by</p>
@@ -1492,7 +1492,7 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="rounded-[30px] border border-blue-100 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-7 shadow-sm">
+              <div className="rounded-[28px] border border-blue-100/90 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
                 <div className="mb-5 border-b border-blue-100 pb-5">
                   <div className="flex flex-wrap items-end gap-3">
                     <span className="text-5xl font-black tracking-tight text-slate-950">{formatAEDPlain(displayPrice)}</span>
@@ -1520,21 +1520,7 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="rounded-[30px] border border-slate-200 bg-white p-7 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">UAE Trusted Marketplace</p>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  {buildProductSeoNarrative(product)}
-                </p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {UAE_TRUST_SIGNALS.map((signal) => (
-                    <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                      {signal}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-[30px] border border-slate-200 bg-white p-7 shadow-sm">
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
                 <div className="space-y-5">
                   {colorOptions.length > 0 && (
                   <div>
@@ -1680,7 +1666,21 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="rounded-[30px] border border-slate-200 bg-white p-7 shadow-sm">
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">UAE Trusted Marketplace</p>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  {buildProductSeoNarrative(product)}
+                </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {UAE_TRUST_SIGNALS.map((signal) => (
+                    <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                      {signal}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
                     <Truck className="mt-0.5 h-5 w-5 text-blue-600" />
@@ -1709,7 +1709,7 @@ const structuredTemplate = getSpecificationTemplate(
           </div>
 
           <div className="xl:col-span-3">
-            <div className="sticky top-[150px] rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+            <div className="sticky top-[150px] rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_22px_52px_rgba(15,23,42,0.08)]">
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <div className="flex items-start gap-2">
                     <Check className="mt-0.5 h-5 w-5 text-emerald-600" />
@@ -1722,13 +1722,13 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="mt-5 border-b border-slate-200 pb-5">
+              <div className="mt-4 border-b border-slate-200 pb-5">
                 <p className="mb-2 text-sm text-slate-700">Price</p>
                 <div className="text-4xl font-black text-slate-950">{formatAEDPlain(displayPrice)}</div>
                 <p className="mt-1 text-xs text-slate-700">Inclusive of VAT</p>
               </div>
 
-              <div className="mt-5">
+              <div className="mt-4">
                 <p className="mb-3 font-semibold text-slate-900">Quantity</p>
                 <div className="inline-flex items-center rounded-full border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.86),rgba(236,243,255,0.92))] p-1 shadow-[0_18px_36px_rgba(15,23,42,0.10)] backdrop-blur-xl">
                   <button
@@ -1747,7 +1747,7 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
               </div>
 
-              <div className="mt-6 space-y-3">
+              <div className="mt-5 space-y-3">
                 <button
                   onClick={handleAddToCart}
                   className="flex w-full items-center justify-center gap-2 rounded-full border border-blue-400/70 bg-[linear-gradient(135deg,#1840c9,#2456ea,#4f8dff)] px-6 py-3.5 font-semibold text-white shadow-[0_18px_38px_rgba(37,99,235,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_48px_rgba(37,99,235,0.34)]"

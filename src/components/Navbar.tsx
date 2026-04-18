@@ -166,17 +166,20 @@ export default function Navbar() {
                   <Menu className="h-3.5 w-3.5 md:h-5 md:w-5" />
                 </button>
 
-                <Link to="/" className="flex min-w-0 max-w-full items-center overflow-hidden">
+                <Link
+                  to="/"
+                  className="group flex min-w-0 max-w-full items-center gap-2.5 overflow-hidden rounded-[20px] border border-slate-200/80 bg-white/80 px-2.5 py-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] ring-1 ring-white/70 backdrop-blur-sm transition-all duration-300 hover:border-slate-300/80 hover:shadow-[0_14px_30px_rgba(15,23,42,0.09)] sm:gap-3 sm:px-3 sm:py-2 md:rounded-[22px] md:px-3.5 md:py-2.5"
+                >
                   <img
                     src="/logo.png"
                     alt="Exshopi"
-                    className="h-7 w-auto shrink-0 object-contain sm:h-8 md:h-16"
+                    className="h-6 w-auto shrink-0 object-contain drop-shadow-[0_4px_10px_rgba(255,255,255,0.9)] sm:h-7 md:h-12"
                   />
-                  <div className="-ml-1 min-w-0 leading-tight">
-                    <div className="truncate text-[15px] font-black tracking-tight text-slate-900 sm:text-[16px] md:text-2xl">
+                  <div className="min-w-0 leading-[1.02]">
+                    <div className="truncate text-[15px] font-black tracking-[-0.03em] text-slate-900 transition-colors duration-300 group-hover:text-slate-950 sm:text-[16px] md:text-[1.65rem]">
                       Exshopi
                     </div>
-                    <div className="hidden text-[10px] uppercase tracking-[0.2em] text-slate-500 md:block">
+                    <div className="hidden pt-0.5 text-[9px] uppercase tracking-[0.24em] text-slate-500 md:block">
                       UAE’s Trusted Marketplace
                     </div>
                   </div>
