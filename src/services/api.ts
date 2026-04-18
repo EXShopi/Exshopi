@@ -149,7 +149,9 @@ function persistAuthTokens(data: { accessToken?: string | null; refreshToken?: s
   );
 }
 
-function clearPersistedAuthState() {
+function clearPersistedAuthState(reason = 'unknown') {
+  logDev('warn', '[auth] clearing persisted auth state', { reason });
+
   if (typeof window !== 'undefined') {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('token');
@@ -237,6 +239,15 @@ async function parseApiResponse(res: Response) {
 
 let refreshPromise: Promise<any> | null = null;
 
+function isAuthFailureResponse(status: number) {
+  return status === 401 || status === 403;
+}
+
+function isConfirmedAuthFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message === 'AUTH_INVALID_SESSION' || /session expired/i.test(message);
+}
+
 async function refreshAccessToken() {
   if (refreshPromise) {
     return refreshPromise;
@@ -250,6 +261,7 @@ async function refreshAccessToken() {
   const legacyRefreshToken = useAuthStore.getState().refreshToken || '';
 
   refreshPromise = (async () => {
+    logDev('info', '[auth] token refresh started');
     const res = await fetchWithTimeout(refreshUrl, {
       method: 'POST',
       headers: {
@@ -263,9 +275,9 @@ async function refreshAccessToken() {
       ),
     });
 
-    if (res.status === 401 || res.status === 403) {
-      clearPersistedAuthState();
-      throw new Error('Session expired. Please sign in again.');
+    if (isAuthFailureResponse(res.status)) {
+      logDev('warn', '[auth] token refresh rejected', { status: res.status });
+      throw new Error('AUTH_INVALID_SESSION');
     }
 
     const data = await parseApiResponse(res);
@@ -273,6 +285,7 @@ async function refreshAccessToken() {
       accessToken: data?.accessToken || null,
       refreshToken: data?.refreshToken || null,
     });
+    logDev('info', '[auth] token refresh successful');
     return data;
   })();
 
@@ -319,19 +332,23 @@ export async function authFetch(path: string, options: RequestInit = {}) {
       const newToken = typeof refreshData?.accessToken === 'string' ? refreshData.accessToken : '';
 
       if (!newToken) {
-        clearPersistedAuthState();
-        throw new Error('Session expired. Please sign in again.');
+        throw new Error('AUTH_INVALID_SESSION');
       }
 
       token = newToken;
       response = await makeRequest(newToken);
     } catch (error) {
-      clearPersistedAuthState();
-      throw error instanceof Error ? error : new Error('Session expired. Please sign in again.');
+      if (isConfirmedAuthFailure(error)) {
+        clearPersistedAuthState('confirmed_refresh_failure');
+        throw new Error('Session expired. Please sign in again.');
+      }
+
+      logDev('warn', '[auth] token refresh failed without confirmed logout', error);
+      throw error instanceof Error ? error : new Error('Failed to refresh session.');
     }
 
     if (response.status === 401) {
-      clearPersistedAuthState();
+      clearPersistedAuthState('retry_still_unauthorized');
       throw new Error('Session expired. Please sign in again.');
     }
   }

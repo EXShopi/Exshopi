@@ -509,18 +509,56 @@ export const prismaRuntime = {
     const current =
       ((await prisma.setting.findUnique({ where: { key: 'site_settings' } }))?.valueJson as unknown as SiteSettings) ||
       db.getSiteSettings();
+    const currentHomepage = current.homepage;
+    const incomingHomepage = settings.homepage || {};
     const merged: SiteSettings = {
       ...current,
       ...settings,
       general: { ...current.general, ...(settings.general || {}) },
       branding: { ...current.branding, ...(settings.branding || {}) },
       homepage: {
-        ...current.homepage,
-        ...(settings.homepage || {}),
-        hero: { ...current.homepage.hero, ...(settings.homepage?.hero || {}) },
-        videoSection: { ...current.homepage.videoSection, ...(settings.homepage?.videoSection || {}) },
-        trustBanner: { ...current.homepage.trustBanner, ...(settings.homepage?.trustBanner || {}) },
-        sections: settings.homepage?.sections || current.homepage.sections,
+        ...currentHomepage,
+        ...incomingHomepage,
+        hero: { ...currentHomepage.hero, ...(incomingHomepage.hero || {}) },
+        featuredSection: {
+          ...currentHomepage.featuredSection,
+          ...(incomingHomepage.featuredSection || {}),
+          bestsellersProductIds: Array.isArray(incomingHomepage.featuredSection?.bestsellersProductIds)
+            ? incomingHomepage.featuredSection.bestsellersProductIds
+            : currentHomepage.featuredSection?.bestsellersProductIds,
+          bestchoiceProductIds: Array.isArray(incomingHomepage.featuredSection?.bestchoiceProductIds)
+            ? incomingHomepage.featuredSection.bestchoiceProductIds
+            : currentHomepage.featuredSection?.bestchoiceProductIds,
+          onsaleProductIds: Array.isArray(incomingHomepage.featuredSection?.onsaleProductIds)
+            ? incomingHomepage.featuredSection.onsaleProductIds
+            : currentHomepage.featuredSection?.onsaleProductIds,
+        },
+        campaignSection: {
+          ...currentHomepage.campaignSection,
+          ...(incomingHomepage.campaignSection || {}),
+          featuredProductIds: Array.isArray(incomingHomepage.campaignSection?.featuredProductIds)
+            ? incomingHomepage.campaignSection.featuredProductIds
+            : currentHomepage.campaignSection?.featuredProductIds,
+        },
+        uaeStrip: { ...currentHomepage.uaeStrip, ...(incomingHomepage.uaeStrip || {}) },
+        allProductsSection: {
+          ...currentHomepage.allProductsSection,
+          ...(incomingHomepage.allProductsSection || {}),
+        },
+        videoSection: { ...currentHomepage.videoSection, ...(incomingHomepage.videoSection || {}) },
+        trustBanner: {
+          ...currentHomepage.trustBanner,
+          ...(incomingHomepage.trustBanner || {}),
+          items: Array.isArray(incomingHomepage.trustBanner?.items)
+            ? incomingHomepage.trustBanner.items
+            : currentHomepage.trustBanner?.items,
+        },
+        sections: Array.isArray(incomingHomepage.sections)
+          ? incomingHomepage.sections
+          : currentHomepage.sections,
+        promoBoxes: Array.isArray(incomingHomepage.promoBoxes)
+          ? incomingHomepage.promoBoxes
+          : currentHomepage.promoBoxes,
       },
       header: {
         ...current.header,
@@ -532,7 +570,18 @@ export const prismaRuntime = {
         ...(settings.footer || {}),
         socialLinks: { ...current.footer.socialLinks, ...(settings.footer?.socialLinks || {}) },
       },
-      seo: { ...current.seo, ...(settings.seo || {}) },
+      seo: {
+        ...current.seo,
+        ...(settings.seo || {}),
+        homepage: {
+          ...current.seo.homepage,
+          ...(settings.seo?.homepage || {}),
+        },
+        blog: {
+          ...current.seo.blog,
+          ...(settings.seo?.blog || {}),
+        },
+      },
     };
     await prisma.setting.upsert({
       where: { key: 'site_settings' },

@@ -145,6 +145,7 @@ function RouteDebugLogger() {
   const location = useLocation();
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     console.info('[route] navigate', location.pathname, {
       search: location.search,
       hash: location.hash,
@@ -222,6 +223,8 @@ function AppContent() {
             <Route path="/products" element={<ProductListing />} />
             <Route path="/product/:identifier" element={<ProductDetail />} />
             <Route path="/:category/:subcategory/:identifier" element={<ProductDetail />} />
+            <Route path="/electronics" element={<CategoryPage />} />
+            <Route path="/electronics/:subcategory" element={<CategoryPage />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/order-success" element={<OrderSuccess />} />

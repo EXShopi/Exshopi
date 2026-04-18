@@ -378,6 +378,7 @@ export async function updateSiteSettings(settings: SiteSettings): Promise<void> 
     body: JSON.stringify(settings),
   });
   if (!res.ok) {
-    throw new Error('Failed to update site settings');
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.error || payload?.message || 'Failed to update site settings');
   }
 }

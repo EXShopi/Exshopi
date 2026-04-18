@@ -1245,6 +1245,9 @@ private data!: DatabaseSchema;
   }
 
   updateSiteSettings(settings: Partial<SiteSettings>): SiteSettings {
+    const currentHomepage = this.data.siteSettings.homepage;
+    const incomingHomepage = settings.homepage || {};
+
     this.data.siteSettings = {
       ...this.data.siteSettings,
       ...settings,
@@ -1257,21 +1260,57 @@ private data!: DatabaseSchema;
         ...(settings.branding || {}),
       },
       homepage: {
-        ...this.data.siteSettings.homepage,
-        ...(settings.homepage || {}),
+        ...currentHomepage,
+        ...incomingHomepage,
         hero: {
-          ...this.data.siteSettings.homepage.hero,
-          ...(settings.homepage?.hero || {}),
+          ...currentHomepage.hero,
+          ...(incomingHomepage.hero || {}),
+        },
+        featuredSection: {
+          ...currentHomepage.featuredSection,
+          ...(incomingHomepage.featuredSection || {}),
+          bestsellersProductIds: Array.isArray(incomingHomepage.featuredSection?.bestsellersProductIds)
+            ? incomingHomepage.featuredSection.bestsellersProductIds
+            : currentHomepage.featuredSection?.bestsellersProductIds,
+          bestchoiceProductIds: Array.isArray(incomingHomepage.featuredSection?.bestchoiceProductIds)
+            ? incomingHomepage.featuredSection.bestchoiceProductIds
+            : currentHomepage.featuredSection?.bestchoiceProductIds,
+          onsaleProductIds: Array.isArray(incomingHomepage.featuredSection?.onsaleProductIds)
+            ? incomingHomepage.featuredSection.onsaleProductIds
+            : currentHomepage.featuredSection?.onsaleProductIds,
+        },
+        campaignSection: {
+          ...currentHomepage.campaignSection,
+          ...(incomingHomepage.campaignSection || {}),
+          featuredProductIds: Array.isArray(incomingHomepage.campaignSection?.featuredProductIds)
+            ? incomingHomepage.campaignSection.featuredProductIds
+            : currentHomepage.campaignSection?.featuredProductIds,
+        },
+        uaeStrip: {
+          ...currentHomepage.uaeStrip,
+          ...(incomingHomepage.uaeStrip || {}),
+        },
+        allProductsSection: {
+          ...currentHomepage.allProductsSection,
+          ...(incomingHomepage.allProductsSection || {}),
         },
         videoSection: {
-          ...this.data.siteSettings.homepage.videoSection,
-          ...(settings.homepage?.videoSection || {}),
+          ...currentHomepage.videoSection,
+          ...(incomingHomepage.videoSection || {}),
         },
         trustBanner: {
-          ...this.data.siteSettings.homepage.trustBanner,
-          ...(settings.homepage?.trustBanner || {}),
+          ...currentHomepage.trustBanner,
+          ...(incomingHomepage.trustBanner || {}),
+          items: Array.isArray(incomingHomepage.trustBanner?.items)
+            ? incomingHomepage.trustBanner.items
+            : currentHomepage.trustBanner?.items,
         },
-        sections: settings.homepage?.sections || this.data.siteSettings.homepage.sections,
+        sections: Array.isArray(incomingHomepage.sections)
+          ? incomingHomepage.sections
+          : currentHomepage.sections,
+        promoBoxes: Array.isArray(incomingHomepage.promoBoxes)
+          ? incomingHomepage.promoBoxes
+          : currentHomepage.promoBoxes,
       },
       header: {
         ...this.data.siteSettings.header,

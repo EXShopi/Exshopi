@@ -82,6 +82,7 @@ type ProductVariant = {
   stock?: number | string | null;
   sku?: string;
   image?: string;
+  isDefault?: boolean | null;
 };
 
 type VariantSelection = {
@@ -109,24 +110,76 @@ const VARIANT_SELECTION_KEYS: Array<keyof VariantSelection> = [
 ];
 
 function normalizeVariantValue(value?: string | null) {
-  return String(value || "").trim();
+  return String(value || "").trim().toLowerCase();
+}
+
+function getVariantValue(variant: ProductVariant | null | undefined, key: keyof VariantSelection) {
+  return normalizeVariantValue(String(variant?.[key] || ""));
+}
+
+function hasVariantValue(value?: string | null) {
+  return Boolean(normalizeVariantValue(value));
+}
+
+function variantMatchesSelection(
+  variant: ProductVariant | null | undefined,
+  selection: VariantSelection,
+  options?: {
+    ignoreKeys?: Array<keyof VariantSelection>;
+    requireKeys?: Array<keyof VariantSelection>;
+  }
+) {
+  if (!variant) return false;
+
+  const ignoreKeys = new Set(options?.ignoreKeys || []);
+  const requireKeys = options?.requireKeys || VARIANT_SELECTION_KEYS;
+
+  return requireKeys.every((key) => {
+    if (ignoreKeys.has(key)) return true;
+
+    const desiredValue = selection[key];
+    if (!desiredValue) return true;
+
+    return getVariantValue(variant, key) === desiredValue;
+  });
+}
+
+function getVariantMatchScore(variant: ProductVariant, selection: VariantSelection) {
+  return VARIANT_SELECTION_KEYS.reduce((score, key) => {
+    const desiredValue = selection[key];
+    if (!desiredValue) return score;
+    return getVariantValue(variant, key) === desiredValue ? score + 1 : score;
+  }, 0);
+}
+
+function getPreferredVariant(variants: ProductVariant[]) {
+  return variants.find((variant) => Boolean(variant?.isDefault)) || variants[0] || null;
+}
+
+function resolveOptionLabel<T extends string | { label?: string; name?: string }>(
+  options: T[],
+  selectedValue: string,
+  pickLabel: (option: T) => string
+) {
+  const match = options.find((option) => normalizeVariantValue(pickLabel(option)) === selectedValue);
+  return match ? pickLabel(match) : selectedValue;
 }
 
 function buildDefaultVariantSelection(
   variants: ProductVariant[],
   baseAttributes: Record<string, any>
 ): VariantSelection {
-  const firstVariant = variants[0];
+  const defaultVariant = getPreferredVariant(variants);
 
   return {
-    color: normalizeVariantValue(firstVariant?.color || baseAttributes.color),
-    size: normalizeVariantValue(firstVariant?.size || baseAttributes.size || baseAttributes.Size),
+    color: normalizeVariantValue(defaultVariant?.color || baseAttributes.color),
+    size: normalizeVariantValue(defaultVariant?.size || baseAttributes.size || baseAttributes.Size),
     storage: normalizeVariantValue(
-      firstVariant?.storage || baseAttributes.storage || baseAttributes.Storage
+      defaultVariant?.storage || baseAttributes.storage || baseAttributes.Storage
     ),
-    ram: normalizeVariantValue(firstVariant?.ram || baseAttributes.ram || baseAttributes.RAM),
+    ram: normalizeVariantValue(defaultVariant?.ram || baseAttributes.ram || baseAttributes.RAM),
     processor: normalizeVariantValue(
-      firstVariant?.processor || baseAttributes.processor || baseAttributes.Processor
+      defaultVariant?.processor || baseAttributes.processor || baseAttributes.Processor
     ),
   };
 }
@@ -155,32 +208,32 @@ function findBestVariantMatch(
   if (!variants.length) return null;
 
   const requiredCandidates = variants.filter((variant) =>
-    requiredKeys.every((key) => {
-      const desiredValue = desiredSelection[key];
-      return !desiredValue || normalizeVariantValue(String(variant[key] || "")) === desiredValue;
+    variantMatchesSelection(variant, desiredSelection, {
+      requireKeys: requiredKeys,
     })
   );
 
   const candidates = requiredCandidates.length ? requiredCandidates : variants;
 
-  let bestVariant: ProductVariant | null = null;
-  let bestScore = -1;
+  return (
+    [...candidates].sort((left, right) => {
+      const leftExact = variantMatchesSelection(left, desiredSelection) ? 1 : 0;
+      const rightExact = variantMatchesSelection(right, desiredSelection) ? 1 : 0;
+      if (leftExact !== rightExact) return rightExact - leftExact;
 
-  candidates.forEach((variant) => {
-    const score = VARIANT_SELECTION_KEYS.reduce((total, key) => {
-      const desiredValue = desiredSelection[key];
-      if (!desiredValue) return total;
+      const leftScore = getVariantMatchScore(left, desiredSelection);
+      const rightScore = getVariantMatchScore(right, desiredSelection);
+      if (leftScore !== rightScore) return rightScore - leftScore;
 
-      return normalizeVariantValue(String(variant[key] || "")) === desiredValue ? total + 1 : total;
-    }, 0);
+      const leftDefault = left?.isDefault ? 1 : 0;
+      const rightDefault = right?.isDefault ? 1 : 0;
+      if (leftDefault !== rightDefault) return rightDefault - leftDefault;
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestVariant = variant;
-    }
-  });
-
-  return bestVariant || candidates[0] || null;
+      const leftStock = Number(left?.stock || 0);
+      const rightStock = Number(right?.stock || 0);
+      return rightStock - leftStock;
+    })[0] || getPreferredVariant(candidates)
+  );
 }
 
 const COLOR_HEX_MAP: Record<string, string> = {
@@ -413,7 +466,7 @@ export default function ProductDetail() {
   }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { addItem } = useCartStore();
+  const { addItem, updateQuantity } = useCartStore();
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const authRole = useAuthStore((state) => state.role);
   const authUser = useAuthStore((state) => state.user);
@@ -620,7 +673,14 @@ export default function ProductDetail() {
 
   useEffect(() => {
     setMainImage(0);
-  }, [product?.id]);
+  }, [
+    product?.id,
+    selectedOptions.color,
+    selectedOptions.size,
+    selectedOptions.storage,
+    selectedOptions.ram,
+    selectedOptions.processor,
+  ]);
 
   useEffect(() => {
     if (!product?.id) return;
@@ -736,7 +796,23 @@ const productSchema = product
     [baseSpecifications, productSpecs?.attributes]
   );
   const variants = useMemo<ProductVariant[]>(
-    () => (Array.isArray(productSpecs?.variants) ? productSpecs.variants : []),
+    () =>
+      (Array.isArray(productSpecs?.variants) ? productSpecs.variants : [])
+        .map((variant: any) => ({
+          ...variant,
+          id: variant?.id ? String(variant.id) : undefined,
+          sku: variant?.sku ? String(variant.sku).trim() : undefined,
+          color: String(variant?.color || "").trim(),
+          size: String(variant?.size || "").trim(),
+          storage: String(variant?.storage || "").trim(),
+          ram: String(variant?.ram || "").trim(),
+          processor: String(variant?.processor || "").trim(),
+          image: String(variant?.image || "").trim(),
+          isDefault: Boolean(variant?.isDefault),
+        }))
+        .filter((variant) =>
+          VARIANT_SELECTION_KEYS.some((key) => hasVariantValue(String(variant[key] || "")))
+        ),
     [productSpecs]
   );
   const variantDefaults = useMemo(
@@ -876,14 +952,16 @@ const productSchema = product
   );
   const displayStock = Number(activeVariant?.stock ?? product?.stock ?? 0);
   const displaySku = String(activeVariant?.sku || product?.sku || "");
-  const selectedColorLabel = selectedColor || colorOptions[0]?.label || "";
-  const selectedSizeLabel = selectedSize || sizeOptions[0] || "";
-  const selectedProcessorLabel = selectedProcessor || processorOptions[0] || "";
+  const selectedColorLabel = activeVariant?.color || resolveOptionLabel(colorOptions, selectedColor, (option) => option.label) || "";
+  const selectedSizeLabel = activeVariant?.size || resolveOptionLabel(sizeOptions, selectedSize, (option) => option) || "";
+  const selectedStorageLabel = activeVariant?.storage || resolveOptionLabel(storageOptions, selectedStorage, (option) => option) || "";
+  const selectedRamLabel = activeVariant?.ram || resolveOptionLabel(ramOptions, selectedRam, (option) => option) || "";
+  const selectedProcessorLabel = activeVariant?.processor || resolveOptionLabel(processorOptions, selectedProcessor, (option) => option) || "";
   const selectedVariantLabel = [
     selectedColorLabel,
     selectedSizeLabel,
-    selectedStorage,
-    selectedRam,
+    selectedStorageLabel,
+    selectedRamLabel,
     selectedProcessorLabel,
   ]
     .filter(Boolean)
@@ -1000,6 +1078,22 @@ const structuredTemplate = getSpecificationTemplate(
     [product?.gallery, product?.image, product?.images, product?.media, activeVariant?.image]
   );
 
+  const isOptionAvailable = (key: keyof VariantSelection, rawValue: string) => {
+    const normalizedValue = normalizeVariantValue(rawValue);
+    if (!normalizedValue || !variants.length) return true;
+
+    const desiredSelection = {
+      ...selectedOptions,
+      [key]: normalizedValue,
+    };
+
+    return variants.some((variant) =>
+      variantMatchesSelection(variant, desiredSelection, {
+        requireKeys: VARIANT_SELECTION_KEYS,
+      })
+    );
+  };
+
   const overviewParagraphs = useMemo(() => {
     const fallbackDescription = `${product?.title || "This product"} is a premium marketplace pick selected for UAE shoppers who want strong performance, trusted seller support, and a polished buying experience.`;
     const description = String(product?.description || fallbackDescription)
@@ -1072,17 +1166,17 @@ const structuredTemplate = getSpecificationTemplate(
     return (
       <>
         <SEO
-          title="Product Not Found"
-          description={`The product you're looking for doesn't exist.`}
+          title="Product Unavailable | ExShopi"
+          description="This product is temporarily unavailable right now."
           pathname={location.pathname}
           canonicalUrl={buildAbsoluteUrl(location.pathname)}
-          noindex={true}
+          noindex={false}
         />
 
         <div className="flex items-center justify-center px-4 py-24">
           <div className="text-center">
-            <h1 className="mb-4 text-3xl font-bold text-slate-900">Product Not Found</h1>
-            <p className="mb-6 text-slate-600">The product you&apos;re looking for doesn&apos;t exist.</p>
+            <h1 className="mb-4 text-3xl font-bold text-slate-900">Product unavailable</h1>
+            <p className="mb-6 text-slate-600">We couldn&apos;t load this product right now. Please try again in a moment.</p>
             <button
               onClick={() => navigate("/")}
               className="rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
@@ -1097,6 +1191,8 @@ const structuredTemplate = getSpecificationTemplate(
 
   const handleAddToCart = () => {
     const compositeId = activeVariant && activeVariant.id ? `${product.id}::${activeVariant.id}` : String(product.id);
+    const existingQuantity =
+      useCartStore.getState().items.find((item) => item.id === compositeId)?.quantity || 0;
     addItem({
       id: compositeId,
       title: displayTitle,
@@ -1111,6 +1207,9 @@ const structuredTemplate = getSpecificationTemplate(
       seller: product.seller || product.sellerName || product.storeId || 'ExShopi Official',
       sellerId: product.sellerId || product.storeId || undefined,
     });
+    if (quantity > 1) {
+      updateQuantity(compositeId, existingQuantity + quantity);
+    }
     window.dispatchEvent(new CustomEvent("openCartDrawer"));
   };
 
@@ -1443,19 +1542,26 @@ const structuredTemplate = getSpecificationTemplate(
                       Color: {selectedColorLabel || "Default"}
                     </p>
                     <div className="flex gap-3">
-                      {colorOptions.map((color) => (
+                      {colorOptions.map((color) => {
+                        const isSelected = normalizeVariantValue(color.label) === selectedColor;
+                        const isAvailable = isOptionAvailable("color", color.label);
+                        return (
                         <button
                           key={color.name}
+                          type="button"
                           onClick={() => updateSelectedOption("color", color.label)}
+                          disabled={!isAvailable}
                           className={`h-12 w-12 rounded-full border-2 transition ${
-                            selectedColorLabel === color.label
+                            isSelected
                               ? "border-blue-600 ring-2 ring-blue-200"
-                              : "border-slate-300 hover:border-slate-400"
+                              : isAvailable
+                              ? "border-slate-300 hover:border-slate-400"
+                              : "cursor-not-allowed border-slate-200 opacity-40"
                           }`}
                           style={{ backgroundColor: color.hex }}
                           title={color.label}
                         />
-                      ))}
+                      )})}
                     </div>
                   </div>
                   )}
@@ -1464,19 +1570,26 @@ const structuredTemplate = getSpecificationTemplate(
                   <div>
                     <p className="mb-3 font-semibold text-slate-900">Storage</p>
                     <div className="flex flex-wrap gap-2">
-                      {storageOptions.map((size) => (
+                      {storageOptions.map((size) => {
+                        const isSelected = normalizeVariantValue(size) === selectedStorage;
+                        const isAvailable = isOptionAvailable("storage", size);
+                        return (
                         <button
                           key={size}
+                          type="button"
                           onClick={() => updateSelectedOption("storage", size)}
+                          disabled={!isAvailable}
                           className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
-                            selectedStorage === size
+                            isSelected
                               ? "border-blue-600 bg-blue-50 text-blue-600"
-                              : "border-slate-200 text-slate-900 hover:border-slate-300"
+                              : isAvailable
+                              ? "border-slate-200 text-slate-900 hover:border-slate-300"
+                              : "cursor-not-allowed border-slate-200 text-slate-400 opacity-60"
                           }`}
                         >
                           {size}
                         </button>
-                      ))}
+                      )})}
                     </div>
                   </div>
                   )}
@@ -1485,19 +1598,26 @@ const structuredTemplate = getSpecificationTemplate(
                   <div>
                     <p className="mb-3 font-semibold text-slate-900">Size</p>
                     <div className="flex flex-wrap gap-2">
-                      {sizeOptions.map((size) => (
+                      {sizeOptions.map((size) => {
+                        const isSelected = normalizeVariantValue(size) === selectedSize;
+                        const isAvailable = isOptionAvailable("size", size);
+                        return (
                         <button
                           key={size}
+                          type="button"
                           onClick={() => updateSelectedOption("size", size)}
+                          disabled={!isAvailable}
                           className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
-                            selectedSize === size
+                            isSelected
                               ? "border-blue-600 bg-blue-50 text-blue-600"
-                              : "border-slate-200 text-slate-900 hover:border-slate-300"
+                              : isAvailable
+                              ? "border-slate-200 text-slate-900 hover:border-slate-300"
+                              : "cursor-not-allowed border-slate-200 text-slate-400 opacity-60"
                           }`}
                         >
                           {size}
                         </button>
-                      ))}
+                      )})}
                     </div>
                   </div>
                   )}
@@ -1506,19 +1626,26 @@ const structuredTemplate = getSpecificationTemplate(
                     <div>
                       <p className="mb-3 font-semibold text-slate-900">RAM</p>
                       <div className="flex flex-wrap gap-2">
-                        {ramOptions.map((size) => (
+                        {ramOptions.map((size) => {
+                          const isSelected = normalizeVariantValue(size) === selectedRam;
+                          const isAvailable = isOptionAvailable("ram", size);
+                          return (
                           <button
                             key={size}
+                            type="button"
                             onClick={() => updateSelectedOption("ram", size)}
+                            disabled={!isAvailable}
                             className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
-                              selectedRam === size
+                              isSelected
                                 ? "border-blue-600 bg-blue-50 text-blue-600"
-                                : "border-slate-200 text-slate-900 hover:border-slate-300"
+                                : isAvailable
+                                ? "border-slate-200 text-slate-900 hover:border-slate-300"
+                                : "cursor-not-allowed border-slate-200 text-slate-400 opacity-60"
                             }`}
                           >
                             {size}
                           </button>
-                        ))}
+                        )})}
                       </div>
                     </div>
                   )}
@@ -1527,19 +1654,26 @@ const structuredTemplate = getSpecificationTemplate(
                     <div>
                       <p className="mb-3 font-semibold text-slate-900">Processor</p>
                       <div className="flex flex-wrap gap-2">
-                        {processorOptions.map((processor) => (
+                        {processorOptions.map((processor) => {
+                          const isSelected = normalizeVariantValue(processor) === selectedProcessor;
+                          const isAvailable = isOptionAvailable("processor", processor);
+                          return (
                           <button
                             key={processor}
+                            type="button"
                             onClick={() => updateSelectedOption("processor", processor)}
+                            disabled={!isAvailable}
                             className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
-                              selectedProcessor === processor
+                              isSelected
                                 ? "border-blue-600 bg-blue-50 text-blue-600"
-                                : "border-slate-200 text-slate-900 hover:border-slate-300"
+                                : isAvailable
+                                ? "border-slate-200 text-slate-900 hover:border-slate-300"
+                                : "cursor-not-allowed border-slate-200 text-slate-400 opacity-60"
                             }`}
                           >
                             {processor}
                           </button>
-                        ))}
+                        )})}
                       </div>
                     </div>
                   )}
