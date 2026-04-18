@@ -1,5 +1,7 @@
 import { prisma } from './prisma';
 import bcrypt from 'bcryptjs';
+import fs from 'node:fs';
+import path from 'node:path';
 import type {
   Banner,
   Category,
@@ -67,6 +69,7 @@ const CORE_OFFICIAL_USER = {
 };
 
 const CORE_OFFICIAL_STORE_ID = 'exshopi_official';
+const BUNDLED_DRAFT_IMPORT_PATH = path.join(process.cwd(), 'backend', 'data', 'importedDraftProducts.json');
 
 async function hashSeedPasswordIfNeeded(password: string) {
   const value = String(password || '');
@@ -819,6 +822,121 @@ export const prismaRuntime = {
         status: 'active',
       },
     });
+  },
+
+  async ensureBundledDraftProductsImported() {
+    if (!enabled) {
+      return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
+    }
+
+    if (!fs.existsSync(BUNDLED_DRAFT_IMPORT_PATH)) {
+      return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
+    }
+
+    const raw = fs.readFileSync(BUNDLED_DRAFT_IMPORT_PATH, 'utf8');
+    const bundledProducts = JSON.parse(raw);
+    if (!Array.isArray(bundledProducts) || !bundledProducts.length) {
+      return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
+    }
+
+    const officialStore =
+      (await this.getSeller(CORE_OFFICIAL_STORE_ID)) ||
+      (await this.getSellerBySlug('exshopi-official')) ||
+      (await this.getAllSellers()).find((seller) => seller.isOfficial);
+
+    if (!officialStore) {
+      throw new Error('Bundled draft import failed: ExShopi Official store is missing.');
+    }
+
+    const categories = await this.getCategories();
+    const electronicsCategory = categories.find((category) => category.slug === 'electronics');
+    if (!electronicsCategory) {
+      throw new Error('Bundled draft import failed: Electronics category is missing.');
+    }
+
+    const existingProducts = await this.getAllProductsForAdmin();
+    const existingSlugs = new Set(
+      existingProducts.map((product) => String(product.slug || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const existingTitles = new Set(
+      existingProducts.map((product) => String(product.title || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const existingBrandModels = new Set(
+      existingProducts
+        .map((product) => {
+          const brand = String(product.brand || '').trim().toLowerCase();
+          const model = String(product.specs?.model || product.specs?.specificationValues?.model || '').trim().toLowerCase();
+          return brand && model ? `${brand}::${model}` : '';
+        })
+        .filter(Boolean)
+    );
+
+    let imported = 0;
+    let duplicates = 0;
+    let failed = 0;
+
+    for (const product of bundledProducts) {
+      const slug = String(product?.slug || '').trim().toLowerCase();
+      const title = String(product?.title || '').trim().toLowerCase();
+      const brand = String(product?.brand || '').trim().toLowerCase();
+      const model = String(product?.specs?.model || product?.specs?.specificationValues?.model || '').trim().toLowerCase();
+      const brandModelKey = brand && model ? `${brand}::${model}` : '';
+
+      if (!slug || !title) {
+        failed += 1;
+        continue;
+      }
+
+      if (existingSlugs.has(slug) || existingTitles.has(title) || (brandModelKey && existingBrandModels.has(brandModelKey))) {
+        duplicates += 1;
+        continue;
+      }
+
+      try {
+        await this.createProduct({
+          ...product,
+          sellerId: officialStore.id,
+          storeId: officialStore.id,
+          categoryId: electronicsCategory.id,
+          image: '',
+          images: [],
+          status: 'draft',
+          approvalStatus: 'pending',
+          productStatus: 'draft',
+          visibilityStatus: 'hidden',
+          createdByRole: 'admin',
+          ownership: 'official',
+          approvedAt: '',
+          rejectedAt: '',
+          approvalNotes: product?.approvalNotes || '',
+          rejectionReason: product?.rejectionReason || '',
+          specs: {
+            ...(product?.specs || {}),
+            approvalStatus: 'pending',
+            productStatus: 'draft',
+            visibilityStatus: 'hidden',
+            createdByRole: 'admin',
+            ownership: 'official',
+          },
+        } as any);
+
+        existingSlugs.add(slug);
+        existingTitles.add(title);
+        if (brandModelKey) existingBrandModels.add(brandModelKey);
+        imported += 1;
+      } catch (error) {
+        failed += 1;
+        console.error('[BOOT] Bundled draft import row failed:', product?.title || slug, error);
+      }
+    }
+
+    return {
+      attempted: true,
+      imported,
+      duplicates,
+      failed,
+      totalRows: bundledProducts.length,
+    };
   },
 
   async updateUser(id: string, data: Partial<User>) {

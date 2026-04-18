@@ -6816,6 +6816,15 @@ const startServer = async () => {
     try {
       await prismaRuntime.ensureCoreAuthRecords();
       console.log('[BOOT] Prisma core auth records verified');
+
+      const bundledImport = await prismaRuntime.ensureBundledDraftProductsImported();
+      if (bundledImport.attempted) {
+        console.log(
+          `[BOOT] Bundled draft import summary: total=${bundledImport.totalRows} imported=${bundledImport.imported} duplicates=${bundledImport.duplicates} failed=${bundledImport.failed}`
+        );
+      } else {
+        console.log('[BOOT] No bundled draft import dataset found or import not required');
+      }
     } catch (error) {
       console.error('[BOOT] Failed to verify Prisma core auth records:', error);
     }
