@@ -50,6 +50,14 @@ function splitTags(value: unknown): string[] {
   return tags;
 }
 
+function pickRowValue(row: SpreadsheetRow, keys: string[]): string {
+  for (const key of keys) {
+    const value = safeText((row as Record<string, string>)[key]);
+    if (value) return value;
+  }
+  return '';
+}
+
 function readZipText(file: string, innerPath: string): string {
   return execFileSync('unzip', ['-p', file, innerPath], { encoding: 'utf8' });
 }
@@ -214,7 +222,7 @@ function mapCategory(rawSubcategory: string) {
 }
 
 function buildCanonicalUrl(row: SpreadsheetRow, slug: string, category: ReturnType<typeof mapCategory>) {
-  const provided = safeText(row.CanonicalURL || row.canonical_url);
+  const provided = pickRowValue(row, ['CanonicalURL', 'canonical_url']);
   if (/^https:\/\//i.test(provided)) return provided;
   return `https://exshopi.com/${category.categoryPath}/${slug}`;
 }
@@ -274,10 +282,10 @@ async function main() {
   };
 
   for (const row of rows) {
-    const title = safeText(row.Title || row.title);
-    const brand = safeText(row.Brand || row.brand);
-    const model = safeText(row.Model || row.model);
-    const requestedSlug = slugify(row.Slug || row.slug || title);
+    const title = pickRowValue(row, ['Title', 'title']);
+    const brand = pickRowValue(row, ['Brand', 'brand']);
+    const model = pickRowValue(row, ['Model', 'model']);
+    const requestedSlug = slugify(pickRowValue(row, ['Slug', 'slug']) || title);
     const duplicateKey = `${normalize(title)}::${normalize(brand)}::${normalize(model)}`;
 
     if (!title || !requestedSlug) {
@@ -299,14 +307,19 @@ async function main() {
       continue;
     }
 
-    const category = mapCategory(row.Subcategory || row.subcategory || row.Category || row.category);
-    const description = [safeText(row.Description || row.description), safeText(row.LongDescription || row.long_description)]
+    const category = mapCategory(
+      pickRowValue(row, ['Subcategory', 'subcategory', 'Category', 'category', 'product_type'])
+    );
+    const shortDescription = pickRowValue(row, ['Description', 'description', 'short_description']);
+    const longDescription = pickRowValue(row, ['LongDescription', 'long_description']);
+    const description = [shortDescription, longDescription]
       .filter(Boolean)
       .join('\n\n');
 
-    const price = parseNumber(row.PriceAED || row.price_aed, 0);
-    const stock = parseInteger(row.Stock || row.stock, 0);
-    const searchTags = splitTags(row.SearchTags || row.search_tags);
+    const price = parseNumber(pickRowValue(row, ['PriceAED', 'price_aed']), 0);
+    const compareAtPrice = parseNumber(pickRowValue(row, ['compare_at_price_aed']), 0);
+    const stock = parseInteger(pickRowValue(row, ['Stock', 'stock', 'stock_qty']), 0);
+    const searchTags = splitTags(pickRowValue(row, ['SearchTags', 'search_tags']));
     const canonicalUrl = buildCanonicalUrl(row, requestedSlug, category);
 
     summary.validatedRows += 1;
@@ -320,20 +333,20 @@ async function main() {
         slug: requestedSlug,
         description,
         price,
-        originalPrice: price,
+        originalPrice: compareAtPrice > price ? compareAtPrice : price,
         salePrice: price,
         image: '',
         images: [],
         stock,
         rating: 0,
         reviews: 0,
-        sku: safeText(row.SKU || row.sku) || `EX-DRAFT-${requestedSlug.toUpperCase()}`,
+        sku: pickRowValue(row, ['SKU', 'sku']) || `EX-DRAFT-${requestedSlug.toUpperCase()}`,
         brand,
-        metaTitle: safeText(row.SEOTitle || row.seo_title) || title,
-        metaDescription: safeText(row.SEODescription || row.seo_description) || safeText(row.Description || row.description),
+        metaTitle: pickRowValue(row, ['SEOTitle', 'seo_title']) || title,
+        metaDescription: pickRowValue(row, ['SEODescription', 'seo_description']) || shortDescription || longDescription,
         canonicalUrl,
-        ogTitle: safeText(row.SEOTitle || row.seo_title) || title,
-        ogDescription: safeText(row.SEODescription || row.seo_description) || safeText(row.Description || row.description),
+        ogTitle: pickRowValue(row, ['SEOTitle', 'seo_title']) || title,
+        ogDescription: pickRowValue(row, ['SEODescription', 'seo_description']) || shortDescription || longDescription,
         ogImage: '',
         status: 'draft',
         approvalStatus: 'pending',
@@ -353,51 +366,51 @@ async function main() {
           templateId: category.subcategorySlug || category.categorySlug,
           templateName: category.subcategoryName || category.categoryName,
           categoryTemplateKey: category.subcategorySlug || category.categorySlug,
-          shortDescription: safeText(row.Description || row.description),
-          longDescription: safeText(row.Description || row.description),
+          shortDescription,
+          longDescription,
           specificationValues: {
             brand,
             model,
-            condition: safeText(row.Condition || row.condition),
-            processorBrand: safeText(row.ProcessorBrand || row.processor_brand),
-            processorModel: safeText(row.ProcessorModel || row.processor_model),
-            generation: safeText(row.Generation || row.generation),
-            ram: safeText(row.RAM || row.ram),
-            ramType: safeText(row.RAMType || row.ram_type),
-            storage: safeText(row.Storage || row.storage),
-            storageType: safeText(row.StorageType || row.storage_type),
-            graphics: safeText(row.Graphics || row.graphics),
-            graphicsType: safeText(row.GraphicsType || row.graphics_type),
-            screenSize: safeText(row.ScreenSize || row.screen_size),
-            resolution: safeText(row.Resolution || row.resolution),
-            displayType: safeText(row.DisplayType || row.display_type),
-            keyboard: safeText(row.Keyboard || row.keyboard),
-            color: safeText(row.Color || row.color),
-            operatingSystem: safeText(row.OperatingSystem || row.operating_system),
-            weight: safeText(row.Weight || row.weight),
-            ports: safeText(row.Ports || row.ports),
-            battery: safeText(row.Battery || row.battery),
+            condition: pickRowValue(row, ['Condition', 'condition']),
+            processorBrand: pickRowValue(row, ['ProcessorBrand', 'processor_brand']),
+            processorModel: pickRowValue(row, ['ProcessorModel', 'processor_model']),
+            generation: pickRowValue(row, ['Generation', 'generation']),
+            ram: pickRowValue(row, ['RAM', 'ram']),
+            ramType: pickRowValue(row, ['RAMType', 'ram_type']),
+            storage: pickRowValue(row, ['Storage', 'storage']),
+            storageType: pickRowValue(row, ['StorageType', 'storage_type']),
+            graphics: pickRowValue(row, ['Graphics', 'graphics']),
+            graphicsType: pickRowValue(row, ['GraphicsType', 'graphics_type']),
+            screenSize: pickRowValue(row, ['ScreenSize', 'screen_size']),
+            resolution: pickRowValue(row, ['Resolution', 'resolution']),
+            displayType: pickRowValue(row, ['DisplayType', 'display_type']),
+            keyboard: pickRowValue(row, ['Keyboard', 'keyboard', 'keyboard_layout']),
+            color: pickRowValue(row, ['Color', 'color']),
+            operatingSystem: pickRowValue(row, ['OperatingSystem', 'operating_system']),
+            weight: pickRowValue(row, ['Weight', 'weight']),
+            ports: pickRowValue(row, ['Ports', 'ports']),
+            battery: pickRowValue(row, ['Battery', 'battery']),
           },
           specifications: {
-            Condition: safeText(row.Condition || row.condition),
-            'Processor Brand': safeText(row.ProcessorBrand || row.processor_brand),
-            'Processor Model': safeText(row.ProcessorModel || row.processor_model),
-            Generation: safeText(row.Generation || row.generation),
-            RAM: safeText(row.RAM || row.ram),
-            'RAM Type': safeText(row.RAMType || row.ram_type),
-            Storage: safeText(row.Storage || row.storage),
-            'Storage Type': safeText(row.StorageType || row.storage_type),
-            Graphics: safeText(row.Graphics || row.graphics),
-            'Graphics Type': safeText(row.GraphicsType || row.graphics_type),
-            'Screen Size': safeText(row.ScreenSize || row.screen_size),
-            Resolution: safeText(row.Resolution || row.resolution),
-            'Display Type': safeText(row.DisplayType || row.display_type),
-            Keyboard: safeText(row.Keyboard || row.keyboard),
-            Color: safeText(row.Color || row.color),
-            'Operating System': safeText(row.OperatingSystem || row.operating_system),
-            Weight: safeText(row.Weight || row.weight),
-            Ports: safeText(row.Ports || row.ports),
-            Battery: safeText(row.Battery || row.battery),
+            Condition: pickRowValue(row, ['Condition', 'condition']),
+            'Processor Brand': pickRowValue(row, ['ProcessorBrand', 'processor_brand']),
+            'Processor Model': pickRowValue(row, ['ProcessorModel', 'processor_model']),
+            Generation: pickRowValue(row, ['Generation', 'generation']),
+            RAM: pickRowValue(row, ['RAM', 'ram']),
+            'RAM Type': pickRowValue(row, ['RAMType', 'ram_type']),
+            Storage: pickRowValue(row, ['Storage', 'storage']),
+            'Storage Type': pickRowValue(row, ['StorageType', 'storage_type']),
+            Graphics: pickRowValue(row, ['Graphics', 'graphics']),
+            'Graphics Type': pickRowValue(row, ['GraphicsType', 'graphics_type']),
+            'Screen Size': pickRowValue(row, ['ScreenSize', 'screen_size']),
+            Resolution: pickRowValue(row, ['Resolution', 'resolution']),
+            'Display Type': pickRowValue(row, ['DisplayType', 'display_type']),
+            Keyboard: pickRowValue(row, ['Keyboard', 'keyboard', 'keyboard_layout']),
+            Color: pickRowValue(row, ['Color', 'color']),
+            'Operating System': pickRowValue(row, ['OperatingSystem', 'operating_system']),
+            Weight: pickRowValue(row, ['Weight', 'weight']),
+            Ports: pickRowValue(row, ['Ports', 'ports']),
+            Battery: pickRowValue(row, ['Battery', 'battery']),
             Model: model,
           },
           specificationGroups: [],
@@ -415,15 +428,15 @@ async function main() {
           whatsInTheBox: [],
           searchTags,
           variantAttributes: [],
-          metaTitle: safeText(row.SEOTitle || row.seo_title) || title,
-          metaDescription: safeText(row.SEODescription || row.seo_description) || safeText(row.Description || row.description),
+          metaTitle: pickRowValue(row, ['SEOTitle', 'seo_title']) || title,
+          metaDescription: pickRowValue(row, ['SEODescription', 'seo_description']) || shortDescription || longDescription,
           metaKeywords: searchTags.join(', '),
           canonicalUrl,
-          ogTitle: safeText(row.SEOTitle || row.seo_title) || title,
-          ogDescription: safeText(row.SEODescription || row.seo_description) || safeText(row.Description || row.description),
+          ogTitle: pickRowValue(row, ['SEOTitle', 'seo_title']) || title,
+          ogDescription: pickRowValue(row, ['SEODescription', 'seo_description']) || shortDescription || longDescription,
           ogImage: '',
-          shippingWeight: safeText(row.Weight || row.weight),
-          packageSize: safeText(row.ScreenSize || row.screen_size),
+          shippingWeight: pickRowValue(row, ['Weight', 'weight']),
+          packageSize: pickRowValue(row, ['ScreenSize', 'screen_size']),
           returnPolicy: '',
           warrantyPolicy: '',
           sellerNotes: 'Imported via Prisma draft importer. Images intentionally left empty for manual admin upload.',
@@ -443,11 +456,11 @@ async function main() {
           createdByRole: 'admin',
           badges: [],
           model,
-          condition: safeText(row.Condition || row.condition),
+          condition: pickRowValue(row, ['Condition', 'condition']),
           importMeta: {
             source: 'xlsx-prisma',
             sourceFile: path.basename(INPUT_PATH),
-            originalImageUrl: safeText(row.ImageURL || row.image_url),
+            originalImageUrl: pickRowValue(row, ['ImageURL', 'image_url']),
           },
         },
       } as any);
