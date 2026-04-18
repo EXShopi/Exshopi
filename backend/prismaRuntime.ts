@@ -1059,20 +1059,43 @@ export const prismaRuntime = {
 
   const createdByRole = input.createdByRole || 'seller';
   const isAdminCreated = createdByRole === 'admin';
+  const requestedStatus = String(input.productStatus || input.status || 'pending');
+  const requestedApprovalStatus = String(input.approvalStatus || 'pending');
+  const requestedVisibilityStatus = String(input.visibilityStatus || 'hidden');
+  const isExplicitDraft = requestedStatus === 'draft';
+  const isExplicitPending = requestedStatus === 'pending' || requestedStatus === 'pending_approval';
+  const isExplicitRejected = requestedStatus === 'rejected' || requestedApprovalStatus === 'rejected';
+  const isExplicitArchived = requestedStatus === 'archived';
 
   const finalApprovalStatus = isAdminCreated
-    ? 'approved'
+    ? isExplicitDraft || isExplicitPending || isExplicitArchived
+      ? 'pending'
+      : isExplicitRejected
+      ? 'rejected'
+      : ((input.approvalStatus || 'approved') as any)
     : ((input.approvalStatus || 'pending') as any);
 
-  const requestedStatus = (input.productStatus || input.status || 'pending') as string;
-
   const finalStatus = isAdminCreated
-    ? 'live'
+    ? isExplicitDraft
+      ? 'draft'
+      : isExplicitPending
+      ? requestedStatus === 'pending_approval'
+        ? 'pending_approval'
+        : 'pending'
+      : isExplicitRejected
+      ? 'rejected'
+      : isExplicitArchived
+      ? 'archived'
+      : 'live'
     : requestedStatus === 'pending'
     ? 'pending_approval'
     : requestedStatus;
 
-  const finalVisibilityStatus = isAdminCreated ? 'live' : (input.visibilityStatus || 'hidden');
+  const finalVisibilityStatus = isAdminCreated
+    ? isExplicitDraft || isExplicitPending || isExplicitRejected || isExplicitArchived
+      ? ((input.visibilityStatus || 'hidden') as any)
+      : ((input.visibilityStatus || 'live') as any)
+    : (input.visibilityStatus || 'hidden');
 
   const imageList = [input.image, ...(input.images || [])].filter(Boolean);
     const categoryExtras: any = {};
@@ -1135,12 +1158,12 @@ export const prismaRuntime = {
 
     visibilityStatus: finalVisibilityStatus as any,
 
-    approvalRequestedAt: new Date(),
+    approvalRequestedAt: input.approvalRequestedAt ? new Date(input.approvalRequestedAt) : new Date(),
     rejectionReason: "",
     approvalNotes: "",
 
     approvedAt:
-      input.createdByRole === "admin" ? new Date() : undefined,
+      finalApprovalStatus === 'approved' ? new Date() : undefined,
 
     rejectedAt: undefined,
 
