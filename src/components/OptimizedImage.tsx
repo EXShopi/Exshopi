@@ -1,7 +1,13 @@
 /**
  * OptimizedImage Component
- * Handles WebP conversion, lazy loading, and responsive images for better performance.
- * Uses native browser source selection instead of JS probing to reduce main-thread work.
+ * Handles lazy loading and stable fallback image paths for the storefront.
+ *
+ * Important: many legacy assets in this project only exist as PNG/JPG files.
+ * If we advertise a WebP <source> that does not exist, browsers that support
+ * WebP will pick the broken candidate and never fall back to the PNG <img>.
+ * For the generic image component we therefore prefer the concrete raster file
+ * directly and keep <picture> support only in the explicit OptimizedPicture
+ * component where assets are intentionally prepared for it.
  */
 
 import React, { ImgHTMLAttributes } from 'react';
@@ -134,12 +140,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     );
   }
 
-  return (
-    <picture>
-      <source srcSet={webp} type="image/webp" />
-      <img {...imgProps} />
-    </picture>
-  );
+  return <img {...imgProps} />;
 };
 
 /**
