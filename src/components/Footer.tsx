@@ -81,6 +81,7 @@ export default function Footer() {
             {
               title: storefrontT(lang, "seller"),
               links: [
+                { name: "Sell on ExShopi", to: "/sell-on-exshopi" },
                 { name: storefrontT(lang, "sell_with_exshopi"), to: "/seller/register" },
               ],
             },

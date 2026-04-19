@@ -27,6 +27,7 @@ const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const About = lazy(() => import("./pages/About").then((m) => ({ default: m.About })));
 const Contact = lazy(() => import("./pages/Contact").then((m) => ({ default: m.Contact })));
 const FAQ = lazy(() => import("./pages/FAQ").then((m) => ({ default: m.FAQ })));
+const SellOnExShopi = lazy(() => import("./pages/SellOnExShopi"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsConditions = lazy(() => import("./pages/TermsConditions"));
 const ReturnPolicy = lazy(() => import("./pages/ReturnPolicy"));
@@ -239,6 +240,7 @@ function AppContent() {
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/faq" element={<FAQ />} />
+            <Route path="/sell-on-exshopi" element={<SellOnExShopi />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsConditions />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
