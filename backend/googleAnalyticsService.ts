@@ -1,4 +1,6 @@
 import { createSign } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 type GoogleAnalyticsDateRangeKey = 'today' | 'yesterday' | '7d' | '30d' | 'this_month' | 'custom';
 
@@ -39,8 +41,12 @@ type GoogleAnalyticsConfig = {
   propertyId: string;
   clientEmail: string;
   privateKey: string;
+  projectId: string;
+  clientId: string;
   enabled: boolean;
   missing: string[];
+  validationErrors: string[];
+  envSource: 'env' | 'json' | 'file' | 'mixed' | 'none';
 };
 
 type GoogleAnalyticsCacheEntry<T> = {
@@ -55,6 +61,7 @@ const DEV_ANALYTICS_DEBUG = process.env.DEBUG_ADMIN_ANALYTICS === '1' || process
 
 const requestCache = new Map<string, GoogleAnalyticsCacheEntry<any>>();
 let accessTokenCache: GoogleAnalyticsCacheEntry<string> | null = null;
+let configStatusLogged = false;
 
 function logDebug(message: string, payload?: unknown) {
   if (!DEV_ANALYTICS_DEBUG) return;
@@ -83,33 +90,109 @@ function safeJsonParse<T>(value: string | undefined | null): T | null {
   }
 }
 
+function readServiceAccountFile() {
+  const configuredPath = String(
+    process.env.GA4_SERVICE_ACCOUNT_FILE ||
+      process.env.GOOGLE_ANALYTICS_SERVICE_ACCOUNT_FILE ||
+      ''
+  ).trim();
+
+  if (!configuredPath) return null;
+
+  const absolutePath = path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(process.cwd(), configuredPath);
+
+  if (!fs.existsSync(absolutePath)) {
+    logDebug('Configured GA service account file does not exist', { absolutePath });
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(absolutePath, 'utf8');
+    return safeJsonParse<Record<string, string>>(raw);
+  } catch (error) {
+    logDebug('Failed to read GA service account file', {
+      absolutePath,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+function sanitizeEnvString(value: unknown) {
+  const stringValue = String(value || '')
+    .trim()
+    .replace(/^"(.*)"$/s, '$1')
+    .replace(/^'(.*)'$/s, '$1')
+    .trim();
+
+  return stringValue;
+}
+
+function normalizePropertyId(value: unknown) {
+  const raw = sanitizeEnvString(value);
+  if (!raw) return '';
+
+  const normalized = raw.replace(/^properties\//i, '').trim();
+  return normalized;
+}
+
+function normalizePrivateKey(value: unknown) {
+  return sanitizeEnvString(value).replace(/\\n/g, '\n');
+}
+
+function isLikelyEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function readGoogleAnalyticsConfig(): GoogleAnalyticsConfig {
   const rawJson =
     process.env.GA_SERVICE_ACCOUNT_JSON ||
+    process.env.GA4_SERVICE_ACCOUNT_JSON ||
     process.env.GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON ||
     '';
   const parsedJson = safeJsonParse<Record<string, string>>(rawJson);
+  const fileJson = process.env.NODE_ENV === 'production' ? null : readServiceAccountFile();
 
-  const propertyId = String(
+  const propertyId = normalizePropertyId(
     process.env.GA4_PROPERTY_ID ||
       process.env.GA_PROPERTY_ID ||
       process.env.GOOGLE_ANALYTICS_PROPERTY_ID ||
+      parsedJson?.property_id ||
+      fileJson?.property_id ||
       ''
-  ).trim();
-  const clientEmail = String(
-    process.env.GA_SERVICE_ACCOUNT_EMAIL ||
+  );
+  const clientEmail = sanitizeEnvString(
+    process.env.GA4_CLIENT_EMAIL ||
+      process.env.GA_SERVICE_ACCOUNT_EMAIL ||
       process.env.GOOGLE_ANALYTICS_SERVICE_ACCOUNT_EMAIL ||
       parsedJson?.client_email ||
+      fileJson?.client_email ||
       ''
-  ).trim();
-  const privateKey = String(
-    process.env.GA_SERVICE_ACCOUNT_PRIVATE_KEY ||
+  );
+  const privateKey = normalizePrivateKey(
+    process.env.GA4_PRIVATE_KEY ||
+      process.env.GA_SERVICE_ACCOUNT_PRIVATE_KEY ||
       process.env.GOOGLE_ANALYTICS_SERVICE_ACCOUNT_PRIVATE_KEY ||
       parsedJson?.private_key ||
+      fileJson?.private_key ||
       ''
-  )
-    .replace(/\\n/g, '\n')
-    .trim();
+  );
+  const projectId = sanitizeEnvString(
+    process.env.GA4_PROJECT_ID ||
+      process.env.GOOGLE_ANALYTICS_PROJECT_ID ||
+      parsedJson?.project_id ||
+      fileJson?.project_id ||
+      ''
+  );
+  const clientId = sanitizeEnvString(
+    process.env.GA4_CLIENT_ID ||
+      process.env.GOOGLE_ANALYTICS_CLIENT_ID ||
+      parsedJson?.client_id ||
+      fileJson?.client_id ||
+      ''
+  );
 
   const missing = [
     !propertyId ? 'GA4 property id' : '',
@@ -117,13 +200,61 @@ function readGoogleAnalyticsConfig(): GoogleAnalyticsConfig {
     !privateKey ? 'service account private key' : '',
   ].filter(Boolean);
 
+  const validationErrors = [
+    propertyId && !/^\d+$/.test(propertyId) ? 'GA4 property id must be numeric or in properties/123456 format.' : '',
+    clientEmail && !isLikelyEmail(clientEmail) ? 'Service account email is not a valid email address.' : '',
+    privateKey && !privateKey.includes('BEGIN PRIVATE KEY') ? 'Service account private key is not in a valid PEM format.' : '',
+  ].filter(Boolean);
+
+  const envSource = rawJson
+    ? process.env.GA4_CLIENT_EMAIL || process.env.GA4_PRIVATE_KEY || process.env.GA4_PROPERTY_ID || process.env.GA_SERVICE_ACCOUNT_EMAIL || process.env.GA_SERVICE_ACCOUNT_PRIVATE_KEY
+      ? 'mixed'
+      : 'json'
+    : fileJson
+      ? process.env.GA4_CLIENT_EMAIL || process.env.GA4_PRIVATE_KEY || process.env.GA4_PROPERTY_ID || process.env.GA_SERVICE_ACCOUNT_EMAIL || process.env.GA_SERVICE_ACCOUNT_PRIVATE_KEY
+        ? 'mixed'
+        : 'file'
+      : process.env.GA4_CLIENT_EMAIL || process.env.GA4_PRIVATE_KEY || process.env.GA4_PROPERTY_ID || process.env.GA_SERVICE_ACCOUNT_EMAIL || process.env.GA_SERVICE_ACCOUNT_PRIVATE_KEY
+        ? 'env'
+        : 'none';
+
   return {
     propertyId,
     clientEmail,
     privateKey,
-    enabled: missing.length === 0,
+    projectId,
+    clientId,
+    enabled: missing.length === 0 && validationErrors.length === 0,
     missing,
+    validationErrors,
+    envSource,
   };
+}
+
+function getSafeConfigSummary(config: GoogleAnalyticsConfig) {
+  return {
+    enabled: config.enabled,
+    propertyIdPresent: Boolean(config.propertyId),
+    clientEmailPresent: Boolean(config.clientEmail),
+    privateKeyPresent: Boolean(config.privateKey),
+    projectIdPresent: Boolean(config.projectId),
+    clientIdPresent: Boolean(config.clientId),
+    missing: config.missing,
+    validationErrors: config.validationErrors,
+    envSource: config.envSource,
+  };
+}
+
+function ensureConfigStatusLogged(config: GoogleAnalyticsConfig) {
+  if (configStatusLogged) return;
+  configStatusLogged = true;
+
+  if (config.enabled) {
+    console.info('[ga-admin] GA4 config validation passed', getSafeConfigSummary(config));
+    return;
+  }
+
+  console.warn('[ga-admin] GA4 config validation failed', getSafeConfigSummary(config));
 }
 
 function getCacheEntry<T>(key: string): T | null {
@@ -827,13 +958,18 @@ async function getGoogleAnalyticsReports(config: GoogleAnalyticsConfig, dateRang
 
 export async function getGoogleAnalyticsAdminSnapshot(dateRange: GoogleAnalyticsDateRangeInput) {
   const config = readGoogleAnalyticsConfig();
+  ensureConfigStatusLogged(config);
 
   if (!config.enabled) {
     return {
       connected: false,
       source: 'google-analytics-data-api',
       propertyId: config.propertyId || null,
-      configurationIssue: `Google Analytics is not configured yet: missing ${config.missing.join(', ')}`,
+      configurationIssue:
+        config.missing.length > 0
+          ? `Google Analytics is not configured yet: missing ${config.missing.join(', ')}`
+          : config.validationErrors.join(' '),
+      configStatus: getSafeConfigSummary(config),
       summary: null,
       trend: [],
       geography: {
@@ -901,17 +1037,23 @@ export async function getGoogleAnalyticsAdminSnapshot(dateRange: GoogleAnalytics
       source: 'google-analytics-data-api',
       propertyId: config.propertyId,
       configurationIssue: null,
+      configStatus: getSafeConfigSummary(config),
       ...reports,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown Google Analytics error';
-    logDebug('Google Analytics snapshot failed', { message });
+    console.warn('[ga-admin] Google Analytics snapshot failed', {
+      message,
+      propertyIdPresent: Boolean(config.propertyId),
+      envSource: config.envSource,
+    });
 
     return {
       connected: false,
       source: 'google-analytics-data-api',
       propertyId: config.propertyId || null,
       configurationIssue: message,
+      configStatus: getSafeConfigSummary(config),
       summary: null,
       trend: [],
       geography: {
@@ -965,4 +1107,10 @@ export async function getGoogleAnalyticsAdminSnapshot(dateRange: GoogleAnalytics
       fetchedAt: new Date().toISOString(),
     };
   }
+}
+
+export function getGoogleAnalyticsConfigurationStatus() {
+  const config = readGoogleAnalyticsConfig();
+  ensureConfigStatusLogged(config);
+  return getSafeConfigSummary(config);
 }

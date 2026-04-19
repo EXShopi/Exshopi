@@ -48,7 +48,7 @@ import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, 
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 import { buildStoreOperationsAnalytics } from './adminAnalyticsService';
-import { getGoogleAnalyticsAdminSnapshot } from './googleAnalyticsService';
+import { getGoogleAnalyticsAdminSnapshot, getGoogleAnalyticsConfigurationStatus } from './googleAnalyticsService';
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
 import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
 
@@ -76,6 +76,17 @@ const seoSlugify = (value: string) =>
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
+
+const googleAnalyticsConfigStatus = getGoogleAnalyticsConfigurationStatus();
+if (googleAnalyticsConfigStatus.enabled) {
+  console.info('[startup] Google Analytics Data API is configured for admin reports.');
+} else {
+  console.warn('[startup] Google Analytics Data API is not fully configured.', {
+    missing: googleAnalyticsConfigStatus.missing,
+    validationErrors: googleAnalyticsConfigStatus.validationErrors,
+    envSource: googleAnalyticsConfigStatus.envSource,
+  });
+}
 
 
 // ==================== CORS CONFIGURATION ====================
