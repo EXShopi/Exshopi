@@ -2,6 +2,7 @@ import { BadgeCheck, CreditCard, MapPin, ShieldCheck, Store, TrendingUp } from "
 import { Link } from "react-router-dom";
 import SEOHead from "../components/seo/SEOHead";
 import { buildAbsoluteUrl } from "../lib/seo";
+import { getCategoryPath } from "../lib/seo";
 
 const benefitCards = [
   {
@@ -59,12 +60,40 @@ const steps = [
   },
 ];
 
+const faqItems = [
+  {
+    question: "How to sell on ExShopi?",
+    answer:
+      "Create your seller account, complete approval, upload your products, and start selling across the UAE marketplace through ExShopi.",
+  },
+  {
+    question: "Is ExShopi available in UAE?",
+    answer:
+      "Yes. ExShopi is available in UAE and is built to help sellers reach customers across Dubai, Abu Dhabi, Sharjah, and other Emirates.",
+  },
+  {
+    question: "What is commission on ExShopi?",
+    answer:
+      "ExShopi offers a simple 6% commission model designed for sellers who want to grow their ecommerce UAE business with predictable costs.",
+  },
+  {
+    question: "How fast is seller approval?",
+    answer:
+      "Seller approval is designed to be fast once your business details are submitted and verified, helping you start online business UAE operations quickly.",
+  },
+  {
+    question: "Do you support cash on delivery?",
+    answer:
+      "Yes. ExShopi supports cash on delivery, giving sellers access to one of the most trusted payment methods for customers who sell online UAE wide.",
+  },
+];
+
 export default function SellOnExShopi() {
   const pathname = "/sell-on-exshopi";
   const canonicalUrl = buildAbsoluteUrl(pathname);
-  const title = "Sell on ExShopi UAE – Start Your Online Business in UAE Marketplace";
+  const title = "Sell on ExShopi UAE | Start Selling Online in UAE Marketplace";
   const description =
-    "Start selling on ExShopi UAE marketplace. Reach customers across UAE with cash on delivery, low commission, and fast approval.";
+    "Sell online in UAE with ExShopi marketplace. Low commission, cash on delivery, fast seller approval. Start your ecommerce business today.";
 
   const jsonLd = [
     {
@@ -92,6 +121,18 @@ export default function SellOnExShopi() {
       logo: buildAbsoluteUrl("/logo.png"),
       sameAs: [buildAbsoluteUrl("/")],
     },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: faqItems.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.answer,
+        },
+      })),
+    },
   ];
 
   return (
@@ -105,6 +146,7 @@ export default function SellOnExShopi() {
         ogTitle={title}
         ogDescription={description}
         ogImage={buildAbsoluteUrl("/logo.png")}
+        image={buildAbsoluteUrl("/logo.png")}
         jsonLd={jsonLd}
       />
 
@@ -156,6 +198,17 @@ export default function SellOnExShopi() {
           </section>
 
           <section className="rounded-[32px] border border-slate-200 bg-white px-6 py-8 shadow-sm md:px-8 md:py-10">
+            <div className="max-w-4xl">
+              <h2 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
+                Why Sell on ExShopi UAE?
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-slate-500 md:text-base">
+                ExShopi helps brands and retailers sell online UAE wide through a trusted UAE marketplace built for modern ecommerce UAE growth. If you want to start online business UAE operations with fast approval, cash on delivery, and a premium seller journey, ExShopi gives you a clear path to reach customers across the Emirates.
+              </p>
+            </div>
+          </section>
+
+          <section className="rounded-[32px] border border-slate-200 bg-white px-6 py-8 shadow-sm md:px-8 md:py-10">
             <div className="mb-6 flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Seller Benefits</h2>
@@ -181,6 +234,24 @@ export default function SellOnExShopi() {
                   </div>
                 );
               })}
+            </div>
+          </section>
+
+          <section className="rounded-[32px] border border-slate-200 bg-white px-6 py-8 shadow-sm md:px-8 md:py-10">
+            <div className="max-w-3xl">
+              <h2 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Seller FAQ</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
+                Common questions for businesses planning to join ExShopi as a UAE marketplace seller.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-4">
+              {faqItems.map((item) => (
+                <div key={item.question} className="rounded-[26px] border border-slate-200 bg-slate-50 p-6">
+                  <h3 className="text-lg font-black text-slate-900">{item.question}</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-500">{item.answer}</p>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -224,6 +295,14 @@ export default function SellOnExShopi() {
               </div>
             </div>
           </section>
+
+          <nav aria-label="Seller SEO links" className="sr-only">
+            <Link to="/seller/register">Start selling on ExShopi</Link>
+            <Link to="/">ExShopi homepage</Link>
+            <Link to={getCategoryPath("electronics")}>Electronics in UAE</Link>
+            <Link to={getCategoryPath("laptops")}>Laptops in UAE</Link>
+            <Link to={getCategoryPath("accessories")}>Accessories in UAE</Link>
+          </nav>
         </div>
       </div>
     </>
