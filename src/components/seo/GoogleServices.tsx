@@ -26,39 +26,32 @@ export default function GoogleServices() {
     }
 
     if (measurementId) {
-      let script = document.head.querySelector(
-        `script[src="https://www.googletagmanager.com/gtag/js?id=${measurementId}"]`
+      const existingGtagScript = document.head.querySelector(
+        'script[src*="https://www.googletagmanager.com/gtag/js"]'
       ) as HTMLScriptElement | null;
+      const hasGlobalGtag = typeof window !== "undefined" && typeof (window as any).gtag === "function";
 
-      if (!script) {
-        script = document.createElement("script");
+      if (!existingGtagScript && !hasGlobalGtag) {
+        const script = document.createElement("script");
         script.async = true;
         script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
         script.setAttribute("data-exshopi-google", "true");
         document.head.appendChild(script);
-      }
+        managedNodes.push(script);
 
-      managedNodes.push(script);
-
-      let inlineScript = document.head.querySelector(
-        'script[data-exshopi-google-inline="true"]'
-      ) as HTMLScriptElement | null;
-
-      if (!inlineScript) {
-        inlineScript = document.createElement("script");
+        const inlineScript = document.createElement("script");
         inlineScript.type = "text/javascript";
         inlineScript.setAttribute("data-exshopi-google", "true");
         inlineScript.setAttribute("data-exshopi-google-inline", "true");
+        inlineScript.textContent = `
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', '${measurementId}', { send_page_view: true });
+        `;
         document.head.appendChild(inlineScript);
+        managedNodes.push(inlineScript);
       }
-
-      inlineScript.textContent = `
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', '${measurementId}', { send_page_view: true });
-      `;
-      managedNodes.push(inlineScript);
     }
 
     return () => {

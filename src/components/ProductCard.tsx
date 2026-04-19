@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ShoppingCart, Star, Check, Truck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cart";
@@ -50,16 +50,20 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const productId = id ?? slug ?? title;
   const productSlug = slug ?? id ?? title;
-  const productPath = buildProductPath({
-    id: productId,
-    slug: productSlug,
-    title,
-    category: parentCategorySlug || category,
-    specs: {
-      parentCategorySlug: parentCategorySlug || category,
-      subcategorySlug: subcategorySlug || category,
-    },
-  });
+  const productPath = useMemo(
+    () =>
+      buildProductPath({
+        id: productId,
+        slug: productSlug,
+        title,
+        category: parentCategorySlug || category,
+        specs: {
+          parentCategorySlug: parentCategorySlug || category,
+          subcategorySlug: subcategorySlug || category,
+        },
+      }),
+    [category, parentCategorySlug, productId, productSlug, subcategorySlug, title]
+  );
   const resolvedBadge = badge ?? badges?.[0];
   const stockLabel = typeof stock === "boolean" ? (stock ? "In Stock" : "Out of Stock") : stock;
 
@@ -212,4 +216,4 @@ const ProductCard: React.FC<ProductCardProps> = ({
   );
 };
 
-export default ProductCard;
+export default React.memo(ProductCard);

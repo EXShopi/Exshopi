@@ -1,29 +1,45 @@
-import { useEffect, useMemo } from "react";
+import { Suspense, lazy, useEffect, useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import HeroSection from "../components/HeroSection";
 import CategorySection from "../components/CategorySection";
 import UAEPrideStrip from "../components/UAEPrideStrip";
 import MegaCategoryCarousel from "../components/MegaCategoryCarousel";
-import FeaturedProducts from "../components/FeaturedProducts";
-import ShopByBrandSection from "../components/ShopByBrandSection";
-import AccessoriesSection from "../components/AccessoriesSection";
-import MostPopularSection from "../components/MostPopularSection";
-import BlackFridaySection from "../components/BlackFridaySection";
-import PromoSection from "../components/PromoSection";
-import AllProductsSection from "../components/AllProductsSection";
 import { useSettingsStore } from "../store/settings";
 import SEOHead from "../components/seo/SEOHead";
 import { generateHomepageSeo, buildHomepageSchemas } from "../lib/seo";
 import { LazyComponent } from "../components/LazyComponent";
 import { UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
 
+const FeaturedProducts = lazy(() => import("../components/FeaturedProducts"));
+const ShopByBrandSection = lazy(() => import("../components/ShopByBrandSection"));
+const AccessoriesSection = lazy(() => import("../components/AccessoriesSection"));
+const MostPopularSection = lazy(() => import("../components/MostPopularSection"));
+const BlackFridaySection = lazy(() => import("../components/BlackFridaySection"));
+const PromoSection = lazy(() => import("../components/PromoSection"));
+const AllProductsSection = lazy(() => import("../components/AllProductsSection"));
+
+function DeferredSection({
+  children,
+  rootMargin = "120px",
+}: {
+  children: ReactNode;
+  rootMargin?: string;
+}) {
+  return (
+    <LazyComponent deferUntilVisible={true} rootMargin={rootMargin}>
+      <Suspense fallback={null}>{children}</Suspense>
+    </LazyComponent>
+  );
+}
+
 export default function Home() {
-  const { settings, fetchSettings } = useSettingsStore();
+  const { settings, fetchSettings, hasFetched } = useSettingsStore();
   const homeSeo = generateHomepageSeo();
 
   useEffect(() => {
+    if (hasFetched) return;
     fetchSettings();
-  }, [fetchSettings]);
+  }, [fetchSettings, hasFetched]);
 
   const orderedCmsSections = useMemo(
     () =>
@@ -37,33 +53,33 @@ export default function Home() {
     switch (sectionId) {
       case "featured-products":
         return (
-          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+          <DeferredSection key={sectionId} rootMargin="120px">
             <FeaturedProducts />
-          </LazyComponent>
+          </DeferredSection>
         );
       case "brands":
         return (
-          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+          <DeferredSection key={sectionId} rootMargin="120px">
             <ShopByBrandSection />
-          </LazyComponent>
+          </DeferredSection>
         );
       case "most-popular":
         return (
-          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+          <DeferredSection key={sectionId} rootMargin="120px">
             <MostPopularSection />
-          </LazyComponent>
+          </DeferredSection>
         );
       case "flash-deals":
         return (
-          <LazyComponent key={sectionId} deferUntilVisible={true} rootMargin="100px">
+          <DeferredSection key={sectionId} rootMargin="120px">
             <BlackFridaySection />
-          </LazyComponent>
+          </DeferredSection>
         );
       case "promo":
         return (
-          <div key={sectionId}>
+          <DeferredSection key={sectionId} rootMargin="120px">
             <PromoSection boxes={settings.homepage.promoBoxes} />
-          </div>
+          </DeferredSection>
         );
       default:
         return null;
@@ -88,11 +104,13 @@ export default function Home() {
       </div>
       <CategorySection />
       <MegaCategoryCarousel />
-      <AccessoriesSection />
+      <DeferredSection rootMargin="160px">
+        <AccessoriesSection />
+      </DeferredSection>
       {orderedCmsSections.map((section) => renderHomepageSection(section.id))}
-      <LazyComponent deferUntilVisible={true} rootMargin="100px">
+      <DeferredSection rootMargin="180px">
         <AllProductsSection />
-      </LazyComponent>
+      </DeferredSection>
       <section className="mx-auto mt-10 max-w-7xl px-4 pb-12 md:px-6">
         <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">UAE Trusted Marketplace</p>

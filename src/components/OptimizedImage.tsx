@@ -1,15 +1,10 @@
 /**
  * OptimizedImage Component
- * Handles WebP conversion, lazy loading, and responsive images for better performance
- * Features:
- * - Automatic WebP with PNG fallback
- * - Lazy loading for non-critical images
- * - Explicit width/height to prevent layout shift
- * - Preload support for LCP images
- * - Responsive sizing
+ * Handles WebP conversion, lazy loading, and responsive images for better performance.
+ * Uses native browser source selection instead of JS probing to reduce main-thread work.
  */
 
-import React, { ImgHTMLAttributes, useState, useEffect } from 'react';
+import React, { ImgHTMLAttributes } from 'react';
 
 interface OptimizedImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   /** Image source path (without extension) - e.g., "/hero/hero-1" */
@@ -88,19 +83,9 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   style,
   ...props
 }) => {
- const [imageSrc, setImageSrc] = useState<string>(() => {
   const normalizedSrc = src.startsWith("/") ? src : `/${src}`;
-
-  if (!useWebP) {
-    return normalizedSrc;
-  }
-
-  const { png } = getImageSources(src);
-  return png;
-});
-
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
+  const { webp, png } = getImageSources(src);
+  const imageSrc = fallbackSrc || (!useWebP ? normalizedSrc : png);
 
   // Determine fetch priority
   const fetchPriority = priority === 'high' ? 'high' : priority === 'low' ? 'low' : 'auto';
@@ -113,64 +98,11 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     return 'lazy';
   };
 
-  useEffect(() => {
-    // On client side, prefer WebP but probe first so we don't switch to
-    // a WebP URL that returns HTML or 404 (which would cause a broken image
-    // and extra console noise). Start with the PNG (SSR-friendly) and
-    // only switch to WebP if the probe succeeds.
-    if (useWebP && typeof window !== 'undefined') {
-      const { webp, png } = getImageSources(src);
-      let cancelled = false;
-      const probe = new Image();
-      probe.onload = () => {
-        if (!cancelled) setImageSrc(webp);
-      };
-      probe.onerror = () => {
-        if (!cancelled) setImageSrc(png);
-      };
-      // Kick off probe (browser will request the resource)
-      probe.src = webp;
-
-      return () => {
-        cancelled = true;
-        probe.onload = null;
-        probe.onerror = null;
-      };
-    }
-  }, [src, useWebP]);
-
-  const handleError = () => {
-  try {
-    const { webp, png } = getImageSources(src);
-
-    if (imageSrc === webp && png && imageSrc !== png) {
-      setImageSrc(png);
-      return;
-    }
-
-    if (fallbackSrc && imageSrc !== fallbackSrc) {
-      setImageSrc(fallbackSrc);
-      return;
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  setHasError(true);
-};
-
-  const handleLoad = () => {
-    setIsLoaded(true);
-  };
-
-  // Merge user styles with loading state styles
   const mergedStyle: React.CSSProperties = {
     ...style,
-    backgroundColor: !isLoaded && !hasError ? placeholderColor : 'transparent',
-    transition: 'background-color 0.3s ease-in-out',
+    backgroundColor: placeholderColor,
   };
 
-  // Only add explicit dimensions if provided
   const imgProps = {
     ...props,
     src: imageSrc,
@@ -178,16 +110,18 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     className,
     style: mergedStyle,
     loading: loadingStrategy() as 'lazy' | 'eager',
-    onError: handleError,
-    onLoad: handleLoad,
     ...(fetchPriority !== 'auto' && { fetchPriority: fetchPriority as 'high' | 'low' | 'auto' }),
     ...(width && { width }),
     ...(height && { height }),
     decoding: 'async' as const,
   };
 
-  if (hasError) {
-    const fallbackText = (alt || "").slice(0, 1).toUpperCase() || "";
+  if (props.onError || !useWebP || normalizedSrc.startsWith('http')) {
+    return <img {...imgProps} />;
+  }
+
+  if (!imageSrc) {
+    const fallbackText = (alt || '').slice(0, 1).toUpperCase() || '';
     return (
       <div
         role="img"
@@ -200,7 +134,12 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     );
   }
 
-  return <img {...imgProps} />;
+  return (
+    <picture>
+      <source srcSet={webp} type="image/webp" />
+      <img {...imgProps} />
+    </picture>
+  );
 };
 
 /**

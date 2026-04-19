@@ -3,17 +3,30 @@ import { defaultSettings, getSiteSettings } from "../services/settingsService";
 
 interface SettingsState {
   settings: typeof defaultSettings;
+  hasFetched: boolean;
   fetchSettings: () => Promise<void>;
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+let settingsRequest: Promise<void> | null = null;
+
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: defaultSettings,
+  hasFetched: false,
   fetchSettings: async () => {
+    if (get().hasFetched) return;
+    if (settingsRequest) return settingsRequest;
+
+    settingsRequest = (async () => {
     try {
       const settings = await getSiteSettings();
-      set({ settings });
+        set({ settings, hasFetched: true });
     } catch {
-      set({ settings: defaultSettings });
+        set({ settings: defaultSettings, hasFetched: true });
     }
+    })().finally(() => {
+      settingsRequest = null;
+    });
+
+    return settingsRequest;
   },
 }));

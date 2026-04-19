@@ -68,11 +68,40 @@ export default defineConfig(({ mode }) => {
             }
             return `assets/[name]-[hash][extname]`;
           },
-          manualChunks: {
-            "vendor-react": ["react", "react-dom", "react-router-dom"],
-            "vendor-icons": ["lucide-react"],
-            "vendor-charts": ["recharts"],
-            "vendor-ui": ["framer-motion"],
+          manualChunks(id) {
+            if (id.includes("node_modules")) {
+              if (id.includes("react") || id.includes("scheduler") || id.includes("react-router-dom")) {
+                return "vendor-react";
+              }
+
+              if (id.includes("lucide-react")) {
+                return "vendor-icons";
+              }
+
+              if (id.includes("recharts")) {
+                return "vendor-charts";
+              }
+
+              if (id.includes("framer-motion") || id.includes("/motion/")) {
+                return "vendor-ui";
+              }
+
+              if (id.includes("firebase")) {
+                return "vendor-firebase";
+              }
+
+              if (id.includes("jspdf") || id.includes("html2canvas")) {
+                return "vendor-print";
+              }
+            }
+
+            if (id.includes("/src/pages/admin/") || id.includes("/src/layouts/AdminLayout")) {
+              return "admin-shell";
+            }
+
+            if (id.includes("/src/pages/seller/") || id.includes("/src/layouts/SellerLayout")) {
+              return "seller-shell";
+            }
           },
         },
         // Optimize input options
