@@ -8,6 +8,19 @@ const DIST_DIR = path.join(process.cwd(), "dist");
 const TARGETED_CANONICAL_PRODUCT_PATHS = [
   "/electronics/laptops/apple-macbook-pro-a1708-2017",
 ];
+const TARGETED_STATIC_ROUTE_PATHS = [
+  "/about",
+  "/contact",
+  "/faq",
+  "/privacy",
+  "/terms",
+  "/return-policy",
+  "/warranty",
+  "/support",
+  "/sell-on-exshopi",
+  "/promotions",
+  "/campaigns/current",
+];
 const TARGETED_LEGACY_PRODUCT_PATHS = [
   "/electronics/laptops/apple-macbook-pro-a1708-2017-laptop-with-13-3-inch-display-intel-core-i5-processor-7th-gen-8gb-ram-128gb-ssd-1-5gb-intel",
 ];
@@ -151,7 +164,7 @@ async function main() {
 
       const expectedPath = routeSnapshot?.path || `/${relative.replace(/\/index\.html$/, "").replace(/^index\.html$/, "")}`;
       const expectedCanonical = `https://exshopi.com${expectedPath === "/" ? "" : expectedPath}`;
-      const productTitle = normalizeText(String(routeSnapshot?.product?.title || ""));
+      const productTitle = normalizeText(String((routeSnapshot as any)?.product?.title || ""));
 
       if (/Product Not Found/i.test(html)) {
         issues.push({ file: relative, message: 'Product page contains "Product Not Found"' });
@@ -213,6 +226,46 @@ async function main() {
       issues.push({
         file: targetPath,
         message: "Targeted canonical product URL is missing prerendered HTML",
+      });
+    }
+  }
+
+  for (const targetPath of TARGETED_STATIC_ROUTE_PATHS) {
+    const filePath =
+      targetPath === "/"
+        ? "index.html"
+        : `${targetPath.replace(/^\//, "")}/index.html`;
+    const absolutePath = path.join(DIST_DIR, filePath);
+
+    try {
+      const html = await fs.readFile(absolutePath, "utf8");
+      const snapshot = extractRouteSnapshot(html);
+      const pageText = normalizeText(stripHtml(html));
+
+      if (!getTitle(html)) {
+        issues.push({ file: filePath, message: "Missing static page title" });
+      }
+      if (
+        pageText.includes(
+          normalizeText("ExShopi UAE Online Shopping Marketplace")
+        ) &&
+        !targetPath.startsWith("/campaigns")
+      ) {
+        issues.push({
+          file: filePath,
+          message: "Static route is still rendering the generic homepage shell content",
+        });
+      }
+      if (!snapshot || !["static", "landing"].includes(String((snapshot as any).kind || ""))) {
+        issues.push({
+          file: filePath,
+          message: "Static route is missing route snapshot metadata",
+        });
+      }
+    } catch {
+      issues.push({
+        file: filePath,
+        message: "Expected static prerendered route is missing",
       });
     }
   }

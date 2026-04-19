@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { BLOG_POSTS } from "../src/lib/blog";
+import { brands } from "../src/components/ShopByBrandSection";
 import {
   buildCategorySeoBody,
   buildProductSeoNarrative,
@@ -47,6 +48,137 @@ type PrerenderedProduct = {
   brand: string;
   badges: string[];
 };
+
+const STATIC_PAGE_CONTENT: Array<{
+  path: string;
+  title: string;
+  description: string;
+  keywords: string;
+  heading: string;
+  paragraphs: string[];
+}> = [
+  {
+    path: "/about",
+    title: "About ExShopi UAE | Trusted Online Marketplace",
+    description: "Learn about ExShopi, the UAE marketplace focused on electronics, verified sellers, and trusted customer shopping journeys.",
+    keywords: "about ExShopi, UAE marketplace, trusted online shopping UAE, ExShopi company",
+    heading: "About ExShopi",
+    paragraphs: [
+      "ExShopi is a UAE-focused marketplace built to connect shoppers with verified sellers, structured product pages, and trusted online buying experiences across electronics and daily-use categories.",
+      "The platform combines clearer category navigation, route-specific product pages, and marketplace trust signals to help customers discover products faster and sellers launch with more confidence.",
+    ],
+  },
+  {
+    path: "/contact",
+    title: "Contact ExShopi UAE | Marketplace Support",
+    description: "Contact ExShopi UAE for marketplace support, order help, seller questions, and customer service assistance.",
+    keywords: "contact ExShopi, ExShopi support, UAE marketplace support, customer service ExShopi",
+    heading: "Contact ExShopi",
+    paragraphs: [
+      "Reach ExShopi for order support, seller onboarding help, and customer service questions related to the UAE marketplace.",
+      "Use ExShopi support channels for assistance with products, orders, seller registration, and marketplace policies.",
+    ],
+  },
+  {
+    path: "/faq",
+    title: "ExShopi FAQ | UAE Marketplace Help",
+    description: "Read frequently asked questions about shopping, delivery, returns, sellers, and marketplace support on ExShopi UAE.",
+    keywords: "ExShopi FAQ, marketplace FAQ UAE, delivery questions ExShopi, seller help UAE",
+    heading: "ExShopi FAQ",
+    paragraphs: [
+      "Find answers about orders, delivery, returns, seller flows, and general marketplace support for ExShopi UAE.",
+      "This FAQ hub helps shoppers and sellers quickly understand how ExShopi works across the UAE marketplace.",
+    ],
+  },
+  {
+    path: "/privacy",
+    title: "Privacy Policy | ExShopi UAE",
+    description: "Read the ExShopi UAE privacy policy to understand how marketplace data, account information, and shopping activity are handled.",
+    keywords: "privacy policy ExShopi, ExShopi privacy, marketplace privacy UAE",
+    heading: "Privacy Policy",
+    paragraphs: [
+      "Review how ExShopi handles account information, marketplace activity, and customer data across the UAE shopping platform.",
+      "The privacy policy explains how data is collected, used, and protected while browsing, buying, or selling on ExShopi.",
+    ],
+  },
+  {
+    path: "/terms",
+    title: "Terms and Conditions | ExShopi UAE",
+    description: "Read the terms and conditions for shopping, selling, and using ExShopi UAE marketplace services.",
+    keywords: "ExShopi terms, marketplace terms UAE, ExShopi conditions",
+    heading: "Terms and Conditions",
+    paragraphs: [
+      "The ExShopi terms outline the rules for shopping, selling, orders, listings, and general use of the UAE marketplace.",
+      "Review these terms to understand responsibilities, service conditions, and platform expectations across customer and seller journeys.",
+    ],
+  },
+  {
+    path: "/return-policy",
+    title: "Return Policy | ExShopi UAE",
+    description: "Read the ExShopi UAE return policy for orders, seller listings, and marketplace purchase support.",
+    keywords: "return policy ExShopi, ExShopi returns UAE, marketplace returns",
+    heading: "Return Policy",
+    paragraphs: [
+      "ExShopi provides clear return policy guidance for marketplace orders, listing conditions, and buyer support in the UAE.",
+      "Use the return policy page to understand timelines, item eligibility, and how support works for marketplace transactions.",
+    ],
+  },
+  {
+    path: "/warranty",
+    title: "Warranty Information | ExShopi UAE",
+    description: "Review warranty information for eligible ExShopi marketplace products and UAE customer support policies.",
+    keywords: "ExShopi warranty, UAE electronics warranty, marketplace warranty",
+    heading: "Warranty Information",
+    paragraphs: [
+      "ExShopi highlights warranty information and support expectations for eligible marketplace products across the UAE.",
+      "Review warranty coverage details and support guidance before completing your purchase on the marketplace.",
+    ],
+  },
+  {
+    path: "/support",
+    title: "ExShopi Support | UAE Marketplace Help Center",
+    description: "Visit the ExShopi support page for order tracking, customer service, seller help, and marketplace assistance.",
+    keywords: "ExShopi support, help center ExShopi, seller help UAE, customer support marketplace",
+    heading: "Marketplace Support",
+    paragraphs: [
+      "The ExShopi support page connects buyers and sellers to help for orders, product questions, seller onboarding, and general marketplace guidance.",
+      "Use support resources to resolve issues faster and keep shopping and selling journeys moving smoothly across the UAE marketplace.",
+    ],
+  },
+  {
+    path: "/sell-on-exshopi",
+    title: "Sell on ExShopi UAE | Start Selling Online in UAE Marketplace",
+    description: "Sell online in UAE with ExShopi marketplace. Low commission, cash on delivery, fast seller approval. Start your ecommerce business today.",
+    keywords: "sell on ExShopi, sell online UAE, ecommerce UAE, UAE marketplace, start online business UAE",
+    heading: "Sell on ExShopi UAE",
+    paragraphs: [
+      "ExShopi helps businesses sell online in UAE through a trusted marketplace built for electronics, retail growth, and smoother seller onboarding.",
+      "If you want to start online business UAE operations with cash on delivery support, faster approval, and clearer marketplace visibility, ExShopi provides a focused seller path.",
+    ],
+  },
+  {
+    path: "/promotions",
+    title: "Marketplace Promotions in UAE | ExShopi",
+    description: "Explore ExShopi promotions, seasonal marketplace offers, and curated shopping opportunities across UAE categories.",
+    keywords: "ExShopi promotions, UAE marketplace offers, online shopping deals UAE",
+    heading: "Marketplace Promotions",
+    paragraphs: [
+      "Browse ExShopi promotions, featured marketplace offers, and seasonal buying opportunities across UAE shopping categories.",
+      "Promotions pages help shoppers discover curated deals while preserving clear internal links into products, categories, and campaigns.",
+    ],
+  },
+  {
+    path: "/campaigns/current",
+    title: "Current Campaigns | ExShopi UAE Marketplace",
+    description: "See the current ExShopi marketplace campaigns, featured offers, and curated product collections in the UAE.",
+    keywords: "ExShopi campaign, marketplace campaigns UAE, featured offers ExShopi",
+    heading: "Current Campaigns",
+    paragraphs: [
+      "Current campaign pages highlight marketplace collections, featured promotions, and curated product discovery routes across ExShopi UAE.",
+      "These campaign pages support both shoppers and search engines with route-specific content linked to live marketplace offers.",
+    ],
+  },
+];
 
 function escapeHtml(value: string) {
   return String(value || "")
@@ -236,6 +368,44 @@ function renderCategorySnapshot(input: {
             .join("")}
         </ul>
         <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">${input.continueText}</p>
+      </section>
+    </main>`;
+}
+
+function renderStaticSnapshot(input: {
+  heading: string;
+  paragraphs: string[];
+  links?: Array<{ href: string; label: string }>;
+}) {
+  return `
+    <main style="max-width:1100px;margin:0 auto;padding:48px 20px 64px;font-family:Inter,system-ui,sans-serif;">
+      <section data-prerender-human-shell="true" style="padding:12px 0 24px;">
+        <div style="display:grid;gap:20px;grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr);align-items:start;">
+          <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#ffffff;padding:28px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+            <div style="width:126px;height:12px;border-radius:999px;background:#dbeafe;"></div>
+            <div style="margin-top:16px;width:62%;height:40px;border-radius:18px;background:#e2e8f0;"></div>
+            <div style="margin-top:14px;width:100%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+            <div style="margin-top:10px;width:90%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+            <div style="margin-top:10px;width:76%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+          </div>
+          <div style="border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#ffffff;padding:24px;box-shadow:0 18px 42px rgba(15,23,42,.06);">
+            <div style="width:70%;height:18px;border-radius:999px;background:#e2e8f0;"></div>
+            <div style="margin-top:16px;width:100%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+            <div style="margin-top:10px;width:88%;height:14px;border-radius:999px;background:#e2e8f0;"></div>
+            <div style="margin-top:28px;width:100%;height:44px;border-radius:18px;background:#dbeafe;"></div>
+          </div>
+        </div>
+      </section>
+      <section data-prerender-human-hidden="true">
+        <h1 style="font-size:40px;line-height:1.15;color:#0f172a;">${escapeHtml(input.heading)}</h1>
+        ${textParagraphs(input.paragraphs)}
+        ${
+          input.links?.length
+            ? `<ul style="padding-left:20px;line-height:2;margin-top:24px;">
+          ${input.links.map((link) => `<li><a href="${link.href}">${escapeHtml(link.label)}</a></li>`).join("")}
+        </ul>`
+            : ""
+        }
       </section>
     </main>`;
 }
@@ -454,6 +624,32 @@ async function main() {
   });
   await writeRouteFile("/products", listingHtml);
 
+  for (const page of STATIC_PAGE_CONTENT) {
+    await writeRouteFile(
+      page.path,
+      htmlDocument(template, {
+        title: page.title,
+        description: page.description,
+        keywords: page.keywords,
+        canonicalUrl: buildAbsoluteUrl(page.path),
+        ogImage: "/logo.png",
+        routeData: { kind: "static", path: page.path },
+        snapshotHtml: renderStaticSnapshot({
+          heading: page.heading,
+          paragraphs: page.paragraphs,
+          links: [
+            { href: "/", label: "ExShopi homepage" },
+            { href: "/products", label: "Marketplace products" },
+            { href: "/category/electronics", label: "Electronics category" },
+            ...(page.path !== "/sell-on-exshopi"
+              ? [{ href: "/sell-on-exshopi", label: "Sell on ExShopi" }]
+              : [{ href: "/seller/register", label: "Seller registration" }]),
+          ],
+        }),
+      })
+    );
+  }
+
   for (const category of categories) {
     const categoryProducts = liveProducts.filter((product) =>
       productMatchesCategoryAssignment(product, category.slug)
@@ -583,6 +779,58 @@ async function main() {
         );
       }
     }
+  }
+
+  const brandDescriptions: Record<string, string> = {
+    apple: "Premium Apple devices, laptops, tablets, and accessories selected for UAE marketplace buyers.",
+    samsung: "Samsung smartphones, tablets, earbuds, and accessories with trusted marketplace offers.",
+    dell: "Dell laptops, monitors, and computing essentials for work and daily use.",
+    hp: "HP productivity devices, business machines, and reliable electronics for every workflow.",
+    lenovo: "Lenovo laptops and professional computing picks from marketplace sellers.",
+    acer: "Acer gaming and everyday computing products with competitive pricing.",
+    asus: "ASUS laptops, components, and performance devices for modern shoppers.",
+    gaming: "Gaming-focused devices, accessories, and performance products from top sellers.",
+  };
+
+  for (const brand of brands) {
+    const brandSlug = cleanSeoSlug(brand.name);
+    const brandPath = `/brands/${brandSlug}`;
+    const brandProducts = liveProducts.filter((product) =>
+      String(
+        product.brand ||
+          product.specs?.brand ||
+          product.specs?.attributes?.brand ||
+          ""
+      )
+        .toLowerCase()
+        .includes(brandSlug)
+    );
+
+    await writeRouteFile(
+      brandPath,
+      htmlDocument(template, {
+        title: `${brand.name} Products in UAE | ExShopi`,
+        description:
+          brandDescriptions[brandSlug] ||
+          `${brand.name} products, listings, and marketplace offers in UAE on ExShopi.`,
+        keywords: `${brand.name} UAE, ${brand.name} marketplace, ${brand.name} products ExShopi`,
+        canonicalUrl: buildAbsoluteUrl(brandPath),
+        ogImage: "/logo.png",
+        routeData: { kind: "brand", path: brandPath, brand: brand.name, products: brandProducts },
+        snapshotHtml: renderStaticSnapshot({
+          heading: `${brand.name} on ExShopi UAE`,
+          paragraphs: [
+            brandDescriptions[brandSlug] ||
+              `${brand.name} listings and brand-focused marketplace discovery for UAE shoppers.`,
+            `Browse ${brand.name} alongside related categories, live product routes, and marketplace buying paths on ExShopi.`,
+          ],
+          links: brandProducts.slice(0, 8).map((product) => ({
+            href: buildProductPath(product),
+            label: product.title,
+          })),
+        }),
+      })
+    );
   }
 
   const productRedirects = new Map<string, string>();

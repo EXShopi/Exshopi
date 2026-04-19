@@ -7,6 +7,8 @@ import { brands } from "../components/ShopByBrandSection";
 import { getBrandLogoForName, normalizeBrandKey } from "../data/brandLogos";
 import { productAPI } from "../services/api";
 import { getLiveMarketplaceProducts, productMatchesBrand, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
+import SEOHead from "../components/seo/SEOHead";
+import { buildAbsoluteUrl } from "../lib/seo";
 
 const brandDescriptions: Record<string, string> = {
   apple: "Premium Apple devices, laptops, tablets, and accessories selected for UAE marketplace buyers.",
@@ -70,6 +72,22 @@ export default function BrandPage() {
 
   return (
     <div className="min-h-screen bg-[#f6f8fc]">
+      <SEOHead
+        title={`${brandName} Products in UAE | ExShopi`}
+        description={
+          brandDescriptions[brandSlug] ||
+          `${brandName} products, listings, and marketplace offers in UAE on ExShopi.`
+        }
+        pathname={`/brands/${brandSlug}`}
+        canonicalUrl={buildAbsoluteUrl(`/brands/${brandSlug}`)}
+        type="website"
+        ogTitle={`${brandName} Products in UAE | ExShopi`}
+        ogDescription={
+          brandDescriptions[brandSlug] ||
+          `${brandName} products, listings, and marketplace offers in UAE on ExShopi.`
+        }
+        ogImage={brandLogo || buildAbsoluteUrl("/logo.png")}
+      />
       <section className="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.12),_transparent_30%),linear-gradient(135deg,#ffffff,#eff5ff)]">
         <div className="mx-auto max-w-7xl px-4 py-12 md:px-6">
           <div className="mb-5 text-sm text-slate-500">

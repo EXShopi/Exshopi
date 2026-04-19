@@ -1,6 +1,7 @@
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
 import { productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../lib/masterCategories';
+import { getProductLifecycleState } from '../lib/productLifecycle';
 
 const DEFAULT_PROD_API_BASE = 'https://exshopi-api.onrender.com/api';
 const DEFAULT_DEV_API_BASE = 'http://localhost:3001/api';
@@ -134,27 +135,8 @@ export function buildApiUrl(pathOrUrl: string): string | null {
   return API_BASE.replace(/\/$/, '') + '/' + pathOrUrl;
 }
 
-function isDeletedMarketplaceProduct(product: any) {
-  const deletionMeta = product?.specs?.__deletion || {};
-  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt);
-}
-
-function normalizeMarketplaceValue(value: any) {
-  return String(value || '').trim().toLowerCase();
-}
-
 function isPubliclyVisibleMarketplaceProduct(product: any) {
-  if (!product || isDeletedMarketplaceProduct(product)) return false;
-
-  const status = normalizeMarketplaceValue(product.status || product.productStatus || product.product_status);
-  const approval = normalizeMarketplaceValue(product.approval_status || product.approvalStatus);
-  const visibility = normalizeMarketplaceValue(product.visibility_status || product.visibilityStatus);
-
-  if (['draft', 'pending', 'pending_approval', 'rejected', 'archived'].includes(status)) return false;
-  if (approval === 'rejected' || visibility === 'archived') return false;
-  if (visibility && !['live', 'public', 'visible'].includes(visibility)) return false;
-
-  return status === 'live' || approval === 'approved';
+  return getProductLifecycleState(product).isCustomerVisible;
 }
 
 if (typeof window !== 'undefined') {

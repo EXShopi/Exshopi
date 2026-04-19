@@ -23,6 +23,11 @@ export type ExShopiRouteSnapshot =
       kind: "landing" | "home" | "blog-index" | "blog-post" | "listing";
       path: string;
       [key: string]: unknown;
+    }
+  | {
+      kind: "static" | "brand";
+      path: string;
+      [key: string]: unknown;
     };
 
 export function readRouteSnapshot(): ExShopiRouteSnapshot | null {

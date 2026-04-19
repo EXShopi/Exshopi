@@ -207,22 +207,51 @@ export interface SiteSettings {
     accentColor: string;
   };
   homepage: {
-    hero: {
+    hero?: {
       title: string;
       subtitle: string;
       primaryCtaText: string;
       primaryCtaLink: string;
       productImageUrl: string;
     };
-    sections: Array<{
+    featuredSection?: {
+      show?: boolean;
+      title?: string;
+      subtitle?: string;
+      bestsellersProductIds?: string[];
+      bestchoiceProductIds?: string[];
+      onsaleProductIds?: string[];
+      [key: string]: any;
+    };
+    campaignSection?: {
+      show?: boolean;
+      title?: string;
+      subtitle?: string;
+      featuredProductIds?: string[];
+      [key: string]: any;
+    };
+    uaeStrip?: {
+      show?: boolean;
+      title?: string;
+      subtitle?: string;
+      [key: string]: any;
+    };
+    allProductsSection?: {
+      show?: boolean;
+      title?: string;
+      subtitle?: string;
+      [key: string]: any;
+    };
+    sections?: Array<{
       id: string;
       title: string;
       subtitle: string;
       type: string;
       show: boolean;
       order: number;
+      [key: string]: any;
     }>;
-    videoSection: {
+    videoSection?: {
       show: boolean;
       badgeText: string;
       title: string;
@@ -230,15 +259,20 @@ export interface SiteSettings {
       ctaText: string;
       videoUrl: string;
       thumbnailUrl: string;
+      [key: string]: any;
     };
-    trustBanner: {
+    trustBanner?: {
       show: boolean;
       items: Array<{
         icon: string;
         title: string;
         desc: string;
+        [key: string]: any;
       }>;
+      [key: string]: any;
     };
+    promoBoxes?: Array<Record<string, any>>;
+    [key: string]: any;
   };
   header: {
     announcementBar: {

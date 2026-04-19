@@ -1,4 +1,5 @@
 import type { ProductCardProps } from "../components/ProductCard";
+import { getProductLifecycleState } from "./productLifecycle";
 
 export type LiveMarketplaceProduct = ProductCardProps & {
   raw: any;
@@ -21,33 +22,15 @@ function shouldDebugVisibility() {
 
 function getMarketplaceVisibilityDecision(product: any) {
   if (!product) return { visible: false, reason: 'missing-product' };
-
-  const deletionMeta = product.specs?.__deletion || {};
-  if (product.isDeleted || product.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt) {
-    return { visible: false, reason: 'deleted' };
-  }
-
-  const status = normalizeMarketplaceValue(product.status || product.productStatus || product.product_status);
-  const approval = normalizeMarketplaceValue(product.approval_status || product.approvalStatus);
-  const visibility = normalizeMarketplaceValue(product.visibility_status || product.visibilityStatus);
-
-  if (['draft', 'pending', 'pending_approval', 'rejected', 'archived'].includes(status)) {
-    return { visible: false, reason: `status:${status || 'unknown'}` };
-  }
-  if (approval === 'rejected') {
-    return { visible: false, reason: 'approval:rejected' };
-  }
-  if (visibility === 'archived') {
-    return { visible: false, reason: 'visibility:archived' };
-  }
-  if (visibility && !['live', 'public', 'visible'].includes(visibility)) {
-    return { visible: false, reason: `visibility:${visibility}` };
-  }
-  if (status === 'live' || approval === 'approved') {
-    return { visible: true, reason: status === 'live' ? 'status:live' : 'approval:approved' };
-  }
-
-  return { visible: false, reason: 'not-live-or-approved' };
+  const lifecycle = getProductLifecycleState(product);
+  return {
+    visible: lifecycle.isCustomerVisible,
+    reason: lifecycle.isCustomerVisible
+      ? lifecycle.effectiveStatus === 'live'
+        ? 'status:live'
+        : 'approval:approved'
+      : lifecycle.exclusionReason || 'not-live-or-approved',
+  };
 }
 
 export function isLiveMarketplaceProduct(product: any) {

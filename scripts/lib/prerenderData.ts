@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { getProductLifecycleState } from "../../src/lib/productLifecycle";
 
 const ROOT = process.cwd();
 const DEFAULT_REMOTE_API_BASE = "https://exshopi-api.onrender.com/api";
@@ -47,20 +48,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 20000) {
 }
 
 export function isLivePrerenderProduct(product: any) {
-  const specs = product?.specs || {};
-  const deletionMeta = specs?.__deletion || {};
-  if (product?.isDeleted || product?.deletedAt || deletionMeta?.isDeleted || deletionMeta?.deletedAt) {
-    return false;
-  }
-
-  const status = String(product?.status || product?.productStatus || "").toLowerCase();
-  const approval = String(product?.approvalStatus || "").toLowerCase();
-  const visibility = String(product?.visibilityStatus || "").toLowerCase();
-
-  if (["draft", "pending", "pending_approval", "rejected", "archived"].includes(status)) return false;
-  if (approval === "rejected") return false;
-  if (visibility && !["live", "public", "visible"].includes(visibility)) return false;
-  return status === "live" || approval === "approved";
+  return getProductLifecycleState(product).isCustomerVisible;
 }
 
 async function loadLocalProducts() {

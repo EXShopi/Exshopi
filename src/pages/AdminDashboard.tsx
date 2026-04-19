@@ -6,6 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import { compressImage } from '../lib/imageUtils';
 import { dashboardAPI, productAPI, sellerAPI, categoryAPI, adminOpsAPI, adminProductAPI, orderAPI, customerAPI, getAuthHeaders } from '../services/api';
 import { useAuthStore } from '../store/auth';
+import { buildProductPath } from '../lib/seo';
 
 interface Vendor {
   id: string;

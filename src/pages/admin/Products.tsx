@@ -5,6 +5,7 @@ import { formatAED } from '../../lib/currency';
 import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
+import { getProductLifecycleState, isSoftDeletedProduct } from '../../lib/productLifecycle';
 
 const statusTone: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
@@ -16,21 +17,11 @@ const statusTone: Record<string, string> = {
 };
 
 const getEffectiveStatus = (product: any) => {
-  const productStatus = String(product?.productStatus || '');
-  const approvalStatus = String(product?.approvalStatus || '');
-  const status = String(product?.status || '');
-
-  if (productStatus === 'draft' || status === 'draft') return 'draft';
-  if (productStatus === 'rejected' || approvalStatus === 'rejected' || status === 'rejected') return 'rejected';
-  if (productStatus === 'archived' || status === 'archived') return 'archived';
-  if (productStatus === 'live' || status === 'live') return 'live';
-  if (productStatus === 'approved' || approvalStatus === 'approved' || status === 'approved') return 'approved';
-  return 'pending';
+  return getProductLifecycleState(product).effectiveStatus;
 };
 
 const isSoftDeletedAdminProduct = (product: any) => {
-  const deletionMeta = product?.specs?.__deletion || {};
-  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta?.isDeleted || deletionMeta?.deletedAt);
+  return isSoftDeletedProduct(product);
 };
 
 export function AdminProducts() {

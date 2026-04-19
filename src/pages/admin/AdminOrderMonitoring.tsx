@@ -905,6 +905,7 @@ export default function AdminOrderMonitoring() {
             ...selectedOrder,
             orderNumber: selectedOrder.orderNumber || selectedOrder.id,
             commissionAmount: selectedOrder.commission,
+            paymentStatus: selectedOrder.paymentStatus || 'pending',
           }}
           onStatusChange={handleStatusChange}
           onUpdateDispatch={handleDispatchUpdate}

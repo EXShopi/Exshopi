@@ -60,7 +60,7 @@ export interface OrderDetailsData {
     sku?: string;
     image?: string;
   }>;
-  shippingAddress: {
+  shippingAddress?: {
     emirate?: string;
     area?: string;
     building?: string;
