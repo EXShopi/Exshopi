@@ -2,7 +2,6 @@ import { BadgeCheck, CreditCard, MapPin, ShieldCheck, Store, TrendingUp } from "
 import { Link } from "react-router-dom";
 import SEOHead from "../components/seo/SEOHead";
 import { buildAbsoluteUrl } from "../lib/seo";
-import { getCategoryPath } from "../lib/seo";
 
 const benefitCards = [
   {
@@ -72,7 +71,7 @@ const faqItems = [
       "Yes. ExShopi is available in UAE and is built to help sellers reach customers across Dubai, Abu Dhabi, Sharjah, and other Emirates.",
   },
   {
-    question: "What is commission on ExShopi?",
+    question: "What commission does ExShopi charge?",
     answer:
       "ExShopi offers a simple 6% commission model designed for sellers who want to grow their ecommerce UAE business with predictable costs.",
   },
@@ -202,9 +201,20 @@ export default function SellOnExShopi() {
               <h2 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
                 Why Sell on ExShopi UAE?
               </h2>
-              <p className="mt-3 text-sm leading-7 text-slate-500 md:text-base">
-                ExShopi helps brands and retailers sell online UAE wide through a trusted UAE marketplace built for modern ecommerce UAE growth. If you want to start online business UAE operations with fast approval, cash on delivery, and a premium seller journey, ExShopi gives you a clear path to reach customers across the Emirates.
-              </p>
+              <div className="mt-3 space-y-4 text-sm leading-7 text-slate-500 md:text-base">
+                <p>
+                  ExShopi is built for businesses that want to sell online UAE wide through a professional, trusted, and growth-focused UAE marketplace. For many merchants, the hardest part of ecommerce UAE expansion is not product sourcing or pricing, but finding a reliable platform that already understands local customer expectations. ExShopi makes that process easier by creating a marketplace environment where sellers can enter the digital space with clear onboarding, simple cost structures, and a premium storefront presence that fits the UAE market.
+                </p>
+                <p>
+                  If you want to start online business UAE operations with confidence, ExShopi gives you a practical path to launch without rebuilding everything from scratch. Instead of spending time setting up every delivery workflow, trust system, and payment expectation alone, sellers can plug into a marketplace experience designed around real shopping behavior in the Emirates. That includes support for cash on delivery, a key conversion driver for customers who still prefer flexible payment options when they shop online.
+                </p>
+                <p>
+                  ExShopi also helps sellers position their products inside a premium ecommerce UAE environment that feels trustworthy to buyers. Strong approval standards, curated marketplace quality, and clear seller onboarding help create more confidence on both sides of the transaction. Whether you are launching a new retail brand, moving an offline business online, or expanding an existing catalog into a stronger UAE marketplace presence, ExShopi is designed to help you reach more customers across Dubai, Abu Dhabi, Sharjah, and the wider Emirates.
+                </p>
+                <p>
+                  For businesses looking to grow steadily, ExShopi combines low-friction entry with marketplace features that support long-term selling. The goal is not only to help you sell online UAE wide, but to help you build a stronger ecommerce UAE presence with faster approval, clear costs, and a polished route to market. If your next step is to start online business UAE growth on a trusted platform, ExShopi gives you that opportunity in one focused seller journey.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -299,9 +309,6 @@ export default function SellOnExShopi() {
           <nav aria-label="Seller SEO links" className="sr-only">
             <Link to="/seller/register">Start selling on ExShopi</Link>
             <Link to="/">ExShopi homepage</Link>
-            <Link to={getCategoryPath("electronics")}>Electronics in UAE</Link>
-            <Link to={getCategoryPath("laptops")}>Laptops in UAE</Link>
-            <Link to={getCategoryPath("accessories")}>Accessories in UAE</Link>
           </nav>
         </div>
       </div>
