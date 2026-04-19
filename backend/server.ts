@@ -47,6 +47,8 @@ import { ensureUniqueSlug, normalizeSlugInput, slugifyProduct } from './utils/sl
 import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, uniqueSeoKeywords } from './utils/seo';
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
+import { buildStoreOperationsAnalytics } from './adminAnalyticsService';
+import { getGoogleAnalyticsAdminSnapshot } from './googleAnalyticsService';
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
 import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
 
@@ -1237,7 +1239,7 @@ const supportMessageSchema = z.object({
 });
 
 const adminDashboardQuerySchema = z.object({
-  range: z.enum(['today', '7d', '30d', 'custom']).optional().default('30d'),
+  range: z.enum(['today', 'yesterday', '7d', '30d', 'this_month', 'custom']).optional().default('30d'),
   from: z.string().optional(),
   to: z.string().optional(),
 });
@@ -1257,8 +1259,16 @@ const parseAdminDateRange = (query: unknown) => {
 
   if (parsed.range === 'today') {
     start.setHours(0, 0, 0, 0);
+  } else if (parsed.range === 'yesterday') {
+    start.setDate(now.getDate() - 1);
+    start.setHours(0, 0, 0, 0);
+    end.setDate(now.getDate() - 1);
+    end.setHours(23, 59, 59, 999);
   } else if (parsed.range === '7d') {
     start.setDate(now.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+  } else if (parsed.range === 'this_month') {
+    start.setDate(1);
     start.setHours(0, 0, 0, 0);
   } else if (parsed.range === '30d') {
     start.setDate(now.getDate() - 29);
@@ -5594,102 +5604,71 @@ app.get('/api/admin/customers', authMiddleware, async (req: Request, res: Respon
   }
 });
 
-app.get('/api/admin/analytics', authMiddleware, (req: Request, res: Response) => {
+app.get('/api/admin/analytics', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) {
       return res.status(403).json({ error: 'Admin only' });
     }
 
-    const orders = db.getAllOrders();
-    const analyticsEvents = db.getAnalyticsEvents();
-    const products = db.getAllProducts();
-    const sellers = db.getAllSellers();
-    const banners = db.getBanners();
+    const dateRange = parseAdminDateRange(req.query);
+    const [storeOps, googleAnalytics] = await Promise.all([
+      buildStoreOperationsAnalytics(dateRange),
+      getGoogleAnalyticsAdminSnapshot({
+        range: dateRange.range,
+        from: dateRange.from,
+        to: dateRange.to,
+      }),
+    ]);
 
-    const topSearches = Object.entries(
-      analyticsEvents
-        .filter((event) => event.eventType === 'search')
-        .reduce<Record<string, number>>((acc, event) => {
-          const query = String(event.metadata?.query || '').trim().toLowerCase();
-          if (!query) return acc;
-          acc[query] = (acc[query] || 0) + 1;
-          return acc;
-        }, {})
-    )
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([query, count]) => ({ query, count }));
+    const gaSummary = googleAnalytics.summary || {
+      activeUsers: 0,
+      totalUsers: 0,
+      newUsers: 0,
+      sessions: 0,
+      engagedSessions: 0,
+      averageEngagementTime: 0,
+      eventCount: 0,
+      keyEvents: 0,
+    };
+    const conversionRate = gaSummary.sessions
+      ? Number(((gaSummary.keyEvents / gaSummary.sessions) * 100).toFixed(2))
+      : null;
 
-    const mostViewedProducts = Object.entries(
-      analyticsEvents
-        .filter((event) => event.eventType === 'product_view')
-        .reduce<Record<string, number>>((acc, event) => {
-          const productId = String(event.entityId || '');
-          if (!productId) return acc;
-          acc[productId] = (acc[productId] || 0) + 1;
-          return acc;
-        }, {})
-    )
-      .map(([productId, views]) => ({
-        productId,
-        views,
-        product: products.find((product) => product.id === productId),
-      }))
-      .sort((a, b) => b.views - a.views)
-      .slice(0, 8);
+    return res.json({
+      range: dateRange.range,
+      from: dateRange.from.toISOString(),
+      to: dateRange.to.toISOString(),
 
-    const mostWishlistedProducts = Object.entries(
-      analyticsEvents
-        .filter((event) => event.eventType === 'wishlist_add')
-        .reduce<Record<string, number>>((acc, event) => {
-          const productId = String(event.entityId || '');
-          if (!productId) return acc;
-          acc[productId] = (acc[productId] || 0) + 1;
-          return acc;
-        }, {})
-    )
-      .map(([productId, count]) => ({
-        productId,
-        count,
-        product: products.find((product) => product.id === productId),
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
+      totalLogins: storeOps.legacyReports.totalLogins,
+      totalSearches: storeOps.legacyReports.totalSearches,
+      totalProductViews: storeOps.legacyReports.totalProductViews,
+      totalWishlistAdds: storeOps.legacyReports.totalWishlistAdds,
+      topSearches: storeOps.legacyReports.topSearches,
+      mostViewedProducts: storeOps.legacyReports.mostViewedProducts,
+      mostWishlistedProducts: storeOps.legacyReports.mostWishlistedProducts,
+      sellerPerformance: storeOps.legacyReports.sellerPerformance,
+      bannerPerformance: storeOps.legacyReports.bannerPerformance,
+      refundRequests: storeOps.legacyReports.refundRequests,
+      returnsRequested: storeOps.legacyReports.returnsRequested,
 
-    const sellerPerformance = sellers
-      .map((seller) => {
-        const sellerOrders = orders.filter((order) => order.sellerId === seller.id);
-        return {
-          sellerId: seller.id,
-          sellerName: seller.storeName,
-          totalOrders: sellerOrders.length,
-          grossSales: sellerOrders.reduce((sum, order) => sum + (order.totalAmount || order.subtotal), 0),
-          commission: sellerOrders.reduce((sum, order) => sum + order.commission, 0),
-          returnRate: sellerOrders.length ? sellerOrders.filter((order) => order.status === 'return_requested' || order.status === 'returned').length / sellerOrders.length : 0,
-        };
-      })
-      .sort((a, b) => b.grossSales - a.grossSales)
-      .slice(0, 8);
+      summaryCards: {
+        activeUsers: gaSummary.activeUsers,
+        activeUsersLast30Minutes: googleAnalytics.realtime.activeUsersLast30Minutes,
+        newUsers: gaSummary.newUsers,
+        totalUsers: gaSummary.totalUsers,
+        sessions: gaSummary.sessions,
+        engagedSessions: gaSummary.engagedSessions,
+        averageEngagementTime: gaSummary.averageEngagementTime,
+        eventCount: gaSummary.eventCount,
+        keyEvents: gaSummary.keyEvents,
+        conversionRate,
+        ordersToday: storeOps.summary.ordersToday,
+        revenueToday: storeOps.summary.revenueToday,
+        revenueThisMonth: storeOps.summary.revenueThisMonth,
+      },
 
-    const bannerPerformance = banners.map((banner) => ({
-      id: banner.id,
-      title: banner.title,
-      clicks: banner.clicks || 0,
-      link: banner.link || '/',
-    }));
-
-    res.json({
-      totalLogins: analyticsEvents.filter((event) => event.eventType === 'login').length,
-      totalSearches: analyticsEvents.filter((event) => event.eventType === 'search').length,
-      totalProductViews: analyticsEvents.filter((event) => event.eventType === 'product_view').length,
-      totalWishlistAdds: analyticsEvents.filter((event) => event.eventType === 'wishlist_add').length,
-      topSearches,
-      mostViewedProducts,
-      mostWishlistedProducts,
-      sellerPerformance,
-      bannerPerformance,
-      refundRequests: orders.filter((order) => order.refundStatus === 'requested').length,
-      returnsRequested: orders.filter((order) => order.status === 'return_requested').length,
+      googleAnalytics,
+      storeOperations: storeOps,
     });
   } catch (error) {
     res.status(500).json({ error: String(error) });

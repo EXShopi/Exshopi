@@ -1694,8 +1694,17 @@ export const dashboardAPI = {
     return parseApiResponse(res);
   },
 
-  async getAdminAnalytics() {
-    const res = await fetchWithAuthRetry('/admin/analytics', {
+  async getAdminAnalytics(params?: {
+    range?: 'today' | 'yesterday' | '7d' | '30d' | 'this_month' | 'custom';
+    from?: string;
+    to?: string;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.range) query.set('range', params.range);
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+
+    const res = await fetchWithAuthRetry(`/admin/analytics${query.toString() ? `?${query.toString()}` : ''}`, {
       headers: getAuthHeaders(),
     });
     return parseApiResponse(res);

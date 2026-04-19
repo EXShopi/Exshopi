@@ -17,7 +17,7 @@ import {
 import { orderAPI } from '../../services/api';
 import { formatAED, formatAEDPlain } from '../../lib/currency';
 import { trackingAPI } from '../../services/api';
-import { printOrderSlip } from '../../lib/orderPrint';
+import { downloadOrderInvoicePdf, printOrderDocuments } from '../../lib/orderAdmin';
 
 interface Order {
   id: string;
@@ -269,11 +269,34 @@ export function AdminOrders() {
                           <Eye size={18} />
                         </button>
                         <button
-                          onClick={() => printOrderSlip(order, 'pickup')}
+                          onClick={() => printOrderDocuments([{
+                            ...order,
+                            orderNumber: order.orderId || order.id,
+                            deliveryFee: order.shippingCost,
+                          }], 'compact')}
                           className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-900 hover:text-white transition-all"
-                          title="Print pickup slip"
+                          title="Print shipping label"
                         >
                           <ExternalLink size={18} />
+                        </button>
+                        <button
+                          onClick={() => downloadOrderInvoicePdf({
+                            ...order,
+                            orderNumber: order.orderId || order.id,
+                            deliveryFee: order.shippingCost,
+                            items: order.productTitle
+                              ? [{
+                                  id: order.id,
+                                  title: order.productTitle,
+                                  quantity: 1,
+                                  unitPrice: Number(order.totalAmount ?? order.subtotal ?? 0),
+                                }]
+                              : [],
+                          })}
+                          className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-900 hover:text-white transition-all"
+                          title="Download invoice PDF"
+                        >
+                          <CreditCard size={18} />
                         </button>
                         {order.status === 'waiting_for_pickup' && (
                           <button
