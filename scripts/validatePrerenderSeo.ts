@@ -21,6 +21,28 @@ const TARGETED_STATIC_ROUTE_PATHS = [
   "/promotions",
   "/campaigns/current",
 ];
+const TARGETED_BRAND_ROUTE_PATHS = [
+  "/brands/apple",
+];
+const GENERIC_HOMEPAGE_SHELL_TEXT = normalizeText("ExShopi UAE Online Shopping Marketplace");
+const PRERENDERED_ROUTE_PATHS = [
+  ...TARGETED_STATIC_ROUTE_PATHS,
+  ...TARGETED_BRAND_ROUTE_PATHS,
+];
+const FORBIDDEN_INDEX_REWRITES = [
+  "/sell-on-exshopi /index.html 200",
+  "/support /index.html 200",
+  "/privacy /index.html 200",
+  "/terms /index.html 200",
+  "/promotions /index.html 200",
+  "/campaigns/current /index.html 200",
+  "/brands/* /index.html 200",
+];
+const REQUIRED_CANONICAL_REDIRECTS = [
+  "/term /terms 301!",
+  "/terms-conditions /terms 301!",
+  "/privacy-policy /privacy 301!",
+];
 const TARGETED_LEGACY_PRODUCT_PATHS = [
   "/electronics/laptops/apple-macbook-pro-a1708-2017-laptop-with-13-3-inch-display-intel-core-i5-processor-7th-gen-8gb-ram-128gb-ssd-1-5gb-intel",
 ];
@@ -28,6 +50,15 @@ const TARGETED_LEGACY_PRODUCT_PATHS = [
 type ValidationIssue = {
   file: string;
   message: string;
+};
+
+type RouteValidationRecord = {
+  routePath: string;
+  outputPath: string;
+  kind: string;
+  uniqueHtml: boolean;
+  containsGenericShell: boolean;
+  valid: boolean;
 };
 
 type RouteSnapshot =
@@ -108,6 +139,7 @@ function normalizeText(value: string) {
 async function main() {
   const files = await collectHtmlFiles(DIST_DIR);
   const issues: ValidationIssue[] = [];
+  const routeValidationRecords: RouteValidationRecord[] = [];
   const productSnapshots: Array<{ path: string; product: any }> = [];
   const productPathsInDist = new Set<string>();
   let redirectsContent = "";
@@ -246,9 +278,7 @@ async function main() {
         issues.push({ file: filePath, message: "Missing static page title" });
       }
       if (
-        pageText.includes(
-          normalizeText("ExShopi UAE Online Shopping Marketplace")
-        ) &&
+        pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT) &&
         !targetPath.startsWith("/campaigns")
       ) {
         issues.push({
@@ -262,10 +292,69 @@ async function main() {
           message: "Static route is missing route snapshot metadata",
         });
       }
+      routeValidationRecords.push({
+        routePath: targetPath,
+        outputPath: filePath,
+        kind: String((snapshot as any)?.kind || "unknown"),
+        uniqueHtml: !pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT),
+        containsGenericShell: pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT),
+        valid:
+          Boolean(getTitle(html)) &&
+          Boolean(snapshot) &&
+          ["static", "landing"].includes(String((snapshot as any)?.kind || "")) &&
+          !pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT),
+      });
     } catch {
       issues.push({
         file: filePath,
         message: "Expected static prerendered route is missing",
+      });
+    }
+  }
+
+  for (const targetPath of TARGETED_BRAND_ROUTE_PATHS) {
+    const filePath = `${targetPath.replace(/^\//, "")}/index.html`;
+    const absolutePath = path.join(DIST_DIR, filePath);
+
+    try {
+      const html = await fs.readFile(absolutePath, "utf8");
+      const snapshot = extractRouteSnapshot(html);
+      const pageText = normalizeText(stripHtml(html));
+
+      if (pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT)) {
+        issues.push({
+          file: filePath,
+          message: "Brand route is still rendering the generic homepage shell content",
+        });
+      }
+      if (!snapshot || String((snapshot as any).kind || "") !== "brand") {
+        issues.push({
+          file: filePath,
+          message: "Brand route is missing brand route snapshot metadata",
+        });
+      }
+      if (!pageText.includes("Apple on ExShopi UAE")) {
+        issues.push({
+          file: filePath,
+          message: "Brand route is missing its unique Apple heading",
+        });
+      }
+
+      routeValidationRecords.push({
+        routePath: targetPath,
+        outputPath: filePath,
+        kind: String((snapshot as any)?.kind || "unknown"),
+        uniqueHtml: !pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT),
+        containsGenericShell: pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT),
+        valid:
+          String((snapshot as any)?.kind || "") === "brand" &&
+          pageText.includes("Apple on ExShopi UAE") &&
+          !pageText.includes(GENERIC_HOMEPAGE_SHELL_TEXT),
+      });
+    } catch {
+      issues.push({
+        file: filePath,
+        message: "Expected brand prerendered route is missing",
       });
     }
   }
@@ -329,6 +418,34 @@ async function main() {
         );
       }
     }
+
+    for (const forbiddenRule of FORBIDDEN_INDEX_REWRITES) {
+      if (redirectsContent.includes(forbiddenRule)) {
+        issues.push({
+          file: "_redirects",
+          message: `Prerendered route is incorrectly rewritten to the SPA shell: ${forbiddenRule}`,
+        });
+      }
+    }
+
+    for (const requiredRule of REQUIRED_CANONICAL_REDIRECTS) {
+      if (!redirectsContent.includes(requiredRule)) {
+        issues.push({
+          file: "_redirects",
+          message: `Missing canonical redirect: ${requiredRule}`,
+        });
+      }
+    }
+
+    for (const routePath of PRERENDERED_ROUTE_PATHS) {
+      const forbiddenRewrite = `${routePath} /index.html 200`;
+      if (redirectsContent.includes(forbiddenRewrite)) {
+        issues.push({
+          file: "_redirects",
+          message: `Route-specific HTML is being masked by an SPA rewrite: ${forbiddenRewrite}`,
+        });
+      }
+    }
   }
 
   if (issues.length) {
@@ -338,6 +455,12 @@ async function main() {
     process.exit(1);
   }
 
+  console.log("[seo-validate] Route verification report:");
+  for (const record of routeValidationRecords.sort((a, b) => a.routePath.localeCompare(b.routePath))) {
+    console.log(
+      `[seo-validate] ${record.routePath} -> ${record.outputPath} kind=${record.kind} uniqueHtml=${record.uniqueHtml} genericShell=${record.containsGenericShell} valid=${record.valid}`
+    );
+  }
   console.log(`[seo-validate] Checked ${files.length} HTML files with no blocking issues.`);
 }
 

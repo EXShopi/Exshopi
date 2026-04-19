@@ -49,6 +49,19 @@ type PrerenderedProduct = {
   badges: string[];
 };
 
+type GeneratedRouteRecord = {
+  routePath: string;
+  outputPath: string;
+  kind: string;
+};
+
+const generatedRouteRecords: GeneratedRouteRecord[] = [];
+const CANONICAL_REDIRECTS = [
+  "/term /terms 301!",
+  "/terms-conditions /terms 301!",
+  "/privacy-policy /privacy 301!",
+];
+
 const STATIC_PAGE_CONTENT: Array<{
   path: string;
   title: string;
@@ -180,6 +193,9 @@ const STATIC_PAGE_CONTENT: Array<{
   },
 ];
 
+const STATIC_PRERENDER_ROUTE_PATHS = STATIC_PAGE_CONTENT.map((page) => page.path);
+const BRAND_PRERENDER_ROUTE_PATHS = brands.map((brand) => `/brands/${cleanSeoSlug(brand.name)}`);
+
 function escapeHtml(value: string) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -306,11 +322,16 @@ function htmlDocument(template: string, input: {
   return html;
 }
 
-async function writeRouteFile(routePath: string, html: string) {
+async function writeRouteFile(routePath: string, html: string, kind = "route") {
   const cleanRoute = routePath.replace(/^\//, "").replace(/\/$/, "");
   const outputPath = cleanRoute ? path.join(DIST_DIR, cleanRoute, "index.html") : path.join(DIST_DIR, "index.html");
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, html, "utf8");
+  generatedRouteRecords.push({
+    routePath: routePath || "/",
+    outputPath,
+    kind,
+  });
 }
 
 function renderTrustSignals() {
@@ -425,6 +446,7 @@ function productAliasRedirects(product: PrerenderedProduct) {
 async function writeSupportFiles(input: {
   homeHtml: string;
   productRedirects: Array<{ alias: string; canonicalPath: string }>;
+  prerenderedRoutePaths: string[];
 }) {
   const robots = `User-agent: *
 Allow: /
@@ -458,21 +480,8 @@ Sitemap: ${SITE_URL}/sitemap.xml
     "/account /index.html 200",
     "/vendor /index.html 200",
     "/vendor/* /index.html 200",
-    "/support /index.html 200",
-    "/about /index.html 200",
-    "/contact /index.html 200",
-    "/faq /index.html 200",
-    "/privacy /index.html 200",
-    "/terms /index.html 200",
-    "/privacy-policy /index.html 200",
-    "/terms-conditions /index.html 200",
-    "/return-policy /index.html 200",
-    "/warranty /index.html 200",
     "/track-order /index.html 200",
-    "/brands/* /index.html 200",
     "/popular/* /index.html 200",
-    "/campaigns/current /index.html 200",
-    "/promotions /index.html 200",
     "/vendors /index.html 200",
     "/deals /index.html 200",
     "/categories /index.html 200",
@@ -480,12 +489,17 @@ Sitemap: ${SITE_URL}/sitemap.xml
     "/admin/* /index.html 200",
   ];
 
+  const prerenderedRouteRewrites = new Set(
+    input.prerenderedRoutePaths.map((routePath) => `${routePath} /index.html 200`)
+  );
+
   const redirects = [
+    ...CANONICAL_REDIRECTS,
     ...categoryRedirects,
     ...input.productRedirects
       .map((item) => `${item.alias} ${item.canonicalPath} 301!`)
       .sort(),
-    ...spaRewrites,
+    ...spaRewrites.filter((rule) => !prerenderedRouteRewrites.has(rule)),
     "/404 /404.html 404",
     "/* /404.html 404",
   ].join("\n");
@@ -523,6 +537,27 @@ Sitemap: ${SITE_URL}/sitemap.xml
 </body>`
   );
   await fs.writeFile(path.join(DIST_DIR, "404.html"), notFoundHtml, "utf8");
+
+  const reportPath = path.join(DIST_DIR, "prerender-report.json");
+  const report = {
+    generatedAt: new Date().toISOString(),
+    routeCount: generatedRouteRecords.length,
+    routes: generatedRouteRecords
+      .slice()
+      .sort((a, b) => a.routePath.localeCompare(b.routePath))
+      .map((record) => ({
+        routePath: record.routePath,
+        outputPath: path.relative(ROOT, record.outputPath),
+        kind: record.kind,
+      })),
+  };
+  await fs.writeFile(reportPath, JSON.stringify(report, null, 2), "utf8");
+  console.log(`[seo-prerender] Wrote prerender report to ${path.relative(ROOT, reportPath)}.`);
+  for (const record of report.routes) {
+    console.log(
+      `[seo-prerender] route ${record.routePath} -> ${record.outputPath} (${record.kind})`
+    );
+  }
 }
 
 async function main() {
@@ -600,7 +635,7 @@ async function main() {
         </section>
       </main>`,
   });
-  await writeRouteFile("/", homeHtml);
+  await writeRouteFile("/", homeHtml, "home");
 
   const listingHtml = htmlDocument(template, {
     title: "All Products in UAE | Premium Marketplace | ExShopi",
@@ -622,7 +657,7 @@ async function main() {
         <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Explore more through <a href="/category/electronics">category pages</a>, <a href="/blog">UAE buying guides</a>, and dedicated <a href="/electronics-online-uae">landing pages</a>.</p>
       </main>`,
   });
-  await writeRouteFile("/products", listingHtml);
+  await writeRouteFile("/products", listingHtml, "listing");
 
   for (const page of STATIC_PAGE_CONTENT) {
     await writeRouteFile(
@@ -646,7 +681,8 @@ async function main() {
               : [{ href: "/seller/register", label: "Seller registration" }]),
           ],
         }),
-      })
+      }),
+      "static"
     );
   }
 
@@ -685,7 +721,8 @@ async function main() {
           continueText:
             'Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.',
         }),
-      })
+      }),
+      "category"
     );
 
     if (category.slug === "electronics") {
@@ -711,7 +748,8 @@ async function main() {
             continueText:
               'Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.',
           }),
-        })
+        }),
+        "category-alias"
       );
     }
 
@@ -749,7 +787,8 @@ async function main() {
             products: subProducts,
             continueText: `Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.`,
           }),
-        })
+        }),
+        "category"
       );
 
       if (category.slug === "electronics") {
@@ -775,7 +814,8 @@ async function main() {
               products: subProducts,
               continueText: `Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.`,
             }),
-          })
+          }),
+          "category-alias"
         );
       }
     }
@@ -829,7 +869,8 @@ async function main() {
             label: product.title,
           })),
         }),
-      })
+      }),
+      "brand"
     );
   }
 
@@ -1036,6 +1077,12 @@ ${Array.from(sitemapUrls)
       alias,
       canonicalPath,
     })),
+    prerenderedRoutePaths: [
+      ...STATIC_PRERENDER_ROUTE_PATHS,
+      ...BRAND_PRERENDER_ROUTE_PATHS,
+      "/campaigns/current",
+      "/promotions",
+    ],
   });
 }
 
