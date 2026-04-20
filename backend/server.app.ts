@@ -62,11 +62,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Render health checks must stay public, instant, and dependency-free.
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
+  res.status(200).send('OK');
 });
 
 const SERVER_ENTRY = 'backend/server.ts';
@@ -1035,11 +1031,7 @@ const resolveRefreshToken = (req: Request) => {
 };
 
 app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
+  res.status(200).send('OK');
 });
 
 app.get('/api/events/stream', (req: Request, res: Response) => {
