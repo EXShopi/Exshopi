@@ -62,10 +62,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Render health checks must stay public, instant, and dependency-free.
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-  });
+  res.status(200).send('OK');
 });
 
 const SERVER_ENTRY = 'backend/server.ts';
@@ -1034,10 +1031,7 @@ const resolveRefreshToken = (req: Request) => {
 };
 
 app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-  });
+  res.status(200).send('OK');
 });
 
 app.get('/api/events/stream', (req: Request, res: Response) => {
@@ -6812,7 +6806,7 @@ app.use((req: Request, res: Response) => {
 
 // ==================== START SERVER ====================
 const startServer = async () => {
-  console.log('[boot] listen starting', {
+  console.log('INIT STARTED', {
     port: PORT,
     connectionMode,
   });
@@ -6833,8 +6827,8 @@ const startServer = async () => {
       );
       console.log(`[BOOT] Frontend URL: ${APP_URL}`);
       console.log(`[BOOT] CORS origins: ${Array.from(defaultAllowedOrigins).join(', ')}`);
-      console.log(`[boot] server listening`, { port: PORT });
-      console.log('🚀 Server running on port:', PORT);
+      console.log('SERVER LISTENING', { port: PORT, host: '0.0.0.0' });
+      console.log('Server running on port', PORT);
       console.log(`✅ Backend server running on http://localhost:${PORT}`);
       console.log(`📚 API Base: http://localhost:${PORT}/api`);
       console.log(`👤 Frontend on http://localhost:5173`);
@@ -6843,14 +6837,15 @@ const startServer = async () => {
     });
 
     server.on('error', (error) => {
-      console.error('[boot] listen failed', error);
+      console.error('INIT FAILED', error);
       reject(error);
     });
   });
 
-  console.log('[boot] prisma init starting', {
+  console.log('INIT STARTED', {
     enabled: prismaRuntime.enabled,
     connectionMode,
+    phase: 'post-listen',
   });
 
   if (!prismaRuntime.enabled) {
@@ -6871,7 +6866,7 @@ const startServer = async () => {
         console.log('[BOOT] No bundled draft import dataset found or import not required');
       }
     } catch (error) {
-      console.error('[BOOT] Failed to verify Prisma core auth records:', error);
+      console.error('INIT FAILED', error);
     }
 
     const result = await probePrismaConnection();
