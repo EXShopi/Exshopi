@@ -62,7 +62,10 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Render health checks must stay public, instant, and dependency-free.
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.status(200).send('OK');
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 const SERVER_ENTRY = 'backend/server.ts';
@@ -182,7 +185,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-const PORT = Number(process.env.PORT || 3001);
+const PORT = Number(process.env.PORT || 10000);
 const APP_URL = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5179';
 const ADMIN_ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'ahsansajid295@gmail.com';
 const COD_MAX_DAILY_ORDERS = Number(process.env.COD_MAX_DAILY_ORDERS || 3);
@@ -1031,7 +1034,10 @@ const resolveRefreshToken = (req: Request) => {
 };
 
 app.get('/health', (req: Request, res: Response) => {
-  res.status(200).send('OK');
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.get('/api/events/stream', (req: Request, res: Response) => {
@@ -6806,35 +6812,13 @@ app.use((req: Request, res: Response) => {
 
 // ==================== START SERVER ====================
 const startServer = async () => {
-  console.log('[boot] prisma init starting', {
-    enabled: prismaRuntime.enabled,
-    connectionMode,
-  });
-  if (prismaRuntime.enabled) {
-    try {
-      await prismaRuntime.ensureCoreAuthRecords();
-      console.log('[BOOT] Prisma core auth records verified');
-
-      const bundledImport = await prismaRuntime.ensureBundledDraftProductsImported();
-      if (bundledImport.attempted) {
-        console.log(
-          `[BOOT] Bundled draft import summary: total=${bundledImport.totalRows} imported=${bundledImport.imported} duplicates=${bundledImport.duplicates} failed=${bundledImport.failed}`
-        );
-      } else {
-        console.log('[BOOT] No bundled draft import dataset found or import not required');
-      }
-    } catch (error) {
-      console.error('[BOOT] Failed to verify Prisma core auth records:', error);
-    }
-  }
-
   console.log('[boot] listen starting', {
     port: PORT,
     connectionMode,
   });
 
   await new Promise<void>((resolve, reject) => {
-    const server = app.listen(PORT, () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`[BOOT] ExShopi API entry: ${SERVER_ENTRY}`);
       console.log(`[BOOT] Node env: ${process.env.NODE_ENV || 'development'}`);
       console.log(`[BOOT] Port binding: ${PORT}`);
@@ -6850,31 +6834,10 @@ const startServer = async () => {
       console.log(`[BOOT] Frontend URL: ${APP_URL}`);
       console.log(`[BOOT] CORS origins: ${Array.from(defaultAllowedOrigins).join(', ')}`);
       console.log(`[boot] server listening`, { port: PORT });
+      console.log('🚀 Server running on port:', PORT);
       console.log(`✅ Backend server running on http://localhost:${PORT}`);
       console.log(`📚 API Base: http://localhost:${PORT}/api`);
       console.log(`👤 Frontend on http://localhost:5173`);
-
-      if (prismaRuntime.enabled) {
-        void probePrismaConnection().then((result) => {
-          if (result.ok) {
-            console.log('[DB] Prisma connection probe succeeded');
-            return;
-          }
-
-          console.error(
-            `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
-          );
-          if (prismaEnvDiagnostics.databaseUrlIssues.length) {
-            console.error(`[DB] DATABASE_URL issues: ${prismaEnvDiagnostics.databaseUrlIssues.join(' | ')}`);
-          }
-          if (prismaEnvDiagnostics.directUrlIssues.length) {
-            console.error(`[DB] DIRECT_URL issues: ${prismaEnvDiagnostics.directUrlIssues.join(' | ')}`);
-          }
-          console.error(
-            '[DB] Expected format: DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@<region>.pooler.supabase.com:6543/postgres?pgbouncer=true and DIRECT_URL=postgresql://postgres:<db-password>@db.<project-ref>.supabase.co:5432/postgres'
-          );
-        });
-      }
 
       resolve();
     });
@@ -6884,6 +6847,52 @@ const startServer = async () => {
       reject(error);
     });
   });
+
+  console.log('[boot] prisma init starting', {
+    enabled: prismaRuntime.enabled,
+    connectionMode,
+  });
+
+  if (!prismaRuntime.enabled) {
+    return;
+  }
+
+  void (async () => {
+    try {
+      await prismaRuntime.ensureCoreAuthRecords();
+      console.log('[BOOT] Prisma core auth records verified');
+
+      const bundledImport = await prismaRuntime.ensureBundledDraftProductsImported();
+      if (bundledImport.attempted) {
+        console.log(
+          `[BOOT] Bundled draft import summary: total=${bundledImport.totalRows} imported=${bundledImport.imported} duplicates=${bundledImport.duplicates} failed=${bundledImport.failed}`
+        );
+      } else {
+        console.log('[BOOT] No bundled draft import dataset found or import not required');
+      }
+    } catch (error) {
+      console.error('[BOOT] Failed to verify Prisma core auth records:', error);
+    }
+
+    const result = await probePrismaConnection();
+    if (result.ok) {
+      console.log('[DB] Prisma connection probe succeeded');
+      return;
+    }
+
+    console.error(
+      `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
+    );
+    if (prismaEnvDiagnostics.databaseUrlIssues.length) {
+      console.error(`[DB] DATABASE_URL issues: ${prismaEnvDiagnostics.databaseUrlIssues.join(' | ')}`);
+    }
+    if (prismaEnvDiagnostics.directUrlIssues.length) {
+      console.error(`[DB] DIRECT_URL issues: ${prismaEnvDiagnostics.directUrlIssues.join(' | ')}`);
+    }
+    console.error(
+      '[DB] Expected format: DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@<region>.pooler.supabase.com:6543/postgres?pgbouncer=true and DIRECT_URL=postgresql://postgres:<db-password>@db.<project-ref>.supabase.co:5432/postgres'
+    );
+  })();
 };
 
 export { startServer };

@@ -1,25 +1,15 @@
 import 'dotenv/config';
 
-console.log('[boot] server entry loaded', {
-  entry: 'backend/server.ts',
-  nodeEnv: process.env.NODE_ENV || 'development',
-  port: process.env.PORT || '10000',
-});
-
-console.log('[boot] env check starting', {
-  hasJwtAccessSecret: Boolean(process.env.JWT_ACCESS_SECRET),
-  hasJwtRefreshSecret: Boolean(process.env.JWT_REFRESH_SECRET),
-  hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
-  hasDirectUrl: Boolean(process.env.DIRECT_URL),
-  usePrismaRuntime: process.env.USE_PRISMA_RUNTIME || 'unset',
-});
+console.log('🔥 BOOT STARTED');
+console.log('ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
 
 process.on('uncaughtException', (error) => {
-  console.error('[boot] uncaughtException', error);
+  console.error('UNCAUGHT EXCEPTION:', error);
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('[boot] unhandledRejection', reason);
+  console.error('UNHANDLED REJECTION:', reason);
 });
 
 try {
