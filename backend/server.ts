@@ -52,6 +52,12 @@ import { getGoogleAnalyticsAdminSnapshot, getGoogleAnalyticsConfigurationStatus 
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
 import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
 
+console.log('[BOOT] boot started', {
+  entry: 'backend/server.ts',
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: process.env.PORT || '10000',
+});
+
 const app: Express = express();
 app.set('trust proxy', 1);
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -6854,6 +6860,10 @@ app.use((req: Request, res: Response) => {
 
 // ==================== START SERVER ====================
 const startServer = async () => {
+  console.log('[BOOT] prisma init started', {
+    enabled: prismaRuntime.enabled,
+    connectionMode,
+  });
   if (prismaRuntime.enabled) {
     try {
       await prismaRuntime.ensureCoreAuthRecords();

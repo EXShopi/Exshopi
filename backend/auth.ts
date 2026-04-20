@@ -31,11 +31,25 @@ export type AdminPermission =
   | 'support:manage'
   | 'audit:view';
 
+console.log('[BOOT] env loaded', {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  hasJwtAccessSecret: Boolean(process.env.JWT_ACCESS_SECRET),
+  hasJwtRefreshSecret: Boolean(process.env.JWT_REFRESH_SECRET),
+  usePrismaRuntime: process.env.USE_PRISMA_RUNTIME || 'unset',
+  exshopiDbMode: process.env.EXSHOPI_DB_MODE || 'unset',
+  hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+  hasDirectUrl: Boolean(process.env.DIRECT_URL),
+});
+
 const getJwtSecret = (envKey: 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET', fallback: string) => {
   const configured = process.env[envKey];
   if (configured) return configured;
 
   if (process.env.NODE_ENV === 'production') {
+    console.error('[BOOT] required production env var missing', {
+      envKey,
+      failingCommand: 'npx tsx backend/server.ts',
+    });
     throw new Error(`${envKey} must be configured in production`);
   }
 
