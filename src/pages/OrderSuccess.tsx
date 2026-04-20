@@ -15,7 +15,8 @@ import { useOrderStore } from "../store/orders";
 import { useCartStore } from "../store/cart";
 import { useAuthStore } from "../store/auth";
 import { orderAPI } from "../services/api";
-import { formatAED } from "../lib/currency";
+import { formatCurrencyForCountry } from "../lib/currency";
+import { getCountryConfig, isSupportedCountryCode } from "../lib/countryConfig";
 
 export default function OrderSuccess() {
   const navigate = useNavigate();
@@ -95,6 +96,8 @@ export default function OrderSuccess() {
   }, [clearCart, currentOrder, isStripeReturn, navigate, stripeSessionId, user?.email, user?.fullName, user?.id]);
 
   const activeOrder = currentOrder || restoredOrder;
+  const activeCountryCode = isSupportedCountryCode(activeOrder?.shipping?.country) ? activeOrder.shipping.country : 'AE';
+  const activeCountry = getCountryConfig(activeCountryCode);
 
   // --- Google Ads Purchase Conversion Tracking ---
   useEffect(() => {
@@ -114,7 +117,7 @@ export default function OrderSuccess() {
         (window as any).gtag('event', 'conversion', {
           send_to: `AW-18086868869/${CONVERSION_LABEL}`,
           value,
-          currency: 'AED',
+          currency: activeCountry.currency,
           transaction_id: transactionId,
         });
         window.sessionStorage.setItem(firedKey, '1');
@@ -255,7 +258,7 @@ export default function OrderSuccess() {
               <div className="space-y-2">
                 <p className="font-semibold text-slate-900">{activeOrder.customer.firstName} {activeOrder.customer.lastName}</p>
                 <p className="text-slate-600">{activeOrder.shipping.address}</p>
-                <p className="text-slate-600">{activeOrder.shipping.city}, AE</p>
+                <p className="text-slate-600">{activeOrder.shipping.city}, {activeCountry.shortName}</p>
               </div>
             </div>
 
@@ -265,15 +268,15 @@ export default function OrderSuccess() {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Subtotal</span>
-                  <span className="font-semibold text-slate-900">{formatAED(activeOrder.summary.subtotal)}</span>
+                  <span className="font-semibold text-slate-900">{formatCurrencyForCountry(activeOrder.summary.subtotal, activeCountryCode)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Shipping</span>
-                  <span className="font-semibold text-slate-900">{formatAED(activeOrder.summary.shipping || 0)}</span>
+                  <span className="font-semibold text-slate-900">{formatCurrencyForCountry(activeOrder.summary.shipping || 0, activeCountryCode)}</span>
                 </div>
                 <div className="flex justify-between text-sm border-t border-slate-200 pt-3">
                   <span className="font-bold text-slate-900">Total</span>
-                  <span className="text-2xl font-bold text-slate-900">{formatAED(activeOrder.summary.total)}</span>
+                  <span className="text-2xl font-bold text-slate-900">{formatCurrencyForCountry(activeOrder.summary.total, activeCountryCode)}</span>
                 </div>
               </div>
             </div>
@@ -297,7 +300,7 @@ export default function OrderSuccess() {
                     <p className="text-sm text-slate-600">Qty: {item.quantity}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-slate-900">{formatAED(item.price * item.quantity)}</p>
+                    <p className="font-bold text-slate-900">{formatCurrencyForCountry(item.price * item.quantity, activeCountryCode)}</p>
                   </div>
                 </div>
               ))}
@@ -317,7 +320,7 @@ export default function OrderSuccess() {
               <AlertCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm">
                 <p className="font-bold text-emerald-900 mb-1">Seller is Preparing Your Order</p>
-                <p className="text-emerald-800">Estimated delivery in 3-7 business days</p>
+                <p className="text-emerald-800">Estimated delivery in {activeCountryCode === 'AE' ? '2-4' : '3-5'} business days</p>
               </div>
             </div>
           </div>

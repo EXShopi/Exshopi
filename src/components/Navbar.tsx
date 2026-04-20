@@ -18,10 +18,11 @@ import CartDrawer from "./CartDrawer";
 import { useLanguageStore } from "../store/language";
 import { storefrontT } from "../lib/storefrontCopy";
 import { analyticsAPI, productAPI } from "../services/api";
-import { formatAEDPlain } from "../lib/currency";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
 import { useAuthStore } from "../store/auth";
 import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { marketplaceCategories } from "./categories";
+import { useCountryStore } from "../store/country";
 
 type SubCategoryGroup = {
   title: string;
@@ -44,6 +45,7 @@ export default function Navbar() {
   const [searchCatalog, setSearchCatalog] = useState<LiveMarketplaceProduct[]>([]);
   const [listening, setListening] = useState(false);
   const { lang } = useLanguageStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
 
   // Listen for custom cart drawer event from ProductDetail
   useEffect(() => {
@@ -180,7 +182,7 @@ export default function Navbar() {
                       Exshopi
                     </div>
                     <div className="hidden pt-0.5 text-[9px] uppercase tracking-[0.24em] text-slate-500 md:block">
-                      UAE’s Trusted Marketplace
+                      UAE & KSA Premium Marketplace
                     </div>
                   </div>
                 </Link>
@@ -376,7 +378,7 @@ export default function Navbar() {
                                 <div className="text-xs text-slate-500">{product.seller}</div>
                               </div>
                             </div>
-                            <div className="text-sm font-black text-blue-600">{formatAEDPlain(product.price)}</div>
+                            <div className="text-sm font-black text-blue-600">{formatCurrencyPlainForCountry(product.price, selectedCountry)}</div>
                           </button>
                         ))}
                       </div>

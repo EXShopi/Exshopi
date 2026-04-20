@@ -1319,7 +1319,7 @@ export const orderAPI = {
 };
 
 export const codAPI = {
-  async sendOtp(data: { phone: string; email: string }) {
+  async sendOtp(data: { phone: string; email: string; country?: string }) {
     const res = await fetchWithAuthRetry('/cod/otp/send', {
       method: 'POST',
       headers: {

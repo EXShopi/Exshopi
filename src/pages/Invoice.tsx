@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useOrderStore } from "../store/orders";
 import { PrinterIcon, ArrowLeft } from "lucide-react";
-import { formatAED } from "../lib/currency";
+import { formatCurrencyForCountry } from "../lib/currency";
+import { getCountryConfig, isSupportedCountryCode } from "../lib/countryConfig";
 
 export default function Invoice() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -31,6 +32,8 @@ export default function Invoice() {
   const handlePrint = () => {
     window.print();
   };
+  const orderCountryCode = isSupportedCountryCode(order?.shipping?.country) ? order.shipping.country : 'AE';
+  const orderCountry = getCountryConfig(orderCountryCode);
 
   const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
     weekday: 'short',
@@ -69,7 +72,7 @@ export default function Invoice() {
               <p className="text-slate-600 mt-1">Premium Electronics Marketplace</p>
               <p className="text-sm text-slate-500 mt-4">
                 365/1 Al Wasl Road<br />
-                Dubai, UAE<br />
+                Dubai, United Arab Emirates<br />
                 Phone: +971 4 123 4567<br />
                 Email: orders@exshopi.ae
               </p>
@@ -100,7 +103,7 @@ export default function Invoice() {
               <h3 className="text-sm font-bold text-slate-900 uppercase mb-3">Ship To:</h3>
               <p className="font-bold text-slate-900">{order.customer.firstName} {order.customer.lastName}</p>
               <p className="text-slate-600 text-sm">{order.shipping.address}</p>
-              <p className="text-slate-600 text-sm">{order.shipping.city}, UAE</p>
+              <p className="text-slate-600 text-sm">{order.shipping.city}, {orderCountry.name}</p>
             </div>
           </div>
 
@@ -155,9 +158,9 @@ export default function Invoice() {
                       )}
                     </td>
                     <td className="py-4 text-center">{item.quantity}</td>
-                    <td className="py-4 text-right">{formatAED(item.price)}</td>
+                    <td className="py-4 text-right">{formatCurrencyForCountry(item.price, orderCountryCode)}</td>
                     <td className="py-4 text-right font-bold text-slate-900">
-                      {formatAED(item.price * item.quantity)}
+                      {formatCurrencyForCountry(item.price * item.quantity, orderCountryCode)}
                     </td>
                   </tr>
                 ))}
@@ -171,19 +174,19 @@ export default function Invoice() {
               <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
                 <div className="flex justify-between py-2 text-sm">
                   <span className="text-slate-600">Subtotal:</span>
-                  <span className="font-bold text-slate-900">{formatAED(order.summary.subtotal)}</span>
+                  <span className="font-bold text-slate-900">{formatCurrencyForCountry(order.summary.subtotal, orderCountryCode)}</span>
                 </div>
                 <div className="flex justify-between py-2 text-sm">
                   <span className="text-slate-600">Shipping:</span>
-                  <span className="font-bold text-emerald-600">Free</span>
+                  <span className="font-bold text-emerald-600">{formatCurrencyForCountry(order.summary.shipping || 0, orderCountryCode)}</span>
                 </div>
                 <div className="flex justify-between py-2 text-sm border-t border-slate-300 pt-3">
-                  <span className="text-slate-600">VAT (5%):</span>
-                  <span className="font-bold text-slate-900">{formatAED(Math.round(order.summary.total * 0.05))}</span>
+                  <span className="text-slate-600">VAT ({Math.round(orderCountry.vatRate * 100)}%):</span>
+                  <span className="font-bold text-slate-900">{formatCurrencyForCountry(order.summary.vat || 0, orderCountryCode)}</span>
                 </div>
                 <div className="flex justify-between py-4 text-lg border-t-2 border-slate-300 pt-4">
                   <span className="font-bold text-slate-900">Total:</span>
-                  <span className="font-bold text-blue-600 text-2xl">{formatAED(order.summary.total)}</span>
+                  <span className="font-bold text-blue-600 text-2xl">{formatCurrencyForCountry(order.summary.total, orderCountryCode)}</span>
                 </div>
               </div>
             </div>

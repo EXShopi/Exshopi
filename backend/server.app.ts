@@ -19,6 +19,7 @@ import {
   createCodOtpSession,
   getNotificationsForAudience,
   isBlacklisted,
+  isValidPhoneForCountry,
   isValidUaePhone,
   listBlacklistEntries,
   normalizePhone,
@@ -1122,6 +1123,7 @@ const createOrderSchema = z.object({
 const codOtpSendSchema = z.object({
   phone: z.string().min(7),
   email: z.string().email(),
+  country: z.string().optional().default('AE'),
 });
 
 const codOtpVerifySchema = z.object({
@@ -4070,8 +4072,8 @@ app.post('/api/cod/otp/send', authMiddleware, async (req: Request, res: Response
     if (blacklisted) {
       return res.status(403).json({ error: `COD blocked for this ${blacklisted.type}.` });
     }
-    if (!isValidUaePhone(payload.phone)) {
-      return res.status(400).json({ error: 'Please enter a valid UAE phone number.' });
+    if (!isValidPhoneForCountry(payload.phone, payload.country || 'AE')) {
+      return res.status(400).json({ error: 'Please enter a valid phone number for the selected country.' });
     }
 
     const session = createCodOtpSession({
@@ -4181,8 +4183,8 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       return res.status(400).json({ error: 'Cash on Delivery is the only payment method available right now.' });
     }
 
-    if (!isValidUaePhone(customerPhone)) {
-      return res.status(400).json({ error: 'Please enter a valid UAE phone number.' });
+    if (!isValidPhoneForCountry(customerPhone, deliveryCountry || 'AE')) {
+      return res.status(400).json({ error: 'Please enter a valid phone number for the selected country.' });
     }
 
     const clientIp = getClientIp(req);

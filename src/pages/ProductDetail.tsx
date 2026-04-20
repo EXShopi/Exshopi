@@ -26,7 +26,7 @@ import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { useWishlistStore } from "../store/wishlist";
 import { useAuthStore } from "../store/auth";
 import { analyticsAPI, productAPI, reviewAPI } from "../services/api";
-import { formatAED, formatAEDPlain } from "../lib/currency";
+import { formatCurrencyForCountry, formatCurrencyPlainForCountry } from "../lib/currency";
 import { getSellerProfile, normalizeSellerSlug } from "../lib/sellerProfiles";
 import {
   buildDetailedSpecificationGroups,
@@ -39,6 +39,8 @@ import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
 import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
 import { readRouteSnapshot, resolveProductSnapshot } from "../lib/routeSnapshot";
+import { getCountryConfig } from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 // Local helpers for safe category path and slugification
 function slugifyLocal(value?: string) {
   return String(value || "")
@@ -358,11 +360,13 @@ function copyTextFallback(text: string) {
 type DetailSlimCardProps = {
   product: ReturnType<typeof mapToCardProduct>;
   onAddToCart: (product: ReturnType<typeof mapToCardProduct>) => void;
+  countryCode: "AE" | "SA";
 };
 
 const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
   product,
   onAddToCart,
+  countryCode,
 }) => {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const sellerMeta = getSellerProfile(product.seller || "ExShopi Official");
@@ -452,8 +456,8 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
         </div>
 
         <div className="mt-2 flex items-end gap-2">
-          <span className="text-[22px] font-black leading-none text-slate-950">{formatAEDPlain(product.price)}</span>
-          {product.oldPrice && <span className="pb-0.5 text-[11px] text-slate-600 line-through">{formatAEDPlain(product.oldPrice)}</span>}
+          <span className="text-[22px] font-black leading-none text-slate-950">{formatCurrencyPlainForCountry(product.price, countryCode)}</span>
+          {product.oldPrice && <span className="pb-0.5 text-[11px] text-slate-600 line-through">{formatCurrencyPlainForCountry(product.oldPrice, countryCode)}</span>}
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-3">
@@ -476,6 +480,8 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
 };
 
 export default function ProductDetail() {
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const country = getCountryConfig(selectedCountry);
   const { identifier, category: paramCategory, subcategory: paramSubcategory } = useParams<{
     identifier: string;
     category?: string;
@@ -1655,17 +1661,17 @@ const structuredTemplate = getSpecificationTemplate(
               <div className="rounded-[28px] border border-blue-100/90 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
                 <div className="mb-4 border-b border-blue-100 pb-4">
                   <div className="flex flex-wrap items-end gap-3">
-                    <span className="text-5xl font-black tracking-tight text-slate-950">{formatAEDPlain(displayPrice)}</span>
+                    <span className="text-5xl font-black tracking-tight text-slate-950">{formatCurrencyPlainForCountry(displayPrice, selectedCountry)}</span>
                     {displayOriginalPrice > displayPrice && (
                       <>
-                        <span className="pb-2 text-xl text-slate-600 line-through">{formatAEDPlain(displayOriginalPrice)}</span>
+                        <span className="pb-2 text-xl text-slate-600 line-through">{formatCurrencyPlainForCountry(displayOriginalPrice, selectedCountry)}</span>
                         <span className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white">
                           Save {Math.max(1, Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100))}%
                         </span>
                       </>
                     )}
                   </div>
-                  <p className="mt-2 text-sm font-medium text-slate-600">Inclusive of VAT, fees, and marketplace protection</p>
+                  <p className="mt-2 text-sm font-medium text-slate-600">Inclusive of {Math.round(country.vatRate * 100)}% VAT, fees, and marketplace protection</p>
                 </div>
 
                 <div className="space-y-2.5">
@@ -1827,7 +1833,7 @@ const structuredTemplate = getSpecificationTemplate(
               </div>
 
               <div className="rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">UAE Trusted Marketplace</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{country.shortName} Trusted Marketplace</p>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   {buildProductSeoNarrative(product)}
                 </p>
@@ -1845,8 +1851,8 @@ const structuredTemplate = getSpecificationTemplate(
                   <div className="flex items-start gap-3">
                     <Truck className="mt-0.5 h-5 w-5 text-blue-600" />
                     <div>
-                      <p className="font-semibold text-slate-900">Free Delivery</p>
-                      <p className="text-sm text-slate-600">Wed, 31 Mar - Next day guaranteed</p>
+                      <p className="font-semibold text-slate-900">{country.availabilityLabel}</p>
+                      <p className="text-sm text-slate-600">{country.shippingOptions[0].eta}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 border-t border-slate-200 pt-3.5">
@@ -1877,15 +1883,15 @@ const structuredTemplate = getSpecificationTemplate(
                     <p className="font-semibold text-emerald-900">
                       {displayStock > 0 ? `In Stock - Only ${Math.max(displayStock, 1)} left!` : "Out of Stock"}
                     </p>
-                    <p className="text-sm text-emerald-800">Delivered by Wed, 31 Mar</p>
+                    <p className="text-sm text-emerald-800">{country.shippingOptions[0].eta}</p>
                   </div>
                 </div>
               </div>
 
               <div className="mt-4 border-b border-slate-200 pb-5">
                 <p className="mb-2 text-sm text-slate-700">Price</p>
-                <div className="text-4xl font-black text-slate-950">{formatAEDPlain(displayPrice)}</div>
-                <p className="mt-1 text-xs text-slate-700">Inclusive of VAT</p>
+                <div className="text-4xl font-black text-slate-950">{formatCurrencyPlainForCountry(displayPrice, selectedCountry)}</div>
+                <p className="mt-1 text-xs text-slate-700">Inclusive of VAT ({Math.round(country.vatRate * 100)}%)</p>
               </div>
 
               <div className="mt-4">
@@ -1954,7 +1960,7 @@ const structuredTemplate = getSpecificationTemplate(
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-700">
                   <Truck className="h-4 w-4 text-blue-600" />
-                  <span>Free & fast delivery</span>
+                  <span>{country.shippingOptions[0].description}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-700">
                   <Award className="h-4 w-4 text-blue-600" />
@@ -2066,7 +2072,7 @@ const structuredTemplate = getSpecificationTemplate(
                     <h3 className="mt-2 text-2xl font-black text-slate-900">Specifications</h3>
                   </div>
                   <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 md:block">
-                    Built for UAE marketplace buyers
+                    Built for {country.shortName} marketplace buyers
                   </div>
                 </div>
                 {specificationGroups.length > 0 ? (
@@ -2095,7 +2101,7 @@ const structuredTemplate = getSpecificationTemplate(
                               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Stock {variant.stock}</span>
                             ) : null}
                             {variant.price !== undefined && variant.price !== null ? (
-                              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{formatAEDPlain(Number(variant.price || 0))}</span>
+                              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{formatCurrencyPlainForCountry(Number(variant.price || 0), selectedCountry)}</span>
                             ) : null}
                           </div>
                         </div>
@@ -2354,6 +2360,7 @@ const structuredTemplate = getSpecificationTemplate(
                           key={item.slug || item.id}
                           product={mapToCardProduct(item)}
                           onAddToCart={handleAddRelatedToCart}
+                          countryCode={selectedCountry}
                         />
                       ))}
                     </div>
@@ -2371,7 +2378,7 @@ const structuredTemplate = getSpecificationTemplate(
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {relatedProducts.map((item) => (
-              <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} />
+              <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} countryCode={selectedCountry} />
             ))}
           </div>
         </div>
@@ -2383,7 +2390,7 @@ const structuredTemplate = getSpecificationTemplate(
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {viewedProducts.map((item) => (
-              <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} />
+              <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} countryCode={selectedCountry} />
             ))}
           </div>
         </div>

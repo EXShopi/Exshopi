@@ -14,7 +14,7 @@ import {
 import { useCartStore } from "../store/cart";
 import { useOrderStore } from "../store/orders";
 import { codAPI, orderAPI, productAPI, userAPI } from "../services/api";
-import { formatAED } from "../lib/currency";
+import { formatCurrencyForCountry } from "../lib/currency";
 import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
 import {
@@ -23,14 +23,18 @@ import {
   getFirebasePhoneVerificationRuntimeInfo,
   getReadableFirebasePhoneVerificationError,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
-  isValidUaePhone,
-  normalizeUaePhone,
   resetFirebasePhoneVerification,
   sendFirebasePhoneCode,
   verifyFirebasePhoneCode,
 } from "../lib/firebasePhoneVerification";
-
-const emirates = ["Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"];
+import {
+  calculateVat,
+  getCountryConfig,
+  getShippingOption,
+  isValidPhoneForCountry,
+  normalizePhoneForCountry,
+} from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -61,6 +65,13 @@ export default function Checkout() {
   const sendOtpLockRef = useRef(false);
 
   const [currentStep, setCurrentStep] = useState(1);
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const selectedCity = useCountryStore((state) => state.selectedCity);
+  const selectedShippingOption = useCountryStore((state) => state.selectedShippingOption);
+  const setCitySelection = useCountryStore((state) => state.setCity);
+  const setShippingSelection = useCountryStore((state) => state.setShippingOption);
+  const country = getCountryConfig(selectedCountry);
+  const activeShipping = getShippingOption(selectedCountry, selectedShippingOption);
 
   const [form, setForm] = useState({
     // Step 1: Customer Info
@@ -70,26 +81,20 @@ export default function Checkout() {
     phone: "",
     // Step 2: Shipping
     address: "",
-    city: "Dubai",
+    city: selectedCity,
     area: "",
     building: "",
     landmark: "",
     postalCode: "",
     // Step 3: Delivery Method
-    deliveryType: "standard_uae", // "same_day_delivery" or "standard_uae"
+    deliveryType: activeShipping.id,
     // Step 4: Payment
     paymentMethod: "cod",
   });
 
   const total = useMemo(() => getCartTotal(), [getCartTotal, items]);
-  
-  // Determine available delivery types based on emirate
-  const sameDayEmirateers = ['Dubai', 'Sharjah', 'Ajman'];
-  const canUseSameDay = sameDayEmirateers.includes(form.city);
-  
-  // Delivery fee: AED 25 for Same Day, AED 15 for Standard UAE
-  const shippingFee = form.deliveryType === "same_day_delivery" ? 25 : 15;
-  const vatAmount = Math.round(total * 0.05);
+  const shippingFee = activeShipping.fee;
+  const vatAmount = Math.round(calculateVat(total, selectedCountry));
   const totalPayable = total + shippingFee + vatAmount;
 
   useEffect(() => {
@@ -101,16 +106,13 @@ export default function Checkout() {
     });
   }, [items.length, phoneVerificationSupported, useFirebaseOtp]);
 
-  // Validate delivery type based on emirate
   useEffect(() => {
-    const sameDayEmirateers = ['Dubai', 'Sharjah', 'Ajman'];
-    const canUseSameDay = sameDayEmirateers.includes(form.city);
-    
-    // If Same Day is selected but not available for this emirate, switch to Standard
-    if (form.deliveryType === 'same_day_delivery' && !canUseSameDay) {
-      setForm(prev => ({ ...prev, deliveryType: 'standard_uae' }));
-    }
-  }, [form.city]);
+    setForm((prev) => ({
+      ...prev,
+      city: selectedCity,
+      deliveryType: activeShipping.id,
+    }));
+  }, [activeShipping.id, selectedCity]);
 
   useEffect(() => {
     let active = true;
@@ -404,7 +406,7 @@ export default function Checkout() {
 
   const validateStep = (step: number): boolean => {
     if (step === 1) {
-      return !!(form.firstName && form.lastName && form.email && isValidUaePhone(form.phone));
+      return !!(form.firstName && form.lastName && form.email && isValidPhoneForCountry(form.phone, selectedCountry));
     }
     if (step === 2) {
       return !!(form.address && form.city && form.area && form.building);
@@ -437,8 +439,8 @@ export default function Checkout() {
         setOtpError("Please sign in to your customer account before phone verification.");
         return;
       }
-      if (!form.email || !isValidUaePhone(form.phone)) {
-        setOtpError("Enter a valid UAE phone number and email before requesting verification.");
+      if (!form.email || !isValidPhoneForCountry(form.phone, selectedCountry)) {
+        setOtpError(`Enter a valid ${country.shortName} phone number and email before requesting verification.`);
         return;
       }
 
@@ -446,16 +448,28 @@ export default function Checkout() {
       setSendingOtp(true);
       setOtpError("");
       setOtpMessage("");
-      const normalizedPhone = normalizeUaePhone(form.phone);
+      const normalizedPhone = normalizePhoneForCountry(form.phone, selectedCountry);
       console.info("[checkout] send-code requested", {
         ...getFirebasePhoneVerificationRuntimeInfo(),
         phone: normalizedPhone,
       });
-      const response = await sendFirebasePhoneCode(normalizedPhone, "checkout-firebase-recaptcha");
-      setOtpProvider("firebase");
-      setOtpSessionId(`firebase:${response.phone}`);
-      setOtpResendAvailableAt(new Date(Date.now() + 60 * 1000).toISOString());
-      setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
+      if (selectedCountry === "AE") {
+        const response = await sendFirebasePhoneCode(normalizedPhone, "checkout-firebase-recaptcha");
+        setOtpProvider("firebase");
+        setOtpSessionId(`firebase:${response.phone}`);
+        setOtpResendAvailableAt(new Date(Date.now() + 60 * 1000).toISOString());
+        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
+      } else {
+        const response = await codAPI.sendOtp({
+          phone: normalizedPhone,
+          email: form.email,
+          country: selectedCountry,
+        } as any);
+        setOtpProvider("backend");
+        setOtpSessionId(response.sessionId);
+        setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
+        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
+      }
     } catch (error: any) {
       console.error("[checkout] send-code failed", {
         ...getFirebasePhoneVerificationRuntimeInfo(),
@@ -478,8 +492,8 @@ export default function Checkout() {
       setOtpError("");
       if (otpProvider === "firebase") {
         const response = await verifyFirebasePhoneCode(otpCode);
-        const verifiedPhone = normalizeUaePhone(response.phone);
-        if (verifiedPhone !== normalizeUaePhone(form.phone)) {
+        const verifiedPhone = normalizePhoneForCountry(response.phone, selectedCountry);
+        if (verifiedPhone !== normalizePhoneForCountry(form.phone, selectedCountry)) {
           throw new Error("Verified phone does not match the checkout number.");
         }
         setOtpSessionId(`firebase:${verifiedPhone}`);
@@ -491,8 +505,8 @@ export default function Checkout() {
           sessionId: otpSessionId,
           code: otpCode,
         });
-        const verifiedPhone = normalizeUaePhone(response.phone);
-        if (verifiedPhone !== normalizeUaePhone(form.phone)) {
+        const verifiedPhone = normalizePhoneForCountry(response.phone, selectedCountry);
+        if (verifiedPhone !== normalizePhoneForCountry(form.phone, selectedCountry)) {
           throw new Error("Verified phone does not match the checkout number.");
         }
         setOtpSessionId(response.verificationToken);
@@ -561,7 +575,7 @@ export default function Checkout() {
 
       // Create an order for each seller
       for (const [sellerId, sellerItems] of ordersBySellerMap) {
-        const sellerShippingCost = form.deliveryType === "same_day_delivery" ? 25 : 15;
+        const sellerShippingCost = activeShipping.fee;
         const created = await orderAPI.create({
           sellerId,
           items: sellerItems.map((item: any) => {
@@ -580,20 +594,27 @@ export default function Checkout() {
           }),
           customerName: `${form.firstName} ${form.lastName}`.trim(),
           customerEmail: form.email,
-          customerPhone: normalizeUaePhone(form.phone),
+          customerPhone: normalizePhoneForCountry(form.phone, selectedCountry),
           verificationToken: otpSessionId,
           shippingCost: sellerShippingCost,
-          deliveryType: form.deliveryType === 'same_day_delivery' ? 'Same Day Delivery' : 'Standard UAE Delivery',
+          deliveryType: activeShipping.label,
           shippingAddress: {
-            emirate: form.city,
+            emirate: selectedCountry === 'AE' ? form.city : '',
             area: form.area,
             building: form.building,
             flat: '',
             landmark: form.landmark,
             addressLine: form.address,
             method: form.deliveryType,
+            city: form.city,
+            district: form.area,
+            street: form.address,
+            buildingNumber: form.building,
+            postalCode: form.postalCode,
+            country: selectedCountry,
           },
           paymentMethod: "cod",
+          deliveryCountry: selectedCountry,
         });
         createdOrders.push(created);
       }
@@ -611,7 +632,7 @@ export default function Checkout() {
           address: form.address,
           city: form.city,
           postalCode: form.postalCode,
-          country: "UAE",
+          country: country.name,
         },
         {
           method: "cod",
@@ -781,12 +802,12 @@ export default function Checkout() {
                       </label>
                       <input
                         name="phone"
-                        value={form.phone}
-                        onChange={handleChange}
-                        placeholder="+971 50 123 4567"
+                          value={form.phone}
+                          onChange={handleChange}
+                          placeholder={selectedCountry === 'AE' ? '+971 50 123 4567' : '+966 5X XXX XXXX'}
                         className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       />
-                      <p className="mt-2 text-xs font-semibold text-slate-500">UAE mobile verification is required before COD order confirmation.</p>
+                      <p className="mt-2 text-xs font-semibold text-slate-500">{country.shortName} mobile verification is required before COD order confirmation.</p>
                     </div>
                   </div>
                 </div>
@@ -803,13 +824,13 @@ export default function Checkout() {
                   <div className="space-y-4">
                     <div>
                       <label className="mb-2 block text-sm font-bold text-slate-900">
-                        Full Address *
+                        {country.addressLabels.address} *
                       </label>
                       <textarea
                         name="address"
                         value={form.address}
                         onChange={handleChange}
-                        placeholder="Street address, building, etc."
+                        placeholder={selectedCountry === 'AE' ? 'Street address, building, etc.' : 'Street name'}
                         rows={3}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       />
@@ -818,32 +839,31 @@ export default function Checkout() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-sm font-bold text-slate-900">
-                          Emirate *
+                          {country.addressLabels.city} *
                         </label>
                         <select
                           name="city"
                           value={form.city}
-                          onChange={handleChange}
+                          onChange={(event) => {
+                            handleChange(event);
+                            setCitySelection(event.target.value);
+                          }}
                           className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         >
-                          <option>Dubai</option>
-                          <option>Abu Dhabi</option>
-                          <option>Sharjah</option>
-                          <option>Ajman</option>
-                          <option>Ras Al Khaimah</option>
-                          <option>Fujairah</option>
-                          <option>Umm Al Quwain</option>
+                          {country.cities.map((city) => (
+                            <option key={city}>{city}</option>
+                          ))}
                         </select>
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-bold text-slate-900">
-                          Area *
+                          {country.addressLabels.area} *
                         </label>
                         <input
                           name="area"
                           value={form.area}
                           onChange={handleChange}
-                          placeholder="Al Barsha, Deira, Khalidiya..."
+                          placeholder={selectedCountry === 'AE' ? 'Al Barsha, Deira, Khalidiya...' : 'Al Olaya, Al Rawdah, Al Malqa...'}
                           className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         />
                       </div>
@@ -852,19 +872,19 @@ export default function Checkout() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-sm font-bold text-slate-900">
-                          Building / Villa *
+                          {country.addressLabels.building} *
                         </label>
                         <input
                           name="building"
                           value={form.building}
                           onChange={handleChange}
-                          placeholder="Building 9, Villa 14, Tower B"
+                          placeholder={selectedCountry === 'AE' ? 'Building 9, Villa 14, Tower B' : 'Building 24'}
                           className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         />
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-bold text-slate-900">
-                          Landmark
+                          {country.addressLabels.landmark}
                         </label>
                         <input
                           name="landmark"
@@ -874,6 +894,19 @@ export default function Checkout() {
                           className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-900">
+                        {country.addressLabels.postalCode}
+                      </label>
+                      <input
+                        name="postalCode"
+                        value={form.postalCode}
+                        onChange={handleChange}
+                        placeholder={selectedCountry === 'AE' ? 'Optional postal code' : '12345'}
+                        className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      />
                     </div>
                   </div>
                 </div>
@@ -894,64 +927,40 @@ export default function Checkout() {
                   )}
 
                   <div className="space-y-3">
-                    {/* Same Day Delivery - Only for Dubai, Sharjah, Ajman */}
-                    {canUseSameDay && (
+                    {country.shippingOptions.map((option) => (
                       <label
-                        className="relative flex cursor-pointer items-center rounded-xl border-2 p-4 transition-all hover:border-green-400"
+                        key={option.id}
+                        className="relative flex cursor-pointer items-center rounded-xl border-2 p-4 transition-all hover:border-blue-400"
                         style={{
                           borderColor:
-                            form.deliveryType === "same_day_delivery"
-                              ? "rgb(34, 197, 94)"
+                            form.deliveryType === option.id
+                              ? "rgb(37, 99, 235)"
                               : "rgb(226, 232, 240)",
                         }}
                       >
                         <input
                           type="radio"
                           name="deliveryType"
-                          value="same_day_delivery"
-                          checked={form.deliveryType === "same_day_delivery"}
-                          onChange={handleChange}
+                          value={option.id}
+                          checked={form.deliveryType === option.id}
+                          onChange={(event) => {
+                            handleChange(event);
+                            setShippingSelection(option.id);
+                          }}
                           className="h-4 w-4"
                         />
                         <div className="ml-4 flex-1">
-                          <p className="font-bold text-slate-900">Same Day Delivery ⚡</p>
-                          <p className="text-sm text-slate-600">Express delivery in Dubai, Sharjah, Ajman (next business day)</p>
+                          <p className="font-bold text-slate-900">{option.label}</p>
+                          <p className="text-sm text-slate-600">{option.eta}</p>
                         </div>
-                        <span className="font-bold text-green-600">AED 25</span>
+                        <span className="font-bold text-blue-600">{formatCurrencyForCountry(option.fee, selectedCountry)}</span>
                       </label>
-                    )}
-
-                    {/* Standard UAE Delivery - Available for all UAE emirates */}
-                    <label
-                      className="relative flex cursor-pointer items-center rounded-xl border-2 p-4 transition-all hover:border-blue-400"
-                      style={{
-                        borderColor:
-                          form.deliveryType === "standard_uae"
-                            ? "rgb(37, 99, 235)"
-                            : "rgb(226, 232, 240)",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="deliveryType"
-                        value="standard_uae"
-                        checked={form.deliveryType === "standard_uae"}
-                        onChange={handleChange}
-                        className="h-4 w-4"
-                      />
-                      <div className="ml-4 flex-1">
-                        <p className="font-bold text-slate-900">Standard UAE Delivery</p>
-                        <p className="text-sm text-slate-600">Full UAE coverage (2-4 business days)</p>
-                      </div>
-                      <span className="font-bold text-blue-600">AED 15</span>
-                    </label>
+                    ))}
                   </div>
 
-                  {!canUseSameDay && (
-                    <div className="mt-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
-                      <p><span className="font-semibold">Note:</span> Same Day Delivery is available only for Dubai, Sharjah, and Ajman. We offer Standard UAE Delivery for all other emirates.</p>
-                    </div>
-                  )}
+                  <div className="mt-6 rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
+                    <p><span className="font-semibold">Note:</span> {activeShipping.description}</p>
+                  </div>
                 </div>
               )}
 
@@ -977,11 +986,11 @@ export default function Checkout() {
                     <div className="flex items-start justify-between gap-6">
                       <div>
                         <p className="text-lg font-black text-slate-900">Cash on Delivery</p>
-                        <p className="mt-1 text-sm font-medium text-slate-600">Pay on Delivery in AED. ExShopi requires UAE phone verification before the order is sent to sellers.</p>
+                        <p className="mt-1 text-sm font-medium text-slate-600">Pay on delivery in {country.currency}. ExShopi requires {country.shortName} phone verification before the order is sent to sellers.</p>
                       </div>
                       <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-right">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Total Payable</p>
-                        <p className="mt-1 text-2xl font-black text-emerald-900">{formatAED(totalPayable)}</p>
+                        <p className="mt-1 text-2xl font-black text-emerald-900">{formatCurrencyForCountry(totalPayable, selectedCountry)}</p>
                       </div>
                     </div>
 
@@ -1032,11 +1041,11 @@ export default function Checkout() {
                     <div className="grid gap-3 md:grid-cols-3">
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Delivery Charges</p>
-                        <p className="mt-2 text-xl font-black text-slate-900">{formatAED(shippingFee)}</p>
+                        <p className="mt-2 text-xl font-black text-slate-900">{formatCurrencyForCountry(shippingFee, selectedCountry)}</p>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">VAT</p>
-                        <p className="mt-2 text-xl font-black text-slate-900">{formatAED(vatAmount)}</p>
+                        <p className="mt-2 text-xl font-black text-slate-900">{formatCurrencyForCountry(vatAmount, selectedCountry)}</p>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Verification</p>
@@ -1045,7 +1054,7 @@ export default function Checkout() {
                         </p>
                         {!otpVerified && otpSessionId && (
                           <p className="mt-2 text-xs font-semibold text-slate-500">
-                            Code sent to {normalizeUaePhone(form.phone)}
+                            Code sent to {normalizePhoneForCountry(form.phone, selectedCountry)}
                           </p>
                         )}
                       </div>
@@ -1088,7 +1097,7 @@ export default function Checkout() {
                       <div className="text-sm text-slate-600 space-y-1">
                         <p>{form.address}</p>
                         <p>
-                          {form.building}, {form.area}, {form.city}, AE
+                          {form.building}, {form.area}, {form.city}, {selectedCountry}
                         </p>
                         {form.landmark && <p>Landmark: {form.landmark}</p>}
                       </div>
@@ -1109,7 +1118,7 @@ export default function Checkout() {
                               {item.title} x {item.quantity}
                             </span>
                             <span className="font-bold text-slate-900">
-                              {formatAED(item.price * item.quantity)}
+                              {formatCurrencyForCountry(item.price * item.quantity, selectedCountry)}
                             </span>
                           </div>
                         ))}
@@ -1125,15 +1134,15 @@ export default function Checkout() {
                         </div>
                         <div className="flex justify-between">
                           <span>Delivery Charges</span>
-                          <span className="font-bold text-slate-900">{formatAED(shippingFee)}</span>
+                          <span className="font-bold text-slate-900">{formatCurrencyForCountry(shippingFee, selectedCountry)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>VAT</span>
-                          <span className="font-bold text-slate-900">{formatAED(vatAmount)}</span>
+                          <span className="font-bold text-slate-900">{formatCurrencyForCountry(vatAmount, selectedCountry)}</span>
                         </div>
                         <div className="flex justify-between border-t border-slate-200 pt-3">
                           <span className="font-bold text-slate-900">Total Payable on Delivery</span>
-                          <span className="font-black text-slate-900">{formatAED(totalPayable)}</span>
+                          <span className="font-black text-slate-900">{formatCurrencyForCountry(totalPayable, selectedCountry)}</span>
                         </div>
                       </div>
                     </div>
@@ -1197,7 +1206,7 @@ export default function Checkout() {
                       <p className="text-white/60 text-xs">Qty: {item.quantity}</p>
                     </div>
                     <p className="font-bold ml-2 whitespace-nowrap">
-                      {formatAED(item.price * item.quantity)}
+                      {formatCurrencyForCountry(item.price * item.quantity, selectedCountry)}
                     </p>
                   </div>
                 ))}
@@ -1206,33 +1215,33 @@ export default function Checkout() {
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
                   <span className="text-white/70">Subtotal</span>
-                  <span>{formatAED(total)}</span>
+                  <span>{formatCurrencyForCountry(total, selectedCountry)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-white/70">Shipping</span>
-                  <span className="font-bold">{formatAED(shippingFee)}</span>
+                  <span className="font-bold">{formatCurrencyForCountry(shippingFee, selectedCountry)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-white/70">VAT (5%)</span>
-                  <span>{formatAED(vatAmount)}</span>
+                  <span className="text-white/70">VAT ({Math.round(country.vatRate * 100)}%)</span>
+                  <span>{formatCurrencyForCountry(vatAmount, selectedCountry)}</span>
                 </div>
               </div>
 
               <div className="border-t border-white/10 pt-6">
                 <div className="flex justify-between items-end">
                   <span className="font-bold">Total</span>
-                  <span className="text-3xl font-black">{formatAED(totalPayable)}</span>
+                  <span className="text-3xl font-black">{formatCurrencyForCountry(totalPayable, selectedCountry)}</span>
                 </div>
               </div>
 
               <div className="mt-6 space-y-2">
                 <div className="flex items-center gap-2 text-xs text-white/70">
                   <ShieldCheck className="h-4 w-4" />
-                  COD protected by UAE phone OTP
+                  COD protected by {country.shortName} phone OTP
                 </div>
                 <div className="flex items-center gap-2 text-xs text-white/70">
                   <Truck className="h-4 w-4" />
-                  Pay on delivery across UAE
+                  {activeShipping.eta}
                 </div>
               </div>
             </div>

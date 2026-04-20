@@ -1,34 +1,52 @@
-export const formatAED = (
-  value: number | string | null | undefined,
-  options?: {
-    maximumFractionDigits?: number;
-    minimumFractionDigits?: number;
-  }
-) => {
-  const amount = Number(value ?? 0);
-  const safeAmount = Number.isFinite(amount) ? amount : 0;
+import { getCountryConfig, type SupportedCountryCode } from './countryConfig';
 
-  return new Intl.NumberFormat('en-AE', {
+type FormatOptions = {
+  maximumFractionDigits?: number;
+  minimumFractionDigits?: number;
+};
+
+const toSafeAmount = (value: number | string | null | undefined) => {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount) ? amount : 0;
+};
+
+export const formatCurrencyForCountry = (
+  value: number | string | null | undefined,
+  countryCode: SupportedCountryCode | string = 'AE',
+  options?: FormatOptions
+) => {
+  const safeAmount = toSafeAmount(value);
+  const config = getCountryConfig(countryCode);
+
+  return new Intl.NumberFormat(config.locale, {
     style: 'currency',
-    currency: 'AED',
+    currency: config.currency,
     currencyDisplay: 'code',
     maximumFractionDigits: options?.maximumFractionDigits ?? 0,
     minimumFractionDigits: options?.minimumFractionDigits ?? 0,
   }).format(safeAmount);
 };
 
-export const formatAEDPlain = (
+export const formatCurrencyPlainForCountry = (
   value: number | string | null | undefined,
-  options?: {
-    maximumFractionDigits?: number;
-    minimumFractionDigits?: number;
-  }
+  countryCode: SupportedCountryCode | string = 'AE',
+  options?: FormatOptions
 ) => {
-  const amount = Number(value ?? 0);
-  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const safeAmount = toSafeAmount(value);
+  const config = getCountryConfig(countryCode);
 
-  return `AED ${safeAmount.toLocaleString('en-AE', {
+  return `${config.currency} ${safeAmount.toLocaleString(config.locale, {
     maximumFractionDigits: options?.maximumFractionDigits ?? 0,
     minimumFractionDigits: options?.minimumFractionDigits ?? 0,
   })}`;
 };
+
+export const formatAED = (
+  value: number | string | null | undefined,
+  options?: FormatOptions
+) => formatCurrencyForCountry(value, 'AE', options);
+
+export const formatAEDPlain = (
+  value: number | string | null | undefined,
+  options?: FormatOptions
+) => formatCurrencyPlainForCountry(value, 'AE', options);

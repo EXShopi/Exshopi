@@ -2,23 +2,20 @@ import { useState } from "react";
 import { ChevronDown, MapPin, Globe } from "lucide-react";
 import { useLanguageStore } from "../store/language";
 import { storefrontT } from "../lib/storefrontCopy";
+import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, getDualCountryTrustText } from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
 export default function TopBar() {
-  const [city, setCity] = useState("Dubai");
   const [cityOpen, setCityOpen] = useState(false);
-
   const [langOpen, setLangOpen] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
   const { lang: language, setLanguage } = useLanguageStore();
-
-  const cities = [
-    "Dubai",
-    "Abu Dhabi",
-    "Sharjah",
-    "Ajman",
-    "Ras Al Khaimah",
-    "Fujairah",
-    "Umm Al Quwain",
-  ];
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const selectedCity = useCountryStore((state) => state.selectedCity);
+  const setCountry = useCountryStore((state) => state.setCountry);
+  const setCity = useCountryStore((state) => state.setCity);
+  const countryConfig = COUNTRY_CONFIG[selectedCountry];
+  const cities = countryConfig.cities;
 
   const languages = [
     "English",
@@ -41,7 +38,7 @@ export default function TopBar() {
           </span>
           <span className="hidden text-white/25 md:inline">•</span>
           <span className="hidden text-white/70 md:inline">
-            {storefrontT(language, "fast_delivery")} • {storefrontT(language, "trusted_sellers")}
+            {getDualCountryTrustText()} • {storefrontT(language, "trusted_sellers")}
           </span>
         </div>
 
@@ -49,13 +46,59 @@ export default function TopBar() {
           <div className="relative">
             <button
               onClick={() => {
-                setCityOpen(!cityOpen);
+                setCountryOpen(!countryOpen);
+                setCityOpen(false);
                 setLangOpen(false);
               }}
               className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:gap-2 md:px-3"
             >
               <MapPin className="h-3.5 w-3.5 md:h-4 md:w-4" />
-              <span className="max-w-[54px] truncate text-[11px] font-semibold md:max-w-none md:text-[12px]">{city}</span>
+              <span className="max-w-[72px] truncate text-[11px] font-semibold md:max-w-none md:text-[12px]">
+                {countryConfig.shortName}
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform duration-200 ${countryOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {countryOpen && (
+              <div className="absolute right-0 top-full z-[99999] mt-3 w-56 overflow-hidden rounded-2xl border border-slate-300 bg-white text-slate-900 shadow-2xl backdrop-blur-xl">
+                {SUPPORTED_COUNTRY_CODES.map((countryCode, idx) => {
+                  const option = COUNTRY_CONFIG[countryCode];
+                  const isActive = selectedCountry === countryCode;
+
+                  return (
+                    <button
+                      key={countryCode}
+                      onClick={() => {
+                        setCountry(countryCode);
+                        setCountryOpen(false);
+                      }}
+                      className={`w-full px-5 py-3 text-left text-sm font-medium transition-all ${
+                        isActive
+                          ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-l-4 border-blue-600 pl-3"
+                          : "hover:bg-slate-50 border-l-4 border-transparent"
+                      } ${idx !== SUPPORTED_COUNTRY_CODES.length - 1 ? "border-b border-slate-100" : ""}`}
+                    >
+                      {option.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => {
+                setCityOpen(!cityOpen);
+                setCountryOpen(false);
+                setLangOpen(false);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:gap-2 md:px-3"
+            >
+              <MapPin className="h-3.5 w-3.5 md:h-4 md:w-4" />
+              <span className="max-w-[54px] truncate text-[11px] font-semibold md:max-w-none md:text-[12px]">{selectedCity}</span>
               <ChevronDown
                 className={`h-4 w-4 transition-transform duration-200 ${cityOpen ? "rotate-180" : ""}`}
               />
@@ -71,7 +114,7 @@ export default function TopBar() {
                       setCityOpen(false);
                     }}
                     className={`w-full px-5 py-3 text-left text-sm font-medium transition-all ${
-                      city === c 
+                      selectedCity === c 
                         ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-l-4 border-blue-600 pl-3" 
                         : "hover:bg-slate-50 border-l-4 border-transparent"
                     } ${idx !== cities.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -90,6 +133,7 @@ export default function TopBar() {
               onClick={() => {
                 setLangOpen(!langOpen);
                 setCityOpen(false);
+                setCountryOpen(false);
               }}
               className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:gap-2 md:px-3"
             >

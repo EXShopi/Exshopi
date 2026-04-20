@@ -15,25 +15,10 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCartStore } from "../store/cart";
-import { formatAED, formatAEDPlain } from "../lib/currency";
+import { formatCurrencyForCountry, formatCurrencyPlainForCountry } from "../lib/currency";
 import { productAPI } from "../services/api";
-
-const EMIRATES = [
-  "Dubai",
-  "Abu Dhabi",
-  "Sharjah",
-  "Ajman",
-  "Ras Al Khaimah",
-  "Fujairah",
-  "Umm Al Quwain",
-];
-
-function getDeliveryType(emirate: string) {
-  if (emirate === "Dubai" || emirate === "Sharjah" || emirate === "Ajman") {
-    return "Express";
-  }
-  return "Standard";
-}
+import { calculateVat, getCountryConfig, getDefaultShippingOption, getShippingOption } from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -47,11 +32,17 @@ export default function Cart() {
     getCartCount,
   } = useCartStore();
 
-  const [selectedEmirate, setSelectedEmirate] = useState("Dubai");
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
   const [cartNotice, setCartNotice] = useState("");
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const selectedCity = useCountryStore((state) => state.selectedCity);
+  const selectedShippingOption = useCountryStore((state) => state.selectedShippingOption);
+  const setCity = useCountryStore((state) => state.setCity);
+  const setShippingOption = useCountryStore((state) => state.setShippingOption);
+  const country = getCountryConfig(selectedCountry);
+  const activeShipping = getShippingOption(selectedCountry, selectedShippingOption);
 
   useEffect(() => {
     let active = true;
@@ -92,10 +83,9 @@ export default function Cart() {
     };
   }, [items, removeItem]);
 
-  const deliveryType = getDeliveryType(selectedEmirate);
   const subtotal = getCartTotal();
-  const vat = Math.round(subtotal * 0.05);
-  const finalTotal = subtotal + vat - discount;
+  const vat = Math.round(calculateVat(subtotal, selectedCountry));
+  const finalTotal = subtotal + activeShipping.fee + vat - discount;
 
   const applyPromo = () => {
     if (promoCode === "WELCOME10") {
@@ -202,11 +192,12 @@ export default function Cart() {
 
                     {/* Price & Seller */}
                     <div className="flex items-baseline gap-2 mb-3">
-                      <span className="text-2xl font-bold text-slate-900">{formatAED(item.price)}</span>
+                      <span className="text-2xl font-bold text-slate-900">{formatCurrencyForCountry(item.price, selectedCountry)}</span>
+                      
                       {item.originalPrice && item.originalPrice > item.price && (
                         <>
                           <span className="text-slate-400 line-through">
-                            {formatAED(item.originalPrice)}
+                            {formatCurrencyForCountry(item.originalPrice, selectedCountry)}
                           </span>
                           <span className="text-sm font-bold text-red-600">
                             Save {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}%
@@ -245,7 +236,7 @@ export default function Cart() {
                     <div className="text-right">
                       <p className="text-sm text-slate-600 mb-1">Subtotal</p>
                       <p className="text-2xl font-bold text-slate-900">
-                        {formatAED(item.price * item.quantity)}
+                        {formatCurrencyForCountry(item.price * item.quantity, selectedCountry)}
                       </p>
                     </div>
 
@@ -299,14 +290,14 @@ export default function Cart() {
                 {/* Delivery Info */}
                 <div className="mb-6 pb-6 border-b border-slate-200">
                   <label className="text-xs font-bold text-slate-900 uppercase mb-2 block">
-                    Delivery to:
+                    {country.addressLabels.city}:
                   </label>
                   <select
-                    value={selectedEmirate}
-                    onChange={(e) => setSelectedEmirate(e.target.value)}
+                    value={selectedCity}
+                    onChange={(e) => setCity(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold"
                   >
-                    {EMIRATES.map((e) => (
+                    {country.cities.map((e) => (
                       <option key={e} value={e}>
                         {e}
                       </option>
@@ -314,7 +305,24 @@ export default function Cart() {
                   </select>
                   <div className="mt-3 flex items-center gap-2 text-emerald-600">
                     <Truck className="h-4 w-4" />
-                    <span className="text-sm font-bold">{deliveryType} Delivery - FREE</span>
+                    <span className="text-sm font-bold">{activeShipping.label} - {formatCurrencyForCountry(activeShipping.fee, selectedCountry)}</span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {country.shippingOptions.map((option) => (
+                      <label key={option.id} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                        <input
+                          type="radio"
+                          name="cartShippingOption"
+                          checked={activeShipping.id === option.id}
+                          onChange={() => setShippingOption(option.id)}
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="block font-bold text-slate-900">{option.label}</span>
+                          <span className="block text-slate-500">{option.eta}</span>
+                        </span>
+                      </label>
+                    ))}
                   </div>
                 </div>
 
@@ -322,11 +330,15 @@ export default function Cart() {
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-600">Subtotal ({getCartCount()} items)</span>
-                    <span className="font-bold text-slate-900">{formatAED(subtotal)}</span>
+                    <span className="font-bold text-slate-900">{formatCurrencyForCountry(subtotal, selectedCountry)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">VAT (5%)</span>
-                    <span className="font-bold text-slate-900">{formatAED(vat)}</span>
+                    <span className="text-slate-600">VAT ({Math.round(country.vatRate * 100)}%)</span>
+                    <span className="font-bold text-slate-900">{formatCurrencyForCountry(vat, selectedCountry)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Shipping</span>
+                    <span className="font-bold text-slate-900">{formatCurrencyForCountry(activeShipping.fee, selectedCountry)}</span>
                   </div>
                   {promoApplied && (
                     <div className="flex justify-between text-sm bg-emerald-50 p-2 rounded-lg">
@@ -334,7 +346,7 @@ export default function Cart() {
                         <Percent className="h-4 w-4" />
                         Discount
                       </span>
-                      <span className="font-bold text-emerald-700">- {formatAEDPlain(discount)}</span>
+                      <span className="font-bold text-emerald-700">- {formatCurrencyPlainForCountry(discount, selectedCountry)}</span>
                     </div>
                   )}
                 </div>
@@ -344,8 +356,8 @@ export default function Cart() {
                   <div className="flex justify-between items-end mb-2">
                     <span className="text-xl font-black text-slate-900">Total</span>
                     <div className="text-right">
-                      <p className="text-3xl font-black text-blue-600">{formatAED(finalTotal)}</p>
-                      <p className="text-xs text-slate-500">VAT included</p>
+                      <p className="text-3xl font-black text-blue-600">{formatCurrencyForCountry(finalTotal, selectedCountry)}</p>
+                      <p className="text-xs text-slate-500">VAT included for {country.shortName}</p>
                     </div>
                   </div>
                 </div>
@@ -374,7 +386,7 @@ export default function Cart() {
                   <Truck className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                   <div className="text-sm">
                     <p className="font-bold text-slate-900">Free Delivery</p>
-                    <p className="text-xs text-slate-600">On all orders in UAE</p>
+                    <p className="text-xs text-slate-600">{activeShipping.eta}</p>
                   </div>
                 </div>
 

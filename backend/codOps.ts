@@ -91,11 +91,35 @@ export function normalizePhone(phone: string) {
   if (raw.startsWith('971')) return `+${raw}`;
   if (raw.startsWith('05')) return `+971${raw.slice(1)}`;
   if (raw.startsWith('5')) return `+971${raw}`;
+  if (raw.startsWith('+966')) return raw;
+  if (raw.startsWith('966')) return `+${raw}`;
   return raw;
 }
 
 export function isValidUaePhone(phone: string) {
   return /^\+971(5\d{8}|[234679]\d{7,8})$/.test(normalizePhone(phone));
+}
+
+export function isValidSaudiPhone(phone: string) {
+  const raw = String(phone || '').replace(/[^\d+]/g, '');
+  const normalized =
+    raw.startsWith('+966')
+      ? raw
+      : raw.startsWith('966')
+      ? `+${raw}`
+      : raw.startsWith('05')
+      ? `+966${raw.slice(1)}`
+      : raw.startsWith('5')
+      ? `+966${raw}`
+      : raw;
+  return /^\+9665\d{8}$/.test(normalized);
+}
+
+export function isValidPhoneForCountry(phone: string, countryCode = 'AE') {
+  if (String(countryCode || 'AE').toUpperCase() === 'SA') {
+    return isValidSaudiPhone(phone);
+  }
+  return isValidUaePhone(phone);
 }
 
 export function createCodOtpSession(input: {
