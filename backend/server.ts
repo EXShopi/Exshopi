@@ -48,7 +48,6 @@ import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, 
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 import { buildStoreOperationsAnalytics } from './adminAnalyticsService';
-import { getGoogleAnalyticsAdminSnapshot, getGoogleAnalyticsConfigurationStatus } from './googleAnalyticsService';
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
 import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
 
@@ -82,18 +81,6 @@ const seoSlugify = (value: string) =>
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
-
-const googleAnalyticsConfigStatus = getGoogleAnalyticsConfigurationStatus();
-if (googleAnalyticsConfigStatus.enabled) {
-  console.info('[startup] Google Analytics Data API is configured for admin reports.');
-} else {
-  console.warn('[startup] Google Analytics Data API is not fully configured.', {
-    missing: googleAnalyticsConfigStatus.missing,
-    validationErrors: googleAnalyticsConfigStatus.validationErrors,
-    envSource: googleAnalyticsConfigStatus.envSource,
-  });
-}
-
 
 // ==================== CORS CONFIGURATION ====================
 const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '');
@@ -5668,30 +5655,11 @@ app.get('/api/admin/analytics', authMiddleware, async (req: Request, res: Respon
     }
 
     const dateRange = parseAdminDateRange(req.query);
-    const [storeOps, googleAnalytics] = await Promise.all([
-      buildStoreOperationsAnalytics(dateRange),
-      getGoogleAnalyticsAdminSnapshot({
-        range: dateRange.range,
-        from: dateRange.from,
-        to: dateRange.to,
-      }),
-    ]);
-
-    const gaSummary = googleAnalytics.summary || {
-      activeUsers: 0,
-      totalUsers: 0,
-      newUsers: 0,
-      sessions: 0,
-      engagedSessions: 0,
-      averageEngagementTime: 0,
-      eventCount: 0,
-      keyEvents: 0,
-    };
-    const conversionRate = gaSummary.sessions
-      ? Number(((gaSummary.keyEvents / gaSummary.sessions) * 100).toFixed(2))
-      : null;
+    const storeOps = await buildStoreOperationsAnalytics(dateRange);
+    const internalSummary: any = storeOps.summary || {};
 
     return res.json({
+      success: true,
       range: dateRange.range,
       from: dateRange.from.toISOString(),
       to: dateRange.to.toISOString(),
@@ -5709,22 +5677,31 @@ app.get('/api/admin/analytics', authMiddleware, async (req: Request, res: Respon
       returnsRequested: storeOps.legacyReports.returnsRequested,
 
       summaryCards: {
-        activeUsers: gaSummary.activeUsers,
-        activeUsersLast30Minutes: googleAnalytics.realtime.activeUsersLast30Minutes,
-        newUsers: gaSummary.newUsers,
-        totalUsers: gaSummary.totalUsers,
-        sessions: gaSummary.sessions,
-        engagedSessions: gaSummary.engagedSessions,
-        averageEngagementTime: gaSummary.averageEngagementTime,
-        eventCount: gaSummary.eventCount,
-        keyEvents: gaSummary.keyEvents,
-        conversionRate,
-        ordersToday: storeOps.summary.ordersToday,
-        revenueToday: storeOps.summary.revenueToday,
-        revenueThisMonth: storeOps.summary.revenueThisMonth,
+        ordersToday: internalSummary.ordersToday || 0,
+        totalOrders: internalSummary.totalOrders || 0,
+        revenueToday: internalSummary.revenueToday || 0,
+        revenueThisMonth: internalSummary.revenueThisMonth || 0,
+        totalRevenue: internalSummary.revenueInRange || 0,
+        totalUsers: internalSummary.totalCustomers || 0,
+        totalSellers: internalSummary.totalSellers || 0,
+        totalProducts: internalSummary.totalProducts || 0,
       },
 
-      googleAnalytics,
+      ga4: {
+        enabled: false,
+        message: 'GA4 analytics disabled',
+      },
+      googleAnalytics: {
+        enabled: false,
+        connected: false,
+        message: 'GA4 analytics disabled',
+        configurationIssue: 'GA4 analytics disabled',
+      },
+      internal: {
+        orders: internalSummary.totalOrders || 0,
+        revenue: internalSummary.revenueInRange || 0,
+        users: internalSummary.totalCustomers || 0,
+      },
       storeOperations: storeOps,
     });
   } catch (error) {
