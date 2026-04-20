@@ -3,7 +3,7 @@ import express from "express";
 console.log("BOOT STARTED");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = Number(process.env.PORT || 10000);
 
 console.log("PORT", PORT);
 
