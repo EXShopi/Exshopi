@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "./**/*.ts",
+    "../src/vite-env.d.ts",
+    "../src/lib/masterCategories.ts",
+    "../src/lib/productRouteResolution.ts",
+    "../src/lib/seo.ts",
+    "../src/lib/seoMarketplace.ts"
+  ],
+  "exclude": [
+    "../dist",
+    "../node_modules",
+    "../scripts",
+    "../src/**/*.tsx",
+    "../src/components",
+    "../src/pages",
+    "../src/services",
+    "../src/store",
+    "../src/data",
+    "../src/assets"
+  ]
+}
