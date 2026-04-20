@@ -1,27 +1,20 @@
-import 'dotenv/config';
+import express from "express";
 
-console.log('BOOT STARTED');
-console.log('ENV:', process.env.NODE_ENV);
-console.log('PORT:', process.env.PORT);
+console.log("BOOT STARTED");
 
-process.on('uncaughtException', (error) => {
-  console.error('UNCAUGHT EXCEPTION:', error);
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+console.log("PORT", PORT);
+
+app.get("/api/health", (_req, res) => {
+  res.status(200).send("OK");
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('UNHANDLED REJECTION:', reason);
+app.get("/health", (_req, res) => {
+  res.status(200).send("OK");
 });
 
-try {
-  const serverModule = await import('./server.app');
-  console.log('IMPORTS LOADED');
-
-  if (typeof serverModule.startServer !== 'function') {
-    throw new Error('backend/server.app.ts does not export startServer');
-  }
-
-  await serverModule.startServer();
-} catch (error) {
-  console.error('INIT FAILED', error);
-  process.exit(1);
-}
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("SERVER LISTENING");
+});
