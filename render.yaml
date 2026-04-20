@@ -4,8 +4,8 @@ services:
     runtime: node
     plan: starter
     rootDir: .
-    buildCommand: npm install && npx prisma generate
-    startCommand: npx tsx backend/server.ts
+    buildCommand: npm install && npm run build
+    startCommand: node dist/backend/server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
@@ -50,5 +50,8 @@ services:
     env: static
     branch: main
     rootDir: .
-    buildCommand: npm ci && npm run build:frontend
+    buildCommand: npm install && npm run build
     publishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://exshopi-api.onrender.com

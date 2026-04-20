@@ -3,7 +3,10 @@ services:
     name: exshopi-frontend
     env: static
     branch: main
-    buildCommand: npm ci && npm run build:frontend
+    buildCommand: npm install && npm run build
     publishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://exshopi-api.onrender.com
     # Optional: set the root dir if your frontend is in a subfolder
     # rootDir: .

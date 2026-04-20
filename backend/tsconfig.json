@@ -11,10 +11,12 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
+    "noEmit": false,
     "declaration": false,
     "sourceMap": false,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "rootDir": "..",
+    "outDir": "../dist"
   },
   "include": [
     "./**/*.ts",
