@@ -25,6 +25,8 @@ export interface ProductSeoInput extends ProductSeoFields {
   brand?: string;
   seller?: string;
   condition?: string;
+  reviewCount?: number | string | null;
+  ratingValue?: number | string | null;
   pathname?: string;
 }
 

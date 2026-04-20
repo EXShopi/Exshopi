@@ -5,7 +5,7 @@ import { useCartStore } from "../store/cart";
 import WishlistIcon from "./Premium/WishlistIcon";
 import { formatAEDPlain } from "../lib/currency";
 import LazyImage from "./ui/LazyImage";
-import { buildProductPath } from "../lib/seo";
+import { buildProductImageAlt, buildProductPath } from "../lib/seo";
 
 export interface ProductCardProps {
   id?: string;
@@ -112,7 +112,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <div className="relative aspect-square overflow-hidden bg-white px-3 pb-3 pt-3 md:px-4 md:pb-4 md:pt-4">
           <LazyImage
             src={image}
-            alt={title}
+            alt={buildProductImageAlt({ title })}
             wrapperClassName="h-full w-full overflow-hidden rounded-[14px] bg-white md:rounded-[18px]"
             className="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-[1.03]"
           />

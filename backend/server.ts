@@ -654,6 +654,46 @@ const escapeXml = (value: string) =>
     .replace(/'/g, '&apos;');
 
 const BLOG_SITEMAP_SLUGS = ['best-laptops-uae', 'macbook-buying-guide'];
+const STATIC_SITEMAP_PATHS = [
+  '/',
+  '/products',
+  '/blog',
+  '/about',
+  '/contact',
+  '/faq',
+  '/privacy',
+  '/terms',
+  '/return-policy',
+  '/warranty',
+  '/support',
+  '/sell-on-exshopi',
+  '/promotions',
+  '/campaigns/current',
+  '/brands/apple',
+  '/brands/samsung',
+  '/brands/dell',
+  '/brands/hp',
+  '/brands/lenovo',
+  '/brands/acer',
+  '/brands/asus',
+  '/brands/gaming',
+  '/buy-iphone-uae',
+  '/cheap-macbook-dubai',
+  '/electronics-online-uae',
+  '/refurbished-laptops-uae',
+];
+
+const getSitemapMeta = (pathname: string) => {
+  if (pathname === '/') return { changefreq: 'daily', priority: '1.0' };
+  if (pathname.startsWith('/electronics/') || pathname.startsWith('/category/') || pathname === '/products') {
+    return { changefreq: 'daily', priority: '0.9' };
+  }
+  if (pathname.startsWith('/brands/') || pathname.startsWith('/campaigns') || pathname.startsWith('/promotions')) {
+    return { changefreq: 'weekly', priority: '0.7' };
+  }
+  if (pathname.startsWith('/blog')) return { changefreq: 'monthly', priority: '0.6' };
+  return { changefreq: 'weekly', priority: '0.7' };
+};
 
 const flattenCategoryIds = (categories: Array<any>) => {
   const ids = new Set<string>();
@@ -6263,6 +6303,7 @@ Sitemap: https://exshopi.com/sitemap.xml
 app.get('/sitemap.xml', async (_req: Request, res: Response) => {
   try {
     const siteUrl = 'https://exshopi.com';
+    const lastmod = new Date().toISOString().slice(0, 10);
     const categories = (MASTER_CATEGORIES || []).map((category) => ({
       slug: category.slug,
       subcategories: Array.isArray(category.subcategories)
@@ -6275,18 +6316,24 @@ app.get('/sitemap.xml', async (_req: Request, res: Response) => {
       ? await supabaseRuntime.getAllProducts()
       : db.getAllProducts();
 
-    const urls = new Set<string>([
-      `${siteUrl}/`,
-      `${siteUrl}/products`,
-      `${siteUrl}/blog`,
-    ]);
+    const urls = new Map<string, { changefreq: string; priority: string }>();
+
+    for (const pathname of STATIC_SITEMAP_PATHS) {
+      urls.set(`${siteUrl}${pathname === '/' ? '/' : pathname}`, getSitemapMeta(pathname));
+    }
 
     for (const category of categories || []) {
       if (!category?.slug) continue;
-      urls.add(`${siteUrl}/category/${escapeXml(String(category.slug))}`);
+      urls.set(
+        `${siteUrl}/category/${escapeXml(String(category.slug))}`,
+        getSitemapMeta(`/category/${String(category.slug)}`)
+      );
       for (const sub of category?.subcategories || []) {
         if (!sub?.slug) continue;
-        urls.add(`${siteUrl}/category/${escapeXml(String(category.slug))}/${escapeXml(String(sub.slug))}`);
+        urls.set(
+          `${siteUrl}/category/${escapeXml(String(category.slug))}/${escapeXml(String(sub.slug))}`,
+          getSitemapMeta(`/category/${String(category.slug)}/${String(sub.slug)}`)
+        );
       }
     }
 
@@ -6296,17 +6343,22 @@ app.get('/sitemap.xml', async (_req: Request, res: Response) => {
       const approval = String(product?.approvalStatus || '').toLowerCase();
       const visibility = String(product?.visibilityStatus || '').toLowerCase();
       if (!(status === 'live' || (approval === 'approved' && visibility === 'live'))) continue;
-      urls.add(`${siteUrl}${escapeXml(getProductCanonicalPath(product))}`);
+      const pathname = getProductCanonicalPath(product);
+      urls.set(`${siteUrl}${escapeXml(pathname)}`, getSitemapMeta(pathname));
     }
 
     for (const slug of BLOG_SITEMAP_SLUGS) {
-      urls.add(`${siteUrl}/blog/${escapeXml(slug)}`);
+      urls.set(`${siteUrl}/blog/${escapeXml(slug)}`, getSitemapMeta(`/blog/${slug}`));
     }
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${Array.from(urls)
-  .map((url) => `  <url><loc>${url}</loc></url>`)
+${Array.from(urls.entries())
+  .sort(([left], [right]) => left.localeCompare(right))
+  .map(
+    ([url, meta]) =>
+      `  <url><loc>${url}</loc><lastmod>${lastmod}</lastmod><changefreq>${meta.changefreq}</changefreq><priority>${meta.priority}</priority></url>`
+  )
   .join('\n')}
 </urlset>`;
 

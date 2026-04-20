@@ -136,12 +136,47 @@ function normalizeText(value: string) {
     .trim();
 }
 
+function extractJsonLdBlocks(html: string) {
+  return Array.from(
+    html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+  )
+    .map((match) => match[1]?.trim())
+    .filter(Boolean)
+    .map((raw) => {
+      try {
+        return JSON.parse(String(raw));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean) as Array<Record<string, any> | Array<Record<string, any>>>;
+}
+
+function flattenJsonLdNodes(nodes: Array<Record<string, any> | Array<Record<string, any>>>) {
+  return nodes.flatMap((node) => (Array.isArray(node) ? node : [node])).filter(Boolean);
+}
+
+function extractSitemapLocs(xml: string) {
+  return new Set(
+    Array.from(xml.matchAll(/<loc>([\s\S]*?)<\/loc>/gi))
+      .map((match) => String(match[1] || "").trim())
+      .filter(Boolean)
+  );
+}
+
+function relativeHtmlPathToRoute(relative: string) {
+  if (relative === "index.html") return "/";
+  if (relative === "404.html") return "/404";
+  return `/${relative.replace(/\/index\.html$/, "").replace(/\.html$/, "")}`;
+}
+
 async function main() {
   const files = await collectHtmlFiles(DIST_DIR);
   const issues: ValidationIssue[] = [];
   const routeValidationRecords: RouteValidationRecord[] = [];
   const productSnapshots: Array<{ path: string; product: any }> = [];
   const productPathsInDist = new Set<string>();
+  const htmlRoutesInDist = new Set<string>();
   let redirectsContent = "";
   const { products: sourceProducts, source: prerenderSource } = await loadPrerenderProducts();
 
@@ -158,8 +193,14 @@ async function main() {
   for (const file of files) {
     const html = await fs.readFile(file, "utf8");
     const relative = path.relative(DIST_DIR, file) || "index.html";
+    const routePath = relativeHtmlPathToRoute(relative);
     const routeSnapshot = extractRouteSnapshot(html);
     const pageText = stripHtml(html);
+    const jsonLdNodes = flattenJsonLdNodes(extractJsonLdBlocks(html));
+
+    if (routePath !== "/404") {
+      htmlRoutesInDist.add(routePath);
+    }
 
     if (!/404\.html$/.test(relative)) {
       if (!getTitle(html)) issues.push({ file: relative, message: "Missing <title>" });
@@ -223,6 +264,27 @@ async function main() {
       }
       if (!/"@type":"BreadcrumbList"/.test(html)) {
         issues.push({ file: relative, message: "Missing BreadcrumbList JSON-LD" });
+      }
+      const productJsonLd = jsonLdNodes.find((node) => node?.["@type"] === "Product");
+      const offerJsonLd = productJsonLd?.offers;
+      if (!productJsonLd) {
+        issues.push({ file: relative, message: "Product JSON-LD block could not be parsed" });
+      } else {
+        if (!Array.isArray(productJsonLd.image) || productJsonLd.image.length === 0) {
+          issues.push({ file: relative, message: "Product JSON-LD is missing image array data" });
+        }
+        if (!offerJsonLd?.shippingDetails) {
+          issues.push({
+            file: relative,
+            message: "Product Offer JSON-LD is missing shippingDetails",
+          });
+        }
+        if (!offerJsonLd?.hasMerchantReturnPolicy) {
+          issues.push({
+            file: relative,
+            message: "Product Offer JSON-LD is missing hasMerchantReturnPolicy",
+          });
+        }
       }
       if (!/UAE Trusted Marketplace/.test(html)) {
         issues.push({ file: relative, message: "Missing crawlable product body content" });
@@ -446,6 +508,48 @@ async function main() {
         });
       }
     }
+  }
+
+  try {
+    const robotsTxt = await fs.readFile(path.join(DIST_DIR, "robots.txt"), "utf8");
+    if (!/User-agent:\s*\*/i.test(robotsTxt)) {
+      issues.push({ file: "robots.txt", message: "Missing robots User-agent rule" });
+    }
+    if (!/Allow:\s*\/\s*/i.test(robotsTxt)) {
+      issues.push({ file: "robots.txt", message: "Missing robots Allow rule" });
+    }
+    if (!/Sitemap:\s*https:\/\/exshopi\.com\/sitemap\.xml/i.test(robotsTxt)) {
+      issues.push({ file: "robots.txt", message: "Missing canonical sitemap reference" });
+    }
+  } catch {
+    issues.push({ file: "robots.txt", message: "Missing robots.txt file" });
+  }
+
+  try {
+    const sitemapXml = await fs.readFile(path.join(DIST_DIR, "sitemap.xml"), "utf8");
+    const sitemapLocs = extractSitemapLocs(sitemapXml);
+
+    if (!/<lastmod>[^<]+<\/lastmod>/i.test(sitemapXml)) {
+      issues.push({ file: "sitemap.xml", message: "Sitemap entries are missing <lastmod>" });
+    }
+    if (!/<changefreq>[^<]+<\/changefreq>/i.test(sitemapXml)) {
+      issues.push({ file: "sitemap.xml", message: "Sitemap entries are missing <changefreq>" });
+    }
+    if (!/<priority>[^<]+<\/priority>/i.test(sitemapXml)) {
+      issues.push({ file: "sitemap.xml", message: "Sitemap entries are missing <priority>" });
+    }
+
+    for (const routePath of htmlRoutesInDist) {
+      const expectedUrl = `https://exshopi.com${routePath === "/" ? "" : routePath}`;
+      if (!sitemapLocs.has(expectedUrl)) {
+        issues.push({
+          file: "sitemap.xml",
+          message: `Missing prerendered route in sitemap: ${expectedUrl}`,
+        });
+      }
+    }
+  } catch {
+    issues.push({ file: "sitemap.xml", message: "Missing sitemap.xml file" });
   }
 
   if (issues.length) {

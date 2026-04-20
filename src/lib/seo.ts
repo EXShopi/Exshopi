@@ -212,13 +212,13 @@ export function generateProductMeta(product: any) {
 
   const generatedTitle = clampText(
     storedTitle ||
-      `${buildRichProductTitle(product) || title}${brand && !title.toLowerCase().includes(brand.toLowerCase()) ? ` ${brand}` : ""} | ${DEFAULT_SITE_NAME}`,
+      `Buy ${buildRichProductTitle(product) || title} in UAE | Best Price | ${DEFAULT_SITE_NAME}`,
     60
   );
 
   const generatedDescription = clampText(
     storedDescription ||
-      `${title} available on ExShopi with UAE delivery, trusted seller support, and secure COD checkout. Shop ${brand || "premium"} deals for Dubai and GCC buyers today.`,
+      `Shop ${title} in UAE. Cash on Delivery, Fast Delivery, Warranty Available. Order now on ${DEFAULT_SITE_NAME}.`,
     160
   );
 
@@ -244,6 +244,66 @@ export function generateProductMeta(product: any) {
     metaDescription: generatedDescription,
     metaKeywords: keywordList.join(", "),
     slug: getProductSlug(product),
+  };
+}
+
+export function buildProductImageAlt(product: any, imageIndex = 0) {
+  const title = String(product?.title || product?.name || "Product").trim();
+  const brand = String(product?.brand || product?.specs?.attributes?.brand || "").trim();
+  const model = String(
+    product?.specs?.attributes?.model ||
+      product?.specs?.model ||
+      product?.specs?.specificationValues?.model ||
+      ""
+  ).trim();
+  const ram = String(product?.specs?.attributes?.ram || product?.specs?.specificationValues?.ram || "").trim();
+  const storage = String(
+    product?.specs?.attributes?.storage ||
+      product?.specs?.specificationValues?.storage ||
+      ""
+  ).trim();
+  const parts = [brand, model, ram, storage].filter(Boolean);
+  const primary = parts.length ? parts.join(" ") : title;
+  return imageIndex > 0 ? `${primary} UAE image ${imageIndex + 1}` : `${primary} UAE`;
+}
+
+function buildOfferShippingDetails() {
+  return {
+    "@type": "OfferShippingDetails",
+    shippingRate: {
+      "@type": "MonetaryAmount",
+      value: "10",
+      currency: "AED",
+    },
+    shippingDestination: {
+      "@type": "DefinedRegion",
+      addressCountry: "AE",
+    },
+    deliveryTime: {
+      "@type": "ShippingDeliveryTime",
+      handlingTime: {
+        "@type": "QuantitativeValue",
+        minValue: 0,
+        maxValue: 1,
+        unitCode: "DAY",
+      },
+      transitTime: {
+        "@type": "QuantitativeValue",
+        minValue: 1,
+        maxValue: 2,
+        unitCode: "DAY",
+      },
+    },
+  };
+}
+
+function buildMerchantReturnPolicy() {
+  return {
+    "@type": "MerchantReturnPolicy",
+    applicableCountry: "AE",
+    merchantReturnDays: 7,
+    returnMethod: "https://schema.org/ReturnByMail",
+    returnFees: "https://schema.org/FreeReturn",
   };
 }
 
@@ -329,6 +389,8 @@ export function buildProductSchema(product: any, pathname?: string) {
       product?.description ||
       seo.metaDescription
   ).trim();
+  const reviewCount = Number(product?.reviews || product?.reviewsCount || 0);
+  const ratingValue = Number(product?.rating || 0);
 
   return {
     "@context": "https://schema.org",
@@ -343,6 +405,14 @@ export function buildProductSchema(product: any, pathname?: string) {
           name: product.brand,
         }
       : undefined,
+    aggregateRating:
+      reviewCount > 0 && ratingValue > 0
+        ? {
+            "@type": "AggregateRating",
+            ratingValue: Number(ratingValue.toFixed(1)),
+            reviewCount,
+          }
+        : undefined,
     offers: {
       "@type": "Offer",
       priceCurrency: "AED",
@@ -351,6 +421,8 @@ export function buildProductSchema(product: any, pathname?: string) {
         stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: buildAbsoluteUrl(pathname || buildProductPath(product)),
       itemCondition,
+      shippingDetails: buildOfferShippingDetails(),
+      hasMerchantReturnPolicy: buildMerchantReturnPolicy(),
       seller: sellerName
         ? {
             "@type": "Organization",

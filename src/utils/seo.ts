@@ -97,13 +97,13 @@ export function generateProductSeo(input: ProductSeoInput): ProductSeoFields {
 
   const generatedTitle = clampSeoText(
     input.metaTitle ||
-      `${richTitle || title} | ${DEFAULT_SITE_NAME}`.replace(/\s+/g, " ").trim(),
+      `Buy ${richTitle || title} in UAE | Best Price | ${DEFAULT_SITE_NAME}`.replace(/\s+/g, " ").trim(),
     DEFAULT_PRODUCT_TITLE_RANGE.max
   );
 
   const generatedDescription = clampSeoText(
     input.metaDescription ||
-      `${shortDescription || title} Shop on ${DEFAULT_SITE_NAME} with UAE delivery, COD-ready checkout, verified seller support, and structured product details for better comparison.`,
+      `Shop ${title} in UAE. Cash on Delivery, Fast Delivery, Warranty Available. Order now on ${DEFAULT_SITE_NAME}.`,
     DEFAULT_PRODUCT_DESCRIPTION_RANGE.max
   );
 
@@ -159,6 +159,8 @@ export function buildProductJsonLd(input: ProductSeoInput) {
   const images = Array.from(
     new Set([input.image, ...(Array.isArray(input.images) ? input.images : [])].filter(Boolean))
   ) as string[];
+  const reviewCount = Number((input as any).reviewCount || (input as any).reviews || 0);
+  const ratingValue = Number((input as any).ratingValue || (input as any).rating || 0);
 
   return {
     "@context": "https://schema.org",
@@ -173,6 +175,14 @@ export function buildProductJsonLd(input: ProductSeoInput) {
           name: input.brand,
         }
       : undefined,
+    aggregateRating:
+      reviewCount > 0 && ratingValue > 0
+        ? {
+            "@type": "AggregateRating",
+            ratingValue: Number(ratingValue.toFixed(1)),
+            reviewCount,
+          }
+        : undefined,
     offers: {
       "@type": "Offer",
       priceCurrency: "AED",
@@ -181,6 +191,40 @@ export function buildProductJsonLd(input: ProductSeoInput) {
         stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: seo.canonicalUrl || buildProductPreviewUrl(seo.slug || ""),
       itemCondition,
+      shippingDetails: {
+        "@type": "OfferShippingDetails",
+        shippingRate: {
+          "@type": "MonetaryAmount",
+          value: "10",
+          currency: "AED",
+        },
+        shippingDestination: {
+          "@type": "DefinedRegion",
+          addressCountry: "AE",
+        },
+        deliveryTime: {
+          "@type": "ShippingDeliveryTime",
+          handlingTime: {
+            "@type": "QuantitativeValue",
+            minValue: 0,
+            maxValue: 1,
+            unitCode: "DAY",
+          },
+          transitTime: {
+            "@type": "QuantitativeValue",
+            minValue: 1,
+            maxValue: 2,
+            unitCode: "DAY",
+          },
+        },
+      },
+      hasMerchantReturnPolicy: {
+        "@type": "MerchantReturnPolicy",
+        applicableCountry: "AE",
+        merchantReturnDays: 7,
+        returnMethod: "https://schema.org/ReturnByMail",
+        returnFees: "https://schema.org/FreeReturn",
+      },
       seller: input.seller
         ? {
             "@type": "Organization",

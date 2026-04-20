@@ -443,6 +443,25 @@ function productAliasRedirects(product: PrerenderedProduct) {
     .map((alias) => `${alias} ${canonicalPath} 301!`);
 }
 
+function getSitemapPriority(kind: string, routePath: string) {
+  if (routePath === "/") return "1.0";
+  if (kind === "route") return "0.9";
+  if (kind === "listing" || kind === "category" || kind === "category-alias") return "0.8";
+  if (kind === "brand" || kind === "static") return "0.7";
+  if (routePath.startsWith("/blog")) return "0.6";
+  return "0.5";
+}
+
+function getSitemapChangefreq(kind: string, routePath: string) {
+  if (routePath === "/") return "daily";
+  if (kind === "route" || kind === "listing" || kind === "category" || kind === "category-alias") {
+    return "daily";
+  }
+  if (kind === "brand" || kind === "static") return "weekly";
+  if (routePath.startsWith("/blog")) return "monthly";
+  return "weekly";
+}
+
 async function writeSupportFiles(input: {
   homeHtml: string;
   productRedirects: Array<{ alias: string; canonicalPath: string }>;
@@ -1043,30 +1062,30 @@ async function main() {
     );
   }
 
-  const sitemapUrls = new Set<string>([
-    `${SITE_URL}/`,
-    `${SITE_URL}/products`,
-    `${SITE_URL}/blog`,
-    ...LANDING_PAGES.map((page) => `${SITE_URL}/${page.slug}`),
-    ...BLOG_POSTS.map((post) => `${SITE_URL}/blog/${post.slug}`),
-  ]);
-
-  for (const category of categories) {
-    sitemapUrls.add(`${SITE_URL}${getCategoryPath(category.slug)}`);
-    for (const sub of category.subcategories || []) {
-      sitemapUrls.add(`${SITE_URL}${getCategoryPath(category.slug, sub.slug)}`);
-    }
-  }
-
-  for (const product of liveProducts) {
-    sitemapUrls.add(`${SITE_URL}${buildProductPath(product)}`);
-  }
+  const sitemapEntries = Array.from(
+    new Map(
+      generatedRouteRecords
+        .filter((record) => record.routePath !== "/404")
+        .map((record) => [
+          `${SITE_URL}${record.routePath === "/" ? "" : record.routePath}`,
+          {
+            loc: `${SITE_URL}${record.routePath === "/" ? "" : record.routePath}`,
+            lastmod: now,
+            changefreq: getSitemapChangefreq(record.kind, record.routePath),
+            priority: getSitemapPriority(record.kind, record.routePath),
+          },
+        ])
+    ).values()
+  );
 
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${Array.from(sitemapUrls)
-  .sort()
-  .map((url) => `  <url><loc>${url}</loc><lastmod>${now}</lastmod></url>`)
+${sitemapEntries
+  .sort((left, right) => left.loc.localeCompare(right.loc))
+  .map(
+    (entry) =>
+      `  <url><loc>${entry.loc}</loc><lastmod>${entry.lastmod}</lastmod><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`
+  )
   .join("\n")}
 </urlset>`;
 

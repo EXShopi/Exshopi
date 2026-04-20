@@ -33,7 +33,7 @@ import {
   getSpecificationTemplate,
   humanizeSpecificationValue,
 } from "../lib/productSpecifications";
-import { buildProductPath, buildAbsoluteUrl, buildProductBreadcrumbSchema, getCategoryPath } from "../lib/seo";
+import { buildProductPath, buildAbsoluteUrl, buildProductBreadcrumbSchema, buildProductImageAlt, getCategoryPath } from "../lib/seo";
 import { findProductRouteMatch } from "../lib/productRouteResolution";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
@@ -427,7 +427,7 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
 
         <img
           src={product.image}
-          alt={product.title}
+          alt={buildProductImageAlt(product)}
           loading="lazy"
           className="h-[160px] w-full object-contain p-3 transition duration-300 group-hover:scale-105"
         />
@@ -876,8 +876,17 @@ export default function ProductDetail() {
     String(product?.description || "").replace(/\s+/g, " ").trim() ||
     productSeo.metaDescription;
   const resolvedProductMetaTitle = productTitle
-    ? `${productTitle} | Buy in UAE | ExShopi`
+    ? `Buy ${productTitle} in UAE | Best Price | ExShopi`
     : productSeo.metaTitle;
+  const productReviewCount = reviews.length || Number(product?.reviews || 0);
+  const productRatingValue =
+    reviews.length > 0
+      ? Number(
+          (
+            reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / reviews.length
+          ).toFixed(1)
+        )
+      : Number(product?.rating || 0);
   const loadingMetaTitle = "ExShopi UAE | Trusted Marketplace for Electronics";
   const loadingMetaDescription =
     "Shop verified products on ExShopi UAE with trusted sellers, delivery options, and marketplace-ready product details.";
@@ -907,6 +916,8 @@ const productSchema = product
         brand: product.brand,
         seller: product.sellerName || product.seller,
         condition: productSpecs?.attributes?.condition || product?.condition,
+        reviewCount: productReviewCount,
+        ratingValue: productRatingValue,
       }),
       buildProductBreadcrumbSchema(product, canonicalProductPath),
     ]
@@ -1543,8 +1554,10 @@ const structuredTemplate = getSpecificationTemplate(
               <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)]">
                 <img
                   src={productImages[mainImage]}
-                  alt={product.title}
+                  alt={buildProductImageAlt(product, mainImage)}
                   className="h-full w-full object-contain p-8 transition duration-300 hover:scale-105"
+                  loading={mainImage === 0 ? "eager" : "lazy"}
+                  decoding="async"
                 />
                 <div className="absolute right-5 top-5 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-bold text-white shadow-lg">
                   Save 23%
@@ -1564,7 +1577,13 @@ const structuredTemplate = getSpecificationTemplate(
                           : "border-slate-200 hover:border-slate-300"
                       }`}
                     >
-                      <img src={img} alt={`${product.title} preview ${idx + 1}`} className="h-full w-full object-cover" />
+                      <img
+                        src={img}
+                        alt={buildProductImageAlt(product, idx)}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </button>
                   ))}
                 </div>
@@ -1976,6 +1995,28 @@ const structuredTemplate = getSpecificationTemplate(
               <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
                 <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fbff)] p-5">
                   <p className="mb-2.5 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Product Overview</p>
+                  <div className="mb-4 flex flex-wrap gap-2 text-xs font-semibold text-blue-700">
+                    <Link
+                      to={getCategoryPath(
+                        productSpecs?.parentCategorySlug || productSpecs?.categorySlug || product?.category,
+                        undefined
+                      )}
+                      className="rounded-full bg-blue-50 px-3 py-1.5 hover:bg-blue-100"
+                    >
+                      {productSpecs?.parentCategoryName || productSpecs?.categoryName || product?.category || "Category"}
+                    </Link>
+                    {(productSpecs?.subcategorySlug || productSpecs?.templateId) ? (
+                      <Link
+                        to={getCategoryPath(
+                          productSpecs?.parentCategorySlug || productSpecs?.categorySlug || product?.category,
+                          productSpecs?.subcategorySlug || productSpecs?.templateId
+                        )}
+                        className="rounded-full bg-blue-50 px-3 py-1.5 hover:bg-blue-100"
+                      >
+                        {productSpecs?.subcategoryName || productSpecs?.templateName || productSpecs?.subcategorySlug}
+                      </Link>
+                    ) : null}
+                  </div>
                   <div className="space-y-3">
                     {overviewVisibleParagraphs.map((paragraph, index) => (
                       <p key={`${index}-${paragraph.slice(0, 12)}`} className="text-[15px] leading-7 text-slate-700">
