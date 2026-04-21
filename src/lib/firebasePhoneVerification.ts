@@ -31,6 +31,7 @@ declare global {
       recaptchaVerifier: RecaptchaVerifier | null;
       confirmationResult: ConfirmationResult | null;
       activeContainerId: string;
+      activeContainerElement: HTMLElement | null;
       recaptchaRenderPromise: Promise<number> | null;
     };
   }
@@ -50,6 +51,7 @@ function getGlobalState() {
       recaptchaVerifier: null,
       confirmationResult: null,
       activeContainerId: '',
+      activeContainerElement: null,
       recaptchaRenderPromise: null,
     };
   }
@@ -59,6 +61,7 @@ function getGlobalState() {
       recaptchaVerifier: null,
       confirmationResult: null,
       activeContainerId: '',
+      activeContainerElement: null,
       recaptchaRenderPromise: null,
     };
   }
@@ -268,6 +271,7 @@ function resetRecaptchaState() {
   }
   state.recaptchaVerifier = null;
   state.activeContainerId = '';
+  state.activeContainerElement = null;
 }
 
 function prepareRecaptchaContainer(containerId: string) {
@@ -304,14 +308,28 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
     throw new Error('Phone verification widget is not ready yet.');
   }
 
-  if (forceRefresh || !state.recaptchaVerifier || state.activeContainerId !== containerId) {
+  const hasDetachedContainer =
+    Boolean(state.activeContainerElement) &&
+    !document.body.contains(state.activeContainerElement as HTMLElement);
+  const hasReplacedContainer =
+    Boolean(state.activeContainerElement) && state.activeContainerElement !== container;
+  const shouldRecreateVerifier =
+    forceRefresh ||
+    !state.recaptchaVerifier ||
+    state.activeContainerId !== containerId ||
+    hasDetachedContainer ||
+    hasReplacedContainer;
+
+  if (shouldRecreateVerifier) {
     logPhoneVerification('verifier-create-start', {
       containerId,
       forceRefresh,
       hadVerifier: Boolean(state.recaptchaVerifier),
       activeContainerId: state.activeContainerId,
+      hasDetachedContainer,
+      hasReplacedContainer,
     });
-    if (forceRefresh || state.activeContainerId !== containerId) {
+    if (forceRefresh || state.activeContainerId !== containerId || hasDetachedContainer || hasReplacedContainer) {
       resetRecaptchaState();
       prepareRecaptchaContainer(containerId);
     }
@@ -333,6 +351,7 @@ async function ensureRecaptcha(containerId: string, forceRefresh = false) {
       window.recaptchaVerifier = state.recaptchaVerifier;
     }
     state.activeContainerId = containerId;
+    state.activeContainerElement = container;
     state.recaptchaRenderPromise = state.recaptchaVerifier
       .render()
       .then((widgetId) => {
@@ -412,9 +431,11 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
     });
     clearPhoneConfirmationState({
       resetRecaptcha:
+        describeFirebasePhoneVerificationError(error).toLowerCase().includes('removed') ||
         extractErrorCode(error) === 'auth/captcha-check-failed' ||
         extractErrorCode(error) === 'auth/invalid-app-credential' ||
-        extractErrorCode(error) === 'auth/internal-error',
+        extractErrorCode(error) === 'auth/internal-error' ||
+        extractErrorCode(error) === 'auth/network-request-failed',
     });
     const errorCode = extractErrorCode(error);
     const errorMessage = getErrorMessage(error);

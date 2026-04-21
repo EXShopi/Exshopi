@@ -35,6 +35,7 @@ import {
 } from '../../lib/firebasePhoneVerification';
 
 const REGISTER_FLOW_STORAGE_KEY = 'exshopi:register-flow:v1';
+const REGISTER_RECAPTCHA_CONTAINER_ID = 'register-recaptcha-container';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -88,6 +89,10 @@ const Register = () => {
     } catch (error) {
       console.warn('[Register Phone Verification] failed to restore register flow:', error);
     }
+
+    return () => {
+      resetFirebasePhoneVerification({ resetRecaptcha: true });
+    };
   }, []);
 
   useEffect(() => {
@@ -133,13 +138,14 @@ const Register = () => {
     if (raw.includes('auth/operation-not-allowed')) return 'Firebase phone sign-in is not enabled for this project yet.';
     if (raw.includes('auth/unauthorized-domain')) return 'This domain is not authorized for Firebase phone verification yet.';
     if (raw.includes('auth/captcha-check-failed')) return 'Refresh the page and try again.';
+    if (raw.includes('removed')) return 'Verification expired. Please try again.';
     if (raw.includes('auth/invalid-app-credential') || raw.includes('auth/app-not-authorized')) {
       return 'Firebase phone verification is blocked for this app right now. Check the Firebase project settings and authorized domains.';
     }
     if (raw.includes('auth/internal-error') || raw.includes('recaptchaparams') || raw.includes('app verification')) {
       return 'Phone verification could not start securely. Refresh the page and try again.';
     }
-    if (raw.includes('auth/network-request-failed')) return 'Check your internet connection.';
+    if (raw.includes('auth/network-request-failed')) return 'Network issue detected. Please try again.';
     if (raw.includes('requires localhost or https')) return 'Phone verification requires localhost or a secure HTTPS domain.';
     if (raw.includes('not configured')) return 'Firebase phone verification is not configured for this environment.';
 
@@ -169,7 +175,11 @@ const Register = () => {
         return;
       }
 
-      const response = await sendFirebasePhoneCode(normalizedPhone, 'recaptcha-container');
+      if (!document.getElementById(REGISTER_RECAPTCHA_CONTAINER_ID)) {
+        throw new Error('reCAPTCHA container missing');
+      }
+
+      const response = await sendFirebasePhoneCode(normalizedPhone, REGISTER_RECAPTCHA_CONTAINER_ID);
       console.info('[Register Phone Verification] send success', {
         phone: response.phone,
         verificationId: response.verificationId,
@@ -606,7 +616,11 @@ const Register = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div id="recaptcha-container" />
+            <div
+              id={REGISTER_RECAPTCHA_CONTAINER_ID}
+              aria-hidden="true"
+              className="pointer-events-none absolute opacity-0"
+            />
 
             <button
               type="submit"
