@@ -6867,7 +6867,7 @@ const startServer = async () => {
     });
   });
 
-  console.log('INIT STARTED', {
+  console.log('INIT POST-LISTEN', {
     enabled: prismaRuntime.enabled,
     connectionMode,
     phase: 'post-listen',
@@ -6890,30 +6890,39 @@ const startServer = async () => {
       } else {
         console.log('[BOOT] No bundled draft import dataset found or import not required');
       }
+
+      const result = await probePrismaConnection();
+      if (result.ok) {
+        console.log('[DB] Prisma connection probe succeeded');
+        return;
+      }
+
+      console.error(
+        `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
+      );
+      if (prismaEnvDiagnostics.databaseUrlIssues.length) {
+        console.error(
+          `[DB] DATABASE_URL issues: ${prismaEnvDiagnostics.databaseUrlIssues.join(' | ')}`
+        );
+      }
+      if (prismaEnvDiagnostics.directUrlIssues.length) {
+        console.error(
+          `[DB] DIRECT_URL issues: ${prismaEnvDiagnostics.directUrlIssues.join(' | ')}`
+        );
+      }
+      console.error(
+        '[DB] Expected format: DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@<region>.pooler.supabase.com:6543/postgres?pgbouncer=true and DIRECT_URL=postgresql://postgres:<db-password>@db.<project-ref>.supabase.co:5432/postgres'
+      );
     } catch (error) {
-      console.error('INIT FAILED', error);
+      console.error('[BOOT] Background init failed', error);
     }
-
-    const result = await probePrismaConnection();
-    if (result.ok) {
-      console.log('[DB] Prisma connection probe succeeded');
-      return;
-    }
-
-    console.error(
-      `[DB] Prisma connection probe failed (${result.name}/${result.code}): ${result.message}`
-    );
-    if (prismaEnvDiagnostics.databaseUrlIssues.length) {
-      console.error(`[DB] DATABASE_URL issues: ${prismaEnvDiagnostics.databaseUrlIssues.join(' | ')}`);
-    }
-    if (prismaEnvDiagnostics.directUrlIssues.length) {
-      console.error(`[DB] DIRECT_URL issues: ${prismaEnvDiagnostics.directUrlIssues.join(' | ')}`);
-    }
-    console.error(
-      '[DB] Expected format: DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@<region>.pooler.supabase.com:6543/postgres?pgbouncer=true and DIRECT_URL=postgresql://postgres:<db-password>@db.<project-ref>.supabase.co:5432/postgres'
-    );
   })();
 };
+
+void startServer().catch((error) => {
+  console.error('[BOOT] fatal startup error', error);
+  process.exit(1);
+});
 
 export { startServer };
 export default app;
