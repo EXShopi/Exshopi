@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE } from '../services/api';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Sparkles, Search, ArrowRight, ShoppingBag, 
@@ -48,7 +49,7 @@ export function AISearchModal({ isOpen, onClose }: AISearchModalProps) {
     setResults(null);
 
     try {
-      const response = await fetch('/api/ai-search', {
+      const response = await fetch(`${API_BASE}/ai-search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })

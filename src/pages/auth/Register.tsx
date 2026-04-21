@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -24,6 +24,7 @@ import {
   canAttemptFirebasePhoneVerification,
   describeFirebasePhoneVerificationError,
   getActiveFirebasePhoneOtpSession,
+  getFirebasePhoneSendCooldownRemainingMs,
   getFirebasePhoneVerificationRuntimeInfo,
   getReadableFirebasePhoneVerificationError,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
@@ -59,6 +60,8 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const otpRequestInFlightRef = useRef(false);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
   const useFirebaseOtp = canAttemptFirebasePhoneVerification();
   const useDevOtpFallback = import.meta.env.DEV && !useFirebaseOtp;
@@ -79,6 +82,7 @@ const Register = () => {
       const persistedPhoneSession = getActiveFirebasePhoneOtpSession();
       if (persistedPhoneSession?.phone && !parsed?.phoneVerified) {
         setStep(3);
+        setResendCooldown(Math.ceil(getFirebasePhoneSendCooldownRemainingMs() / 1000));
         setOtpMessage(
           parsed?.otpMessage ||
             `Verification code sent to ${persistedPhoneSession.phone}. Enter the 6-digit code to finish creating your account.`
@@ -94,6 +98,22 @@ const Register = () => {
       resetFirebasePhoneVerification({ resetRecaptcha: true });
     };
   }, []);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     try {
@@ -119,6 +139,7 @@ const Register = () => {
       setGeneratedOtp('');
       setOtpMessage(null);
       setPhoneVerified(false);
+      setResendCooldown(0);
       setError(null);
       resetFirebasePhoneVerification();
     }
@@ -133,11 +154,13 @@ const Register = () => {
       return error instanceof Error ? error.message : String(error || '').trim();
     }
     if (raw.includes('auth/invalid-phone-number')) return 'Enter a valid UAE phone number before requesting verification.';
-    if (raw.includes('auth/too-many-requests')) return 'Too many attempts. Please wait.';
+    if (raw.includes('auth/too-many-requests') || raw.includes('auth/quota-exceeded')) {
+      return 'Too many attempts. Please wait before requesting another code.';
+    }
     if (raw.includes('auth/billing-not-enabled')) return 'Firebase billing issue. Contact support.';
     if (raw.includes('auth/operation-not-allowed')) return 'Firebase phone sign-in is not enabled for this project yet.';
     if (raw.includes('auth/unauthorized-domain')) return 'This domain is not authorized for Firebase phone verification yet.';
-    if (raw.includes('auth/captcha-check-failed')) return 'Refresh the page and try again.';
+    if (raw.includes('auth/captcha-check-failed')) return 'Verification failed. Please try again.';
     if (raw.includes('removed')) return 'Verification expired. Please try again.';
     if (raw.includes('auth/invalid-app-credential') || raw.includes('auth/app-not-authorized')) {
       return 'Firebase phone verification is blocked for this app right now. Check the Firebase project settings and authorized domains.';
@@ -153,11 +176,24 @@ const Register = () => {
   };
 
   const handleSendOtp = async () => {
+    if (otpRequestInFlightRef.current || sendingOtp) {
+      console.info('[Register Phone Verification] duplicate send blocked', {
+        runtime: getFirebasePhoneVerificationRuntimeInfo(),
+      });
+      return;
+    }
+
+    if (resendCooldown > 0) {
+      setError(`Please wait ${resendCooldown}s before requesting another code.`);
+      return;
+    }
+
     if (!formData.phone || !isValidUaePhone(formData.phone)) {
       setError('Enter a valid UAE phone number before requesting verification.');
       return;
     }
 
+    otpRequestInFlightRef.current = true;
     setSendingOtp(true);
     setError(null);
     setOtpMessage(null);
@@ -166,11 +202,17 @@ const Register = () => {
 
     try {
       const normalizedPhone = normalizeUaePhone(formData.phone);
+      console.info('[Register Phone Verification] send pressed', {
+        phone: normalizedPhone,
+        resendCooldown,
+        runtime: getFirebasePhoneVerificationRuntimeInfo(),
+      });
 
       if (useDevOtpFallback) {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         setGeneratedOtp(code);
         setStep(3);
+        setResendCooldown(45);
         setOtpMessage(`Development verification code: ${code}`);
         return;
       }
@@ -187,11 +229,13 @@ const Register = () => {
       });
       setGeneratedOtp('');
       setStep(3);
+      setResendCooldown(Math.max(45, Math.ceil(getFirebasePhoneSendCooldownRemainingMs() / 1000)));
       setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to finish creating your account.`);
     } catch (sendError) {
       console.error('[Register Phone Verification] send failed:', describeFirebasePhoneVerificationError(sendError), sendError);
       setError(mapPhoneVerificationError(sendError));
     } finally {
+      otpRequestInFlightRef.current = false;
       setSendingOtp(false);
     }
   };
@@ -601,10 +645,10 @@ const Register = () => {
                   <button 
                     type="button"
                     onClick={handleSendOtp}
-                    disabled={sendingOtp}
-                    className="w-full text-xs font-black text-violet-600 uppercase tracking-widest hover:text-violet-700 transition-colors"
+                    disabled={sendingOtp || resendCooldown > 0}
+                    className="w-full text-xs font-black text-violet-600 uppercase tracking-widest hover:text-violet-700 transition-colors disabled:opacity-50 disabled:hover:text-violet-600"
                   >
-                    {sendingOtp ? 'Sending Code...' : 'Resend Code'}
+                    {sendingOtp ? 'Sending Code...' : resendCooldown > 0 ? `Resend Code in ${resendCooldown}s` : 'Resend Code'}
                   </button>
 
                   {phoneVerified ? (

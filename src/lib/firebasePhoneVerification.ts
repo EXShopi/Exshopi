@@ -33,6 +33,9 @@ declare global {
       activeContainerId: string;
       activeContainerElement: HTMLElement | null;
       recaptchaRenderPromise: Promise<number> | null;
+      activePhoneNumber: string;
+      pendingSendPromise: Promise<{ phone: string; verificationId: string }> | null;
+      cooldownUntil: number;
     };
   }
 }
@@ -44,6 +47,7 @@ type PersistedPhoneOtpSession = {
 };
 
 const OTP_SESSION_STORAGE_KEY = 'exshopi:firebase-phone-otp-session:v1';
+const PHONE_SEND_COOLDOWN_MS = 45_000;
 
 function getGlobalState() {
   if (typeof window === 'undefined') {
@@ -53,6 +57,9 @@ function getGlobalState() {
       activeContainerId: '',
       activeContainerElement: null,
       recaptchaRenderPromise: null,
+      activePhoneNumber: '',
+      pendingSendPromise: null,
+      cooldownUntil: 0,
     };
   }
 
@@ -63,6 +70,9 @@ function getGlobalState() {
       activeContainerId: '',
       activeContainerElement: null,
       recaptchaRenderPromise: null,
+      activePhoneNumber: '',
+      pendingSendPromise: null,
+      cooldownUntil: 0,
     };
   }
 
@@ -157,6 +167,8 @@ export function getFirebasePhoneVerificationRuntimeInfo() {
     activeContainerId: state.activeContainerId,
     persistedOtpPhone: persistedSession?.phone || '',
     persistedOtpCreatedAt: persistedSession?.createdAt || '',
+    hasPendingSend: Boolean(state.pendingSendPromise),
+    cooldownRemainingMs: Math.max(0, state.cooldownUntil - Date.now()),
   };
 }
 
@@ -186,7 +198,7 @@ export function getReadableFirebasePhoneVerificationError(error: unknown) {
   if (normalized.includes('auth/invalid-phone-number')) {
     return 'Enter a valid UAE phone number';
   }
-  if (normalized.includes('auth/too-many-requests')) {
+  if (normalized.includes('auth/too-many-requests') || normalized.includes('auth/quota-exceeded')) {
     return 'Too many attempts. Please wait.';
   }
   if (normalized.includes('auth/invalid-verification-code')) {
@@ -272,6 +284,11 @@ function resetRecaptchaState() {
   state.recaptchaVerifier = null;
   state.activeContainerId = '';
   state.activeContainerElement = null;
+}
+
+export function getFirebasePhoneSendCooldownRemainingMs() {
+  const state = getGlobalState();
+  return Math.max(0, state.cooldownUntil - Date.now());
 }
 
 function prepareRecaptchaContainer(containerId: string) {
@@ -386,6 +403,7 @@ export function getActiveFirebasePhoneOtpSession() {
 function clearPhoneConfirmationState(options?: { resetRecaptcha?: boolean }) {
   const state = getGlobalState();
   state.confirmationResult = null;
+  state.activePhoneNumber = '';
   persistOtpSession(null);
   if (options?.resetRecaptcha) {
     resetRecaptchaState();
@@ -395,30 +413,54 @@ function clearPhoneConfirmationState(options?: { resetRecaptcha?: boolean }) {
 export async function sendFirebasePhoneCode(phone: string, containerId: string) {
   const state = getGlobalState();
   const normalizedPhone = normalizeUaePhone(phone);
-  try {
-    logPhoneVerification('send-code-start', {
+  const cooldownRemainingMs = getFirebasePhoneSendCooldownRemainingMs();
+  if (cooldownRemainingMs > 0) {
+    logPhoneVerification('send-code-blocked-cooldown', {
       phone: normalizedPhone,
       containerId,
+      cooldownRemainingMs,
     });
-    const verifier = await ensureRecaptcha(containerId, false);
-    state.confirmationResult = null;
-    const nextConfirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
-    state.confirmationResult = nextConfirmationResult;
-    persistOtpSession({
-      phone: normalizedPhone,
-      verificationId: nextConfirmationResult.verificationId,
-      createdAt: new Date().toISOString(),
-    });
-    logPhoneVerification('send-code-success', {
+    throw new Error('auth/too-many-requests Please wait before requesting another code.');
+  }
+
+  if (state.pendingSendPromise) {
+    logPhoneVerification('send-code-duplicate-blocked', {
       phone: normalizedPhone,
       containerId,
-      verificationId: nextConfirmationResult.verificationId,
+      activePhoneNumber: state.activePhoneNumber,
     });
-    return {
-      phone: normalizedPhone,
-      verificationId: nextConfirmationResult.verificationId,
-    };
-  } catch (error) {
+    throw new Error('auth/too-many-requests Verification code request already in progress.');
+  }
+
+  const sendPromise = (async () => {
+    try {
+      logPhoneVerification('send-code-start', {
+        phone: normalizedPhone,
+        containerId,
+        hadExistingVerifier: Boolean(state.recaptchaVerifier),
+      });
+      const verifier = await ensureRecaptcha(containerId, false);
+      state.confirmationResult = null;
+      state.activePhoneNumber = normalizedPhone;
+      const nextConfirmationResult = await signInWithPhoneNumber(firebaseAuth!, normalizedPhone, verifier);
+      state.confirmationResult = nextConfirmationResult;
+      state.cooldownUntil = Date.now() + PHONE_SEND_COOLDOWN_MS;
+      persistOtpSession({
+        phone: normalizedPhone,
+        verificationId: nextConfirmationResult.verificationId,
+        createdAt: new Date().toISOString(),
+      });
+      logPhoneVerification('send-code-success', {
+        phone: normalizedPhone,
+        containerId,
+        verificationId: nextConfirmationResult.verificationId,
+        cooldownUntil: state.cooldownUntil,
+      });
+      return {
+        phone: normalizedPhone,
+        verificationId: nextConfirmationResult.verificationId,
+      };
+    } catch (error) {
     console.error(
       '[Firebase Phone Verification] sendFirebasePhoneCode failed:',
       describeFirebasePhoneVerificationError(error),
@@ -429,16 +471,26 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
       containerId,
       error: describeFirebasePhoneVerificationError(error),
     });
-    clearPhoneConfirmationState({
-      resetRecaptcha:
-        describeFirebasePhoneVerificationError(error).toLowerCase().includes('removed') ||
-        extractErrorCode(error) === 'auth/captcha-check-failed' ||
-        extractErrorCode(error) === 'auth/invalid-app-credential' ||
-        extractErrorCode(error) === 'auth/internal-error' ||
-        extractErrorCode(error) === 'auth/network-request-failed',
-    });
     const errorCode = extractErrorCode(error);
     const errorMessage = getErrorMessage(error);
+    const normalizedError = describeFirebasePhoneVerificationError(error).toLowerCase();
+
+    if (
+      errorCode === 'auth/too-many-requests' ||
+      errorCode === 'auth/quota-exceeded' ||
+      normalizedError.includes('too many')
+    ) {
+      state.cooldownUntil = Date.now() + PHONE_SEND_COOLDOWN_MS;
+    }
+
+    clearPhoneConfirmationState({
+      resetRecaptcha:
+        normalizedError.includes('removed') ||
+        errorCode === 'auth/captcha-check-failed' ||
+        errorCode === 'auth/invalid-app-credential' ||
+        errorCode === 'auth/internal-error' ||
+        errorCode === 'auth/network-request-failed',
+    });
 
     if (isBillingNotEnabledError(error)) {
       throw new Error(
@@ -455,7 +507,13 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
     }
 
     throw error instanceof Error ? error : new Error(String(error || 'Unknown phone verification error'));
-  }
+    } finally {
+      state.pendingSendPromise = null;
+    }
+  })();
+
+  state.pendingSendPromise = sendPromise;
+  return sendPromise;
 }
 
 export async function verifyFirebasePhoneCode(code: string) {
