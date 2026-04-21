@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, MapPin, Globe } from "lucide-react";
 import { useLanguageStore } from "../store/language";
 import { storefrontT } from "../lib/storefrontCopy";
-import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, getDualCountryTrustText } from "../lib/countryConfig";
+import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, getCountryDeliveryMessage, getCountryFlag, getCountryTrustMessage, getDualCountryTrustText } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 
 export default function TopBar() {
@@ -21,8 +21,8 @@ export default function TopBar() {
   const previousCountryRef = useRef(selectedCountry);
   const trustMessages = [
     "Cash on Delivery Available",
-    "Fast Delivery UAE & KSA",
-    "Trusted Marketplace",
+    getCountryDeliveryMessage(selectedCountry),
+    getCountryTrustMessage(selectedCountry),
     "Verified Sellers",
   ];
 
@@ -108,7 +108,10 @@ export default function TopBar() {
                           : "hover:bg-slate-50 border-l-4 border-transparent"
                       } ${idx !== SUPPORTED_COUNTRY_CODES.length - 1 ? "border-b border-slate-100" : ""}`}
                     >
-                      {option.name}
+                      <span className="flex items-center gap-2">
+                        <span>{getCountryFlag(countryCode)}</span>
+                        <span>{option.name}</span>
+                      </span>
                     </button>
                   );
                 })}

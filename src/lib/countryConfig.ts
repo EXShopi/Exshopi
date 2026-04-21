@@ -35,6 +35,8 @@ export type CountryConfig = {
   defaultShippingChargeAed: number;
   announcement: string;
   trustLabel: string;
+  trustMessage: string;
+  deliveryMessage: string;
   availabilityLabel: string;
   shippingOptions: ShippingOptionConfig[];
   cities: string[];
@@ -64,6 +66,8 @@ export const COUNTRY_CONFIG: Record<SupportedCountryCode, CountryConfig> = {
     defaultShippingChargeAed: 10,
     announcement: 'Now serving UAE & Saudi Arabia',
     trustLabel: 'Trusted across UAE',
+    trustMessage: 'Trusted UAE marketplace',
+    deliveryMessage: 'Fast delivery across UAE',
     availabilityLabel: 'Available in UAE',
     shippingOptions: [
       {
@@ -106,6 +110,8 @@ export const COUNTRY_CONFIG: Record<SupportedCountryCode, CountryConfig> = {
     defaultShippingChargeAed: 85,
     announcement: 'Now serving UAE & Saudi Arabia',
     trustLabel: 'Trusted across Saudi Arabia',
+    trustMessage: 'Premium electronics with trusted support',
+    deliveryMessage: 'Delivery available across Saudi Arabia',
     availabilityLabel: 'Available in Saudi Arabia',
     shippingOptions: [
       {
@@ -282,4 +288,20 @@ export function getAvailabilityText(countryCode?: string | null) {
 
 export function getDualCountryTrustText() {
   return 'Fast delivery across UAE and KSA';
+}
+
+export function getCountryTrustMessage(countryCode?: string | null) {
+  return getCountryConfig(countryCode).trustMessage;
+}
+
+export function getCountryDeliveryMessage(countryCode?: string | null) {
+  return getCountryConfig(countryCode).deliveryMessage;
+}
+
+export function getCountrySeoMarketLabel(countryCode?: string | null) {
+  return getCountryConfig(countryCode).code === 'SA' ? 'Saudi Arabia' : 'UAE';
+}
+
+export function getCountryFlag(countryCode?: string | null) {
+  return getCountryConfig(countryCode).code === 'SA' ? '🇸🇦' : '🇦🇪';
 }

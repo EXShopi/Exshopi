@@ -29,6 +29,7 @@ import { loadPrerenderProducts } from "./lib/prerenderData";
 const ROOT = process.cwd();
 const DIST_DIR = path.join(ROOT, "dist");
 const SITE_URL = "https://exshopi.com";
+const PRODUCTS_PER_SITEMAP = 5000;
 
 type PrerenderedProduct = {
   id: string;
@@ -462,6 +463,26 @@ function getSitemapChangefreq(kind: string, routePath: string) {
   return "weekly";
 }
 
+function buildXmlUrlSet(entries: Array<{ loc: string; lastmod: string; changefreq: string; priority: string }>) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries
+  .sort((left, right) => left.loc.localeCompare(right.loc))
+  .map(
+    (entry) =>
+      `  <url><loc>${entry.loc}</loc><lastmod>${entry.lastmod}</lastmod><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`
+  )
+  .join("\n")}
+</urlset>`;
+}
+
+function buildXmlSitemapIndex(entries: Array<{ loc: string; lastmod: string }>) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries.map((entry) => `  <sitemap><loc>${entry.loc}</loc><lastmod>${entry.lastmod}</lastmod></sitemap>`).join("\n")}
+</sitemapindex>`;
+}
+
 async function writeSupportFiles(input: {
   homeHtml: string;
   productRedirects: Array<{ alias: string; canonicalPath: string }>;
@@ -469,6 +490,16 @@ async function writeSupportFiles(input: {
 }) {
   const robots = `User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /seller
+Disallow: /dashboard
+Disallow: /checkout
+Disallow: /cart
+Disallow: /account
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
 Sitemap: ${SITE_URL}/sitemap.xml
 `;
   await fs.writeFile(path.join(DIST_DIR, "robots.txt"), robots, "utf8");
@@ -1073,23 +1104,47 @@ async function main() {
             lastmod: now,
             changefreq: getSitemapChangefreq(record.kind, record.routePath),
             priority: getSitemapPriority(record.kind, record.routePath),
+            kind: record.kind,
           },
         ])
     ).values()
   );
 
-  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${sitemapEntries
-  .sort((left, right) => left.loc.localeCompare(right.loc))
-  .map(
-    (entry) =>
-      `  <url><loc>${entry.loc}</loc><lastmod>${entry.lastmod}</lastmod><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`
-  )
-  .join("\n")}
-</urlset>`;
+  const staticEntries = sitemapEntries.filter((entry) =>
+    ["home", "static", "listing", "blog-index", "blog-post", "landing"].includes(entry.kind)
+  );
+  const categoryEntries = sitemapEntries.filter((entry) =>
+    ["category", "category-alias"].includes(entry.kind)
+  );
+  const brandEntries = sitemapEntries.filter((entry) => entry.kind === "brand");
+  const productEntries = sitemapEntries.filter((entry) => entry.kind === "product");
+  const productChunks = [];
+  for (let index = 0; index < productEntries.length; index += PRODUCTS_PER_SITEMAP) {
+    productChunks.push(productEntries.slice(index, index + PRODUCTS_PER_SITEMAP));
+  }
 
-  await fs.writeFile(path.join(DIST_DIR, "sitemap.xml"), sitemap, "utf8");
+  await fs.mkdir(path.join(DIST_DIR, "sitemaps"), { recursive: true });
+  await fs.writeFile(path.join(DIST_DIR, "sitemaps", "static.xml"), buildXmlUrlSet(staticEntries), "utf8");
+  await fs.writeFile(path.join(DIST_DIR, "sitemaps", "categories.xml"), buildXmlUrlSet(categoryEntries), "utf8");
+  await fs.writeFile(path.join(DIST_DIR, "sitemaps", "brands.xml"), buildXmlUrlSet(brandEntries), "utf8");
+  await Promise.all(
+    productChunks.map((chunk, index) =>
+      fs.writeFile(path.join(DIST_DIR, "sitemaps", `products-${index + 1}.xml`), buildXmlUrlSet(chunk), "utf8")
+    )
+  );
+  await fs.writeFile(
+    path.join(DIST_DIR, "sitemap.xml"),
+    buildXmlSitemapIndex([
+      { loc: `${SITE_URL}/sitemaps/static.xml`, lastmod: now },
+      { loc: `${SITE_URL}/sitemaps/categories.xml`, lastmod: now },
+      { loc: `${SITE_URL}/sitemaps/brands.xml`, lastmod: now },
+      ...productChunks.map((_, index) => ({
+        loc: `${SITE_URL}/sitemaps/products-${index + 1}.xml`,
+        lastmod: now,
+      })),
+    ]),
+    "utf8"
+  );
   await writeSupportFiles({
     homeHtml,
     productRedirects: Array.from(productRedirects.entries()).map(([alias, canonicalPath]) => ({

@@ -50,6 +50,7 @@ import { normalizeProductSpecifications, validateProductSpecificationsForTemplat
 import { buildStoreOperationsAnalytics } from './adminAnalyticsService';
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
 import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
+import { getCategoryPath } from '../src/lib/seo';
 import { getProductLifecycleState, isCustomerVisibleProduct, isSoftDeletedProduct } from '../shared/productLifecycle';
 
 console.log('[BOOT] boot started', {
@@ -680,7 +681,23 @@ const STATIC_SITEMAP_PATHS = [
   '/cheap-macbook-dubai',
   '/electronics-online-uae',
   '/refurbished-laptops-uae',
+  '/saudi-arabia',
+  '/ksa',
+  '/buy-used-laptops-in-saudi-arabia',
 ];
+const PRIVATE_ROBOTS_PATHS = [
+  '/admin',
+  '/seller',
+  '/dashboard',
+  '/checkout',
+  '/cart',
+  '/account',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+];
+const PRODUCTS_PER_SITEMAP = 5000;
 
 const getSitemapMeta = (pathname: string) => {
   if (pathname === '/') return { changefreq: 'daily', priority: '1.0' };
@@ -693,6 +710,26 @@ const getSitemapMeta = (pathname: string) => {
   if (pathname.startsWith('/blog')) return { changefreq: 'monthly', priority: '0.6' };
   return { changefreq: 'weekly', priority: '0.7' };
 };
+
+const xmlUrlSet = (entries: Array<{ loc: string; lastmod: string; changefreq: string; priority: string }>) => `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries
+  .sort((left, right) => left.loc.localeCompare(right.loc))
+  .map(
+    (entry) =>
+      `  <url><loc>${escapeXml(entry.loc)}</loc><lastmod>${entry.lastmod}</lastmod><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`
+  )
+  .join('\n')}
+</urlset>`;
+
+const xmlSitemapIndex = (entries: Array<{ loc: string; lastmod: string }>) => `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries
+  .map((entry) => `  <sitemap><loc>${escapeXml(entry.loc)}</loc><lastmod>${entry.lastmod}</lastmod></sitemap>`)
+  .join('\n')}
+</sitemapindex>`;
+
+type SitemapUrlEntry = { loc: string; lastmod: string; changefreq: string; priority: string };
 
 const flattenCategoryIds = (categories: Array<any>) => {
   const ids = new Set<string>();
@@ -6277,70 +6314,149 @@ app.get('/robots.txt', (_req: Request, res: Response) => {
   res.type('text/plain');
   res.send(`User-agent: *
 Allow: /
+${PRIVATE_ROBOTS_PATHS.map((pathname) => `Disallow: ${pathname}`).join('\n')}
 Sitemap: https://exshopi.com/sitemap.xml
 `);
 });
 
+async function getPublicSitemapData() {
+  const siteUrl = 'https://exshopi.com';
+  const lastmod = new Date().toISOString().slice(0, 10);
+  const products = prismaRuntime.enabled
+    ? await prismaRuntime.getAllProducts()
+    : supabaseRuntime.enabled
+    ? await supabaseRuntime.getAllProducts()
+    : db.getAllProducts();
+
+  const staticEntries = Array.from(
+    new Map(
+      [...STATIC_SITEMAP_PATHS, ...BLOG_SITEMAP_SLUGS.map((slug) => `/blog/${slug}`)].map((pathname) => [
+        `${siteUrl}${pathname === '/' ? '/' : pathname}`,
+        {
+          loc: `${siteUrl}${pathname === '/' ? '/' : pathname}`,
+          lastmod,
+          ...getSitemapMeta(pathname),
+        },
+      ])
+    ).values()
+  ) as SitemapUrlEntry[];
+
+  const categoryEntries = Array.from(
+    new Map(
+      (MASTER_CATEGORIES || [])
+        .flatMap((category) => {
+          const rows = [
+            {
+              loc: `${siteUrl}${getCategoryPath(category.slug)}`,
+              lastmod,
+              ...getSitemapMeta(getCategoryPath(category.slug)),
+            },
+          ];
+          for (const sub of category.subcategories || []) {
+            rows.push({
+              loc: `${siteUrl}${getCategoryPath(category.slug, sub.slug)}`,
+              lastmod,
+              ...getSitemapMeta(getCategoryPath(category.slug, sub.slug)),
+            });
+          }
+          return rows;
+        })
+        .map((entry) => [entry.loc, entry])
+    ).values()
+  ) as SitemapUrlEntry[];
+
+  const brandEntries = Array.from(
+    new Map(
+      STATIC_SITEMAP_PATHS.filter((pathname) => pathname.startsWith('/brands/')).map((pathname) => [
+        `${siteUrl}${pathname}`,
+        {
+          loc: `${siteUrl}${pathname}`,
+          lastmod,
+          ...getSitemapMeta(pathname),
+        },
+      ])
+    ).values()
+  ) as SitemapUrlEntry[];
+
+  const productEntries = Array.from(
+    new Map(
+      (products || [])
+        .filter((product) => isCustomerVisibleProduct(product))
+        .map((product) => {
+          const pathname = getProductCanonicalPath(product);
+          const loc = `${siteUrl}${pathname}`;
+          return [
+            loc,
+            {
+              loc,
+              lastmod: String(product?.updatedAt || product?.createdAt || lastmod).slice(0, 10) || lastmod,
+              ...getSitemapMeta(pathname),
+            },
+          ] as const;
+        })
+    ).values()
+  ) as SitemapUrlEntry[];
+
+  const productChunks: SitemapUrlEntry[][] = [];
+  for (let index = 0; index < productEntries.length; index += PRODUCTS_PER_SITEMAP) {
+    productChunks.push(productEntries.slice(index, index + PRODUCTS_PER_SITEMAP));
+  }
+
+  return { siteUrl, lastmod, staticEntries, categoryEntries, brandEntries, productChunks };
+}
+
 app.get('/sitemap.xml', async (_req: Request, res: Response) => {
   try {
-    const siteUrl = 'https://exshopi.com';
-    const lastmod = new Date().toISOString().slice(0, 10);
-    const categories = (MASTER_CATEGORIES || []).map((category) => ({
-      slug: category.slug,
-      subcategories: Array.isArray(category.subcategories)
-        ? category.subcategories.map((subcategory) => ({ slug: subcategory.slug }))
-        : [],
-    }));
-    const products = prismaRuntime.enabled
-      ? await prismaRuntime.getAllProducts()
-      : supabaseRuntime.enabled
-      ? await supabaseRuntime.getAllProducts()
-      : db.getAllProducts();
-
-    const urls = new Map<string, { changefreq: string; priority: string }>();
-
-    for (const pathname of STATIC_SITEMAP_PATHS) {
-      urls.set(`${siteUrl}${pathname === '/' ? '/' : pathname}`, getSitemapMeta(pathname));
-    }
-
-    for (const category of categories || []) {
-      if (!category?.slug) continue;
-      urls.set(
-        `${siteUrl}/category/${escapeXml(String(category.slug))}`,
-        getSitemapMeta(`/category/${String(category.slug)}`)
-      );
-      for (const sub of category?.subcategories || []) {
-        if (!sub?.slug) continue;
-        urls.set(
-          `${siteUrl}/category/${escapeXml(String(category.slug))}/${escapeXml(String(sub.slug))}`,
-          getSitemapMeta(`/category/${String(category.slug)}/${String(sub.slug)}`)
-        );
-      }
-    }
-
-    for (const product of products || []) {
-      if (!isCustomerVisibleProduct(product)) continue;
-      const pathname = getProductCanonicalPath(product);
-      urls.set(`${siteUrl}${escapeXml(pathname)}`, getSitemapMeta(pathname));
-    }
-
-    for (const slug of BLOG_SITEMAP_SLUGS) {
-      urls.set(`${siteUrl}/blog/${escapeXml(slug)}`, getSitemapMeta(`/blog/${slug}`));
-    }
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${Array.from(urls.entries())
-  .sort(([left], [right]) => left.localeCompare(right))
-  .map(
-    ([url, meta]) =>
-      `  <url><loc>${url}</loc><lastmod>${lastmod}</lastmod><changefreq>${meta.changefreq}</changefreq><priority>${meta.priority}</priority></url>`
-  )
-  .join('\n')}
-</urlset>`;
-
+    const { siteUrl, lastmod, productChunks } = await getPublicSitemapData();
     res.type('application/xml');
-    res.send(xml);
+    res.send(
+      xmlSitemapIndex([
+        { loc: `${siteUrl}/sitemaps/static.xml`, lastmod },
+        { loc: `${siteUrl}/sitemaps/categories.xml`, lastmod },
+        { loc: `${siteUrl}/sitemaps/brands.xml`, lastmod },
+        ...productChunks.map((_, index) => ({
+          loc: `${siteUrl}/sitemaps/products-${index + 1}.xml`,
+          lastmod,
+        })),
+      ])
+    );
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+
+app.get('/sitemaps/static.xml', async (_req: Request, res: Response) => {
+  try {
+    const { staticEntries } = await getPublicSitemapData();
+    res.type('application/xml').send(xmlUrlSet(staticEntries));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+
+app.get('/sitemaps/categories.xml', async (_req: Request, res: Response) => {
+  try {
+    const { categoryEntries } = await getPublicSitemapData();
+    res.type('application/xml').send(xmlUrlSet(categoryEntries));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+
+app.get('/sitemaps/brands.xml', async (_req: Request, res: Response) => {
+  try {
+    const { brandEntries } = await getPublicSitemapData();
+    res.type('application/xml').send(xmlUrlSet(brandEntries));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+
+app.get('/sitemaps/products-:page.xml', async (req: Request, res: Response) => {
+  try {
+    const page = Math.max(1, Number(req.params.page || 1));
+    const { productChunks } = await getPublicSitemapData();
+    res.type('application/xml').send(xmlUrlSet(productChunks[page - 1] || []));
   } catch (error) {
     res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
   }

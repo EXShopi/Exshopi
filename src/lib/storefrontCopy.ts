@@ -7,6 +7,14 @@ export type StorefrontLanguage =
   | "Russian";
 
 type CopyKey =
+  | "choose_country"
+  | "choose_country_subtitle"
+  | "show_local_pricing"
+  | "uae"
+  | "saudi_arabia"
+  | "add_to_cart"
+  | "buy_now"
+  | "free_delivery"
   | "all_categories"
   | "search"
   | "search_placeholder"
@@ -40,11 +48,24 @@ type CopyKey =
   | "privacy"
   | "terms"
   | "faq"
+  | "wishlist"
+  | "sign_in"
+  | "categories"
+  | "offers"
+  | "secure_shopping"
   | "we_accept"
   | "download_app";
 
 const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
   English: {
+    choose_country: "Choose Your Country",
+    choose_country_subtitle: "Select your country to view local pricing, delivery, and offers.",
+    show_local_pricing: "This helps us show local pricing, delivery, and offers.",
+    uae: "UAE",
+    saudi_arabia: "Saudi Arabia",
+    add_to_cart: "Add to Cart",
+    buy_now: "Buy Now",
+    free_delivery: "Free Delivery",
     all_categories: "All Categories",
     search: "Search",
     search_placeholder: "Search for laptops, phones, accessories, sellers...",
@@ -78,10 +99,23 @@ const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
     privacy: "Privacy",
     terms: "Terms",
     faq: "FAQ",
+    wishlist: "Wishlist",
+    sign_in: "Sign In",
+    categories: "Categories",
+    offers: "Offers",
+    secure_shopping: "Secure Shopping",
     we_accept: "We Accept",
     download_app: "Download App",
   },
   Arabic: {
+    choose_country: "اختر دولتك",
+    choose_country_subtitle: "حدد دولتك لعرض الأسعار المحلية وخيارات التوصيل والعروض.",
+    show_local_pricing: "يساعدنا هذا في عرض الأسعار المحلية والتوصيل والعروض.",
+    uae: "الإمارات",
+    saudi_arabia: "المملكة العربية السعودية",
+    add_to_cart: "أضف إلى السلة",
+    buy_now: "اشتر الآن",
+    free_delivery: "توصيل مجاني",
     all_categories: "كل الفئات",
     search: "بحث",
     search_placeholder: "ابحث عن لابتوبات، هواتف، إكسسوارات، وبائعين...",
@@ -115,10 +149,23 @@ const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
     privacy: "الخصوصية",
     terms: "الشروط",
     faq: "الأسئلة الشائعة",
+    wishlist: "المفضلة",
+    sign_in: "تسجيل الدخول",
+    categories: "الفئات",
+    offers: "العروض",
+    secure_shopping: "تسوق آمن",
     we_accept: "نقبل",
     download_app: "تحميل التطبيق",
   },
   Hindi: {
+    choose_country: "अपना देश चुनें",
+    choose_country_subtitle: "स्थानीय कीमतें, डिलीवरी और ऑफ़र देखने के लिए अपना देश चुनें।",
+    show_local_pricing: "इससे हम आपको स्थानीय कीमतें, डिलीवरी और ऑफ़र दिखा पाते हैं।",
+    uae: "यूएई",
+    saudi_arabia: "सऊदी अरब",
+    add_to_cart: "कार्ट में जोड़ें",
+    buy_now: "अभी खरीदें",
+    free_delivery: "फ्री डिलीवरी",
     all_categories: "सभी श्रेणियां",
     search: "खोजें",
     search_placeholder: "लैपटॉप, फोन, एक्सेसरीज़ और सेलर खोजें...",
@@ -152,10 +199,23 @@ const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
     privacy: "गोपनीयता",
     terms: "शर्तें",
     faq: "FAQ",
+    wishlist: "विशलिस्ट",
+    sign_in: "साइन इन",
+    categories: "श्रेणियां",
+    offers: "ऑफ़र",
+    secure_shopping: "सुरक्षित खरीदारी",
     we_accept: "हम स्वीकार करते हैं",
     download_app: "ऐप डाउनलोड करें",
   },
   Urdu: {
+    choose_country: "اپنا ملک منتخب کریں",
+    choose_country_subtitle: "مقامی قیمتیں، ڈیلیوری اور آفرز دیکھنے کے لیے اپنا ملک منتخب کریں۔",
+    show_local_pricing: "اس سے ہم آپ کو مقامی قیمتیں، ڈیلیوری اور آفرز دکھا سکتے ہیں۔",
+    uae: "یو اے ای",
+    saudi_arabia: "سعودی عرب",
+    add_to_cart: "کارٹ میں شامل کریں",
+    buy_now: "ابھی خریدیں",
+    free_delivery: "مفت ڈیلیوری",
     all_categories: "تمام اقسام",
     search: "تلاش",
     search_placeholder: "لیپ ٹاپ، فون، ایکسیسریز اور سیلرز تلاش کریں...",
@@ -189,10 +249,23 @@ const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
     privacy: "پرائیویسی",
     terms: "شرائط",
     faq: "FAQ",
+    wishlist: "وش لسٹ",
+    sign_in: "سائن اِن",
+    categories: "اقسام",
+    offers: "آفرز",
+    secure_shopping: "محفوظ خریداری",
     we_accept: "ہم قبول کرتے ہیں",
     download_app: "ایپ ڈاؤن لوڈ کریں",
   },
   Persian: {
+    choose_country: "کشور خود را انتخاب کنید",
+    choose_country_subtitle: "برای مشاهده قیمت، ارسال و پیشنهادهای محلی، کشور خود را انتخاب کنید.",
+    show_local_pricing: "این کار به ما کمک می‌کند قیمت، ارسال و پیشنهادهای محلی را نمایش دهیم.",
+    uae: "امارات",
+    saudi_arabia: "عربستان سعودی",
+    add_to_cart: "افزودن به سبد",
+    buy_now: "همین حالا بخرید",
+    free_delivery: "ارسال رایگان",
     all_categories: "همه دسته‌ها",
     search: "جستجو",
     search_placeholder: "لپ‌تاپ، موبایل، لوازم جانبی و فروشندگان را جستجو کنید...",
@@ -226,10 +299,23 @@ const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
     privacy: "حریم خصوصی",
     terms: "شرایط",
     faq: "FAQ",
+    wishlist: "علاقه‌مندی‌ها",
+    sign_in: "ورود",
+    categories: "دسته‌ها",
+    offers: "پیشنهادها",
+    secure_shopping: "خرید امن",
     we_accept: "روش‌های پرداخت",
     download_app: "دانلود اپ",
   },
   Russian: {
+    choose_country: "Выберите страну",
+    choose_country_subtitle: "Выберите страну, чтобы видеть локальные цены, доставку и предложения.",
+    show_local_pricing: "Это помогает показывать локальные цены, доставку и предложения.",
+    uae: "ОАЭ",
+    saudi_arabia: "Саудовская Аравия",
+    add_to_cart: "В корзину",
+    buy_now: "Купить сейчас",
+    free_delivery: "Бесплатная доставка",
     all_categories: "Все категории",
     search: "Поиск",
     search_placeholder: "Ищите ноутбуки, телефоны, аксессуары и продавцов...",
@@ -263,6 +349,11 @@ const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
     privacy: "Конфиденциальность",
     terms: "Условия",
     faq: "FAQ",
+    wishlist: "Избранное",
+    sign_in: "Войти",
+    categories: "Категории",
+    offers: "Предложения",
+    secure_shopping: "Безопасные покупки",
     we_accept: "Мы принимаем",
     download_app: "Скачать приложение",
   },

@@ -258,6 +258,9 @@ function AppContent() {
             <Route path="/refurbished-laptops-uae" element={<LandingPage />} />
             <Route path="/cheap-macbook-dubai" element={<LandingPage />} />
             <Route path="/electronics-online-uae" element={<LandingPage />} />
+            <Route path="/saudi-arabia" element={<LandingPage />} />
+            <Route path="/ksa" element={<LandingPage />} />
+            <Route path="/buy-used-laptops-in-saudi-arabia" element={<LandingPage />} />
             <Route path="/category/laptops" element={<Navigate to="/category/electronics/laptops" replace />} />
             <Route path="/category/computers" element={<Navigate to="/category/electronics/computers" replace />} />
             <Route path="/category/pc" element={<Navigate to="/category/electronics/pc" replace />} />

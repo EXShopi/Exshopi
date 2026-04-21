@@ -144,6 +144,68 @@ export function buildCategorySeoBody(input: {
 
 export const LANDING_PAGES: LandingPageDefinition[] = [
   {
+    slug: "saudi-arabia",
+    title: "Buy Electronics in Saudi Arabia",
+    metaTitle: "Buy Electronics in Saudi Arabia | ExShopi KSA",
+    metaDescription:
+      "Browse ExShopi Saudi Arabia marketplace pages with localized pricing, delivery messaging, and trusted electronics shopping support for KSA buyers.",
+    keywords: ["buy electronics Saudi Arabia", "ExShopi KSA", "electronics KSA", "Saudi Arabia marketplace"],
+    h1: "Shop electronics in Saudi Arabia with ExShopi",
+    intro:
+      "This route helps Saudi Arabia shoppers discover ExShopi’s KSA-ready storefront experience with localized trust, delivery, and pricing signals.",
+    sections: [
+      {
+        heading: "A familiar ExShopi experience for KSA buyers",
+        body: [
+          "ExShopi now supports Saudi Arabia with country-aware pricing, VAT visibility, shipping messaging, and premium electronics discovery built on the same trusted storefront design.",
+          "KSA visitors can use this landing page as a clean entry point into laptops, smartphones, tablets, and accessories while keeping the same fast browsing flow ExShopi is known for.",
+        ],
+      },
+    ],
+    primaryCategorySlug: "electronics",
+  },
+  {
+    slug: "ksa",
+    title: "ExShopi KSA",
+    metaTitle: "ExShopi KSA | Shop Electronics in Saudi Arabia",
+    metaDescription:
+      "Explore ExShopi KSA for premium electronics, clear delivery messaging, and localized marketplace support across Saudi Arabia.",
+    keywords: ["ExShopi KSA", "Saudi Arabia electronics", "buy laptops KSA"],
+    h1: "ExShopi KSA storefront",
+    intro:
+      "Use this route to discover ExShopi’s localized Saudi Arabia storefront using the same premium experience already trusted by UAE shoppers.",
+    sections: [
+      {
+        heading: "Localized shopping without a redesign",
+        body: [
+          "ExShopi KSA keeps the same premium shopping experience while adapting pricing, VAT, shipping, and support messaging for Saudi Arabia.",
+        ],
+      },
+    ],
+    primaryCategorySlug: "electronics",
+  },
+  {
+    slug: "buy-used-laptops-in-saudi-arabia",
+    title: "Buy Used Laptops in Saudi Arabia",
+    metaTitle: "Buy Used Laptops in Saudi Arabia | ExShopi KSA",
+    metaDescription:
+      "Shop used and refurbished laptops in Saudi Arabia with ExShopi KSA, including localized trust, shipping visibility, and premium marketplace browsing.",
+    keywords: ["used laptops Saudi Arabia", "refurbished laptops KSA", "buy laptops Saudi Arabia"],
+    h1: "Buy used laptops in Saudi Arabia with more clarity",
+    intro:
+      "Saudi Arabia laptop buyers can use this page to discover ExShopi KSA laptop listings with localized delivery and price presentation.",
+    sections: [
+      {
+        heading: "Used laptop shopping for KSA buyers",
+        body: [
+          "ExShopi helps KSA buyers compare used and refurbished laptop listings more clearly with category-aware routes, premium product pages, and market-specific support cues.",
+        ],
+      },
+    ],
+    primaryCategorySlug: "electronics",
+    primarySubcategorySlug: "laptops",
+  },
+  {
     slug: "buy-iphone-uae",
     title: "Buy iPhone in UAE",
     metaTitle: "Buy iPhone UAE | Trusted Marketplace Deals | ExShopi",

@@ -3,10 +3,13 @@ import { MessageCircle, X, Send, Loader2, Bot, User, ArrowRight, ShoppingBag, He
 import { motion, AnimatePresence } from 'motion/react';
 import OptimizedImage from "./OptimizedImage";
 import HoverTooltip from "./ui/HoverTooltip";
+import { useCountryStore } from '../store/country';
+import { buildCountryAwareWhatsAppMessage, getExShopiWhatsAppNumber } from '../lib/whatsapp';
 
 export function WhatsAppButton() {
-  const phoneNumber = "+971522608063"; // Placeholder UAE number
-  const message = "Hi, I need help with my order on Exshopi";
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const phoneNumber = getExShopiWhatsAppNumber();
+  const message = buildCountryAwareWhatsAppMessage(selectedCountry);
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
   return (

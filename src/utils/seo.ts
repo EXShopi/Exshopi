@@ -9,6 +9,12 @@ import {
 } from "../constants/defaultSeo";
 import type { ProductSeoFields, ProductSeoInput, SeoFieldStatus, SeoPreviewData } from "../types/seo";
 import { buildRichProductTitle, cleanSeoSlug } from "../lib/seoMarketplace";
+import {
+  getCountryConfig,
+  getCountrySeoMarketLabel,
+  getProductCountryPrice,
+  getShippingChargeBusinessAed,
+} from "../lib/countryConfig";
 
 export function normalizeSeoText(value: string) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -77,6 +83,8 @@ export function buildProductPreviewUrl(slug: string) {
 }
 
 export function generateProductSeo(input: ProductSeoInput): ProductSeoFields {
+  const country = getCountryConfig(input.countryCode);
+  const marketLabel = getCountrySeoMarketLabel(input.countryCode);
   const title = normalizeSeoText(input.title || "Marketplace Product");
   const shortDescription = normalizeSeoText(input.shortDescription || input.description || "");
   const category = normalizeSeoText(input.category || "");
@@ -97,13 +105,13 @@ export function generateProductSeo(input: ProductSeoInput): ProductSeoFields {
 
   const generatedTitle = clampSeoText(
     input.metaTitle ||
-      `Buy ${richTitle || title} in UAE | Best Price | ${DEFAULT_SITE_NAME}`.replace(/\s+/g, " ").trim(),
+      `Buy ${richTitle || title} in ${marketLabel} | Best Price | ${DEFAULT_SITE_NAME}`.replace(/\s+/g, " ").trim(),
     DEFAULT_PRODUCT_TITLE_RANGE.max
   );
 
   const generatedDescription = clampSeoText(
     input.metaDescription ||
-      `Shop ${title} in UAE. Cash on Delivery, Fast Delivery, Warranty Available. Order now on ${DEFAULT_SITE_NAME}.`,
+      `Shop ${title} in ${marketLabel}. Cash on Delivery, Fast Delivery, Warranty Available. Order now on ${DEFAULT_SITE_NAME}.`,
     DEFAULT_PRODUCT_DESCRIPTION_RANGE.max
   );
 
@@ -150,6 +158,7 @@ export function getProductSeoPayload(input: ProductSeoInput) {
 
 export function buildProductJsonLd(input: ProductSeoInput) {
   const seo = generateProductSeo(input);
+  const country = getCountryConfig(input.countryCode);
   const stock = Number(input.stock || 0);
   const normalizedCondition = String(input.condition || "").trim().toLowerCase();
   const itemCondition =
@@ -185,8 +194,8 @@ export function buildProductJsonLd(input: ProductSeoInput) {
         : undefined,
     offers: {
       "@type": "Offer",
-      priceCurrency: "AED",
-      price: Number(input.price || 0),
+      priceCurrency: country.currency,
+      price: Number(getProductCountryPrice(input as any, country.code) || input.price || 0),
       availability:
         stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: seo.canonicalUrl || buildProductPreviewUrl(seo.slug || ""),
@@ -195,12 +204,12 @@ export function buildProductJsonLd(input: ProductSeoInput) {
         "@type": "OfferShippingDetails",
         shippingRate: {
           "@type": "MonetaryAmount",
-          value: "10",
+          value: String(getShippingChargeBusinessAed(country.code)),
           currency: "AED",
         },
         shippingDestination: {
           "@type": "DefinedRegion",
-          addressCountry: "AE",
+          addressCountry: country.code,
         },
         deliveryTime: {
           "@type": "ShippingDeliveryTime",
@@ -220,7 +229,7 @@ export function buildProductJsonLd(input: ProductSeoInput) {
       },
       hasMerchantReturnPolicy: {
         "@type": "MerchantReturnPolicy",
-        applicableCountry: "AE",
+        applicableCountry: country.code,
         merchantReturnDays: 7,
         returnMethod: "https://schema.org/ReturnByMail",
         returnFees: "https://schema.org/FreeReturn",

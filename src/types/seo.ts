@@ -12,6 +12,7 @@ export interface ProductSeoFields {
 }
 
 export interface ProductSeoInput extends ProductSeoFields {
+  countryCode?: string;
   title?: string;
   shortDescription?: string;
   description?: string;

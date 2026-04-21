@@ -12,9 +12,11 @@ type CountryState = {
   selectedCountry: SupportedCountryCode;
   selectedCity: string;
   selectedShippingOption: string;
+  hasExplicitSelection: boolean;
   setCountry: (country: SupportedCountryCode) => void;
   setCity: (city: string) => void;
   setShippingOption: (shippingOption: string) => void;
+  markCountryConfirmed: () => void;
 };
 
 export const useCountryStore = create<CountryState>()(
@@ -23,6 +25,7 @@ export const useCountryStore = create<CountryState>()(
       selectedCountry: DEFAULT_COUNTRY_CODE,
       selectedCity: getCountryConfig(DEFAULT_COUNTRY_CODE).defaultCity,
       selectedShippingOption: getDefaultShippingOption(DEFAULT_COUNTRY_CODE).id,
+      hasExplicitSelection: false,
       setCountry: (country) => {
         const nextCountry = isSupportedCountryCode(country) ? country : DEFAULT_COUNTRY_CODE;
         const nextConfig = getCountryConfig(nextCountry);
@@ -30,6 +33,7 @@ export const useCountryStore = create<CountryState>()(
           selectedCountry: nextCountry,
           selectedCity: nextConfig.defaultCity,
           selectedShippingOption: nextConfig.shippingOptions[0].id,
+          hasExplicitSelection: true,
         });
       },
       setCity: (city) => {
@@ -38,6 +42,9 @@ export const useCountryStore = create<CountryState>()(
       setShippingOption: (selectedShippingOption) => {
         set({ selectedShippingOption });
       },
+      markCountryConfirmed: () => {
+        set({ hasExplicitSelection: true });
+      },
     }),
     {
       name: 'exshopi-country',
@@ -45,6 +52,7 @@ export const useCountryStore = create<CountryState>()(
         selectedCountry: state.selectedCountry,
         selectedCity: state.selectedCity,
         selectedShippingOption: state.selectedShippingOption,
+        hasExplicitSelection: state.hasExplicitSelection,
       }),
     }
   )

@@ -6,11 +6,15 @@ import SEOHead from "../components/seo/SEOHead";
 import { productAPI } from "../services/api";
 import { buildAbsoluteUrl, getCategoryPath } from "../lib/seo";
 import { getLandingPageBySlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
+import { getCountryConfig, getCountryTrustMessage } from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
 export default function LandingPage() {
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
   const page = getLandingPageBySlug(slug || location.pathname.replace(/^\//, ""));
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const country = getCountryConfig(selectedCountry);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -122,6 +126,9 @@ export default function LandingPage() {
                 {signal}
               </li>
             ))}
+            <li className="rounded-2xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
+              {getCountryTrustMessage(country.code)}
+            </li>
           </ul>
 
           <div className="mt-6 rounded-[24px] border border-blue-100 bg-blue-50 p-5">

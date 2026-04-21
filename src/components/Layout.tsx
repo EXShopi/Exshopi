@@ -5,6 +5,7 @@ import Navbar from "./Navbar";
 import PremiumCategoryNav from "./PremiumCategoryNav";
 import Footer from "./Footer";
 import FloatingChatbot from "./FloatingChatbot";
+import FirstVisitCountryModal from "./FirstVisitCountryModal";
 import { useLanguageStore } from "../store/language";
 
 export default function Layout() {
@@ -27,6 +28,7 @@ export default function Layout() {
 
       <Footer />
       <FloatingChatbot />
+      <FirstVisitCountryModal />
     </div>
   );
 }

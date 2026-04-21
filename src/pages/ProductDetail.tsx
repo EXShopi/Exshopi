@@ -41,6 +41,7 @@ import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../li
 import { readRouteSnapshot, resolveProductSnapshot } from "../lib/routeSnapshot";
 import { getCountryConfig, getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
+import { buildCountryAwareWhatsAppMessage, getExShopiWhatsAppNumber } from "../lib/whatsapp";
 // Local helpers for safe category path and slugification
 function slugifyLocal(value?: string) {
   return String(value || "")
@@ -856,6 +857,7 @@ export default function ProductDetail() {
 
   const productSpecs = product?.specs || {};
   const productSeo = getProductSeoPayload({
+    countryCode: selectedCountry,
     title: product?.title,
     shortDescription: productSpecs?.shortDescription,
     description: product?.description,
@@ -870,7 +872,7 @@ export default function ProductDetail() {
     ogDescription: product?.ogDescription || productSpecs?.ogDescription,
     ogImage: product?.ogImage || productSpecs?.ogImage || product?.image,
     image: product?.image,
-    price: product?.price,
+    price: getProductCountryPrice(product, selectedCountry),
     stock: product?.stock,
     sku: product?.sku,
     brand: product?.brand,
@@ -890,7 +892,7 @@ export default function ProductDetail() {
     String(product?.description || "").replace(/\s+/g, " ").trim() ||
     productSeo.metaDescription;
   const resolvedProductMetaTitle = productTitle
-    ? `Buy ${productTitle} in UAE | Best Price | ExShopi`
+    ? `Buy ${productTitle} in ${country.code === "SA" ? "Saudi Arabia" : "UAE"} | Best Price | ExShopi`
     : productSeo.metaTitle;
   const productReviewCount = reviews.length || Number(product?.reviews || 0);
   const productRatingValue =
@@ -917,6 +919,7 @@ export default function ProductDetail() {
 const productSchema = product
   ? [
       buildProductJsonLd({
+        countryCode: selectedCountry,
         title: product.title,
         shortDescription: productSpecs?.shortDescription,
         description: product.description,
@@ -924,7 +927,7 @@ const productSchema = product
         canonicalUrl: finalCanonical,
         image: product.image,
         images: Array.isArray(product?.images) ? product.images : [],
-        price: product.price,
+        price: getProductCountryPrice(product, selectedCountry),
         stock: product.stock,
         sku: product.sku,
         brand: product.brand,
@@ -1484,8 +1487,8 @@ const structuredTemplate = getSpecificationTemplate(
   };
 
   const handleWhatsAppOrderHelp = () => {
-    const message = `Hi, I want to order this product from Exshopi: ${displayTitle}`;
-    const whatsappUrl = `https://wa.me/971522608063?text=${encodeURIComponent(message)}`;
+    const message = buildCountryAwareWhatsAppMessage(selectedCountry, displayTitle);
+    const whatsappUrl = `https://wa.me/${getExShopiWhatsAppNumber()}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   };
 
