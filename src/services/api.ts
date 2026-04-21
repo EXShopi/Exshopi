@@ -203,6 +203,46 @@ function clearPersistedAuthState(reason = 'unknown') {
 }
 
 const AUTH_REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 60000; // default 60s
+const PRODUCT_LIST_CACHE_TTL_MS = import.meta.env.PROD ? 60_000 : 5_000;
+const BANNER_LIST_CACHE_TTL_MS = import.meta.env.PROD ? 120_000 : 5_000;
+
+let productListCache:
+  | {
+      data: any[];
+      timestamp: number;
+    }
+  | null = null;
+let productListRequest: Promise<any[]> | null = null;
+
+let bannerListCache:
+  | {
+      data: any[];
+      timestamp: number;
+    }
+  | null = null;
+let bannerListRequest: Promise<any[]> | null = null;
+
+function readFreshListCache<T>(cache: { data: T[]; timestamp: number } | null, ttlMs: number): T[] | null {
+  if (!cache) return null;
+  if (Date.now() - cache.timestamp > ttlMs) return null;
+  return cache.data;
+}
+
+function writeProductListCache(data: any[]) {
+  productListCache = {
+    data,
+    timestamp: Date.now(),
+  };
+  return data;
+}
+
+function writeBannerListCache(data: any[]) {
+  bannerListCache = {
+    data,
+    timestamp: Date.now(),
+  };
+  return data;
+}
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = AUTH_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -848,9 +888,13 @@ export const productAPI = {
         credentials: 'include',
         body: JSON.stringify(data),
       });
-      return parseApiResponse(res);
+      const payload = await parseApiResponse(res);
+      invalidateProductCaches();
+      return payload;
     }
-    return createSupabaseProduct(data);
+    const payload = await createSupabaseProduct(data);
+    invalidateProductCaches();
+    return payload;
   },
 
   async get(id: string, options?: { signal?: AbortSignal }) {
@@ -905,9 +949,18 @@ export const productAPI = {
   },
 
   async getAll(options?: { signal?: AbortSignal }) {
+    const cached = readFreshListCache(productListCache, PRODUCT_LIST_CACHE_TTL_MS);
+    if (cached) return cached;
+    if (productListRequest) return productListRequest;
+
     if (shouldPreferBackendProductApi()) {
-      const res = await safeFetchApi('/products', { signal: options?.signal });
-      return parseApiResponse(res);
+      productListRequest = safeFetchApi('/products', { signal: options?.signal })
+        .then((res) => parseApiResponse(res))
+        .then((data) => writeProductListCache(Array.isArray(data) ? data : []))
+        .finally(() => {
+          productListRequest = null;
+        });
+      return productListRequest;
     }
 
     const useSupabase = Boolean(
@@ -926,10 +979,15 @@ export const productAPI = {
         const filtered = (data || []).filter((product: any) => isPubliclyVisibleMarketplaceProduct(product));
         const explicitApi = Boolean(API_BASE);
         if (filtered.length === 0 && explicitApi) {
-          const res = await safeFetchApi('/products', { signal: options?.signal });
-          return parseApiResponse(res);
+          productListRequest = safeFetchApi('/products', { signal: options?.signal })
+            .then((res) => parseApiResponse(res))
+            .then((fallbackData) => writeProductListCache(Array.isArray(fallbackData) ? fallbackData : []))
+            .finally(() => {
+              productListRequest = null;
+            });
+          return productListRequest;
         }
-        return filtered;
+        return writeProductListCache(filtered);
       } catch (e) {
         console.warn('Supabase products fetch failed:', e);
         const explicitApi = Boolean(API_BASE);
@@ -942,8 +1000,13 @@ export const productAPI = {
     const hasApi = Boolean(API_BASE);
     if (!hasApi && !isLocalDevRuntime()) return [];
 
-    const res = await safeFetchApi('/products', { signal: options?.signal });
-    return parseApiResponse(res);
+    productListRequest = safeFetchApi('/products', { signal: options?.signal })
+      .then((res) => parseApiResponse(res))
+      .then((data) => writeProductListCache(Array.isArray(data) ? data : []))
+      .finally(() => {
+        productListRequest = null;
+      });
+    return productListRequest;
   },
 
   async getByCategory(categoryId: string) {
@@ -1072,9 +1135,13 @@ export const productAPI = {
         credentials: 'include',
         body: JSON.stringify(data),
       });
-      return parseApiResponse(res);
+      const payload = await parseApiResponse(res);
+      invalidateProductCaches(id);
+      return payload;
     }
-    return updateSupabaseProduct(id, data);
+    const payload = await updateSupabaseProduct(id, data);
+    invalidateProductCaches(id);
+    return payload;
   },
 
   async submit(id: string) {
@@ -1084,13 +1151,17 @@ export const productAPI = {
         headers: getAuthHeaders(),
         credentials: 'include',
       });
-      return parseApiResponse(res);
+      const payload = await parseApiResponse(res);
+      invalidateProductCaches(id);
+      return payload;
     }
-    return updateSupabaseProduct(id, {
+    const payload = await updateSupabaseProduct(id, {
       status: 'live',
       approval_status: 'approved',
       visibility_status: 'live',
     });
+    invalidateProductCaches(id);
+    return payload;
   },
 
   async delete(id: string) {
@@ -1100,14 +1171,19 @@ export const productAPI = {
         headers: getAuthHeaders(),
         credentials: 'include',
       });
-      return parseApiResponse(res);
+      const payload = await parseApiResponse(res);
+      invalidateProductCaches(id);
+      return payload;
     }
-    return deleteSupabaseProduct(id);
+    const payload = await deleteSupabaseProduct(id);
+    invalidateProductCaches(id);
+    return payload;
   },
 };
 
 export function invalidateProductCaches(_ids?: string | string[]) {
-  return;
+  productListCache = null;
+  productListRequest = null;
 }
 
 function normalizeAdminProductList(data: any) {
@@ -1153,7 +1229,9 @@ export const adminProductAPI = {
       credentials: 'include',
       body: JSON.stringify({ notes }),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches(id);
+    return payload;
   },
 
   async reject(id: string, reason: string) {
@@ -1166,7 +1244,9 @@ export const adminProductAPI = {
       credentials: 'include',
       body: JSON.stringify({ reason }),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches(id);
+    return payload;
   },
 
   async bulkReview(data: {
@@ -1184,7 +1264,9 @@ export const adminProductAPI = {
       credentials: 'include',
       body: JSON.stringify(data),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches(data.ids);
+    return payload;
   },
 
   async create(data: any) {
@@ -1197,7 +1279,9 @@ export const adminProductAPI = {
       credentials: 'include',
       body: JSON.stringify(data),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches();
+    return payload;
   },
 
   async update(id: string, data: any) {
@@ -1210,7 +1294,9 @@ export const adminProductAPI = {
       credentials: 'include',
       body: JSON.stringify(data),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches(id);
+    return payload;
   },
 
   async delete(id: string) {
@@ -1219,7 +1305,9 @@ export const adminProductAPI = {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches(id);
+    return payload;
   },
 };
 
@@ -1569,8 +1657,17 @@ export const categoryAPI = {
 // ==================== BANNERS ====================
 export const bannerAPI = {
   async getAll() {
-    const res = await safeFetchApi('/banners');
-    return parseApiResponse(res);
+    const cached = readFreshListCache(bannerListCache, BANNER_LIST_CACHE_TTL_MS);
+    if (cached) return cached;
+    if (bannerListRequest) return bannerListRequest;
+
+    bannerListRequest = safeFetchApi('/banners')
+      .then((res) => parseApiResponse(res))
+      .then((data) => writeBannerListCache(Array.isArray(data) ? data : []))
+      .finally(() => {
+        bannerListRequest = null;
+      });
+    return bannerListRequest;
   },
 
   async create(data: any) {
@@ -1582,7 +1679,10 @@ export const bannerAPI = {
       },
       body: JSON.stringify(data),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    bannerListCache = null;
+    bannerListRequest = null;
+    return payload;
   },
 
   async update(id: string, data: any) {
@@ -1594,7 +1694,10 @@ export const bannerAPI = {
       },
       body: JSON.stringify(data),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    bannerListCache = null;
+    bannerListRequest = null;
+    return payload;
   },
 
   async delete(id: string) {
@@ -1602,7 +1705,10 @@ export const bannerAPI = {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return parseApiResponse(res);
+    const payload = await parseApiResponse(res);
+    bannerListCache = null;
+    bannerListRequest = null;
+    return payload;
   },
 
   async trackClick(id: string) {

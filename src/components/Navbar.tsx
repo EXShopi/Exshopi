@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   Menu,
   Search,
@@ -45,6 +45,8 @@ export default function Navbar() {
   const [searchText, setSearchText] = useState("");
   const [searchCatalog, setSearchCatalog] = useState<LiveMarketplaceProduct[]>([]);
   const [listening, setListening] = useState(false);
+  const [searchCatalogLoaded, setSearchCatalogLoaded] = useState(false);
+  const searchCatalogRequestRef = useRef<Promise<void> | null>(null);
   const { lang } = useLanguageStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const setCountry = useCountryStore((state) => state.setCountry);
@@ -58,25 +60,28 @@ export default function Navbar() {
     return () => window.removeEventListener('openCartDrawer', handleOpenCart);
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
+  const ensureSearchCatalogLoaded = useCallback(() => {
+    if (searchCatalogLoaded) return searchCatalogRequestRef.current ?? Promise.resolve();
+    if (searchCatalogRequestRef.current) return searchCatalogRequestRef.current;
 
-    productAPI
+    searchCatalogRequestRef.current = productAPI
       .getAll()
       .then((items) => {
-        if (!mounted) return;
         setSearchCatalog(getLiveMarketplaceProducts(items));
+        setSearchCatalogLoaded(true);
       })
       .catch(() => {
-        if (mounted) setSearchCatalog([]);
+        setSearchCatalog([]);
+      })
+      .finally(() => {
+        searchCatalogRequestRef.current = null;
       });
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    return searchCatalogRequestRef.current;
+  }, [searchCatalogLoaded]);
 
   const startVoiceSearch = () => {
+    void ensureSearchCatalogLoaded();
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -322,7 +327,16 @@ export default function Navbar() {
                     type="text"
                     aria-label="Search products and sellers"
                     value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
+                    onFocus={() => {
+                      void ensureSearchCatalogLoaded();
+                    }}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setSearchText(nextValue);
+                      if (nextValue.trim()) {
+                        void ensureSearchCatalogLoaded();
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();

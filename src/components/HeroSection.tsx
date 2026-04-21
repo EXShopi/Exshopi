@@ -66,6 +66,42 @@ export default function HeroSection() {
 
   const slide = remoteSlide || baseSlide;
 
+  useEffect(() => {
+    if (typeof document === "undefined" || !slide?.image) return;
+
+    const managedLinks: HTMLLinkElement[] = [];
+    const imageUrl = String(slide.image);
+
+    try {
+      const resolvedUrl = imageUrl.startsWith("http")
+        ? new URL(imageUrl)
+        : new URL(imageUrl, window.location.origin);
+
+      const preload = document.createElement("link");
+      preload.rel = "preload";
+      preload.as = "image";
+      preload.href = resolvedUrl.toString();
+      preload.setAttribute("fetchpriority", "high");
+      managedLinks.push(preload);
+      document.head.appendChild(preload);
+
+      if (resolvedUrl.origin !== window.location.origin) {
+        const preconnect = document.createElement("link");
+        preconnect.rel = "preconnect";
+        preconnect.href = resolvedUrl.origin;
+        preconnect.crossOrigin = "anonymous";
+        managedLinks.push(preconnect);
+        document.head.appendChild(preconnect);
+      }
+    } catch {
+      return;
+    }
+
+    return () => {
+      managedLinks.forEach((link) => link.remove());
+    };
+  }, [slide.image]);
+
   const handleBannerClick = (s: any) => {
     if (s?.id) {
       bannerAPI.trackClick(String(s.id)).catch(() => {});
@@ -97,6 +133,8 @@ export default function HeroSection() {
                     className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
                     loading="eager"
                     fetchPriority="high"
+                    decoding="async"
+                    sizes="100vw"
                   />
                 ) : (
                   <OptimizedImage
@@ -106,6 +144,9 @@ export default function HeroSection() {
                     priority="high"
                     lazy={false}
                     useWebP={true}
+                    width={1280}
+                    height={420}
+                    sizes="100vw"
                   />
                 )
               )}

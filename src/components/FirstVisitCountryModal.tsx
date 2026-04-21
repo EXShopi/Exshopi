@@ -29,9 +29,37 @@ export default function FirstVisitCountryModal() {
   const firstButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    const alreadySelected = readStoredCountrySelection();
-    setVisible(!alreadySelected && !hasExplicitSelection);
-    setReady(true);
+    if (typeof window === 'undefined') return;
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    const evaluateVisibility = () => {
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+        const alreadySelected = readStoredCountrySelection();
+        setVisible(!alreadySelected && !hasExplicitSelection);
+        setReady(true);
+      }, 120);
+    };
+
+    const rafId = window.requestAnimationFrame(() => {
+      if ('requestIdleCallback' in window) {
+        idleId = window.requestIdleCallback(evaluateVisibility, { timeout: 300 });
+      } else {
+        evaluateVisibility();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(rafId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (idleId !== null && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId);
+      }
+    };
   }, [hasExplicitSelection]);
 
   useEffect(() => {
