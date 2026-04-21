@@ -462,7 +462,7 @@ export default function Checkout() {
         const response = await sendFirebasePhoneCode(normalizedPhone, "checkout-firebase-recaptcha");
         setOtpProvider("firebase");
         setOtpSessionId(`firebase:${response.phone}`);
-        setOtpResendAvailableAt(new Date(Date.now() + 60 * 1000).toISOString());
+        setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
         setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
       } else {
         const response = await codAPI.sendOtp({

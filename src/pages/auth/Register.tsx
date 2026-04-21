@@ -229,7 +229,17 @@ const Register = () => {
       });
       setGeneratedOtp('');
       setStep(3);
-      setResendCooldown(Math.max(45, Math.ceil(getFirebasePhoneSendCooldownRemainingMs() / 1000)));
+      setResendCooldown(
+        Math.max(
+          45,
+          Math.ceil(
+            Math.max(
+              getFirebasePhoneSendCooldownRemainingMs(),
+              new Date(response.resendAvailableAt).getTime() - Date.now()
+            ) / 1000
+          )
+        )
+      );
       setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to finish creating your account.`);
     } catch (sendError) {
       console.error('[Register Phone Verification] send failed:', describeFirebasePhoneVerificationError(sendError), sendError);
@@ -360,6 +370,9 @@ const Register = () => {
       } catch (err: any) {
         console.error('[Register Phone Verification] verification failed:', describeFirebasePhoneVerificationError(err), err);
         setPhoneVerified(false);
+        if (/expired|session-expired|removed|captcha|network-request-failed|internal-error/i.test(describeFirebasePhoneVerificationError(err))) {
+          setOtp('');
+        }
         setError(mapPhoneVerificationError(err));
       } finally {
         setVerifyingOtp(false);

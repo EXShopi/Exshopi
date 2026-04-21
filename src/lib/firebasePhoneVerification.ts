@@ -46,6 +46,12 @@ type PersistedPhoneOtpSession = {
   createdAt: string;
 };
 
+type FirebasePhoneSendResult = {
+  phone: string;
+  verificationId: string;
+  resendAvailableAt: string;
+};
+
 const OTP_SESSION_STORAGE_KEY = 'exshopi:firebase-phone-otp-session:v1';
 const PHONE_SEND_COOLDOWN_MS = 45_000;
 
@@ -410,7 +416,7 @@ function clearPhoneConfirmationState(options?: { resetRecaptcha?: boolean }) {
   }
 }
 
-export async function sendFirebasePhoneCode(phone: string, containerId: string) {
+export async function sendFirebasePhoneCode(phone: string, containerId: string): Promise<FirebasePhoneSendResult> {
   const state = getGlobalState();
   const normalizedPhone = normalizeUaePhone(phone);
   const cooldownRemainingMs = getFirebasePhoneSendCooldownRemainingMs();
@@ -432,7 +438,7 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
     throw new Error('auth/too-many-requests Verification code request already in progress.');
   }
 
-  const sendPromise = (async () => {
+  const sendPromise: Promise<FirebasePhoneSendResult> = (async () => {
     try {
       logPhoneVerification('send-code-start', {
         phone: normalizedPhone,
@@ -459,6 +465,7 @@ export async function sendFirebasePhoneCode(phone: string, containerId: string) 
       return {
         phone: normalizedPhone,
         verificationId: nextConfirmationResult.verificationId,
+        resendAvailableAt: new Date(state.cooldownUntil).toISOString(),
       };
     } catch (error) {
     console.error(
@@ -560,6 +567,22 @@ export async function verifyFirebasePhoneCode(code: string) {
       describeFirebasePhoneVerificationError(error),
       error
     );
+    const errorCode = extractErrorCode(error);
+    const normalizedError = describeFirebasePhoneVerificationError(error).toLowerCase();
+    if (
+      errorCode === 'auth/code-expired' ||
+      errorCode === 'auth/session-expired' ||
+      errorCode === 'auth/captcha-check-failed' ||
+      errorCode === 'auth/invalid-app-credential' ||
+      errorCode === 'auth/internal-error' ||
+      errorCode === 'auth/network-request-failed' ||
+      normalizedError.includes('removed') ||
+      normalizedError.includes('expired')
+    ) {
+      clearPhoneConfirmationState({
+        resetRecaptcha: true,
+      });
+    }
     logPhoneVerification('verify-code-failure', {
       verificationId,
       error: describeFirebasePhoneVerificationError(error),
