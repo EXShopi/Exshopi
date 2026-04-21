@@ -276,13 +276,41 @@ function colorToHex(color: string) {
   return COLOR_HEX_MAP[color.trim().toLowerCase()] || "#94a3b8";
 }
 
+function extractImageUrl(value: unknown): string {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "object") {
+    const candidate = value as Record<string, unknown>;
+    const nestedUrl =
+      candidate.url ||
+      candidate.image ||
+      candidate.src ||
+      candidate.secure_url ||
+      candidate.secureUrl ||
+      candidate.preview ||
+      candidate.thumbnail ||
+      candidate.path;
+
+    if (typeof nestedUrl === "string") {
+      return nestedUrl.trim();
+    }
+  }
+
+  return "";
+}
+
 function getProductImages(image?: string, gallery?: unknown) {
   const galleryImages = Array.isArray(gallery)
-    ? gallery.map((item) => String(item || "").trim()).filter(Boolean)
+    ? gallery.map((item) => extractImageUrl(item)).filter(Boolean)
     : [];
 
-  const images = [String(image || "").trim(), ...galleryImages].filter(Boolean);
-  return images.length > 0 ? images : ["/hero/hero-1.webp"];
+  const images = [extractImageUrl(image), ...galleryImages].filter(Boolean);
+  const uniqueImages = Array.from(new Set(images));
+  return uniqueImages.length > 0 ? uniqueImages : ["/hero/hero-1.webp"];
 }
 
 function mapToCardProduct(item: any) {
@@ -1246,6 +1274,10 @@ const structuredTemplate = getSpecificationTemplate(
     () => getProductImages(activeVariant?.image || product?.image, product?.images || product?.gallery || product?.media),
     [product?.gallery, product?.image, product?.images, product?.media, activeVariant?.image]
   );
+
+  useEffect(() => {
+    setMainImage((currentIndex) => (currentIndex < productImages.length ? currentIndex : 0));
+  }, [productImages]);
 
   const isOptionAvailable = (key: keyof VariantSelection, rawValue: string) => {
     const normalizedValue = normalizeVariantValue(rawValue);
