@@ -101,15 +101,19 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     : src.startsWith("/")
       ? src
       : `/${src}`;
-  const { webp, png } = getImageSources(src);
   const isRemote = isRemoteImageUrl(normalizedSrc);
+  const { webp, png } = getImageSources(normalizedSrc);
   const prefersWebpCandidate =
     useWebP &&
     !isRemote &&
     /\.(png|jpe?g)$/i.test(png);
 
-  const primarySrc = fallbackSrc || (!useWebP ? normalizedSrc : prefersWebpCandidate ? webp : png);
-  const fallbackImageSrc = fallbackSrc || (!useWebP ? normalizedSrc : png);
+  const primarySrc = isRemote
+    ? normalizedSrc
+    : fallbackSrc || (!useWebP ? normalizedSrc : prefersWebpCandidate ? webp : png);
+  const fallbackImageSrc = isRemote
+    ? normalizedSrc
+    : fallbackSrc || (!useWebP ? normalizedSrc : png);
   const [currentSrc, setCurrentSrc] = useState(primarySrc);
 
   useEffect(() => {
