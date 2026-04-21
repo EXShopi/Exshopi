@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { MessageCircle, X, Send, Loader2, Bot, User, ArrowRight, ShoppingBag, HelpCircle, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import OptimizedImage from "./OptimizedImage";
+import HoverTooltip from "./ui/HoverTooltip";
 
 export function WhatsAppButton() {
   const phoneNumber = "+971522608063"; // Placeholder UAE number
-  const message = "Hello ExShopi! I'm interested in your products.";
+  const message = "Hi, I need help with my order on Exshopi";
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
   return (
@@ -17,8 +18,9 @@ export function WhatsAppButton() {
       animate={{ scale: 1, opacity: 1 }}
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.9 }}
-      className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-white text-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition"
+      className="group fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-white text-white shadow-md transition hover:scale-110"
     >
+      <HoverTooltip label="Chat with us on WhatsApp" side="left" />
       <OptimizedImage
         src="/Banners/call"
         alt="WhatsApp"
@@ -26,9 +28,6 @@ export function WhatsAppButton() {
         useWebP={true}
         className="w-10 h-10 transition"
       />
-      <div className="absolute right-full mr-4 bg-white text-slate-900 px-4 py-2 rounded-xl shadow-xl text-xs font-black uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-slate-100">
-        Chat on WhatsApp
-      </div>
     </motion.a>
   );
 }

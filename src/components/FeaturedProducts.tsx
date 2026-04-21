@@ -298,7 +298,7 @@ export default function FeaturedProducts() {
       <div className="flex items-center gap-4">
         <div className="h-px flex-1 bg-slate-300" />
         <h2 className="text-center text-[1.7rem] font-black tracking-tight text-slate-900 md:text-5xl">
-          Featured Products
+          🔥 Best Deals for You
         </h2>
         <div className="h-px flex-1 bg-slate-300" />
       </div>
@@ -311,10 +311,10 @@ export default function FeaturedProducts() {
             {tabs.map((tab) => {
               const isActive = activeTab === tab;
               const tabLabel = tab === "bestsellers"
-                ? "Bestsellers"
+                ? "🔥 Best Sellers"
                 : tab === "bestchoice"
-                ? "Best Choice"
-                : "On Sale";
+                ? "⭐ Top Picks"
+                : "💸 Deals";
 
               return (
                 <button

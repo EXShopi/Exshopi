@@ -1221,24 +1221,28 @@ export default function Checkout() {
 
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
-                  <span className="text-white/70">Subtotal</span>
-                  <span>{formatCurrencyForCountry(total, selectedCountry)}</span>
+                  <span className="font-semibold uppercase tracking-[0.12em] text-white/70">Subtotal</span>
+                  <span className="font-semibold">{formatCurrencyForCountry(total, selectedCountry)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-white/70">Shipping</span>
+                  <span className="font-semibold uppercase tracking-[0.12em] text-white/70">Shipping</span>
                   <span className="font-bold">{formatCurrencyForCountry(shippingFee, selectedCountry)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-white/70">VAT ({Math.round(country.vatRate * 100)}%)</span>
-                  <span>{formatCurrencyForCountry(vatAmount, selectedCountry)}</span>
+                  <span className="font-semibold uppercase tracking-[0.12em] text-white/70">VAT ({Math.round(country.vatRate * 100)}%)</span>
+                  <span className="font-semibold">{formatCurrencyForCountry(vatAmount, selectedCountry)}</span>
                 </div>
               </div>
 
               <div className="border-t border-white/10 pt-6">
                 <div className="flex justify-between items-end">
-                  <span className="font-bold">Total</span>
+                  <span className="text-base font-black uppercase tracking-[0.18em]">Total</span>
                   <span className="text-3xl font-black">{formatCurrencyForCountry(totalPayable, selectedCountry)}</span>
                 </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-emerald-200">
+                You will pay cash when your order is delivered
               </div>
 
               <div className="mt-6 space-y-2">

@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from "react";
-import { ShoppingCart, Star, Check, Truck } from "lucide-react";
+import { ShoppingCart, Star, Check, Truck, ShieldCheck, Eye, PackageCheck, WalletCards } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cart";
 import WishlistIcon from "./Premium/WishlistIcon";
 import { formatCurrencyPlainForCountry } from "../lib/currency";
-import { getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
+import { getCountryConfig, getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import LazyImage from "./ui/LazyImage";
 import { buildProductImageAlt, buildProductPath } from "../lib/seo";
 import { useCountryStore } from "../store/country";
+import HoverTooltip from "./ui/HoverTooltip";
 
 export interface ProductCardProps {
   id?: string;
@@ -77,6 +78,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   );
   const resolvedBadge = badge ?? badges?.[0];
   const stockLabel = typeof stock === "boolean" ? (stock ? "In Stock" : "Out of Stock") : stock;
+  const country = getCountryConfig(selectedCountry);
 
   const activePrice = getProductCountryPrice(
     { price, priceUae, priceKsa, oldPrice, compareAtPriceUae, compareAtPriceKsa },
@@ -87,6 +89,18 @@ const ProductCard: React.FC<ProductCardProps> = ({
     selectedCountry
   );
   const discount = activeOldPrice > activePrice ? Math.round(((activeOldPrice - activePrice) / activeOldPrice) * 100) : 0;
+  const savingsAmount = Math.max(0, activeOldPrice - activePrice);
+  const parsedStockCount = (() => {
+    if (typeof stock === "boolean") return stock ? 12 : 0;
+    const match = String(stockLabel).match(/\d+/);
+    return match ? Number(match[0]) : null;
+  })();
+  const urgencyText =
+    typeof parsedStockCount === "number" && parsedStockCount > 0 && parsedStockCount <= 5
+      ? `Only ${parsedStockCount} left`
+      : reviews >= 20 || rating >= 4.8
+      ? "Selling fast"
+      : "";
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -112,6 +126,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleCardClick = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.preventDefault();
+    navigate(productPath);
+  };
+
+  const handleQuickView = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     navigate(productPath);
   };
 
@@ -159,6 +179,18 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <div className="absolute right-3 top-3">
             <WishlistIcon productId={productId} />
           </div>
+
+          <div className="absolute right-3 top-[3.65rem] z-20 group">
+            <HoverTooltip label="Quick View" />
+            <button
+              type="button"
+              onClick={handleQuickView}
+              aria-label={`Quick view ${title}`}
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 hover:shadow-lg"
+            >
+              <Eye className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -170,6 +202,17 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <h3 className="mb-2 line-clamp-2 min-h-[36px] text-[13px] font-bold leading-5 text-slate-900 transition-colors duration-300 group-hover:text-blue-600 md:min-h-[42px] md:text-[14px] md:leading-5.5">
             {title}
           </h3>
+
+          <div className="mb-2.5 space-y-1 text-[10px] font-semibold text-slate-500">
+            <p className="flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Verified Seller</span>
+            </p>
+            <p className="flex items-center gap-1.5">
+              <PackageCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <span>1 Month Warranty</span>
+            </p>
+          </div>
 
           {/* Rating */}
           <div className="mb-3 flex items-center gap-1.5">
@@ -193,7 +236,36 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 <span className="whitespace-nowrap text-sm text-slate-600 line-through">{formatCurrencyPlainForCountry(activeOldPrice, selectedCountry)}</span>
               )}
             </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-slate-500">
+              <span>Incl. VAT</span>
+              {savingsAmount > 0 && (
+                <span className="text-emerald-600">
+                  Save {formatCurrencyPlainForCountry(savingsAmount, selectedCountry)}
+                </span>
+              )}
+            </div>
           </div>
+
+          <div className="mb-3 space-y-1.5 text-[10px] font-semibold text-slate-600">
+            <p className="flex items-center gap-1.5">
+              <Truck className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Free Delivery UAE</span>
+            </p>
+            <p className="flex items-center gap-1.5">
+              <span className="text-[12px] leading-none">🇸🇦</span>
+              <span>KSA Delivery Available</span>
+            </p>
+            <p className="flex items-center gap-1.5">
+              <WalletCards className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Cash on Delivery</span>
+            </p>
+          </div>
+
+          {urgencyText && (
+            <div className="mb-3 inline-flex w-fit items-center rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+              {urgencyText}
+            </div>
+          )}
 
           {/* Stock & Seller */}
           <div className="mb-4 rounded-2xl border border-white/70 bg-white/50 px-3 py-2 text-xs text-slate-600 backdrop-blur-md">
@@ -205,16 +277,17 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 Free delivery
               </div>
             )}
+            <p className="mt-1 text-[10px] text-slate-500">{country.shortName} checkout protected by OTP</p>
           </div>
 
           {/* Add to Cart Button */}
           <button
             onClick={handleAddToCart}
             onClickCapture={(e) => e.stopPropagation()}
-            className={`mt-auto flex items-center justify-center gap-2 rounded-2xl border py-2.5 font-bold text-sm backdrop-blur-xl transition-all duration-300 md:py-3 ${
+            className={`mt-auto flex items-center justify-center gap-2 rounded-2xl border py-3 font-bold text-sm backdrop-blur-xl transition-all duration-300 active:scale-[0.99] md:py-3.5 ${
               isAdded
                 ? "border-green-300 bg-[linear-gradient(180deg,rgba(220,252,231,0.95)_0%,rgba(187,247,208,0.88)_100%)] text-green-700 shadow-lg shadow-green-200/40"
-                : "border-slate-300/90 bg-[linear-gradient(180deg,rgba(39,55,87,0.88)_0%,rgba(27,40,66,0.92)_100%)] text-white shadow-[0_8px_20px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 hover:border-slate-400 hover:bg-[linear-gradient(180deg,rgba(46,63,98,0.92)_0%,rgba(31,45,73,0.96)_100%)]"
+                : "border-slate-300/90 bg-[linear-gradient(180deg,rgba(39,55,87,0.88)_0%,rgba(27,40,66,0.92)_100%)] text-white shadow-[0_8px_20px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 hover:scale-[1.01] hover:border-slate-400 hover:bg-[linear-gradient(180deg,rgba(46,63,98,0.92)_0%,rgba(31,45,73,0.96)_100%)] hover:shadow-[0_14px_28px_rgba(15,23,42,0.24)]"
             }`}
           >
             {isAdded ? (

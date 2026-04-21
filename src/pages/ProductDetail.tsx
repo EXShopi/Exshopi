@@ -1483,6 +1483,12 @@ const structuredTemplate = getSpecificationTemplate(
     }
   };
 
+  const handleWhatsAppOrderHelp = () => {
+    const message = `Hi, I want to order this product from Exshopi: ${displayTitle}`;
+    const whatsappUrl = `https://wa.me/971522608063?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  };
+
   const handleSubmitReview = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1996,6 +2002,39 @@ const structuredTemplate = getSpecificationTemplate(
                 <MessageCircle className="h-4 w-4" />
                 Contact Seller
               </button>
+
+              <button
+                onClick={handleWhatsAppOrderHelp}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 font-semibold text-emerald-700 transition hover:bg-emerald-100"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Ask on WhatsApp
+              </button>
+
+              <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                    <span>Cash on Delivery Available</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                    <span>Free Delivery UAE / Fast KSA Shipping</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                    <span>7 Days Easy Return</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                    <span>1 Month Warranty</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                    <span>Verified Seller</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

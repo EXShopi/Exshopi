@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, MapPin, Globe } from "lucide-react";
 import { useLanguageStore } from "../store/language";
 import { storefrontT } from "../lib/storefrontCopy";
@@ -16,6 +16,15 @@ export default function TopBar() {
   const setCity = useCountryStore((state) => state.setCity);
   const countryConfig = COUNTRY_CONFIG[selectedCountry];
   const cities = countryConfig.cities;
+  const [trustIndex, setTrustIndex] = useState(0);
+  const [countryToast, setCountryToast] = useState("");
+  const previousCountryRef = useRef(selectedCountry);
+  const trustMessages = [
+    "Cash on Delivery Available",
+    "Fast Delivery UAE & KSA",
+    "Trusted Marketplace",
+    "Verified Sellers",
+  ];
 
   const languages = [
     "English",
@@ -26,6 +35,25 @@ export default function TopBar() {
     "Urdu",
   ];
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setTrustIndex((current) => (current + 1) % trustMessages.length);
+    }, 2600);
+    return () => window.clearInterval(timer);
+  }, [trustMessages.length]);
+
+  useEffect(() => {
+    if (previousCountryRef.current === selectedCountry) return;
+    setCountryToast(
+      selectedCountry === "SA"
+        ? "Prices updated for Saudi Arabia (SAR)"
+        : "Prices updated for UAE (AED)"
+    );
+    previousCountryRef.current = selectedCountry;
+    const timer = window.setTimeout(() => setCountryToast(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, [selectedCountry]);
+
   return (
     <div className="relative z-[9999] hidden w-full border-b border-slate-300/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white text-[11px] shadow-[0_12px_32px_rgba(15,23,42,0.2)] md:block md:text-[12px]">
       {/* Premium decorative gradient line */}
@@ -34,7 +62,7 @@ export default function TopBar() {
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 px-3 py-1.5 md:gap-3 md:px-6 md:py-2">
         <div className="hidden min-w-0 items-center gap-3 text-white/80 font-medium sm:flex">
           <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 backdrop-blur-sm">
-            ✓ {storefrontT(language, "deliver_uae_only")}
+            ✓ {trustMessages[trustIndex]}
           </span>
           <span className="hidden text-white/25 md:inline">•</span>
           <span className="hidden text-white/70 md:inline">
@@ -166,6 +194,14 @@ export default function TopBar() {
             )}
           </div>
         </div>
+      </div>
+
+      <div
+        className={`pointer-events-none absolute right-6 top-full mt-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2 text-xs font-black tracking-[0.08em] text-emerald-700 shadow-[0_20px_40px_rgba(15,23,42,0.14)] transition-all duration-300 ${
+          countryToast ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
+        }`}
+      >
+        {countryToast}
       </div>
     </div>
   );
