@@ -36,6 +36,87 @@ const toNumber = (value: any) => {
   return Number.isFinite(raw) ? raw : 0;
 };
 
+const orderSelectWithoutTaxRate = {
+  id: true,
+  orderNumber: true,
+  customerId: true,
+  storeId: true,
+  sellerUserId: true,
+  subtotal: true,
+  vatAmount: true,
+  deliveryFee: true,
+  discountAmount: true,
+  totalAmount: true,
+  currency: true,
+  paymentMethod: true,
+  paymentProvider: true,
+  paymentStatus: true,
+  paymentReference: true,
+  paymentSessionId: true,
+  paidAt: true,
+  payoutStatus: true,
+  commissionAmount: true,
+  sellerAmount: true,
+  status: true,
+  customerName: true,
+  customerEmail: true,
+  customerPhone: true,
+  shippingAddressJson: true,
+  deliveryCountry: true,
+  deliveryEta: true,
+  refundStatus: true,
+  refundReason: true,
+  refundAmount: true,
+  dispatchSlotDate: true,
+  dispatchSlotWindow: true,
+  dispatchNotes: true,
+  courierPartner: true,
+  trackingCode: true,
+  pickupQrCode: true,
+  emirate: true,
+  area: true,
+  building: true,
+  flat: true,
+  addressLine: true,
+  placedAt: true,
+  deliveredAt: true,
+  createdAt: true,
+  updatedAt: true,
+  items: {
+    select: {
+      id: true,
+      orderId: true,
+      productId: true,
+      productTitle: true,
+      sku: true,
+      unitPrice: true,
+      salePrice: true,
+      compareAtPrice: true,
+      priceSnapshotCountry: true,
+      priceSnapshotCurrency: true,
+      quantity: true,
+      vatAmount: true,
+      lineTotal: true,
+      commissionAmount: true,
+      sellerNetAmount: true,
+      status: true,
+      createdAt: true,
+      product: {
+        select: {
+          id: true,
+          images: {
+            select: {
+              imageUrl: true,
+              isPrimary: true,
+              sortOrder: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
 const slugify = (value: string) =>
   value
     .toLowerCase()
@@ -1580,7 +1661,6 @@ export const prismaRuntime = {
         payoutStatus: input.payoutStatus || 'pending',
         commissionAmount: input.commission || 0,
         sellerAmount: input.sellerAmount || 0,
-        taxRate: input.taxRate || 0,
         status:
           input.status === 'placed'
             ? 'pending'
@@ -1633,7 +1713,7 @@ export const prismaRuntime = {
           })),
         },
       }) as any,
-      include: { items: { include: { product: { include: { images: true } } } } },
+      select: orderSelectWithoutTaxRate,
     });
     return mapOrder(order);
   },
@@ -1642,7 +1722,7 @@ export const prismaRuntime = {
     if (!enabled) return null;
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: { include: { product: { include: { images: true } } } } },
+      select: orderSelectWithoutTaxRate,
     });
     return order ? mapOrder(order) : null;
   },
@@ -1650,7 +1730,7 @@ export const prismaRuntime = {
   async getAllOrders() {
     if (!enabled) return [];
     const orders = await prisma.order.findMany({
-      include: { items: { include: { product: { include: { images: true } } } } },
+      select: orderSelectWithoutTaxRate,
       orderBy: { createdAt: 'desc' },
     });
     return orders.map(mapOrder);
@@ -1660,7 +1740,7 @@ export const prismaRuntime = {
     if (!enabled) return [];
     const orders = await prisma.order.findMany({
       where: { customerId },
-      include: { items: { include: { product: { include: { images: true } } } } },
+      select: orderSelectWithoutTaxRate,
       orderBy: { createdAt: 'desc' },
     });
     return orders.map(mapOrder);
@@ -1670,7 +1750,7 @@ export const prismaRuntime = {
     if (!enabled) return [];
     const orders = await prisma.order.findMany({
       where: { storeId },
-      include: { items: { include: { product: { include: { images: true } } } } },
+      select: orderSelectWithoutTaxRate,
       orderBy: { createdAt: 'desc' },
     });
     return orders.map(mapOrder);
@@ -1711,7 +1791,7 @@ export const prismaRuntime = {
             ? 'delivered'
             : (updates.status as any),
       },
-      include: { items: { include: { product: { include: { images: true } } } } },
+      select: orderSelectWithoutTaxRate,
     });
     return mapOrder(order);
   },
@@ -1749,14 +1829,19 @@ export const prismaRuntime = {
     if (!enabled) return null;
     const order = await prisma.order.findFirst({
       where: { trackingCode },
-      include: { items: { include: { product: { include: { images: true } } } } },
+      select: orderSelectWithoutTaxRate,
     });
     return order ? mapOrder(order) : null;
   },
 
   async createReview(input: Omit<Review, 'id' | 'createdAt' | 'updatedAt'>) {
     if (!enabled) return null;
-    const order = input.orderId ? await prisma.order.findUnique({ where: { id: input.orderId } }) : null;
+    const order = input.orderId
+      ? await prisma.order.findUnique({
+          where: { id: input.orderId },
+          select: { id: true, sellerUserId: true },
+        })
+      : null;
     const review = await prisma.review.create({
       data: {
         orderItemId: input.orderItemId || '',
@@ -1789,7 +1874,21 @@ export const prismaRuntime = {
     if (!enabled) return null;
     return prisma.orderItem.findUnique({
       where: { id: orderItemId },
-      include: { order: true, product: true },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            sellerUserId: true,
+            storeId: true,
+            customerId: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+        product: true,
+      },
     });
   },
 
@@ -1876,7 +1975,15 @@ export const prismaRuntime = {
         refundStatus: { not: 'refunded' },
         deliveredAt: { gte: weekStart, lte: weekEnd },
       },
-      include: { store: true },
+      select: {
+        id: true,
+        storeId: true,
+        sellerUserId: true,
+        subtotal: true,
+        commissionAmount: true,
+        sellerAmount: true,
+        store: true,
+      },
     });
 
     const grouped = new Map<string, any[]>();

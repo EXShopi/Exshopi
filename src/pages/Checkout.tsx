@@ -659,10 +659,7 @@ export default function Checkout() {
       navigate(primaryOrder?.trackingCode ? `/order-success?tracking=${primaryOrder.trackingCode}` : "/order-success");
     } catch (error: any) {
       console.error("Order creation failed:", error);
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : "Failed to create order. Please try again.";
+      const message = "We could not place your order right now. Please try again.";
       setPageError(message);
       alert(message);
     } finally {
