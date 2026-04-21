@@ -16,6 +16,7 @@ import { formatCurrencyPlainForCountry } from "../lib/currency";
 import { analyticsAPI, productAPI } from "../services/api";
 import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { OrbitLoader } from "./ui/OrbitLoader";
+import { OptimizedImage } from "./OptimizedImage";
 import {
   getProductCountryCompareAtPrice,
   getProductCountryPrice,
@@ -170,10 +171,14 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
         </button>
 
         <div className="aspect-square flex items-center justify-center md:h-[245px] md:aspect-auto">
-          <img
+          <OptimizedImage
             src={product.image}
             alt={product.title}
             className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
+            lazy={true}
+            width={245}
+            height={245}
+            sizes="(max-width: 768px) 50vw, 245px"
           />
         </div>
       </div>

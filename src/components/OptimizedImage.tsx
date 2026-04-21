@@ -10,7 +10,7 @@
  * component where assets are intentionally prepared for it.
  */
 
-import React, { ImgHTMLAttributes } from 'react';
+import React, { ImgHTMLAttributes, useEffect, useMemo, useState } from 'react';
 
 interface OptimizedImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   /** Image source path (without extension) - e.g., "/hero/hero-1" */
@@ -33,6 +33,8 @@ interface OptimizedImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 
   className?: string;
   /** Placeholder background color during load */
   placeholderColor?: string;
+  /** Responsive size hint */
+  sizes?: string;
 }
 
 /**
@@ -86,12 +88,32 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   className = '',
   placeholderColor = 'transparent',
   fallbackSrc,
+  sizes,
   style,
   ...props
 }) => {
   const normalizedSrc = src.startsWith("/") ? src : `/${src}`;
   const { webp, png } = getImageSources(src);
-  const imageSrc = fallbackSrc || (!useWebP ? normalizedSrc : png);
+  const prefersWebpCandidate =
+    useWebP &&
+    !normalizedSrc.startsWith('http') &&
+    /\.(png|jpe?g)$/i.test(png);
+
+  const primarySrc = fallbackSrc || (!useWebP ? normalizedSrc : prefersWebpCandidate ? webp : png);
+  const fallbackImageSrc = fallbackSrc || (!useWebP ? normalizedSrc : png);
+  const [currentSrc, setCurrentSrc] = useState(primarySrc);
+
+  useEffect(() => {
+    setCurrentSrc(primarySrc);
+  }, [primarySrc]);
+
+  const currentSrcSet = useMemo(() => {
+    if (!useWebP || normalizedSrc.startsWith('http')) return undefined;
+    if (prefersWebpCandidate && webp !== fallbackImageSrc) {
+      return `${webp} 1x, ${fallbackImageSrc} 2x`;
+    }
+    return undefined;
+  }, [fallbackImageSrc, normalizedSrc, prefersWebpCandidate, useWebP, webp]);
 
   // Determine fetch priority
   const fetchPriority = priority === 'high' ? 'high' : priority === 'low' ? 'low' : 'auto';
@@ -111,7 +133,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
   const imgProps = {
     ...props,
-    src: imageSrc,
+    src: currentSrc,
     alt,
     className,
     style: mergedStyle,
@@ -119,6 +141,8 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     ...(fetchPriority !== 'auto' && { fetchPriority: fetchPriority as 'high' | 'low' | 'auto' }),
     ...(width && { width }),
     ...(height && { height }),
+    ...(sizes && { sizes }),
+    ...(currentSrcSet && { srcSet: currentSrcSet }),
     decoding: 'async' as const,
   };
 
@@ -126,7 +150,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     return <img {...imgProps} />;
   }
 
-  if (!imageSrc) {
+  if (!currentSrc) {
     const fallbackText = (alt || '').slice(0, 1).toUpperCase() || '';
     return (
       <div
@@ -140,7 +164,17 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     );
   }
 
-  return <img {...imgProps} />;
+  return (
+    <img
+      {...imgProps}
+      onError={(event) => {
+        props.onError?.(event);
+        if (currentSrc !== fallbackImageSrc) {
+          setCurrentSrc(fallbackImageSrc);
+        }
+      }}
+    />
+  );
 };
 
 /**

@@ -16,6 +16,7 @@ import { formatCurrencyPlainForCountry } from "../lib/currency";
 import { analyticsAPI, productAPI } from "../services/api";
 import { getCampaignProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { OrbitLoader } from "./ui/OrbitLoader";
+import { OptimizedImage } from "./OptimizedImage";
 import {
   getProductCountryCompareAtPrice,
   getProductCountryPrice,
@@ -149,10 +150,14 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
           </button>
 
           <div className="flex aspect-square items-center justify-center overflow-hidden rounded-[12px] bg-white md:h-[150px] md:aspect-auto">
-            <img
+            <OptimizedImage
               src={item.image}
               alt={item.title}
               className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
+              lazy={true}
+              width={150}
+              height={150}
+              sizes="(max-width: 768px) 50vw, 150px"
             />
           </div>
         </div>

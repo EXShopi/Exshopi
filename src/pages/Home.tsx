@@ -104,7 +104,9 @@ export default function Home() {
         <h1>ExShopi UAE Online Shopping Marketplace</h1>
       </div>
       <CategorySection />
-      <MegaCategoryCarousel />
+      <DeferredSection rootMargin="80px">
+        <MegaCategoryCarousel />
+      </DeferredSection>
       <DeferredSection rootMargin="160px">
         <AccessoriesSection />
       </DeferredSection>
