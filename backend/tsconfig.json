@@ -20,9 +20,11 @@
   },
   "include": [
     "./**/*.ts",
+    "../shared/**/*.ts",
     "../src/vite-env.d.ts",
     "../src/lib/masterCategories.ts",
     "../src/lib/productRouteResolution.ts",
+    "../src/lib/productLifecycle.ts",
     "../src/lib/seo.ts",
     "../src/lib/seoMarketplace.ts"
   ],

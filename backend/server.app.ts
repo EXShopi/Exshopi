@@ -50,6 +50,7 @@ import { normalizeProductSpecifications, validateProductSpecificationsForTemplat
 import { buildStoreOperationsAnalytics } from './adminAnalyticsService';
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
 import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
+import { getProductLifecycleState, isCustomerVisibleProduct, isSoftDeletedProduct } from '../shared/productLifecycle';
 
 console.log('[BOOT] boot started', {
   entry: 'backend/server.ts',
@@ -704,25 +705,7 @@ const flattenCategoryIds = (categories: Array<any>) => {
   return ids;
 };
 
-const resolveEffectiveProductStatus = (product: any) => {
-  const productStatus = String(product?.productStatus || '');
-  const approvalStatus = String(product?.approvalStatus || '');
-  const baseStatus = String(product?.status || '');
-
-  if (productStatus === 'draft' || baseStatus === 'draft') return 'draft';
-  if (productStatus === 'rejected' || approvalStatus === 'rejected' || baseStatus === 'rejected') return 'rejected';
-  if (productStatus === 'archived' || baseStatus === 'archived') return 'archived';
-  if (productStatus === 'live' || baseStatus === 'live') return 'live';
-  if (productStatus === 'approved' || approvalStatus === 'approved' || baseStatus === 'approved') return 'approved';
-  if (productStatus === 'pending_approval' || productStatus === 'pending' || approvalStatus === 'pending' || baseStatus === 'pending') return 'pending';
-  return baseStatus || 'pending';
-};
-
-const isSoftDeletedProduct = (product: any) => {
-  const specs = (product?.specs || product?.specsJson || {}) as Record<string, any>;
-  const deletionMeta = (specs.__deletion as Record<string, any>) || {};
-  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt);
-};
+const resolveEffectiveProductStatus = (product: any) => getProductLifecycleState(product).effectiveStatus;
 
 const buildSoftDeleteProductPayload = (product: any) => {
   const deletedAt = new Date().toISOString();
@@ -6336,11 +6319,7 @@ app.get('/sitemap.xml', async (_req: Request, res: Response) => {
     }
 
     for (const product of products || []) {
-      if (isSoftDeletedProduct(product)) continue;
-      const status = String(product?.status || product?.productStatus || '').toLowerCase();
-      const approval = String(product?.approvalStatus || '').toLowerCase();
-      const visibility = String(product?.visibilityStatus || '').toLowerCase();
-      if (!(status === 'live' || (approval === 'approved' && visibility === 'live'))) continue;
+      if (!isCustomerVisibleProduct(product)) continue;
       const pathname = getProductCanonicalPath(product);
       urls.set(`${siteUrl}${escapeXml(pathname)}`, getSitemapMeta(pathname));
     }

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 import { db, Product } from './database';
+import { isCustomerVisibleProduct, isSoftDeletedProduct } from '../shared/productLifecycle';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -57,10 +58,10 @@ const mapRowToProduct = (row: any): Product => {
     sku: row.sku || '',
     brand: row.brand || '',
     specs,
-    status: row.status || 'pending',
-    approvalStatus: row.approvalStatus || 'pending',
-    productStatus: row.productStatus || 'pending_approval',
-    visibilityStatus: row.visibilityStatus || 'hidden',
+    status: row.status || row.productStatus || row.product_status || '',
+    approvalStatus: row.approvalStatus || row.approval_status || '',
+    productStatus: row.productStatus || row.product_status || row.status || '',
+    visibilityStatus: row.visibilityStatus || row.visibility_status || '',
     ownership: row.ownership || 'seller',
     createdByRole: row.createdByRole || 'seller',
     approvalNotes: row.approvalNotes || '',
@@ -77,14 +78,6 @@ const mapRowToProduct = (row: any): Product => {
     updatedAt: row.updatedAt || row.updated_at || new Date().toISOString(),
   } as Product;
 };
-
-const isSoftDeletedProduct = (product: any) =>
-  Boolean(
-    product?.isDeleted ||
-      product?.deletedAt ||
-      product?.specs?.__deletion?.isDeleted ||
-      product?.specs?.__deletion?.deletedAt
-  );
 
 const withDeletionMeta = (specs: Record<string, any> | undefined, nextMeta: Record<string, any>) => ({
   ...(specs || {}),
@@ -173,15 +166,12 @@ export const supabaseRuntime = {
         .from('products')
         .select('*')
         .eq('slug', last)
-        .eq('status', 'live')
-        .eq('approval_status', 'approved')
-        .eq('visibility_status', 'live')
         .maybeSingle();
 
       if (error) throw error;
       if (data) {
         const mapped = mapRowToProduct(data);
-        return isSoftDeletedProduct(mapped) ? null : mapped;
+        return isCustomerVisibleProduct(mapped) ? mapped : null;
       }
     } catch (err) {
       console.warn('[supabaseRuntime] primary slug lookup failed', err);
@@ -192,9 +182,6 @@ export const supabaseRuntime = {
       const { data: rows, error } = await supabase
         .from('products')
         .select('*')
-        .eq('status', 'live')
-        .eq('approval_status', 'approved')
-        .eq('visibility_status', 'live')
         .order('createdAt', { ascending: false })
         .limit(2000);
 
@@ -216,7 +203,7 @@ export const supabaseRuntime = {
         return candidates.map(normalize).includes(target);
       });
 
-      return found && !isSoftDeletedProduct(found) ? found : null;
+      return found && isCustomerVisibleProduct(found) ? found : null;
     } catch (err) {
       console.warn('[supabaseRuntime] fallback scan failed', err);
       return null;
@@ -230,27 +217,16 @@ export const supabaseRuntime = {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('status', 'live')
-        .eq('approval_status', 'approved')
-        .eq('visibility_status', 'live')
         .order('createdAt', { ascending: false });
       if (error) throw error;
       const rows = data || [];
       console.log('[supabaseRuntime] getAllProducts fetched', rows.length);
-      return rows.map(mapRowToProduct).filter((product) => !isSoftDeletedProduct(product));
+      return rows.map(mapRowToProduct).filter((product) => isCustomerVisibleProduct(product));
     } catch (err) {
-      // Fallback: query unfiltered then apply strict AND filter client-side (handle camelCase columns)
-      console.warn('[supabaseRuntime] filtered query failed, falling back to client-side filter', err);
+      console.warn('[supabaseRuntime] getAllProducts query failed', err);
       const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
       if (error) throw error;
-      const rows = data || [];
-      const filtered = rows.filter((r: any) => {
-        const status = r.status || r.productStatus || r.status;
-        const approval = r.approval_status || r.approvalStatus || r.approvalStatus;
-        const visibility = r.visibility_status || r.visibilityStatus || r.visibilityStatus;
-        return String(status) === 'live' && String(approval) === 'approved' && String(visibility) === 'live';
-      });
-      return filtered.map(mapRowToProduct).filter((product) => !isSoftDeletedProduct(product));
+      return (data || []).map(mapRowToProduct).filter((product) => isCustomerVisibleProduct(product));
     }
   },
 
@@ -260,9 +236,6 @@ export const supabaseRuntime = {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('status', 'live')
-        .eq('approval_status', 'approved')
-        .eq('visibility_status', 'live')
         .order('createdAt', { ascending: false });
       if (error) throw error;
       const all = (data || []).map(mapRowToProduct);
@@ -288,9 +261,9 @@ export const supabaseRuntime = {
           return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
         }
         return false;
-      }).filter((product) => !isSoftDeletedProduct(product));
+      }).filter((product) => isCustomerVisibleProduct(product));
     } catch (err) {
-      console.warn('[supabaseRuntime] filtered category query failed, falling back to client-side filter', err);
+      console.warn('[supabaseRuntime] category query failed, falling back to client-side filter', err);
       const { data, error } = await supabase.from('products').select('*').order('createdAt', { ascending: false });
       if (error) throw error;
       const all = (data || []).map(mapRowToProduct);
@@ -316,7 +289,7 @@ export const supabaseRuntime = {
           return pSub === subcategorySlug || pCategory === subcategorySlug || pParent === subcategorySlug;
         }
         return false;
-      }).filter((product) => !isSoftDeletedProduct(product));
+      }).filter((product) => isCustomerVisibleProduct(product));
     }
   },
 

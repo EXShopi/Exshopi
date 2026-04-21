@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { isCustomerVisibleProduct } from '../shared/productLifecycle';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, 'db.json');
@@ -1619,7 +1620,7 @@ private data!: DatabaseSchema;
   }
 
   getAllProducts(): Product[] {
-    return this.data.products.filter(p => p.status === 'live' && !this.isSoftDeletedProduct(p));
+    return this.data.products.filter((product) => isCustomerVisibleProduct(product));
   }
 
   getAllProductsForAdmin(): Product[] {

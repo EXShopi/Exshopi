@@ -23,10 +23,12 @@ import type {
   UserStatus,
 } from './database';
 import { db } from './database';
+import { isCustomerVisibleProduct, isSoftDeletedProduct } from '../shared/productLifecycle';
 
 const enabled =
   process.env.USE_PRISMA_RUNTIME === 'true' ||
   process.env.EXSHOPI_DB_MODE === 'prisma';
+const SHOULD_IMPORT_BUNDLED_DRAFTS = process.env.ENABLE_BUNDLED_DRAFT_IMPORT === 'true';
 
 const toNumber = (value: any) => {
   if (value == null) return 0;
@@ -277,10 +279,10 @@ function mapProduct(product: any): Product {
     status:
       product.status === 'pending_approval'
         ? 'pending'
-        : (product.status as Product['status']),
-    approvalStatus: product.approvalStatus as Product['approvalStatus'],
-    productStatus: product.status as Product['productStatus'],
-    visibilityStatus: product.visibilityStatus as Product['visibilityStatus'],
+        : ((product.status || product.productStatus || '') as Product['status']),
+    approvalStatus: (product.approvalStatus || '') as Product['approvalStatus'],
+    productStatus: ((product.productStatus || product.status || '') as Product['productStatus']),
+    visibilityStatus: (product.visibilityStatus || '') as Product['visibilityStatus'],
     ownership: (product.ownership || 'seller') as Product['ownership'],
     createdByRole: (product.createdByRole || 'seller') as Product['createdByRole'],
     approvalNotes: product.approvalNotes || '',
@@ -306,12 +308,6 @@ function withDeletionMeta(specs: Record<string, any> | undefined, nextMeta: Reco
       ...nextMeta,
     },
   };
-}
-
-function isSoftDeletedProduct(product: any) {
-  const specs = (product?.specs || product?.specsJson || {}) as Record<string, any>;
-  const deletionMeta = (specs.__deletion as Record<string, any>) || {};
-  return Boolean(product?.isDeleted || product?.deletedAt || deletionMeta.isDeleted || deletionMeta.deletedAt);
 }
 
 function mapOrderItem(item: any): OrderLineItem {
@@ -843,6 +839,9 @@ export const prismaRuntime = {
     if (!enabled) {
       return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
     }
+    if (!SHOULD_IMPORT_BUNDLED_DRAFTS) {
+      return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
+    }
 
     if (!fs.existsSync(BUNDLED_DRAFT_IMPORT_PATH)) {
       return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
@@ -1341,21 +1340,13 @@ export const prismaRuntime = {
     let product: any = await prisma.product.findFirst({
       where: {
         slug: last,
-        approvalStatus: 'approved',
-        status: 'live',
-        visibilityStatus: 'live',
       },
       include: { images: true },
     });
 
-    // If not found, do a safer in-memory scan of recent approved products
+    // If not found, do a safer in-memory scan of recent products
     if (!product) {
       const candidates = await prisma.product.findMany({
-        where: {
-          approvalStatus: 'approved',
-          status: 'live',
-          visibilityStatus: 'live',
-        },
         include: { images: true },
         orderBy: { createdAt: 'desc' },
         take: 2000,
@@ -1387,32 +1378,23 @@ export const prismaRuntime = {
 
     if (!product) return null;
     const mapped = mapProduct(product);
-    return isSoftDeletedProduct(mapped) ? null : mapped;
+    return isCustomerVisibleProduct(mapped) ? mapped : null;
   },
 
   async getAllProducts() {
-  if (!enabled) return [];
+    if (!enabled) return [];
 
-  const products = await prisma.product.findMany({
-    where: {
-      approvalStatus: 'approved',
-      status: 'live',
-      visibilityStatus: 'live',
-    },
-    include: { images: true },
-    orderBy: { createdAt: 'desc' },
-  });
+    const products = await prisma.product.findMany({
+      include: { images: true },
+      orderBy: { createdAt: 'desc' },
+    });
 
-  return products.map(mapProduct).filter((product) => !isSoftDeletedProduct(product));
-},
+    return products.map(mapProduct).filter((product) => isCustomerVisibleProduct(product));
+  },
 
   async getProductsByCategorySlugs(parentSlug?: string | null, categorySlug?: string | null, subcategorySlug?: string | null) {
     if (!enabled) return [];
-    const where: any = {
-      approvalStatus: 'approved',
-      status: 'live',
-      visibilityStatus: 'live',
-    };
+    const where: any = {};
 
     // If only a single categorySlug is provided, treat it as a match across any level (parent/category/subcategory)
     if (categorySlug && !parentSlug && !subcategorySlug) {
@@ -1437,7 +1419,7 @@ export const prismaRuntime = {
       include: { images: true },
       orderBy: { createdAt: 'desc' },
     });
-    return products.map(mapProduct).filter((product) => !isSoftDeletedProduct(product));
+    return products.map(mapProduct).filter((product) => isCustomerVisibleProduct(product));
   },
 
   async getSellerProducts(sellerId: string) {
