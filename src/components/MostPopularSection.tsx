@@ -149,13 +149,13 @@ const PopularCard = React.memo(function PopularCard({ product }: PopularCardProp
         <button
           type="button"
           onClick={handleToggleWishlist}
-          className={`absolute right-2.5 top-2.5 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-full border transition md:right-4 md:top-4 md:h-11 md:w-11 ${
+          className={`absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-[14px] border transition md:right-4 md:top-4 md:h-11 md:w-11 md:rounded-full ${
             saved
               ? "border-rose-200 bg-white text-rose-500 shadow-md"
               : "border-slate-200 bg-white/95 text-slate-700 shadow-md hover:bg-white"
           }`}
         >
-          <Heart className={`h-4 w-4 md:h-5 md:w-5 ${saved ? "fill-current text-rose-500" : ""}`} />
+          <Heart className={`h-[15px] w-[15px] md:h-5 md:w-5 ${saved ? "fill-current text-rose-500" : ""}`} />
         </button>
 
         <button
@@ -165,9 +165,9 @@ const PopularCard = React.memo(function PopularCard({ product }: PopularCardProp
               e.stopPropagation();
               window.location.href = buildProductPath(product);
             }}
-          className="absolute right-2.5 top-12 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-md transition hover:bg-white md:right-4 md:top-16 md:h-11 md:w-11"
+          className="absolute right-2 top-[2.7rem] z-20 flex h-8 w-8 items-center justify-center rounded-[14px] border border-slate-200 bg-white/95 text-slate-700 shadow-md transition hover:bg-white md:right-4 md:top-16 md:h-11 md:w-11 md:rounded-full"
         >
-          <Eye className="h-4 w-4 md:h-5 md:w-5" />
+          <Eye className="h-[15px] w-[15px] md:h-5 md:w-5" />
         </button>
 
         <div className="aspect-square flex items-center justify-center md:h-[245px] md:aspect-auto">

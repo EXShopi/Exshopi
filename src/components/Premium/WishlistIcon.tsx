@@ -7,9 +7,16 @@ import HoverTooltip from "../ui/HoverTooltip";
 interface WishlistIconProps {
   productId: string;
   showCount?: boolean;
+  buttonClassName?: string;
+  iconClassName?: string;
 }
 
-export default function WishlistIcon({ productId, showCount = false }: WishlistIconProps) {
+export default function WishlistIcon({
+  productId,
+  showCount = false,
+  buttonClassName = "",
+  iconClassName = "",
+}: WishlistIconProps) {
   const isInWishlist = useEcommerceStore((state) => state.isInWishlist);
   const toggleWishlist = useEcommerceStore((state) => state.toggleWishlist);
   const count = useEcommerceStore((state) => state.wishlistItems.length);
@@ -33,12 +40,12 @@ export default function WishlistIcon({ productId, showCount = false }: WishlistI
               })
               .catch(() => undefined);
           }}
-          className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all duration-300 hover:border-red-300 hover:shadow-md hover:-translate-y-0.5"
+          className={`relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all duration-300 hover:border-red-300 hover:shadow-md hover:-translate-y-0.5 ${buttonClassName}`}
           aria-label={isFavorited ? 'Remove from wishlist' : 'Add to wishlist'}
           aria-pressed={isFavorited}
         >
           <Heart
-            className={`h-5 w-5 transition-all duration-300 ${
+            className={`h-5 w-5 transition-all duration-300 ${iconClassName} ${
               isFavorited
                 ? "fill-red-500 stroke-red-500"
                 : "stroke-current fill-none"

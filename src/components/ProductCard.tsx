@@ -176,19 +176,23 @@ const ProductCard: React.FC<ProductCardProps> = ({
           )}
           
           {/* Wishlist Button */}
-          <div className="absolute right-3 top-3">
-            <WishlistIcon productId={productId} />
+          <div className="absolute right-2.5 top-2.5 md:right-3 md:top-3">
+            <WishlistIcon
+              productId={productId}
+              buttonClassName="h-9 w-9 rounded-xl shadow-sm md:h-12 md:w-12 md:rounded-2xl"
+              iconClassName="h-4 w-4 md:h-5 md:w-5"
+            />
           </div>
 
-          <div className="absolute right-3 top-[3.65rem] z-20 group">
+          <div className="absolute right-2.5 top-[3.1rem] z-20 group md:right-3 md:top-[3.65rem]">
             <HoverTooltip label="Quick View" />
             <button
               type="button"
               onClick={handleQuickView}
               aria-label={`Quick view ${title}`}
-              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 hover:shadow-lg"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 hover:shadow-lg md:h-12 md:w-12 md:rounded-2xl md:shadow-md"
             >
-              <Eye className="h-5 w-5" />
+              <Eye className="h-4 w-4 md:h-5 md:w-5" />
             </button>
           </div>
         </div>
