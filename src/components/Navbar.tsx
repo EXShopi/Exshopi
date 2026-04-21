@@ -23,6 +23,7 @@ import { useAuthStore } from "../store/auth";
 import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { marketplaceCategories } from "./categories";
 import { useCountryStore } from "../store/country";
+import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, getCountryFlag } from "../lib/countryConfig";
 
 type SubCategoryGroup = {
   title: string;
@@ -46,6 +47,7 @@ export default function Navbar() {
   const [listening, setListening] = useState(false);
   const { lang } = useLanguageStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const setCountry = useCountryStore((state) => state.setCountry);
 
   // Listen for custom cart drawer event from ProductDetail
   useEffect(() => {
@@ -421,6 +423,38 @@ export default function Navbar() {
               >
                 <X className="h-5 w-5" />
               </button>
+            </div>
+
+            <div className="border-b border-slate-200 px-5 py-4">
+              <div className="mb-3 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                Country
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {SUPPORTED_COUNTRY_CODES.map((countryCode) => {
+                  const option = COUNTRY_CONFIG[countryCode];
+                  const isActive = selectedCountry === countryCode;
+                  return (
+                    <button
+                      key={countryCode}
+                      type="button"
+                      onClick={() => setCountry(countryCode)}
+                      className={`rounded-2xl border px-3 py-3 text-left transition ${
+                        isActive
+                          ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
+                          : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{getCountryFlag(countryCode)}</span>
+                        <div>
+                          <div className="text-sm font-bold">{option.shortName}</div>
+                          <div className="text-[11px] font-medium text-slate-500">{option.currency}</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid min-h-0 flex-1 grid-cols-[160px_1fr]">
