@@ -72,7 +72,7 @@ function mapPopularProduct(product: LiveMarketplaceProduct): PopularProduct {
   };
 }
 
-const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
+const PopularCard = React.memo(function PopularCard({ product }: PopularCardProps) {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const { addItem } = useCartStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
@@ -248,7 +248,7 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
       </div>
     </Link>
   );
-};
+});
 
 export default function MostPopularSection() {
   const navigate = useNavigate();

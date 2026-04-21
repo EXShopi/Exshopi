@@ -42,7 +42,7 @@ interface FeaturedProduct extends CountryAwarePriced {
   seller: string;
 }
 
-const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
+const FeaturedCard = React.memo(function FeaturedCard({ product }: { product: FeaturedProduct }) {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const { addItem } = useCartStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
@@ -214,7 +214,7 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
       </div>
     </Link>
   );
-};
+});
 
 export default function FeaturedProducts() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("bestsellers");

@@ -73,6 +73,10 @@ function getImageSources(
     png: `${pathname}.png${suffix}`,
   };
 }
+
+function isRemoteImageUrl(value: string) {
+  return /^https?:\/\//i.test(String(value || '').trim());
+}
 /**
  * OptimizedImage Component
  * Automatically serves WebP with PNG fallback, adds lazy loading, and prevents layout shift
@@ -92,11 +96,16 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   style,
   ...props
 }) => {
-  const normalizedSrc = src.startsWith("/") ? src : `/${src}`;
+  const normalizedSrc = isRemoteImageUrl(src)
+    ? String(src).trim()
+    : src.startsWith("/")
+      ? src
+      : `/${src}`;
   const { webp, png } = getImageSources(src);
+  const isRemote = isRemoteImageUrl(normalizedSrc);
   const prefersWebpCandidate =
     useWebP &&
-    !normalizedSrc.startsWith('http') &&
+    !isRemote &&
     /\.(png|jpe?g)$/i.test(png);
 
   const primarySrc = fallbackSrc || (!useWebP ? normalizedSrc : prefersWebpCandidate ? webp : png);
@@ -108,12 +117,12 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   }, [primarySrc]);
 
   const currentSrcSet = useMemo(() => {
-    if (!useWebP || normalizedSrc.startsWith('http')) return undefined;
+    if (!useWebP || isRemote) return undefined;
     if (prefersWebpCandidate && webp !== fallbackImageSrc) {
       return `${webp} 1x, ${fallbackImageSrc} 2x`;
     }
     return undefined;
-  }, [fallbackImageSrc, normalizedSrc, prefersWebpCandidate, useWebP, webp]);
+  }, [fallbackImageSrc, isRemote, prefersWebpCandidate, useWebP, webp]);
 
   // Determine fetch priority
   const fetchPriority = priority === 'high' ? 'high' : priority === 'low' ? 'low' : 'auto';
@@ -146,8 +155,19 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     decoding: 'async' as const,
   };
 
-  if (props.onError || !useWebP || normalizedSrc.startsWith('http')) {
-    return <img {...imgProps} />;
+  if (props.onError || !useWebP || isRemote) {
+    return (
+      <img
+        {...imgProps}
+        onError={(event) => {
+          props.onError?.(event);
+          const target = event.currentTarget;
+          if (target.src !== fallbackImageSrc) {
+            target.src = fallbackImageSrc;
+          }
+        }}
+      />
+    );
   }
 
   if (!currentSrc) {

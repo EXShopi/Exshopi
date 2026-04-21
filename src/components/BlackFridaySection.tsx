@@ -62,7 +62,7 @@ function mapDealItem(product: LiveMarketplaceProduct): DealItem {
   };
 }
 
-const DealCard: React.FC<DealCardProps> = ({ item }) => {
+const DealCard = React.memo(function DealCard({ item }: DealCardProps) {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const { addItem } = useCartStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
@@ -221,7 +221,7 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
       </div>
     </Link>
   );
-};
+});
 
 export default function BlackFridaySection() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
