@@ -144,7 +144,11 @@ export interface Product {
   title: string;
   description: string;
   price: number;
+  priceUae?: number;
+  priceKsa?: number;
   originalPrice: number;
+  compareAtPriceUae?: number;
+  compareAtPriceKsa?: number;
   salePrice?: number;
   image: string;
   images: string[];
@@ -339,6 +343,9 @@ export interface OrderLineItem {
   title: string;
   quantity: number;
   unitPrice: number;
+  compareAtPrice?: number;
+  priceSnapshotCountry?: string;
+  priceSnapshotCurrency?: string;
   subtotal: number;
   vatAmount: number;
   commission: number;
@@ -373,6 +380,8 @@ export interface Order {
   vatAmount?: number;
   totalAmount?: number;
   shippingCost: number;
+  currency?: string;
+  taxRate?: number;
   shippingAddress: any;
   paymentMethod?: 'cod' | 'card' | 'tabby' | 'tamara' | 'bank_transfer';
   paymentProvider?: 'cod' | 'stripe' | 'tabby' | 'tamara' | 'bank_transfer';
@@ -667,7 +676,7 @@ function defaultMarketplaceSettings(): MarketplaceSettings {
     maintenanceMode: false,
     countries: [
       { code: 'AE', name: 'United Arab Emirates', currency: 'AED', vatPercent: 5, deliveryBaseAed: 10, codEnabled: true },
-      { code: 'SA', name: 'Saudi Arabia', currency: 'SAR', vatPercent: 15, deliveryBaseAed: 100, codEnabled: true },
+      { code: 'SA', name: 'Saudi Arabia', currency: 'SAR', vatPercent: 15, deliveryBaseAed: 85, codEnabled: true },
       { code: 'KW', name: 'Kuwait', currency: 'KWD', vatPercent: 0, deliveryBaseAed: 100, codEnabled: true },
       { code: 'QA', name: 'Qatar', currency: 'QAR', vatPercent: 0, deliveryBaseAed: 100, codEnabled: true },
       { code: 'BH', name: 'Bahrain', currency: 'BHD', vatPercent: 10, deliveryBaseAed: 100, codEnabled: true },
@@ -877,6 +886,8 @@ private data!: DatabaseSchema;
         commission: Number(order.commission || 0),
         sellerAmount: Number(order.sellerAmount || 0),
         totalAmount: Number(order.totalAmount || 0),
+        currency: order.currency || 'AED',
+        taxRate: Number(order.taxRate || 0),
         refundAmount: Number(order.refundAmount || 0),
         refundStatus: order.refundStatus || 'none',
         refundReason: order.refundReason || '',
@@ -889,6 +900,9 @@ private data!: DatabaseSchema;
               ...item,
               quantity: Number(item.quantity || 1),
               unitPrice: Number(item.unitPrice || 0),
+              compareAtPrice: item.compareAtPrice != null ? Number(item.compareAtPrice) : undefined,
+              priceSnapshotCountry: item.priceSnapshotCountry || undefined,
+              priceSnapshotCurrency: item.priceSnapshotCurrency || undefined,
               subtotal: Number(item.subtotal || 0),
               vatAmount: Number(item.vatAmount || 0),
               commission: Number(item.commission || 0),
@@ -901,6 +915,9 @@ private data!: DatabaseSchema;
                 title: order.productId || 'Marketplace Product',
                 quantity: Number(order.quantity || 1),
                 unitPrice: Number(order.unitPrice || 0),
+                compareAtPrice: undefined,
+                priceSnapshotCountry: order.deliveryCountry || 'AE',
+                priceSnapshotCurrency: order.currency || 'AED',
                 subtotal: Number(order.subtotal || 0),
                 vatAmount: Number(order.vatAmount || 0),
                 commission: Number(order.commission || 0),
@@ -916,11 +933,21 @@ private data!: DatabaseSchema;
         ...product,
         storeId: product.storeId || product.sellerId,
         salePrice: product.salePrice ?? product.price ?? 0,
-      price: Number(product.price || 0),
-      originalPrice: Number(product.originalPrice || product.price || 0),
-      stock: Number(product.stock || 0),
-      slug: product.slug || '',
-      rating: Number(product.rating || 0),
+        price: Number(product.price || 0),
+        priceUae: Number(product.priceUae || product.price || 0),
+        priceKsa:
+          product.priceKsa != null && String(product.priceKsa).trim() !== ''
+            ? Number(product.priceKsa)
+            : undefined,
+        originalPrice: Number(product.originalPrice || product.price || 0),
+        compareAtPriceUae: Number(product.compareAtPriceUae || product.originalPrice || product.price || 0),
+        compareAtPriceKsa:
+          product.compareAtPriceKsa != null && String(product.compareAtPriceKsa).trim() !== ''
+            ? Number(product.compareAtPriceKsa)
+            : undefined,
+        stock: Number(product.stock || 0),
+        slug: product.slug || '',
+        rating: Number(product.rating || 0),
         reviews: Number(product.reviews || 0),
         approvalStatus:
           product.approvalStatus ||

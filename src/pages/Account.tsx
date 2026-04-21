@@ -8,8 +8,10 @@ import { useCartStore } from '../store/cart';
 import AuthService from '../lib/authService';
 import { getAuthHeaders, orderAPI, userAPI } from '../services/api';
 import ProductCard from '../components/ProductCard';
-import { formatAED } from '../lib/currency';
+import { formatCurrencyForCountry } from '../lib/currency';
+import { isSupportedCountryCode } from '../lib/countryConfig';
 import { OrbitLoader } from '../components/ui/OrbitLoader';
+import { useCountryStore } from '../store/country';
 
 interface Address {
   id: string;
@@ -41,12 +43,15 @@ interface Order {
   productTitle?: string;
   trackingCode?: string;
   refundStatus?: string;
+  currency?: string;
+  deliveryCountry?: string;
 }
 
 export default function Account() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, role, setUser, setRole, resetAuth } = useAuthStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const wishlistItems = useWishlistStore((state) => state.items);
   const addItemToCart = useCartStore((state) => state.addItem);
   const [activeSection, setActiveSection] = useState('profile');
@@ -121,6 +126,12 @@ export default function Account() {
             productTitle: order.productTitle || 'Marketplace Product',
             trackingCode: order.trackingCode || '',
             refundStatus: order.refundStatus || 'none',
+            currency: order.currency,
+            deliveryCountry:
+              order.deliveryCountry ||
+              order.shippingAddress?.country ||
+              order.shippingAddressJson?.country ||
+              order.country,
           }))
         );
       })
@@ -291,6 +302,11 @@ export default function Account() {
     setIsAddressModalOpen(false);
   };
 
+  const getOrderCountryCode = (order: Order) => {
+    if (isSupportedCountryCode(order.deliveryCountry)) return order.deliveryCountry;
+    return order.currency === 'SAR' ? 'SA' : selectedCountry;
+  };
+
   const renderSection = () => {
     switch (activeSection) {
       case 'profile':
@@ -390,7 +406,9 @@ export default function Account() {
                     <div className="flex items-center justify-between md:justify-end gap-8">
                       <div className="text-right">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Amount</p>
-                        <p className="font-black text-slate-900">{formatAED(order.totalAmount)}</p>
+                        <p className="font-black text-slate-900">
+                          {formatCurrencyForCountry(order.totalAmount, getOrderCountryCode(order))}
+                        </p>
                       </div>
                       <div className="flex items-center gap-4">
                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
@@ -453,7 +471,7 @@ export default function Account() {
                 </div>
                 <h3 className="mb-2 text-xl font-black text-slate-900">No saved addresses yet</h3>
                 <p className="mx-auto mb-6 max-w-xl text-sm font-medium text-slate-500">
-                  Add your UAE delivery address so checkout is faster and your orders reach the right building, area, and emirate.
+                  Add your delivery address so checkout is faster and your orders reach the right building, district, city, and country.
                 </p>
                 <button
                   onClick={() => openAddressModal(null)}

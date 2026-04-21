@@ -7,7 +7,13 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { buildProductPath } from '../lib/seo';
-import { formatAEDPlain } from '../lib/currency';
+import { formatCurrencyPlainForCountry } from '../lib/currency';
+import {
+  getCountryConfig,
+  getProductCountryCompareAtPrice,
+  getProductCountryPrice,
+} from '../lib/countryConfig';
+import { useCountryStore } from '../store/country';
 
 interface AISearchModalProps {
   isOpen: boolean;
@@ -15,6 +21,8 @@ interface AISearchModalProps {
 }
 
 export function AISearchModal({ isOpen, onClose }: AISearchModalProps) {
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const selectedCountryConfig = getCountryConfig(selectedCountry);
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -59,7 +67,7 @@ export function AISearchModal({ isOpen, onClose }: AISearchModalProps) {
   };
 
   const suggestions = [
-    "I'm looking for a new iPhone under 4000 AED",
+    `I'm looking for a new iPhone under 4000 ${selectedCountryConfig.currency}`,
     "Best gaming laptops for professional use",
     "Used MacBook Pro in excellent condition",
     "Red coffee machine for my kitchen",
@@ -105,7 +113,7 @@ export function AISearchModal({ isOpen, onClose }: AISearchModalProps) {
                   What are you looking for today?
                 </h2>
                 <p className="text-slate-500 font-medium">
-                  Search naturally. Try "I want a new iPhone under 4000 AED" or "Best gaming laptops".
+                  Search naturally. Try {`"I want a new iPhone under 4000 ${selectedCountryConfig.currency}"`} or "Best gaming laptops".
                 </p>
 
                 <form onSubmit={handleAISearch} className="relative group mt-8">
@@ -189,7 +197,7 @@ className="flex-1 px-2 py-2 bg-transparent text-lg flex-1 h-full px-2 bg-transpa
                           )}
                           {(results.filters.minPrice || results.filters.maxPrice) && (
                             <span className="px-3 py-1 bg-white border border-violet-100 text-violet-600 text-[10px] font-black rounded-lg uppercase tracking-widest">
-                              Price: {results.filters.minPrice || 0} - {results.filters.maxPrice || 'Any'} AED
+                              Price: {results.filters.minPrice || 0} - {results.filters.maxPrice || 'Any'} {selectedCountryConfig.currency}
                             </span>
                           )}
                         </div>
@@ -228,6 +236,11 @@ className="flex-1 px-2 py-2 bg-transparent text-lg flex-1 h-full px-2 bg-transpa
                               />
                             </div>
                             <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                              {(() => {
+                                const displayPrice = getProductCountryPrice(product, selectedCountry);
+                                const displayComparePrice = getProductCountryCompareAtPrice(product, selectedCountry);
+                                return (
+                                  <>
                               <div>
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="px-2 py-0.5 bg-white text-slate-500 text-[8px] font-black rounded uppercase tracking-widest border border-slate-100">
@@ -245,15 +258,22 @@ className="flex-1 px-2 py-2 bg-transparent text-lg flex-1 h-full px-2 bg-transpa
                               </div>
                               <div className="flex items-center justify-between mt-4">
                                 <div className="flex flex-col">
-                                  <span className="text-lg font-black text-slate-900">{formatAEDPlain(product.salePrice || product.price)}</span>
-                                  {product.salePrice && (
-                                    <span className="text-[10px] text-slate-400 line-through font-bold">{formatAEDPlain(product.price)}</span>
+                                  <span className="text-lg font-black text-slate-900">
+                                    {formatCurrencyPlainForCountry(displayPrice, selectedCountry)}
+                                  </span>
+                                  {displayComparePrice > displayPrice && (
+                                    <span className="text-[10px] text-slate-400 line-through font-bold">
+                                      {formatCurrencyPlainForCountry(displayComparePrice, selectedCountry)}
+                                    </span>
                                   )}
                                 </div>
                                 <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-300 group-hover:bg-violet-600 group-hover:text-white transition-all shadow-sm">
                                   <ChevronRight size={20} />
                                 </div>
                               </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </Link>
                         ))}

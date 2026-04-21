@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
 import { AlertCircle, CheckCircle2, Copy, Eye, Package2, Pencil, Search, Store, Trash2, XCircle } from 'lucide-react';
-import { formatAED } from '../../lib/currency';
+import { formatCurrencyForCountry } from '../../lib/currency';
 import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
@@ -342,7 +342,12 @@ export function AdminProducts() {
                       </td>
                       <td className="px-4 py-4 text-sm font-medium text-slate-600">
                         <p className="font-black text-slate-900">
-                          {formatAED(Number(product.price || 0))}
+                          {formatCurrencyForCountry(Number(product.priceUae ?? product.price ?? 0), 'AE')}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          {product.priceKsa != null
+                            ? formatCurrencyForCountry(Number(product.priceKsa || 0), 'SA')
+                            : 'KSA price falls back to UAE pricing'}
                         </p>
                         <p className="mt-1">{Number(product.stock || 0)} in stock</p>
                       </td>

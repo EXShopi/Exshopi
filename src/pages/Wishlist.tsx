@@ -19,15 +19,18 @@ import {
 import { Link } from "react-router-dom";
 import { buildProductPath } from "../lib/seo";
 import { useWishlistStore } from "../store/wishlist";
-import { formatAEDPlain } from "../lib/currency";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
+import { getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import { productAPI } from "../services/api";
+import { useCountryStore } from "../store/country";
 
-function formatAED(value?: number) {
+function formatMoney(value: number | undefined, countryCode: "AE" | "SA") {
   if (value === undefined || value === null) return "—";
-  return formatAEDPlain(value);
+  return formatCurrencyPlainForCountry(value, countryCode);
 }
 
 export default function Wishlist() {
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const {
     items,
     collections,
@@ -64,7 +67,7 @@ export default function Wishlist() {
 
     if (filter === "discounted") {
       filtered = filtered.filter(
-        (item) => (item.oldPrice || 0) > (item.price || 0)
+        (item) => getProductCountryCompareAtPrice(item, selectedCountry) > getProductCountryPrice(item, selectedCountry)
       );
     }
 
@@ -77,9 +80,12 @@ export default function Wishlist() {
 
   const totalSaved = useMemo(() => {
     return activeItems.reduce((sum, item) => {
-      return sum + Math.max((item.oldPrice || 0) - (item.price || 0), 0);
+      return sum + Math.max(
+        getProductCountryCompareAtPrice(item, selectedCountry) - getProductCountryPrice(item, selectedCountry),
+        0
+      );
     }, 0);
-  }, [activeItems]);
+  }, [activeItems, selectedCountry]);
 
   useEffect(() => {
     let active = true;
@@ -192,7 +198,7 @@ export default function Wishlist() {
                 </div>
                 <div className="rounded-[26px] bg-white/10 p-5 ring-1 ring-white/10 backdrop-blur">
                   <p className="text-sm text-white/65">You Save</p>
-                  <p className="mt-2 text-3xl font-black">{formatAED(totalSaved)}</p>
+                  <p className="mt-2 text-3xl font-black">{formatMoney(totalSaved, selectedCountry)}</p>
                 </div>
                 <div className="rounded-[26px] bg-white/10 p-5 ring-1 ring-white/10 backdrop-blur">
                   <p className="text-sm text-white/65">Wishlist Type</p>
@@ -362,10 +368,10 @@ export default function Wishlist() {
               {view === "grid" ? (
                 <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {activeItems.map((item) => {
-                    const hasDiscount = (item.oldPrice || 0) > (item.price || 0);
-                    const savings = hasDiscount
-                      ? (item.oldPrice || 0) - (item.price || 0)
-                      : 0;
+                    const activePrice = getProductCountryPrice(item, selectedCountry);
+                    const activeOldPrice = getProductCountryCompareAtPrice(item, selectedCountry);
+                    const hasDiscount = activeOldPrice > activePrice;
+                    const savings = hasDiscount ? activeOldPrice - activePrice : 0;
 
                     return (
                       <div
@@ -433,18 +439,18 @@ export default function Wishlist() {
                           <div className="mt-5 min-h-[60px]">
                             <div className="flex flex-wrap items-end gap-3">
                               <span className="text-3xl font-black tracking-tight text-slate-900">
-                                {formatAED(item.price)}
+                                {formatMoney(activePrice, selectedCountry)}
                               </span>
                               {hasDiscount && (
                                 <span className="pb-1 text-sm text-slate-600 line-through">
-                                  {formatAED(item.oldPrice)}
+                                  {formatMoney(activeOldPrice, selectedCountry)}
                                 </span>
                               )}
                             </div>
 
                             {hasDiscount && (
                               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-600">
-                                You save {formatAED(savings)}
+                                You save {formatMoney(savings, selectedCountry)}
                               </p>
                             )}
                           </div>
@@ -476,7 +482,9 @@ export default function Wishlist() {
               ) : (
                 <div className="space-y-5">
                   {activeItems.map((item) => {
-                    const hasDiscount = (item.oldPrice || 0) > (item.price || 0);
+                    const activePrice = getProductCountryPrice(item, selectedCountry);
+                    const activeOldPrice = getProductCountryCompareAtPrice(item, selectedCountry);
+                    const hasDiscount = activeOldPrice > activePrice;
 
                     return (
                       <div
@@ -525,11 +533,11 @@ export default function Wishlist() {
 
                           <div className="mt-4 flex flex-wrap items-end gap-3">
                             <span className="text-3xl font-black tracking-tight text-slate-900">
-                              {formatAED(item.price)}
+                              {formatMoney(activePrice, selectedCountry)}
                             </span>
                             {hasDiscount && (
                               <span className="pb-1 text-sm text-slate-400 line-through">
-                                {formatAED(item.oldPrice)}
+                                {formatMoney(activeOldPrice, selectedCountry)}
                               </span>
                             )}
                           </div>

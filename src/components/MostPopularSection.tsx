@@ -12,12 +12,18 @@ import { Link, useNavigate } from "react-router-dom";
 import { buildProductPath } from "../lib/seo";
 import { useWishlistStore } from "../store/wishlist";
 import { useCartStore } from "../store/cart";
-import { formatAEDPlain } from "../lib/currency";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
 import { analyticsAPI, productAPI } from "../services/api";
 import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { OrbitLoader } from "./ui/OrbitLoader";
+import {
+  getProductCountryCompareAtPrice,
+  getProductCountryPrice,
+  type CountryAwarePriced,
+} from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
-type PopularProduct = {
+type PopularProduct = CountryAwarePriced & {
   id: string;
   slug: string;
   title: string;
@@ -58,13 +64,20 @@ function mapPopularProduct(product: LiveMarketplaceProduct): PopularProduct {
     rating: product.rating,
     reviews: product.reviews,
     image: product.image,
+    priceUae: product.priceUae ?? product.price,
+    priceKsa: product.priceKsa,
+    compareAtPriceUae: product.compareAtPriceUae ?? product.oldPrice,
+    compareAtPriceKsa: product.compareAtPriceKsa,
   };
 }
 
 const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const { addItem } = useCartStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const [isAdded, setIsAdded] = useState(false);
+  const displayPrice = getProductCountryPrice(product, selectedCountry);
+  const displayComparePrice = getProductCountryCompareAtPrice(product, selectedCountry);
 
   const saved = useWishlistStore((state) =>
     state.collections.some((collection) => collection.productIds.includes(product.id))
@@ -77,6 +90,10 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
       id: product.id,
       title: product.title,
       price: product.price,
+      priceUae: Number(product.priceUae ?? product.price),
+      priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
+      compareAtPriceUae: Number(product.compareAtPriceUae ?? product.oldPrice),
+      compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
       image: product.image,
       slug: product.slug || product.id,
     });
@@ -94,7 +111,11 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
       name: product.title,
       category: product.brand,
       price: product.price,
+      priceUae: Number(product.priceUae ?? product.price),
+      priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
       oldPrice: product.oldPrice,
+      compareAtPriceUae: Number(product.compareAtPriceUae ?? product.oldPrice),
+      compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
       rating: product.rating,
       reviews: product.reviews,
       badge: product.badge,
@@ -180,11 +201,11 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
 
         <div className="mt-2 flex items-end gap-1 md:gap-3">
           <span className="text-[0.92rem] font-black tracking-tight text-slate-900 md:text-3xl">
-            {formatAEDPlain(product.price)}
+            {formatCurrencyPlainForCountry(displayPrice, selectedCountry)}
           </span>
-          {product.oldPrice ? (
+          {displayComparePrice > displayPrice ? (
             <span className="pb-0.5 text-[10px] text-slate-400 line-through md:text-sm">
-              {formatAEDPlain(product.oldPrice)}
+              {formatCurrencyPlainForCountry(displayComparePrice, selectedCountry)}
             </span>
           ) : null}
         </div>
@@ -226,6 +247,7 @@ const PopularCard: React.FC<PopularCardProps> = ({ product }) => {
 
 export default function MostPopularSection() {
   const navigate = useNavigate();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const [activeTab, setActiveTab] = useState<TabKey>("under200");
   const [catalog, setCatalog] = useState<PopularProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,7 +266,7 @@ export default function MostPopularSection() {
           .sort((a, b) => {
             if (b.reviews !== a.reviews) return b.reviews - a.reviews;
             if (b.rating !== a.rating) return b.rating - a.rating;
-            return a.price - b.price;
+            return getProductCountryPrice(a, selectedCountry) - getProductCountryPrice(b, selectedCountry);
           })
           .slice(0, 24)
           .map(mapPopularProduct);
@@ -261,13 +283,13 @@ export default function MostPopularSection() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [selectedCountry]);
 
   const activeProducts = useMemo<PopularProduct[]>(() => {
     const activeFilter = tabs.find((tab) => tab.key === activeTab);
     if (!activeFilter) return catalog;
-    return catalog.filter((product) => product.price <= activeFilter.maxPrice);
-  }, [activeTab, catalog]);
+    return catalog.filter((product) => getProductCountryPrice(product, selectedCountry) <= activeFilter.maxPrice);
+  }, [activeTab, catalog, selectedCountry]);
 
   const collectionRoute = useMemo(() => {
     const mapping: Record<TabKey, string> = {

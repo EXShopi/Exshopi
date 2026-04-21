@@ -43,6 +43,8 @@ export interface Order {
     subtotal: number;
     shipping: number;
     vat: number;
+    currency?: string;
+    taxRate?: number;
     discount: number;
     total: number;
   };

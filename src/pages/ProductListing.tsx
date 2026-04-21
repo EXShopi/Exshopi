@@ -208,7 +208,11 @@ export default function ProductListing() {
                 subcategorySlug={product.specs?.subcategorySlug || product.specs?.templateId}
                 title={product.title}
                 price={product.price}
+                priceUae={product.priceUae ?? product.price}
+                priceKsa={product.priceKsa}
                 oldPrice={product.originalPrice}
+                compareAtPriceUae={product.compareAtPriceUae ?? product.originalPrice}
+                compareAtPriceKsa={product.compareAtPriceKsa}
                 image={product.image}
                 rating={product.rating || 4.5}
                 reviews={product.reviews || 0}

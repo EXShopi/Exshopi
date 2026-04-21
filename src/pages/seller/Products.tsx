@@ -15,6 +15,7 @@ import {
 import { Link } from 'react-router-dom';
 import { productAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
+import { formatCurrencyForCountry } from '../../lib/currency';
 
 interface Product {
   id: string;
@@ -275,7 +276,16 @@ export function SellerProducts() {
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg">{(product as any).specs?.categoryName || (product as any).specs?.parentCategoryName || product.category}</span>
                     </td>
                     <td className="px-8 py-5">
-                      <p className="font-black text-slate-900">AED {product.price.toFixed(2)}</p>
+                      <div className="space-y-1">
+                        <p className="font-black text-slate-900">
+                          {formatCurrencyForCountry(Number((product as any).priceUae ?? product.price ?? 0), 'AE')}
+                        </p>
+                        <p className="text-xs font-semibold text-slate-500">
+                          {((product as any).priceKsa ?? '') !== ''
+                            ? `SAR ${Number((product as any).priceKsa || 0).toFixed(2)}`
+                            : 'KSA fallback to UAE price'}
+                        </p>
+                      </div>
                     </td>
                     <td className="px-8 py-5 text-center">
                       {product.variants && product.variants.length > 0 ? (

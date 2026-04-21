@@ -34,7 +34,20 @@ const mapRowToProduct = (row: any): Product => {
     title: row.title || '',
     description: row.description || '',
     price: Number(row.price || 0),
+    priceUae: Number(row.priceUae || row.price_uae || row.price || 0),
+    priceKsa:
+      row.priceKsa != null || row.price_ksa != null
+        ? Number(row.priceKsa ?? row.price_ksa)
+        : undefined,
     originalPrice: Number(row.originalPrice || row.salePrice || row.price || 0),
+    compareAtPriceUae:
+      row.compareAtPriceUae != null || row.compare_at_price_uae != null
+        ? Number(row.compareAtPriceUae ?? row.compare_at_price_uae)
+        : Number(row.originalPrice || row.salePrice || row.price || 0),
+    compareAtPriceKsa:
+      row.compareAtPriceKsa != null || row.compare_at_price_ksa != null
+        ? Number(row.compareAtPriceKsa ?? row.compare_at_price_ksa)
+        : undefined,
     salePrice: row.salePrice != null ? Number(row.salePrice) : undefined,
     image: row.image || (Array.isArray(row.images) && row.images[0]) || '',
     images: Array.isArray(row.images) ? row.images : [],
@@ -104,7 +117,11 @@ export const supabaseRuntime = {
       title: input.title || '',
       description: input.description || '',
       price: input.price || 0,
+      priceUae: input.priceUae ?? input.price ?? 0,
+      priceKsa: input.priceKsa ?? null,
       originalPrice: input.originalPrice || input.price || 0,
+      compareAtPriceUae: input.compareAtPriceUae ?? input.originalPrice ?? input.price ?? 0,
+      compareAtPriceKsa: input.compareAtPriceKsa ?? null,
       salePrice: input.salePrice || input.price || 0,
       image: input.image || (Array.isArray(input.images) && input.images[0]) || '',
       images: Array.isArray(input.images) ? input.images : [],

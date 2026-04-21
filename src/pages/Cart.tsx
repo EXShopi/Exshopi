@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { useCartStore } from "../store/cart";
 import { formatCurrencyForCountry, formatCurrencyPlainForCountry } from "../lib/currency";
 import { productAPI } from "../services/api";
-import { calculateVat, getCountryConfig, getDefaultShippingOption, getShippingOption } from "../lib/countryConfig";
+import { calculateVat, getCountryConfig, getProductCountryCompareAtPrice, getProductCountryPrice, getShippingOption } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 
 export default function Cart() {
@@ -43,6 +43,7 @@ export default function Cart() {
   const setShippingOption = useCountryStore((state) => state.setShippingOption);
   const country = getCountryConfig(selectedCountry);
   const activeShipping = getShippingOption(selectedCountry, selectedShippingOption);
+  const shippingOptions = country.shippingOptions.map((option) => getShippingOption(selectedCountry, option.id));
 
   useEffect(() => {
     let active = true;
@@ -83,7 +84,7 @@ export default function Cart() {
     };
   }, [items, removeItem]);
 
-  const subtotal = getCartTotal();
+  const subtotal = items.reduce((sum, item) => sum + getProductCountryPrice(item, selectedCountry) * item.quantity, 0);
   const vat = Math.round(calculateVat(subtotal, selectedCountry));
   const finalTotal = subtotal + activeShipping.fee + vat - discount;
 
@@ -192,15 +193,15 @@ export default function Cart() {
 
                     {/* Price & Seller */}
                     <div className="flex items-baseline gap-2 mb-3">
-                      <span className="text-2xl font-bold text-slate-900">{formatCurrencyForCountry(item.price, selectedCountry)}</span>
+                      <span className="text-2xl font-bold text-slate-900">{formatCurrencyForCountry(getProductCountryPrice(item, selectedCountry), selectedCountry)}</span>
                       
-                      {item.originalPrice && item.originalPrice > item.price && (
+                      {getProductCountryCompareAtPrice(item, selectedCountry) > getProductCountryPrice(item, selectedCountry) && (
                         <>
                           <span className="text-slate-400 line-through">
-                            {formatCurrencyForCountry(item.originalPrice, selectedCountry)}
+                            {formatCurrencyForCountry(getProductCountryCompareAtPrice(item, selectedCountry), selectedCountry)}
                           </span>
                           <span className="text-sm font-bold text-red-600">
-                            Save {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}%
+                            Save {Math.round(((getProductCountryCompareAtPrice(item, selectedCountry) - getProductCountryPrice(item, selectedCountry)) / getProductCountryCompareAtPrice(item, selectedCountry)) * 100)}%
                           </span>
                         </>
                       )}
@@ -236,7 +237,7 @@ export default function Cart() {
                     <div className="text-right">
                       <p className="text-sm text-slate-600 mb-1">Subtotal</p>
                       <p className="text-2xl font-bold text-slate-900">
-                        {formatCurrencyForCountry(item.price * item.quantity, selectedCountry)}
+                        {formatCurrencyForCountry(getProductCountryPrice(item, selectedCountry) * item.quantity, selectedCountry)}
                       </p>
                     </div>
 
@@ -308,7 +309,7 @@ export default function Cart() {
                     <span className="text-sm font-bold">{activeShipping.label} - {formatCurrencyForCountry(activeShipping.fee, selectedCountry)}</span>
                   </div>
                   <div className="mt-3 space-y-2">
-                    {country.shippingOptions.map((option) => (
+                    {shippingOptions.map((option) => (
                       <label key={option.id} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                         <input
                           type="radio"

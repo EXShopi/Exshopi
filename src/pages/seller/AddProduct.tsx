@@ -48,7 +48,11 @@ type FormState = {
   shortDescription: string;
   longDescription: string;
   price: string;
+  priceUae: string;
+  priceKsa: string;
   originalPrice: string;
+  compareAtPriceUae: string;
+  compareAtPriceKsa: string;
   stock: string;
   sku: string;
   brand: string;
@@ -210,7 +214,11 @@ type ProductPayload = {
   title: string;
   description: string;
   price: number;
+  priceUae?: number;
+  priceKsa?: number;
   originalPrice: number;
+  compareAtPriceUae?: number;
+  compareAtPriceKsa?: number;
   salePrice?: number;
   image: string;
   images: string[];
@@ -333,7 +341,11 @@ const initialFormState: FormState = {
   shortDescription: '',
   longDescription: '',
   price: '',
+  priceUae: '',
+  priceKsa: '',
   originalPrice: '',
+  compareAtPriceUae: '',
+  compareAtPriceKsa: '',
   stock: '',
   sku: '',
   brand: '',
@@ -831,7 +843,11 @@ useEffect(() => {
           shortDescription: product.specs?.shortDescription || '',
           longDescription: product.specs?.longDescription || product.description || '',
           price: String(product.price ?? ''),
+          priceUae: String((product as any).priceUae ?? product.price ?? ''),
+          priceKsa: String((product as any).priceKsa ?? ''),
           originalPrice: String(product.originalPrice ?? product.price ?? ''),
+          compareAtPriceUae: String((product as any).compareAtPriceUae ?? product.originalPrice ?? product.price ?? ''),
+          compareAtPriceKsa: String((product as any).compareAtPriceKsa ?? ''),
           stock: String(product.stock ?? ''),
           sku: editingId ? product.sku || '' : '',
           brand: product.brand || product.specs?.attributes?.brand || '',
@@ -1449,11 +1465,21 @@ useEffect(() => {
       title: formData.title.trim(),
       description: descriptionParts.join('\n\n'),
       price: Number.isFinite(basePrice) ? basePrice : 0,
+      priceUae: formData.priceUae.trim() ? parseFloat(formData.priceUae) : Number.isFinite(basePrice) ? basePrice : 0,
+      priceKsa: formData.priceKsa.trim() ? parseFloat(formData.priceKsa) : undefined,
       originalPrice: Number.isFinite(baseOriginalPrice)
         ? baseOriginalPrice
         : Number.isFinite(basePrice)
         ? basePrice
         : 0,
+      compareAtPriceUae: formData.compareAtPriceUae.trim()
+        ? parseFloat(formData.compareAtPriceUae)
+        : Number.isFinite(baseOriginalPrice)
+        ? baseOriginalPrice
+        : Number.isFinite(basePrice)
+        ? basePrice
+        : 0,
+      compareAtPriceKsa: formData.compareAtPriceKsa.trim() ? parseFloat(formData.compareAtPriceKsa) : undefined,
       salePrice:
         Number.isFinite(baseOriginalPrice) &&
         Number.isFinite(basePrice) &&
@@ -1953,7 +1979,7 @@ useEffect(() => {
 
             <div className="grid gap-5 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Price *</label>
+                <label className="mb-2 block text-sm font-bold text-slate-700">Legacy / Base Price *</label>
                 <input
                   name="price"
                   type="number"
@@ -1965,13 +1991,49 @@ useEffect(() => {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Original Price</label>
+                <label className="mb-2 block text-sm font-bold text-slate-700">UAE Price (AED)</label>
                 <input
-                  name="originalPrice"
+                  name="priceUae"
                   type="number"
-                  value={formData.originalPrice}
+                  value={formData.priceUae}
+                  onChange={handleInputChange}
+                  placeholder="599"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">KSA Price (SAR)</label>
+                <input
+                  name="priceKsa"
+                  type="number"
+                  value={formData.priceKsa}
+                  onChange={handleInputChange}
+                  placeholder="610"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">UAE Compare Price</label>
+                <input
+                  name="compareAtPriceUae"
+                  type="number"
+                  value={formData.compareAtPriceUae}
                   onChange={handleInputChange}
                   placeholder="699"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">KSA Compare Price</label>
+                <input
+                  name="compareAtPriceKsa"
+                  type="number"
+                  value={formData.compareAtPriceKsa}
+                  onChange={handleInputChange}
+                  placeholder="710"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </div>

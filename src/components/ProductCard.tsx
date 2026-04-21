@@ -3,9 +3,11 @@ import { ShoppingCart, Star, Check, Truck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cart";
 import WishlistIcon from "./Premium/WishlistIcon";
-import { formatAEDPlain } from "../lib/currency";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
+import { getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import LazyImage from "./ui/LazyImage";
 import { buildProductImageAlt, buildProductPath } from "../lib/seo";
+import { useCountryStore } from "../store/country";
 
 export interface ProductCardProps {
   id?: string;
@@ -14,7 +16,11 @@ export interface ProductCardProps {
   subcategorySlug?: string;
   title: string;
   price: number;
+  priceUae?: number;
+  priceKsa?: number;
   oldPrice?: number;
+  compareAtPriceUae?: number;
+  compareAtPriceKsa?: number;
   rating: number;
   reviews: number;
   image: string;
@@ -33,7 +39,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
   subcategorySlug,
   title,
   price,
+  priceUae,
+  priceKsa,
   oldPrice,
+  compareAtPriceUae,
+  compareAtPriceKsa,
   rating,
   reviews,
   image,
@@ -46,6 +56,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const { addItem } = useCartStore();
   const navigate = useNavigate();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const [isAdded, setIsAdded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const productId = id ?? slug ?? title;
@@ -67,7 +78,15 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const resolvedBadge = badge ?? badges?.[0];
   const stockLabel = typeof stock === "boolean" ? (stock ? "In Stock" : "Out of Stock") : stock;
 
-  const discount = oldPrice ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
+  const activePrice = getProductCountryPrice(
+    { price, priceUae, priceKsa, oldPrice, compareAtPriceUae, compareAtPriceKsa },
+    selectedCountry
+  );
+  const activeOldPrice = getProductCountryCompareAtPrice(
+    { price, priceUae, priceKsa, oldPrice, compareAtPriceUae, compareAtPriceKsa },
+    selectedCountry
+  );
+  const discount = activeOldPrice > activePrice ? Math.round(((activeOldPrice - activePrice) / activeOldPrice) * 100) : 0;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -77,8 +96,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
       id: productId,
       title,
       price,
+      priceUae: priceUae ?? price,
+      priceKsa,
       image,
       slug: productSlug,
+      originalPrice: oldPrice,
+      compareAtPriceUae: compareAtPriceUae ?? oldPrice,
+      compareAtPriceKsa,
     });
     setIsAdded(true);
     window.setTimeout(() => setIsSubmitting(false), 420);
@@ -164,9 +188,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
           {/* Price */}
           <div className="mb-3">
             <div className="flex items-baseline gap-2">
-              <span className="whitespace-nowrap text-[22px] font-black leading-none text-slate-900 md:text-[28px]">{formatAEDPlain(price)}</span>
-              {oldPrice && (
-                <span className="whitespace-nowrap text-sm text-slate-600 line-through">{formatAEDPlain(oldPrice)}</span>
+              <span className="whitespace-nowrap text-[22px] font-black leading-none text-slate-900 md:text-[28px]">{formatCurrencyPlainForCountry(activePrice, selectedCountry)}</span>
+              {activeOldPrice > activePrice && (
+                <span className="whitespace-nowrap text-sm text-slate-600 line-through">{formatCurrencyPlainForCountry(activeOldPrice, selectedCountry)}</span>
               )}
             </div>
           </div>

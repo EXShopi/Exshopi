@@ -14,7 +14,8 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { formatAED } from '../../lib/currency';
+import { formatCurrencyForCountry } from '../../lib/currency';
+import { isSupportedCountryCode } from '../../lib/countryConfig';
 import {
   buildOrderAddress,
   copyToClipboard,
@@ -44,6 +45,8 @@ export interface OrderDetailsData {
   paymentStatus: string;
   commissionAmount?: number;
   sellerAmount?: number;
+  currency?: string;
+  taxRate?: number;
   status: string;
   operationalStatus?: string;
   refundStatus?: string;
@@ -127,6 +130,12 @@ function getValidNextStatuses(currentStatus: string) {
   return ['confirmed', 'packed', 'shipped', 'delivered'];
 }
 
+function getOrderCountryCode(order: OrderDetailsData) {
+  const rawCountry = (order.shippingAddress as any)?.country || order.shippingAddressJson?.country;
+  if (isSupportedCountryCode(rawCountry)) return rawCountry;
+  return order.currency === 'SAR' ? 'SA' : 'AE';
+}
+
 export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   order,
   isOpen,
@@ -149,6 +158,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   const validNextActions = getValidNextStatuses(order.status || order.operationalStatus || 'pending');
   const riskReasons = Array.isArray(order.riskReasons) ? order.riskReasons : [];
   const itemCount = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const orderCountryCode = getOrderCountryCode(order);
 
   if (!isOpen || !order) return null;
 
@@ -212,7 +222,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             {[
-              ['Customer total', formatAED(order.totalAmount), Wallet],
+              ['Customer total', formatCurrencyForCountry(order.totalAmount, orderCountryCode), Wallet],
               ['Items', `${itemCount}`, Package2],
               ['Status', String(order.status || order.operationalStatus || 'pending').replace(/_/g, ' '), CheckCircle2],
               ['Payment', String(order.paymentMethod || 'cod').toUpperCase(), Wallet],
@@ -375,8 +385,8 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                         </div>
                         <div className="font-mono text-slate-600">{item.sku || 'No SKU'}</div>
                         <div className="font-bold text-slate-900">{item.quantity}</div>
-                        <div className="font-semibold text-slate-700">{formatAED(item.unitPrice)}</div>
-                        <div className="font-black text-slate-900">{formatAED(item.unitPrice * item.quantity)}</div>
+                        <div className="font-semibold text-slate-700">{formatCurrencyForCountry(item.unitPrice, orderCountryCode)}</div>
+                        <div className="font-black text-slate-900">{formatCurrencyForCountry(item.unitPrice * item.quantity, orderCountryCode)}</div>
                       </div>
                     ))}
                   </div>
@@ -390,27 +400,27 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                   <div className="mt-5 space-y-3 text-sm">
                     <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                       <span className="font-semibold text-slate-600">Subtotal</span>
-                      <span className="font-black text-slate-900">{formatAED(order.subtotal)}</span>
+                      <span className="font-black text-slate-900">{formatCurrencyForCountry(order.subtotal, orderCountryCode)}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                       <span className="font-semibold text-slate-600">VAT</span>
-                      <span className="font-black text-slate-900">{formatAED(order.vatAmount)}</span>
+                      <span className="font-black text-slate-900">{formatCurrencyForCountry(order.vatAmount, orderCountryCode)}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                       <span className="font-semibold text-slate-600">Shipping fee</span>
-                      <span className="font-black text-slate-900">{formatAED(order.deliveryFee)}</span>
+                      <span className="font-black text-slate-900">{formatCurrencyForCountry(order.deliveryFee, orderCountryCode)}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                       <span className="font-semibold text-slate-600">Commission</span>
-                      <span className="font-black text-slate-900">{formatAED(order.commissionAmount || 0)}</span>
+                      <span className="font-black text-slate-900">{formatCurrencyForCountry(order.commissionAmount || 0, orderCountryCode)}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                       <span className="font-semibold text-slate-600">Seller payout</span>
-                      <span className="font-black text-emerald-700">{formatAED(order.sellerAmount || 0)}</span>
+                      <span className="font-black text-emerald-700">{formatCurrencyForCountry(order.sellerAmount || 0, orderCountryCode)}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-[1.5rem] bg-slate-900 px-4 py-4 text-white">
                       <span className="text-sm font-black uppercase tracking-[0.18em]">Grand total</span>
-                      <span className="text-lg font-black">{formatAED(order.totalAmount)}</span>
+                      <span className="text-lg font-black">{formatCurrencyForCountry(order.totalAmount, orderCountryCode)}</span>
                     </div>
                   </div>
                 </section>
@@ -503,7 +513,9 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                           <p className="mt-2 text-sm font-medium text-rose-800">{order.refundReason}</p>
                         ) : null}
                         {order.refundAmount ? (
-                          <p className="mt-2 text-sm font-black text-rose-900">{formatAED(order.refundAmount)}</p>
+                          <p className="mt-2 text-sm font-black text-rose-900">
+                            {formatCurrencyForCountry(order.refundAmount, orderCountryCode)}
+                          </p>
                         ) : null}
                       </div>
                     ) : null}

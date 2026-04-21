@@ -7,7 +7,11 @@ export type WishlistProduct = {
   name: string;
   category?: string;
   price?: number;
+  priceUae?: number;
+  priceKsa?: number;
   oldPrice?: number;
+  compareAtPriceUae?: number;
+  compareAtPriceKsa?: number;
   rating?: number;
   reviews?: number;
   badge?: string;

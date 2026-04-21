@@ -22,7 +22,7 @@ export const formatCurrencyForCountry = (
     style: 'currency',
     currency: config.currency,
     currencyDisplay: 'code',
-    maximumFractionDigits: options?.maximumFractionDigits ?? 0,
+    maximumFractionDigits: options?.maximumFractionDigits ?? 2,
     minimumFractionDigits: options?.minimumFractionDigits ?? 0,
   }).format(safeAmount);
 };
@@ -36,7 +36,7 @@ export const formatCurrencyPlainForCountry = (
   const config = getCountryConfig(countryCode);
 
   return `${config.currency} ${safeAmount.toLocaleString(config.locale, {
-    maximumFractionDigits: options?.maximumFractionDigits ?? 0,
+    maximumFractionDigits: options?.maximumFractionDigits ?? 2,
     minimumFractionDigits: options?.minimumFractionDigits ?? 0,
   })}`;
 };

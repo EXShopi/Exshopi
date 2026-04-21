@@ -4,12 +4,17 @@ import { productAPI, sellerAPI } from '../../services/api';
 import { AlertCircle, Archive, CheckCircle, Clock3, Copy, Edit, Eye, PackageSearch, Search, Trash2, XCircle } from 'lucide-react';
 import { buildProductPath } from '../../lib/seo';
 import { useAuthStore } from '../../store/auth';
-import { formatAED } from '../../lib/currency';
+import { formatCurrencyForCountry } from '../../lib/currency';
 
 type SellerProduct = {
   id: string;
   title: string;
   price: number;
+  priceUae?: number;
+  priceKsa?: number;
+  originalPrice?: number;
+  compareAtPriceUae?: number;
+  compareAtPriceKsa?: number;
   stock?: number;
   image?: string;
   sku?: string;
@@ -343,10 +348,21 @@ export default function SellerProducts() {
                       <td className="px-6 py-5 text-sm font-semibold text-slate-700">{(product as any).specs?.categoryName || (product as any).specs?.parentCategoryName || product.category || product.categoryId || 'Marketplace'}</td>
                       <td className="px-6 py-5">
                         <div className="space-y-1">
-                          <p className="text-sm font-black text-slate-900">{formatAED(Number(product.price || 0))}</p>
-                          {Number((product as any).originalPrice || 0) > Number(product.price || 0) && (
+                          <p className="text-sm font-black text-slate-900">
+                            {formatCurrencyForCountry(Number(product.priceUae ?? product.price ?? 0), 'AE')}
+                          </p>
+                          <p className="text-xs font-semibold text-slate-500">
+                            {product.priceKsa != null
+                              ? formatCurrencyForCountry(Number(product.priceKsa || 0), 'SA')
+                              : 'KSA fallback to UAE price'}
+                          </p>
+                          {Number((product as any).compareAtPriceUae ?? (product as any).originalPrice ?? 0) >
+                            Number(product.priceUae ?? product.price ?? 0) && (
                             <p className="text-xs font-semibold text-slate-400 line-through">
-                              {formatAED(Number((product as any).originalPrice || 0))}
+                              {formatCurrencyForCountry(
+                                Number((product as any).compareAtPriceUae ?? (product as any).originalPrice ?? 0),
+                                'AE'
+                              )}
                             </p>
                           )}
                         </div>

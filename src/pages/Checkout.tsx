@@ -30,6 +30,7 @@ import {
 import {
   calculateVat,
   getCountryConfig,
+  getProductCountryPrice,
   getShippingOption,
   isValidPhoneForCountry,
   normalizePhoneForCountry,
@@ -72,6 +73,7 @@ export default function Checkout() {
   const setShippingSelection = useCountryStore((state) => state.setShippingOption);
   const country = getCountryConfig(selectedCountry);
   const activeShipping = getShippingOption(selectedCountry, selectedShippingOption);
+  const shippingOptions = country.shippingOptions.map((option) => getShippingOption(selectedCountry, option.id));
 
   const [form, setForm] = useState({
     // Step 1: Customer Info
@@ -92,7 +94,10 @@ export default function Checkout() {
     paymentMethod: "cod",
   });
 
-  const total = useMemo(() => getCartTotal(), [getCartTotal, items]);
+  const total = useMemo(
+    () => items.reduce((sum, item) => sum + getProductCountryPrice(item, selectedCountry) * item.quantity, 0),
+    [items, selectedCountry]
+  );
   const shippingFee = activeShipping.fee;
   const vatAmount = Math.round(calculateVat(total, selectedCountry));
   const totalPayable = total + shippingFee + vatAmount;
@@ -296,7 +301,7 @@ export default function Checkout() {
       return "Please sign in to your customer account to continue COD verification.";
     }
     if (normalized.includes("valid uae phone")) {
-      return "Enter a valid UAE phone number before requesting OTP.";
+      return `Enter a valid ${country.shortName} phone number before requesting OTP.`;
     }
     if (normalized.includes("wait before requesting another otp")) {
       return "Please wait a moment before requesting another OTP.";
@@ -323,7 +328,7 @@ export default function Checkout() {
       return "Firebase phone verification is not configured yet for this environment.";
     }
     if (normalized.includes("auth/invalid-phone-number")) {
-      return "Enter a valid UAE phone number.";
+      return `Enter a valid ${country.shortName} phone number.`;
     }
     if (normalized.includes("auth/too-many-requests")) {
       return "Too many attempts. Please wait.";
@@ -587,7 +592,7 @@ export default function Checkout() {
               productId,
               variantId,
               quantity: item.quantity,
-              unitPrice: item.salePrice || variant?.price || item.price,
+              unitPrice: getProductCountryPrice(item, selectedCountry),
               sku: item.sku || variant?.sku,
               image: item.image || variant?.image,
             };
@@ -642,6 +647,8 @@ export default function Checkout() {
           subtotal: total,
           shipping: shippingFee,
           vat: vatAmount,
+          currency: country.currency,
+          taxRate: country.vatRate,
           discount: 0,
           total: totalPayable,
         }
@@ -927,7 +934,7 @@ export default function Checkout() {
                   )}
 
                   <div className="space-y-3">
-                    {country.shippingOptions.map((option) => (
+                    {shippingOptions.map((option) => (
                       <label
                         key={option.id}
                         className="relative flex cursor-pointer items-center rounded-xl border-2 p-4 transition-all hover:border-blue-400"
@@ -1118,7 +1125,7 @@ export default function Checkout() {
                               {item.title} x {item.quantity}
                             </span>
                             <span className="font-bold text-slate-900">
-                              {formatCurrencyForCountry(item.price * item.quantity, selectedCountry)}
+                              {formatCurrencyForCountry(getProductCountryPrice(item, selectedCountry) * item.quantity, selectedCountry)}
                             </span>
                           </div>
                         ))}
@@ -1206,7 +1213,7 @@ export default function Checkout() {
                       <p className="text-white/60 text-xs">Qty: {item.quantity}</p>
                     </div>
                     <p className="font-bold ml-2 whitespace-nowrap">
-                      {formatCurrencyForCountry(item.price * item.quantity, selectedCountry)}
+                      {formatCurrencyForCountry(getProductCountryPrice(item, selectedCountry) * item.quantity, selectedCountry)}
                     </p>
                   </div>
                 ))}

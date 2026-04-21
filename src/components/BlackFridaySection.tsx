@@ -12,12 +12,18 @@ import { buildProductPath } from "../lib/seo";
 import { useWishlistStore } from "../store/wishlist";
 import { useCartStore } from "../store/cart";
 import { useSettingsStore } from "../store/settings";
-import { formatAEDPlain } from "../lib/currency";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
 import { analyticsAPI, productAPI } from "../services/api";
 import { getCampaignProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { OrbitLoader } from "./ui/OrbitLoader";
+import {
+  getProductCountryCompareAtPrice,
+  getProductCountryPrice,
+  type CountryAwarePriced,
+} from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
-type DealItem = {
+type DealItem = CountryAwarePriced & {
   id: string;
   slug: string;
   title: string;
@@ -48,13 +54,20 @@ function mapDealItem(product: LiveMarketplaceProduct): DealItem {
     vendor: product.seller,
     location: "UAE Marketplace",
     badge: product.discount > 0 ? `Save ${product.discount}%` : product.badge || "Deal",
+    priceUae: product.priceUae ?? product.price,
+    priceKsa: product.priceKsa,
+    compareAtPriceUae: product.compareAtPriceUae ?? product.oldPrice,
+    compareAtPriceKsa: product.compareAtPriceKsa,
   };
 }
 
 const DealCard: React.FC<DealCardProps> = ({ item }) => {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const { addItem } = useCartStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const [isAdded, setIsAdded] = useState(false);
+  const displayPrice = getProductCountryPrice(item, selectedCountry);
+  const displayComparePrice = getProductCountryCompareAtPrice(item, selectedCountry);
 
   const saved = useWishlistStore((state) =>
     state.collections.some((collection) => collection.productIds.includes(item.id))
@@ -67,6 +80,10 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
       id: item.id,
       title: item.title,
       price: item.price,
+      priceUae: Number(item.priceUae ?? item.price),
+      priceKsa: item.priceKsa != null ? Number(item.priceKsa) : undefined,
+      compareAtPriceUae: Number(item.compareAtPriceUae ?? item.oldPrice),
+      compareAtPriceKsa: item.compareAtPriceKsa != null ? Number(item.compareAtPriceKsa) : undefined,
       image: item.image,
       slug: item.slug || item.id,
     });
@@ -84,7 +101,11 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
       name: item.title,
       category: "Marketplace Deals",
       price: item.price,
+      priceUae: Number(item.priceUae ?? item.price),
+      priceKsa: item.priceKsa != null ? Number(item.priceKsa) : undefined,
       oldPrice: item.oldPrice,
+      compareAtPriceUae: Number(item.compareAtPriceUae ?? item.oldPrice),
+      compareAtPriceKsa: item.compareAtPriceKsa != null ? Number(item.compareAtPriceKsa) : undefined,
       rating: item.rating,
       reviews: item.reviews,
       badge: item.badge,
@@ -139,12 +160,12 @@ const DealCard: React.FC<DealCardProps> = ({ item }) => {
 
       <div className="flex min-h-[154px] flex-col px-2.5 pb-2.5 md:min-h-[214px]">
         <div className="text-[12px] font-black leading-none text-slate-900 md:text-[14px]">
-          {formatAEDPlain(item.price)}
+          {formatCurrencyPlainForCountry(displayPrice, selectedCountry)}
         </div>
 
-        {item.oldPrice ? (
+        {displayComparePrice > displayPrice ? (
           <div className="mt-1 text-[10px] text-slate-400 line-through">
-            {formatAEDPlain(item.oldPrice)}
+            {formatCurrencyPlainForCountry(displayComparePrice, selectedCountry)}
           </div>
         ) : null}
 

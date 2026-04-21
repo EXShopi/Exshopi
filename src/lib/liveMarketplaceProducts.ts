@@ -48,8 +48,18 @@ export function isLiveMarketplaceProduct(product: any) {
 }
 
 export function mapLiveMarketplaceProduct(product: any): LiveMarketplaceProduct {
-  const price = Number(product.price || 0);
-  const oldPrice = Number(product.originalPrice || product.oldPrice || 0);
+  const priceUae = Number(product.priceUae ?? product.price ?? 0);
+  const priceKsa =
+    product.priceKsa != null && String(product.priceKsa).trim() !== ''
+      ? Number(product.priceKsa)
+      : undefined;
+  const compareAtPriceUae = Number((product.compareAtPriceUae ?? product.originalPrice ?? product.oldPrice) || 0);
+  const compareAtPriceKsa =
+    product.compareAtPriceKsa != null && String(product.compareAtPriceKsa).trim() !== ''
+      ? Number(product.compareAtPriceKsa)
+      : undefined;
+  const price = priceUae;
+  const oldPrice = compareAtPriceUae;
   const sellerName =
     product.sellerName ||
     product.seller ||
@@ -71,7 +81,11 @@ export function mapLiveMarketplaceProduct(product: any): LiveMarketplaceProduct 
     slug: product.slug || String(product.id),
     title: product.title || "Marketplace Product",
     price,
+    priceUae,
+    priceKsa,
     oldPrice: oldPrice > price ? oldPrice : undefined,
+    compareAtPriceUae: compareAtPriceUae > price ? compareAtPriceUae : undefined,
+    compareAtPriceKsa,
     rating: Number(product.rating || 4.5),
     reviews: Number(product.reviews || 0),
     image: product.image || product.images?.[0] || "/placeholder.svg",

@@ -254,7 +254,17 @@ function mapProduct(product: any): Product {
     title: product.title,
     description: product.description || '',
     price: toNumber(product.price),
+    priceUae: toNumber((product as any).priceUae ?? product.price),
+    priceKsa: (product as any).priceKsa != null ? toNumber((product as any).priceKsa) : undefined,
     originalPrice: toNumber(product.originalPrice || product.salePrice || product.price),
+    compareAtPriceUae:
+      (product as any).compareAtPriceUae != null
+        ? toNumber((product as any).compareAtPriceUae)
+        : toNumber(product.originalPrice || product.salePrice || product.price),
+    compareAtPriceKsa:
+      (product as any).compareAtPriceKsa != null
+        ? toNumber((product as any).compareAtPriceKsa)
+        : undefined,
     salePrice: product.salePrice ? toNumber(product.salePrice) : undefined,
     image: primaryImage,
     images: orderedImages.slice(primaryImage ? 1 : 0),
@@ -311,6 +321,9 @@ function mapOrderItem(item: any): OrderLineItem {
     title: item.productTitle,
     quantity: Number(item.quantity || 1),
     unitPrice: toNumber(item.salePrice ?? item.unitPrice),
+    compareAtPrice: item.compareAtPrice != null ? toNumber(item.compareAtPrice) : undefined,
+    priceSnapshotCountry: item.priceSnapshotCountry || undefined,
+    priceSnapshotCurrency: item.priceSnapshotCurrency || undefined,
     subtotal: toNumber(item.lineTotal),
     vatAmount: toNumber(item.vatAmount),
     commission: toNumber(item.commissionAmount),
@@ -348,6 +361,8 @@ function mapOrder(order: any): Order {
     vatAmount: toNumber(order.vatAmount),
     totalAmount: toNumber(order.totalAmount),
     shippingCost: toNumber(order.deliveryFee),
+    currency: order.currency || 'AED',
+    taxRate: toNumber(order.taxRate),
     shippingAddress:
       order.shippingAddressJson || {
         emirate: order.emirate || '',
@@ -1232,7 +1247,7 @@ export const prismaRuntime = {
     }
 
    const product = await prisma.product.create({
-  data: {
+  data: ({
     storeId: input.storeId || input.sellerId || "",
     sellerUserId:
       (
@@ -1256,7 +1271,11 @@ export const prismaRuntime = {
     sku: input.sku,
     brand: input.brand || "",
     price: input.price,
+    priceUae: input.priceUae ?? input.price,
+    priceKsa: input.priceKsa,
     originalPrice: input.originalPrice,
+    compareAtPriceUae: input.compareAtPriceUae ?? input.originalPrice ?? input.price,
+    compareAtPriceKsa: input.compareAtPriceKsa,
     salePrice: input.salePrice,
     currency: "AED",
     stock: input.stock,
@@ -1294,7 +1313,7 @@ export const prismaRuntime = {
           sortOrder: index,
         })),
     },
-  },
+  }) as any,
   include: {
     images: true,
   },
@@ -1477,7 +1496,7 @@ export const prismaRuntime = {
     }
     const product = await prisma.product.update({
       where: { id },
-      data: {
+      data: ({
         categoryId: updates.categoryId,
         title: updates.title,
         slug: updates.slug,
@@ -1493,7 +1512,11 @@ export const prismaRuntime = {
         sku: updates.sku,
         brand: updates.brand,
         price: updates.price,
+        priceUae: updates.priceUae,
+        priceKsa: updates.priceKsa,
         originalPrice: updates.originalPrice,
+        compareAtPriceUae: updates.compareAtPriceUae,
+        compareAtPriceKsa: updates.compareAtPriceKsa,
         salePrice: updates.salePrice,
         stock: updates.stock,
           // keep explicit canonical slug columns in sync with specs
@@ -1524,7 +1547,7 @@ export const prismaRuntime = {
                   })),
               }
             : undefined,
-      },
+      }) as any,
       include: { images: true },
     });
     return mapProduct(product);
@@ -1540,11 +1563,11 @@ export const prismaRuntime = {
     });
     await prisma.product.update({
       where: { id },
-      data: {
+      data: ({
         status: 'archived',
         visibilityStatus: 'hidden',
         specsJson: specs as any,
-      },
+      }) as any,
     });
     return true;
   },
@@ -1555,7 +1578,7 @@ export const prismaRuntime = {
     const store = await prisma.store.findUnique({ where: { id: storeId } });
     if (!store) return null;
     const order = await prisma.order.create({
-      data: {
+      data: ({
         orderNumber: input.orderId,
         customerId: input.customerId,
         storeId,
@@ -1565,7 +1588,7 @@ export const prismaRuntime = {
         deliveryFee: input.shippingCost || 0,
         discountAmount: 0,
         totalAmount: input.totalAmount || input.subtotal,
-        currency: 'AED',
+        currency: input.currency || 'AED',
         paymentMethod: input.paymentMethod || 'cod',
         paymentProvider: input.paymentProvider || input.paymentMethod || 'cod',
         paymentStatus: input.paymentStatus || 'pending',
@@ -1575,6 +1598,7 @@ export const prismaRuntime = {
         payoutStatus: input.payoutStatus || 'pending',
         commissionAmount: input.commission || 0,
         sellerAmount: input.sellerAmount || 0,
+        taxRate: input.taxRate || 0,
         status:
           input.status === 'placed'
             ? 'pending'
@@ -1615,6 +1639,9 @@ export const prismaRuntime = {
             sku: item.sku || '',
             unitPrice: item.unitPrice,
             salePrice: item.unitPrice,
+            compareAtPrice: item.compareAtPrice,
+            priceSnapshotCountry: item.priceSnapshotCountry || input.deliveryCountry || 'AE',
+            priceSnapshotCurrency: item.priceSnapshotCurrency || input.currency || 'AED',
             quantity: item.quantity,
             vatAmount: item.vatAmount,
             lineTotal: item.subtotal,
@@ -1623,7 +1650,7 @@ export const prismaRuntime = {
             status: input.status || 'placed',
           })),
         },
-      },
+      }) as any,
       include: { items: { include: { product: { include: { images: true } } } } },
     });
     return mapOrder(order);

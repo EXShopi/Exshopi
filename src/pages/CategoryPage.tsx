@@ -20,7 +20,11 @@ type CatalogProduct = {
   subcategorySlug?: string;
   title: string;
   price: number;
+  priceUae?: number;
+  priceKsa?: number;
   oldPrice?: number;
+  compareAtPriceUae?: number;
+  compareAtPriceKsa?: number;
   rating: number;
   reviews: number;
   image: string;
@@ -165,10 +169,14 @@ export default function CategoryPage() {
         subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
         title: product.title,
         price: Number(product.price || 0),
+        priceUae: Number(product.priceUae || product.price || 0),
+        priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
         oldPrice:
           Number(product.originalPrice || 0) > Number(product.price || 0)
             ? Number(product.originalPrice || 0)
             : undefined,
+        compareAtPriceUae: Number(product.compareAtPriceUae || product.originalPrice || 0) || undefined,
+        compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
         rating: Number(product.rating || 0),
         reviews: Number(product.reviews || product.reviewsCount || 0),
         image: product.image || product.images?.[0] || "",
@@ -216,10 +224,14 @@ export default function CategoryPage() {
             subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
             title: product.title,
             price: Number(product.price || 0),
+            priceUae: Number(product.priceUae || product.price || 0),
+            priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
             oldPrice:
               Number(product.originalPrice || 0) > Number(product.price || 0)
                 ? Number(product.originalPrice || 0)
                 : undefined,
+            compareAtPriceUae: Number(product.compareAtPriceUae || product.originalPrice || 0) || undefined,
+            compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
             rating: Number(product.rating || 0),
             reviews: Number(product.reviews || product.reviewsCount || 0),
             image: product.image || product.images?.[0] || "",
@@ -257,7 +269,11 @@ export default function CategoryPage() {
         subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
         title: product.title,
         price: Number(product.price || 0),
+        priceUae: Number(product.priceUae || product.price || 0),
+        priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
         oldPrice: Number(product.originalPrice || 0) > Number(product.price || 0) ? Number(product.originalPrice || 0) : undefined,
+        compareAtPriceUae: Number(product.compareAtPriceUae || product.originalPrice || 0) || undefined,
+        compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
         rating: Number(product.rating || 0),
         reviews: Number(product.reviews || product.reviewsCount || 0),
         image: product.image || product.images?.[0] || "",

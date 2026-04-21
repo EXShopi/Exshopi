@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
-import { formatAED } from './currency';
+import { formatCurrencyForCountry } from './currency';
+import { isSupportedCountryCode } from './countryConfig';
 
 export type OrderLabelTemplate = 'a4' | 'compact' | 'packing-slip';
 
@@ -18,6 +19,8 @@ export type AdminOrderLike = {
   commissionAmount?: number;
   commission?: number;
   sellerAmount?: number;
+  currency?: string;
+  taxRate?: number;
   status?: string;
   operationalStatus?: string;
   refundStatus?: string;
@@ -48,6 +51,21 @@ export type AdminOrderLike = {
   shippingAddress?: any;
   shippingAddressJson?: any;
 };
+
+function getOrderCountryCode(order: AdminOrderLike) {
+  const shippingAddress = order.shippingAddressJson
+    ? typeof order.shippingAddressJson === 'string'
+      ? JSON.parse(order.shippingAddressJson)
+      : order.shippingAddressJson
+    : order.shippingAddress || {};
+  const rawCountry = shippingAddress.country;
+  if (isSupportedCountryCode(rawCountry)) return rawCountry;
+  return order.currency === 'SAR' ? 'SA' : 'AE';
+}
+
+function formatOrderMoney(order: AdminOrderLike, amount: number) {
+  return formatCurrencyForCountry(amount, getOrderCountryCode(order));
+}
 
 export function buildOrderAddress(order: Pick<AdminOrderLike, 'shippingAddress' | 'shippingAddressJson'>) {
   const shippingAddress = order.shippingAddressJson
@@ -187,8 +205,8 @@ function buildItemsTable(order: AdminOrderLike) {
             <div style="color:#64748b;font-size:11px;">${escapeHtml(item.sku || 'No SKU')}</div>
           </td>
           <td>${quantity}</td>
-          <td>${formatAED(unitPrice)}</td>
-          <td>${formatAED(quantity * unitPrice)}</td>
+          <td>${formatOrderMoney(order, unitPrice)}</td>
+          <td>${formatOrderMoney(order, quantity * unitPrice)}</td>
         </tr>
       `;
     })
@@ -291,10 +309,10 @@ export function buildOrderLabelHtml(order: AdminOrderLike, template: OrderLabelT
                 <p class="label">Order Summary</p>
                 <div class="totals">
                   <div class="total-row"><span>Items</span><span>${itemCount}</span></div>
-                  <div class="total-row"><span>Subtotal</span><span>${formatAED(Number(order.subtotal || 0))}</span></div>
-                  <div class="total-row"><span>Shipping</span><span>${formatAED(Number(order.deliveryFee || 0))}</span></div>
-                  <div class="total-row"><span>VAT</span><span>${formatAED(Number(order.vatAmount || 0))}</span></div>
-                  <div class="total-row"><strong>Total</strong><strong>${formatAED(Number(order.totalAmount || 0))}</strong></div>
+                  <div class="total-row"><span>Subtotal</span><span>${formatOrderMoney(order, Number(order.subtotal || 0))}</span></div>
+                  <div class="total-row"><span>Shipping</span><span>${formatOrderMoney(order, Number(order.deliveryFee || 0))}</span></div>
+                  <div class="total-row"><span>VAT</span><span>${formatOrderMoney(order, Number(order.vatAmount || 0))}</span></div>
+                  <div class="total-row"><strong>Total</strong><strong>${formatOrderMoney(order, Number(order.totalAmount || 0))}</strong></div>
                 </div>
               </div>
               <div class="panel">
@@ -315,8 +333,8 @@ export function buildOrderLabelHtml(order: AdminOrderLike, template: OrderLabelT
                       .filter(Boolean)
                       .join(' • ') || 'Not assigned'
                   )}</span></div>
-                  <div class="total-row"><span>Commission</span><span>${formatAED(totalCommission)}</span></div>
-                  <div class="total-row"><span>Seller payout</span><span>${formatAED(sellerAmount)}</span></div>
+                  <div class="total-row"><span>Commission</span><span>${formatOrderMoney(order, totalCommission)}</span></div>
+                  <div class="total-row"><span>Seller payout</span><span>${formatOrderMoney(order, sellerAmount)}</span></div>
                 </div>
               </div>
             </div>
@@ -446,12 +464,12 @@ export function downloadOrderLabelPdf(order: AdminOrderLike, template: OrderLabe
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.text(`Items: ${itemCount}`, 12, startY + 18);
-  doc.text(`Subtotal: ${formatAED(Number(order.subtotal || 0))}`, 12, startY + 25);
-  doc.text(`VAT: ${formatAED(Number(order.vatAmount || 0))}`, 12, startY + 32);
-  doc.text(`Shipping: ${formatAED(Number(order.deliveryFee || 0))}`, pageWidth / 2, startY + 18);
-  doc.text(`Commission: ${formatAED(Number(order.commissionAmount ?? order.commission ?? 0))}`, pageWidth / 2, startY + 25);
+  doc.text(`Subtotal: ${formatOrderMoney(order, Number(order.subtotal || 0))}`, 12, startY + 25);
+  doc.text(`VAT: ${formatOrderMoney(order, Number(order.vatAmount || 0))}`, 12, startY + 32);
+  doc.text(`Shipping: ${formatOrderMoney(order, Number(order.deliveryFee || 0))}`, pageWidth / 2, startY + 18);
+  doc.text(`Commission: ${formatOrderMoney(order, Number(order.commissionAmount ?? order.commission ?? 0))}`, pageWidth / 2, startY + 25);
   doc.setFont('helvetica', 'bold');
-  doc.text(`Total: ${formatAED(Number(order.totalAmount || 0))}`, pageWidth / 2, startY + 32);
+  doc.text(`Total: ${formatOrderMoney(order, Number(order.totalAmount || 0))}`, pageWidth / 2, startY + 32);
 
   let itemsY = startY + 50;
   doc.setFont('helvetica', 'bold');
@@ -469,7 +487,7 @@ export function downloadOrderLabelPdf(order: AdminOrderLike, template: OrderLabe
     const title = doc.splitTextToSize(item.title || 'Order item', pageWidth - 48);
     doc.text(title, 12, itemsY);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${qty} x ${formatAED(unitPrice)}`, pageWidth - 46, itemsY, { align: 'left' });
+    doc.text(`${qty} x ${formatOrderMoney(order, unitPrice)}`, pageWidth - 46, itemsY, { align: 'left' });
     itemsY += title.length * 4 + 3;
     if (item.sku) {
       doc.setTextColor(100, 116, 139);
@@ -535,22 +553,22 @@ export function downloadOrderInvoicePdf(order: AdminOrderLike) {
     doc.setFont('helvetica', 'normal');
     doc.text(title, 14, tableY);
     doc.text(String(qty), 118, tableY);
-    doc.text(formatAED(unit), 138, tableY);
-    doc.text(formatAED(qty * unit), 170, tableY);
+    doc.text(formatOrderMoney(order, unit), 138, tableY);
+    doc.text(formatOrderMoney(order, qty * unit), 170, tableY);
     tableY += Math.max(title.length * 5, 8);
   });
 
   tableY += 8;
   doc.line(120, tableY, 196, tableY);
   tableY += 8;
-  doc.text(`Subtotal: ${formatAED(Number(order.subtotal || 0))}`, 128, tableY);
+  doc.text(`Subtotal: ${formatOrderMoney(order, Number(order.subtotal || 0))}`, 128, tableY);
   tableY += 7;
-  doc.text(`VAT: ${formatAED(Number(order.vatAmount || 0))}`, 128, tableY);
+  doc.text(`VAT: ${formatOrderMoney(order, Number(order.vatAmount || 0))}`, 128, tableY);
   tableY += 7;
-  doc.text(`Shipping: ${formatAED(Number(order.deliveryFee || 0))}`, 128, tableY);
+  doc.text(`Shipping: ${formatOrderMoney(order, Number(order.deliveryFee || 0))}`, 128, tableY);
   tableY += 7;
   doc.setFont('helvetica', 'bold');
-  doc.text(`Grand Total: ${formatAED(Number(order.totalAmount || 0))}`, 128, tableY);
+  doc.text(`Grand Total: ${formatOrderMoney(order, Number(order.totalAmount || 0))}`, 128, tableY);
   doc.save(`exshopi-invoice-${order.orderNumber || order.id}.pdf`);
 }
 

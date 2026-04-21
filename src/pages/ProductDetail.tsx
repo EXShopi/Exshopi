@@ -39,7 +39,7 @@ import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
 import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
 import { readRouteSnapshot, resolveProductSnapshot } from "../lib/routeSnapshot";
-import { getCountryConfig } from "../lib/countryConfig";
+import { getCountryConfig, getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 // Local helpers for safe category path and slugification
 function slugifyLocal(value?: string) {
@@ -291,7 +291,11 @@ function mapToCardProduct(item: any) {
     specs: item.specs || {},
     title: item.title,
     price: item.price,
+    priceUae: item.priceUae ?? item.price,
+    priceKsa: item.priceKsa,
     oldPrice: item.oldPrice,
+    compareAtPriceUae: item.compareAtPriceUae ?? item.oldPrice,
+    compareAtPriceKsa: item.compareAtPriceKsa,
     rating: item.rating || 4.5,
     reviews: item.reviews || 0,
     image: item.image,
@@ -415,7 +419,11 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
                 name: product.title,
                 category: product.category,
                 price: product.price,
+                priceUae: product.priceUae ?? product.price,
+                priceKsa: product.priceKsa,
                 oldPrice: product.oldPrice,
+                compareAtPriceUae: product.compareAtPriceUae ?? product.oldPrice,
+                compareAtPriceKsa: product.compareAtPriceKsa,
                 rating: product.rating,
                 reviews: product.reviews,
                 badge: product.badge,
@@ -1091,9 +1099,9 @@ const productSchema = product
     return findBestVariantMatch(variants, selectedOptions);
   }, [variants, selectedOptions]);
 
-  const displayPrice = Number(activeVariant?.price ?? product?.price ?? 0);
+  const displayPrice = Number(activeVariant?.price ?? getProductCountryPrice(product, selectedCountry) ?? 0);
   const displayOriginalPrice = Number(
-    activeVariant?.originalPrice ?? product?.originalPrice ?? product?.salePrice ?? product?.price ?? 0
+    activeVariant?.originalPrice ?? getProductCountryCompareAtPrice(product, selectedCountry) ?? product?.salePrice ?? displayPrice
   );
   const displayStock = Number(activeVariant?.stock ?? product?.stock ?? 0);
   const displaySku = String(activeVariant?.sku || product?.sku || "");
@@ -1355,9 +1363,13 @@ const structuredTemplate = getSpecificationTemplate(
       id: compositeId,
       title: displayTitle,
       price: displayPrice,
+      priceUae: product.priceUae ?? product.price,
+      priceKsa: product.priceKsa,
       image: activeVariant?.image || product.image,
       slug: product.slug || String(product.id),
       originalPrice: displayOriginalPrice > displayPrice ? displayOriginalPrice : undefined,
+      compareAtPriceUae: product.compareAtPriceUae ?? product.originalPrice ?? displayOriginalPrice,
+      compareAtPriceKsa: product.compareAtPriceKsa,
       stockQuantity: displayStock,
       sku: displaySku || product.sku,
       variants: activeVariant ? [activeVariant] : [],
@@ -1381,8 +1393,13 @@ const structuredTemplate = getSpecificationTemplate(
       id: String(item.id),
       title: item.title,
       price: item.price,
+      priceUae: item.priceUae ?? item.price,
+      priceKsa: item.priceKsa,
       image: item.image,
       slug: item.slug,
+      originalPrice: item.oldPrice,
+      compareAtPriceUae: item.compareAtPriceUae ?? item.oldPrice,
+      compareAtPriceKsa: item.compareAtPriceKsa,
     });
   };
 
@@ -1393,7 +1410,11 @@ const structuredTemplate = getSpecificationTemplate(
       name: product.title,
       category: product.category || product.brand || "Marketplace",
       price: product.price,
+      priceUae: product.priceUae ?? product.price,
+      priceKsa: product.priceKsa,
       oldPrice: displayOriginalPrice > displayPrice ? displayOriginalPrice : product.oldPrice,
+      compareAtPriceUae: product.compareAtPriceUae ?? product.originalPrice ?? displayOriginalPrice,
+      compareAtPriceKsa: product.compareAtPriceKsa,
       rating: product.rating,
       reviews: product.reviews,
       badge: product.badges?.[0] || product.badge,

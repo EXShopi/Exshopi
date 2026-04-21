@@ -457,6 +457,7 @@ function normalizeProductPayload(input: any) {
       .replace(/^-|-$/g, '');
 
   const priceValue =
+    data.priceUae ??
     data.price ??
     data.salePrice ??
     data.regularPrice ??
@@ -489,6 +490,19 @@ function normalizeProductPayload(input: any) {
     og_description: data.ogDescription || data.specs?.ogDescription || '',
     og_image: data.ogImage || data.specs?.ogImage || '',
     price: Number(priceValue || 0),
+    priceUae: Number(data.priceUae ?? priceValue ?? 0),
+    priceKsa:
+      data.priceKsa != null && String(data.priceKsa).trim() !== ''
+        ? Number(data.priceKsa)
+        : null,
+    compareAtPriceUae:
+      data.compareAtPriceUae != null && String(data.compareAtPriceUae).trim() !== ''
+        ? Number(data.compareAtPriceUae)
+        : Number(data.originalPrice ?? priceValue ?? 0),
+    compareAtPriceKsa:
+      data.compareAtPriceKsa != null && String(data.compareAtPriceKsa).trim() !== ''
+        ? Number(data.compareAtPriceKsa)
+        : null,
     images: Array.isArray(data.images) ? data.images : [],
     status: productStatus,
     approval_status: approvalStatus,

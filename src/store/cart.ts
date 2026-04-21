@@ -6,6 +6,8 @@ export interface CartItem {
   slug?: string;
   title: string;
   price: number;
+  priceUae?: number;
+  priceKsa?: number;
   image: string;
   quantity: number;
   rating?: number;
@@ -15,6 +17,8 @@ export interface CartItem {
   stockQuantity?: number;
   freeDelivery?: boolean;
   originalPrice?: number;
+  compareAtPriceUae?: number;
+  compareAtPriceKsa?: number;
   salePrice?: number;
   costPrice?: number;
   discountAmount?: number;

@@ -14,13 +14,19 @@ import { useWishlistStore } from "../store/wishlist";
 import { useCartStore } from "../store/cart";
 import { productAPI } from "../services/api";
 import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
-import { formatAEDPlain } from "../lib/currency";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
 import { OrbitLoader } from "./ui/OrbitLoader";
 import { useSettingsStore } from "../store/settings";
+import {
+  getProductCountryCompareAtPrice,
+  getProductCountryPrice,
+  type CountryAwarePriced,
+} from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
 const tabs = ["bestsellers", "bestchoice", "onsale"] as const;
 
-interface FeaturedProduct {
+interface FeaturedProduct extends CountryAwarePriced {
   id: string;
   slug: string;
   title: string;
@@ -38,8 +44,11 @@ interface FeaturedProduct {
 const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const { addItem } = useCartStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const [isAdded, setIsAdded] = useState(false);
   const navigate = useNavigate();
+  const displayPrice = getProductCountryPrice(product, selectedCountry);
+  const displayComparePrice = getProductCountryCompareAtPrice(product, selectedCountry);
 
   const saved = useWishlistStore((state) =>
     state.collections.some((collection) =>
@@ -54,6 +63,10 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
       id: product.id,
       title: product.title,
       price: product.price,
+      priceUae: Number(product.priceUae ?? product.price),
+      priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
+      compareAtPriceUae: Number(product.compareAtPriceUae ?? product.oldPrice),
+      compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
       image: product.image,
       slug: product.slug || product.id,
     });
@@ -82,7 +95,11 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
               name: product.title,
               category: product.category,
               price: product.price,
+              priceUae: Number(product.priceUae ?? product.price),
+              priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
               oldPrice: product.oldPrice,
+              compareAtPriceUae: Number(product.compareAtPriceUae ?? product.oldPrice),
+              compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
               rating: product.rating,
               reviews: product.reviews,
               badge: product.badge,
@@ -149,11 +166,11 @@ const FeaturedCard: React.FC<{ product: FeaturedProduct }> = ({ product }) => {
 
         <div className="mt-2 flex min-h-[28px] items-end gap-1 md:min-h-[48px] md:gap-2">
           <span className="whitespace-nowrap text-[0.9rem] font-black tracking-tight text-slate-900 md:text-[2rem]">
-            {formatAEDPlain(product.price)}
+            {formatCurrencyPlainForCountry(displayPrice, selectedCountry)}
           </span>
-          {product.oldPrice ? (
+          {displayComparePrice > displayPrice ? (
             <span className="whitespace-nowrap pb-0.5 text-[10px] text-slate-600 line-through md:text-sm">
-              {formatAEDPlain(product.oldPrice)}
+              {formatCurrencyPlainForCountry(displayComparePrice, selectedCountry)}
             </span>
           ) : null}
         </div>
@@ -352,7 +369,11 @@ export default function FeaturedProducts() {
                       slug: product.id,
                       title: product.title,
                       price: product.price,
+                      priceUae: Number(product.priceUae ?? product.price),
+                      priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
                       oldPrice: product.originalPrice || product.price * 1.2,
+                      compareAtPriceUae: Number(product.compareAtPriceUae ?? product.originalPrice ?? product.price * 1.2),
+                      compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
                       rating: product.rating || 4.5,
                       reviews: product.reviews || 0,
                       image: product.image,
@@ -375,10 +396,14 @@ export default function FeaturedProducts() {
                       product={{
                         id: product.id,
                         slug: product.id,
-                        title: product.title,
-                        price: product.price,
-                        oldPrice: product.originalPrice || product.price * 1.2,
-                        rating: product.rating || 4.5,
+                      title: product.title,
+                      price: product.price,
+                      priceUae: Number(product.priceUae ?? product.price),
+                      priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
+                      oldPrice: product.originalPrice || product.price * 1.2,
+                      compareAtPriceUae: Number(product.compareAtPriceUae ?? product.originalPrice ?? product.price * 1.2),
+                      compareAtPriceKsa: product.compareAtPriceKsa != null ? Number(product.compareAtPriceKsa) : undefined,
+                      rating: product.rating || 4.5,
                         reviews: product.reviews || 0,
                         image: product.image,
                         badge: "FEATURED",

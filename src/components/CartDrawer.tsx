@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useCartStore } from "../store/cart";
-import { formatAEDPlain } from "../lib/currency";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
+import { getProductCountryPrice } from "../lib/countryConfig";
+import { useCountryStore } from "../store/country";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -18,11 +20,15 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
-  const { items, increaseQty, decreaseQty, removeItem, getCartTotal } = useCartStore();
+  const { items, increaseQty, decreaseQty, removeItem } = useCartStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
 
   if (!isOpen) return null;
 
-  const total = getCartTotal();
+  const total = items.reduce(
+    (sum, item) => sum + getProductCountryPrice(item, selectedCountry) * item.quantity,
+    0
+  );
 
   const cartContent = (
     <>
@@ -94,7 +100,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         {item.title}
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        {formatAEDPlain(item.price)}
+                        {formatCurrencyPlainForCountry(getProductCountryPrice(item, selectedCountry), selectedCountry)}
                       </p>
                     </div>
 
@@ -121,7 +127,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   {/* Price & Remove */}
                   <div className="flex flex-col items-end justify-between">
                     <p className="text-sm font-bold text-slate-900">
-                      {formatAEDPlain(item.price * item.quantity)}
+                      {formatCurrencyPlainForCountry(
+                        getProductCountryPrice(item, selectedCountry) * item.quantity,
+                        selectedCountry
+                      )}
                     </p>
                     <button
                       onClick={() => removeItem(item.id)}
@@ -141,7 +150,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   <span className="text-slate-600 text-sm font-semibold">
                     Subtotal
                   </span>
-                  <span className="font-bold text-slate-900">{formatAEDPlain(total)}</span>
+                  <span className="font-bold text-slate-900">
+                    {formatCurrencyPlainForCountry(total, selectedCountry)}
+                  </span>
                 </div>
                 <p className="text-xs text-slate-500">
                   Shipping calculated at checkout

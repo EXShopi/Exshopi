@@ -45,9 +45,13 @@ export function AdminDashboard() {
     slug: '',
     status: 'Active',
     price: '',
+    priceUae: '',
+    priceKsa: '',
     salePrice: '',
     costPrice: '',
     originalPrice: '',
+    compareAtPriceUae: '',
+    compareAtPriceKsa: '',
     taxIncluded: true,
     discountType: 'Percentage',
     discountAmount: '',
@@ -334,7 +338,11 @@ export function AdminDashboard() {
     const productData = {
       ...newProduct,
       price: Number(newProduct.price),
+      priceUae: Number(newProduct.priceUae || newProduct.price),
+      priceKsa: newProduct.priceKsa ? Number(newProduct.priceKsa) : undefined,
       originalPrice: Number(newProduct.originalPrice) || Number(newProduct.price),
+      compareAtPriceUae: Number(newProduct.compareAtPriceUae || newProduct.originalPrice || newProduct.price),
+      compareAtPriceKsa: newProduct.compareAtPriceKsa ? Number(newProduct.compareAtPriceKsa) : undefined,
       discount: newProduct.originalPrice && Number(newProduct.originalPrice) > Number(newProduct.price) 
         ? Math.round((1 - Number(newProduct.price) / Number(newProduct.originalPrice)) * 100) 
         : 0,
@@ -392,9 +400,13 @@ export function AdminDashboard() {
       ...initialProductState,
       ...editing,
       price: String(editing.price ?? ''),
+      priceUae: String(editing.priceUae ?? editing.price ?? ''),
+      priceKsa: String(editing.priceKsa ?? ''),
       salePrice: String(editing.salePrice || ''),
       costPrice: String(editing.costPrice || ''),
       originalPrice: String(editing.originalPrice || editing.price || ''),
+      compareAtPriceUae: String(editing.compareAtPriceUae || editing.originalPrice || editing.price || ''),
+      compareAtPriceKsa: String(editing.compareAtPriceKsa || ''),
       discountAmount: String(editing.discountAmount || ''),
       stockQuantity: String(editing.stockQuantity || ''),
       lowStockAlert: String(editing.lowStockAlert || '5'),
@@ -877,7 +889,7 @@ export function AdminDashboard() {
                     {formTab === 'pricing' && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Regular Price (AED)</label>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Legacy / Active Price</label>
                           <input 
                             type="number" required value={newProduct.price}
                             onChange={e => setNewProduct({...newProduct, price: e.target.value})}
@@ -885,31 +897,39 @@ export function AdminDashboard() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Sale Price (AED)</label>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">UAE Price (AED)</label>
                           <input 
-                            type="number" value={newProduct.salePrice}
-                            onChange={e => setNewProduct({...newProduct, salePrice: e.target.value})}
+                            type="number" value={newProduct.priceUae}
+                            onChange={e => setNewProduct({...newProduct, priceUae: e.target.value, price: e.target.value})}
                             className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all text-sm font-medium"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Discount Type</label>
-                          <select 
-                            value={newProduct.discountType}
-                            onChange={e => setNewProduct({...newProduct, discountType: e.target.value})}
-                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all text-sm font-medium"
-                          >
-                            <option value="Percentage">Percentage (%)</option>
-                            <option value="Fixed Amount">Fixed Amount (AED)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Discount Amount</label>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">KSA Price (SAR)</label>
                           <input 
-                            type="number" value={newProduct.discountAmount}
-                            onChange={e => setNewProduct({...newProduct, discountAmount: e.target.value})}
+                            type="number" value={newProduct.priceKsa}
+                            onChange={e => setNewProduct({...newProduct, priceKsa: e.target.value})}
                             className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all text-sm font-medium"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">UAE Compare Price (AED)</label>
+                          <input 
+                            type="number" value={newProduct.compareAtPriceUae}
+                            onChange={e => setNewProduct({...newProduct, compareAtPriceUae: e.target.value, originalPrice: e.target.value})}
+                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all text-sm font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">KSA Compare Price (SAR)</label>
+                          <input 
+                            type="number" value={newProduct.compareAtPriceKsa}
+                            onChange={e => setNewProduct({...newProduct, compareAtPriceKsa: e.target.value})}
+                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all text-sm font-medium"
+                          />
+                        </div>
+                        <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+                          If KSA pricing is empty, ExShopi safely falls back to the UAE price until a dedicated Saudi price is saved.
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Offer Start Date</label>
@@ -1457,7 +1477,10 @@ export function AdminDashboard() {
                             </div>
                           </td>
                           <td className="px-8 py-5 font-medium text-slate-600">{product.category}</td>
-                          <td className="px-8 py-5 font-black text-slate-900 text-base">AED {product.price}</td>
+                          <td className="px-8 py-5 font-black text-slate-900 text-base">
+                            <div>AED {(product as any).priceUae ?? product.price}</div>
+                            <div className="text-xs font-semibold text-slate-500">SAR {(product as any).priceKsa ?? "Fallback"}</div>
+                          </td>
                           <td className="px-8 py-5">
                             <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               {(product as any).stock || ((product as any).stockQuantity ? `${(product as any).stockQuantity} units` : 'In Stock')}
