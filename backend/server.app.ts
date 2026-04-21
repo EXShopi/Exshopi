@@ -1123,12 +1123,18 @@ const createOrderSchema = z.object({
   unitPrice: z.coerce.number().nonnegative().optional(),
   shippingCost: z.coerce.number().nonnegative().optional(),
   shippingAddress: z.object({
-    emirate: z.string().min(2),
-    area: z.string().min(2),
-    building: z.string().min(2),
+    emirate: z.string().optional().default(''),
+    city: z.string().optional().default(''),
+    area: z.string().min(1),
+    district: z.string().optional().default(''),
+    building: z.string().min(1),
+    buildingNumber: z.string().optional().default(''),
     flat: z.string().optional().default(''),
     landmark: z.string().optional().default(''),
-    addressLine: z.string().min(5),
+    addressLine: z.string().min(3),
+    street: z.string().optional().default(''),
+    postalCode: z.string().optional().default(''),
+    country: z.string().optional().default('AE'),
     method: z.string().optional().default('standard'),
   }),
   customerName: z.string().min(3),
@@ -1789,6 +1795,19 @@ const buildOrderPayloadFromItems = async ({
   const sellerAmount = items.reduce((sum, item) => sum + item.sellerAmount, 0);
   const vatAmount = items.reduce((sum, item) => sum + item.vatAmount, 0);
   const totalAmount = subtotal + normalizedShippingCost + vatAmount;
+  const normalizedShippingAddress = {
+    ...shippingAddress,
+    emirate: shippingAddress?.emirate || shippingAddress?.city || '',
+    city: shippingAddress?.city || shippingAddress?.emirate || '',
+    area: shippingAddress?.area || shippingAddress?.district || '',
+    district: shippingAddress?.district || shippingAddress?.area || '',
+    building: shippingAddress?.building || shippingAddress?.buildingNumber || '',
+    buildingNumber: shippingAddress?.buildingNumber || shippingAddress?.building || '',
+    addressLine: shippingAddress?.addressLine || shippingAddress?.street || '',
+    street: shippingAddress?.street || shippingAddress?.addressLine || '',
+    postalCode: shippingAddress?.postalCode || '',
+    country: shippingAddress?.country || deliveryCountry,
+  };
 
   return {
     customerId,
@@ -1816,7 +1835,7 @@ const buildOrderPayloadFromItems = async ({
     shippingCost: normalizedShippingCost,
     currency: orderCurrency,
     taxRate: vatRate,
-    shippingAddress,
+    shippingAddress: normalizedShippingAddress,
     paymentMethod,
     paymentProvider,
     paymentStatus,
@@ -4474,7 +4493,11 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
     let enrichedOrder: any;
     if (prismaRuntime.enabled) {
       console.info('[CHECKOUT] Creating tracking event');
-      await prismaRuntime.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
+      try {
+        await prismaRuntime.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
+      } catch (trackingError) {
+        console.error('[CHECKOUT] Tracking event creation failed:', trackingError);
+      }
       console.info('[CHECKOUT] Serializing response');
       try {
         enrichedOrder = await serializeMarketplaceOrderAsync(order);

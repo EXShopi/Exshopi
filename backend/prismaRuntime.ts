@@ -1640,82 +1640,111 @@ export const prismaRuntime = {
     const storeId = input.sellerId;
     const store = await prisma.store.findUnique({ where: { id: storeId } });
     if (!store) return null;
-    const order = await prisma.order.create({
-      data: ({
-        orderNumber: input.orderId,
-        customerId: input.customerId,
-        storeId,
-        sellerUserId: store.sellerUserId,
-        subtotal: input.subtotal,
-        vatAmount: input.vatAmount || 0,
-        deliveryFee: input.shippingCost || 0,
-        discountAmount: 0,
-        totalAmount: input.totalAmount || input.subtotal,
-        currency: input.currency || 'AED',
-        paymentMethod: input.paymentMethod || 'cod',
-        paymentProvider: input.paymentProvider || input.paymentMethod || 'cod',
-        paymentStatus: input.paymentStatus || 'pending',
-        paymentReference: input.paymentReference || '',
-        paymentSessionId: input.paymentSessionId || '',
-        paidAt: input.paidAt ? new Date(input.paidAt) : undefined,
-        payoutStatus: input.payoutStatus || 'pending',
-        commissionAmount: input.commission || 0,
-        sellerAmount: input.sellerAmount || 0,
-        status:
-          input.status === 'placed'
-            ? 'pending'
-            : input.status === 'in_transit' || input.status === 'handed_to_partner' || input.status === 'out_for_delivery'
-            ? 'shipped'
-            : input.status === 'failed'
-            ? 'cancelled'
-            : input.status === 'returned'
-            ? 'returned'
-            : input.status === 'delivered'
-            ? 'delivered'
-            : (input.status as any),
-        customerName: input.customerName || '',
-        customerEmail: input.customerEmail || '',
-        customerPhone: input.customerPhone || '',
-        shippingAddressJson: input.shippingAddress as any,
-        deliveryCountry: input.deliveryCountry || 'AE',
-        deliveryEta: input.deliveryEta || '',
-        refundStatus: input.refundStatus || 'none',
-        refundReason: input.refundReason || '',
-        refundAmount: input.refundAmount || 0,
-        dispatchSlotDate: input.dispatchSlotDate ? new Date(input.dispatchSlotDate) : undefined,
-        dispatchSlotWindow: input.dispatchSlotWindow || '',
-        dispatchNotes: input.dispatchNotes || '',
-        courierPartner: input.courierPartner || '',
-        trackingCode: input.trackingCode || '',
-        pickupQrCode: input.pickupQrCode || '',
-        emirate: input.shippingAddress?.emirate || '',
-        area: input.shippingAddress?.area || '',
-        building: input.shippingAddress?.building || '',
-        flat: input.shippingAddress?.flat || '',
-        addressLine: input.shippingAddress?.addressLine || '',
-        deliveredAt: input.deliveredAt ? new Date(input.deliveredAt) : undefined,
-        items: {
-          create: (input.items || []).map((item) => ({
-            productId: item.productId,
-            productTitle: item.title,
-            sku: item.sku || '',
-            unitPrice: item.unitPrice,
-            salePrice: item.unitPrice,
-            compareAtPrice: item.compareAtPrice,
-            priceSnapshotCountry: item.priceSnapshotCountry || input.deliveryCountry || 'AE',
-            priceSnapshotCurrency: item.priceSnapshotCurrency || input.currency || 'AED',
-            quantity: item.quantity,
-            vatAmount: item.vatAmount,
-            lineTotal: item.subtotal,
-            commissionAmount: item.commission,
-            sellerNetAmount: item.sellerAmount,
-            status: input.status || 'placed',
-          })),
-        },
-      }) as any,
-      select: orderSelectWithoutTaxRate,
+    console.info('[ORDER] Creating order record', {
+      orderNumber: input.orderId,
+      storeId,
+      itemCount: input.items?.length || 0,
     });
-    return mapOrder(order);
+    try {
+      const createdOrderId = await prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
+          data: ({
+            orderNumber: input.orderId,
+            customerId: input.customerId,
+            storeId,
+            sellerUserId: store.sellerUserId,
+            subtotal: input.subtotal,
+            vatAmount: input.vatAmount || 0,
+            deliveryFee: input.shippingCost || 0,
+            discountAmount: 0,
+            totalAmount: input.totalAmount || input.subtotal,
+            currency: input.currency || 'AED',
+            paymentMethod: input.paymentMethod || 'cod',
+            paymentProvider: input.paymentProvider || input.paymentMethod || 'cod',
+            paymentStatus: input.paymentStatus || 'pending',
+            paymentReference: input.paymentReference || '',
+            paymentSessionId: input.paymentSessionId || '',
+            paidAt: input.paidAt ? new Date(input.paidAt) : undefined,
+            payoutStatus: input.payoutStatus || 'pending',
+            commissionAmount: input.commission || 0,
+            sellerAmount: input.sellerAmount || 0,
+            status:
+              input.status === 'placed'
+                ? 'pending'
+                : input.status === 'in_transit' || input.status === 'handed_to_partner' || input.status === 'out_for_delivery'
+                ? 'shipped'
+                : input.status === 'failed'
+                ? 'cancelled'
+                : input.status === 'returned'
+                ? 'returned'
+                : input.status === 'delivered'
+                ? 'delivered'
+                : (input.status as any),
+            customerName: input.customerName || '',
+            customerEmail: input.customerEmail || '',
+            customerPhone: input.customerPhone || '',
+            shippingAddressJson: input.shippingAddress as any,
+            deliveryCountry: input.deliveryCountry || 'AE',
+            deliveryEta: input.deliveryEta || '',
+            refundStatus: input.refundStatus || 'none',
+            refundReason: input.refundReason || '',
+            refundAmount: input.refundAmount || 0,
+            dispatchSlotDate: input.dispatchSlotDate ? new Date(input.dispatchSlotDate) : undefined,
+            dispatchSlotWindow: input.dispatchSlotWindow || '',
+            dispatchNotes: input.dispatchNotes || '',
+            courierPartner: input.courierPartner || '',
+            trackingCode: input.trackingCode || '',
+            pickupQrCode: input.pickupQrCode || '',
+            emirate: input.shippingAddress?.emirate || input.shippingAddress?.city || '',
+            area: input.shippingAddress?.area || input.shippingAddress?.district || '',
+            building: input.shippingAddress?.building || input.shippingAddress?.buildingNumber || '',
+            flat: input.shippingAddress?.flat || '',
+            addressLine: input.shippingAddress?.addressLine || input.shippingAddress?.street || '',
+            deliveredAt: input.deliveredAt ? new Date(input.deliveredAt) : undefined,
+          }) as any,
+          select: { id: true },
+        });
+
+        console.info('[ORDER] Creating order items', {
+          orderId: order.id,
+          itemCount: input.items?.length || 0,
+        });
+        if (input.items?.length) {
+          await tx.orderItem.createMany({
+            data: input.items.map((item) => ({
+              orderId: order.id,
+              productId: item.productId,
+              productTitle: item.title,
+              sku: item.sku || '',
+              unitPrice: item.unitPrice,
+              salePrice: item.unitPrice,
+              compareAtPrice: item.compareAtPrice,
+              priceSnapshotCountry: item.priceSnapshotCountry || input.deliveryCountry || 'AE',
+              priceSnapshotCurrency: item.priceSnapshotCurrency || input.currency || 'AED',
+              quantity: item.quantity,
+              vatAmount: item.vatAmount,
+              lineTotal: item.subtotal,
+              commissionAmount: item.commission,
+              sellerNetAmount: item.sellerAmount,
+              status: input.status || 'placed',
+            })) as any,
+          });
+        }
+
+        return order.id;
+      });
+
+      console.info('[ORDER] Fetching safe order response', { orderId: createdOrderId });
+      const order = await prisma.order.findUnique({
+        where: { id: createdOrderId },
+        select: orderSelectWithoutTaxRate,
+      });
+      return order ? mapOrder(order) : null;
+    } catch (error) {
+      console.error('[ORDER] Prisma order creation failed:', error);
+      console.error('[ORDER] Stack:', error instanceof Error ? error.stack : error);
+      throw error;
+    }
   },
 
   async getOrder(id: string) {
@@ -1798,31 +1827,43 @@ export const prismaRuntime = {
 
   async addTrackingEvent(orderId: string, status: string, timestamp: string, notes: string, location?: string) {
     if (!enabled) return null;
-    return prisma.trackingEvent.create({
-      data: {
-        orderId,
-        status,
-        timestamp: new Date(timestamp),
-        notes,
-        location,
-      },
-    });
+    try {
+      return await prisma.trackingEvent.create({
+        data: {
+          orderId,
+          status,
+          timestamp: new Date(timestamp),
+          notes,
+          location,
+        },
+      });
+    } catch (error) {
+      console.error('[ORDER] Tracking event creation failed:', error);
+      console.error('[ORDER] Tracking event stack:', error instanceof Error ? error.stack : error);
+      return null;
+    }
   },
 
   async getOrderTracking(orderId: string) {
     if (!enabled) return [];
-    const events = await prisma.trackingEvent.findMany({
-      where: { orderId },
-      orderBy: { timestamp: 'asc' },
-    });
-    return events.map((event) => ({
-      id: event.id,
-      orderId: event.orderId,
-      status: event.status,
-      timestamp: event.timestamp.toISOString(),
-      notes: event.notes || '',
-      location: event.location || '',
-    }));
+    try {
+      const events = await prisma.trackingEvent.findMany({
+        where: { orderId },
+        orderBy: { timestamp: 'asc' },
+      });
+      return events.map((event) => ({
+        id: event.id,
+        orderId: event.orderId,
+        status: event.status,
+        timestamp: event.timestamp.toISOString(),
+        notes: event.notes || '',
+        location: event.location || '',
+      }));
+    } catch (error) {
+      console.error('[ORDER] Tracking event fetch failed:', error);
+      console.error('[ORDER] Tracking fetch stack:', error instanceof Error ? error.stack : error);
+      return [];
+    }
   },
 
   async getOrderByTrackingCode(trackingCode: string) {
