@@ -4215,10 +4215,12 @@ app.post('/api/admin/blacklist', authMiddleware, async (req: Request, res: Respo
 
 app.post('/api/orders/create', authMiddleware, async (req: Request, res: Response) => {
   try {
+    console.info('[CHECKOUT] Request received');
     if (req.user?.role !== 'customer') {
       return res.status(403).json({ error: 'Customer only' });
     }
 
+    console.info('[CHECKOUT] Validating payload');
     const payload = createOrderSchema.parse(req.body);
     const {
       sellerId,
@@ -4238,6 +4240,17 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
         : payload.productId
         ? [{ productId: payload.productId, quantity: payload.quantity || 1, unitPrice: payload.unitPrice || 0 }]
         : [];
+
+    console.info('[CHECKOUT] Payload summary:', {
+      customerId: req.user.id,
+      customerEmail,
+      customerPhone,
+      sellerId,
+      itemCount: normalizedItems.length,
+      shippingCost,
+      paymentMethod,
+      deliveryCountry,
+    });
 
     if (!normalizedItems.length) {
       return res.status(400).json({ error: 'At least one order item is required' });
@@ -4273,6 +4286,7 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       consumeCodOtpVerification(verificationToken, req.user.id, customerPhone);
     }
 
+    console.info('[CHECKOUT] Loading prior orders');
     const allOrders = prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders();
     const now = Date.now();
     const priorCustomerOrdersToday = allOrders.filter((order) => {
@@ -4301,6 +4315,7 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       customerId: req.user.id,
     });
 
+    console.info('[CHECKOUT] Building order payload');
     const orderPayload: any = await buildOrderPayloadFromItems({
       customerId: req.user!.id,
       sellerId,
@@ -4327,12 +4342,33 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       deliveryCountry,
     });
 
+    console.info('[CHECKOUT] Order payload ready', {
+      orderId: orderPayload.orderId,
+      resolvedSellerId: orderPayload.sellerId,
+      itemCount: orderPayload.items?.length || 0,
+      subtotal: orderPayload.subtotal,
+      shipping: orderPayload.shippingCost,
+      tax: orderPayload.vatAmount,
+      total: orderPayload.totalAmount,
+    });
+
+    console.info('[CHECKOUT] Creating order');
     const order = prismaRuntime.enabled
       ? await prismaRuntime.createOrder(orderPayload)
       : db.createOrder(orderPayload);
     if (!order) {
-      return res.status(500).json({ error: 'Failed to create order' });
+      console.error('[CHECKOUT] Order creation returned no order');
+      return res.status(500).json({
+        success: false,
+        message: 'We could not place your order right now. Please try again.',
+      });
     }
+
+    console.info('[CHECKOUT] Order created', {
+      id: order.id,
+      orderId: order.orderId || orderPayload.orderId,
+      itemCount: order.items?.length || orderPayload.items?.length || 0,
+    });
 
     const resolvedSellerId = String(orderPayload.sellerId || sellerId || '').trim();
     const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(resolvedSellerId) : db.getSeller(resolvedSellerId);
@@ -4348,92 +4384,104 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       customerId: req.user!.id,
     });
 
-    pushNotification({
-      audience: 'admin',
-      title: risk.riskLevel === 'suspicious' ? 'Suspicious COD order placed' : 'New COD order placed',
-      message: `${customerName} placed ${orderPayload.orderId} for ${orderSummaryTitle}${risk.riskLevel === 'suspicious' ? ' and it needs review' : ''}.`,
-      type: risk.riskLevel === 'suspicious' ? 'cod_order_risk' : 'cod_order_created',
-      entityType: 'order',
-      entityId: order.id,
-    });
-    pushNotification({
-      audience: 'seller',
-      audienceId: seller?.userId || seller?.id,
-      title: 'New order received',
-      message: `${customerName} placed ${orderPayload.orderId}. Prepare it for confirmation and packing.`,
-      type: 'order_created',
-      entityType: 'order',
-      entityId: order.id,
-    });
-    pushNotification({
-      audience: 'customer',
-      audienceId: req.user!.id,
-      title: 'Order placed successfully',
-      message: `Your COD order ${orderPayload.orderId} is waiting for seller confirmation.`,
-      type: 'order_created',
-      entityType: 'order',
-      entityId: order.id,
-    });
-    recordMarketplaceActivity({
-      actorId: req.user!.id,
-      actorRole: req.user!.role,
-      entityType: 'order',
-      entityId: order.id,
-      action: 'cod_order_created',
-      summary: `${customerName} placed COD order ${orderPayload.orderId}${risk.riskLevel === 'suspicious' ? ' (flagged)' : ''}`,
-    });
-    await sendAdminAlert(
-      risk.riskLevel === 'suspicious' ? 'Suspicious COD order placed' : 'New COD order placed',
-      risk.riskLevel === 'suspicious' ? 'Suspicious COD order requires review' : 'New COD order received',
-      `${customerName} placed a COD order on ExShopi.`,
-      [
-        ...buildOrderFacts(
-          {
-            ...orderPayload,
-            createdAt: orderPayload.createdAt || timestamp,
-            customerName,
-            paymentMethod,
-            paymentStatus: 'cod_pending',
-          },
-          seller?.storeName
-        ),
-        { label: 'Phone', value: normalizePhone(customerPhone) },
-        { label: 'Risk level', value: risk.riskLevel },
-      ]
-    );
+    console.info('[CHECKOUT] Running post-create side effects');
+    try {
+      pushNotification({
+        audience: 'admin',
+        title: risk.riskLevel === 'suspicious' ? 'Suspicious COD order placed' : 'New COD order placed',
+        message: `${customerName} placed ${orderPayload.orderId} for ${orderSummaryTitle}${risk.riskLevel === 'suspicious' ? ' and it needs review' : ''}.`,
+        type: risk.riskLevel === 'suspicious' ? 'cod_order_risk' : 'cod_order_created',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      pushNotification({
+        audience: 'seller',
+        audienceId: seller?.userId || seller?.id,
+        title: 'New order received',
+        message: `${customerName} placed ${orderPayload.orderId}. Prepare it for confirmation and packing.`,
+        type: 'order_created',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      pushNotification({
+        audience: 'customer',
+        audienceId: req.user!.id,
+        title: 'Order placed successfully',
+        message: `Your COD order ${orderPayload.orderId} is waiting for seller confirmation.`,
+        type: 'order_created',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      recordMarketplaceActivity({
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        entityType: 'order',
+        entityId: order.id,
+        action: 'cod_order_created',
+        summary: `${customerName} placed COD order ${orderPayload.orderId}${risk.riskLevel === 'suspicious' ? ' (flagged)' : ''}`,
+      });
+      await sendAdminAlert(
+        risk.riskLevel === 'suspicious' ? 'Suspicious COD order placed' : 'New COD order placed',
+        risk.riskLevel === 'suspicious' ? 'Suspicious COD order requires review' : 'New COD order received',
+        `${customerName} placed a COD order on ExShopi.`,
+        [
+          ...buildOrderFacts(
+            {
+              ...orderPayload,
+              createdAt: orderPayload.createdAt || timestamp,
+              customerName,
+              paymentMethod,
+              paymentStatus: 'cod_pending',
+            },
+            seller?.storeName
+          ),
+          { label: 'Phone', value: normalizePhone(customerPhone) },
+          { label: 'Risk level', value: risk.riskLevel },
+        ]
+      );
 
-    await notifyAdminsOfNewOrder(
-      {
-        ...order,
-        ...orderPayload,
-        id: order.id,
-        createdAt: order.createdAt || orderPayload.createdAt || timestamp,
-      },
-      seller
-    );
-    if (seller?.email) {
-      await sendSellerNotice(
-        seller.email,
-        'New order received in ExShopi Seller Center',
-        'A new order is ready for confirmation',
-        `${customerName} has placed a COD order for your store.`,
-        buildOrderFacts(orderPayload, seller.storeName)
+      await notifyAdminsOfNewOrder(
+        {
+          ...order,
+          ...orderPayload,
+          id: order.id,
+          createdAt: order.createdAt || orderPayload.createdAt || timestamp,
+        },
+        seller
       );
-    }
-    if (customerEmail) {
-      await sendCustomerNotice(
-        customerEmail,
-        'Your ExShopi order has been placed',
-        'Order placed successfully',
-        `Your Cash on Delivery order ${orderPayload.orderId} has been created and is now waiting for seller confirmation.`,
-        buildOrderFacts(orderPayload, seller?.storeName)
-      );
+      if (seller?.email) {
+        await sendSellerNotice(
+          seller.email,
+          'New order received in ExShopi Seller Center',
+          'A new order is ready for confirmation',
+          `${customerName} has placed a COD order for your store.`,
+          buildOrderFacts(orderPayload, seller.storeName)
+        );
+      }
+      if (customerEmail) {
+        await sendCustomerNotice(
+          customerEmail,
+          'Your ExShopi order has been placed',
+          'Order placed successfully',
+          `Your Cash on Delivery order ${orderPayload.orderId} has been created and is now waiting for seller confirmation.`,
+          buildOrderFacts(orderPayload, seller?.storeName)
+        );
+      }
+    } catch (sideEffectError) {
+      console.error('[CHECKOUT] Post-create side effects failed:', sideEffectError);
     }
 
     let enrichedOrder: any;
     if (prismaRuntime.enabled) {
+      console.info('[CHECKOUT] Creating tracking event');
       await prismaRuntime.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
-      enrichedOrder = await serializeMarketplaceOrderAsync(order);
+      console.info('[CHECKOUT] Serializing response');
+      try {
+        enrichedOrder = await serializeMarketplaceOrderAsync(order);
+      } catch (serializeError) {
+        console.error('[CHECKOUT] Response serialization failed:', serializeError);
+        enrichedOrder = order;
+      }
     } else {
       db.addTrackingEvent(order.id, 'pending_confirmation', timestamp, `Order placed for ${seller?.storeName || 'seller'} by ${customer?.name || customerName || 'customer'}`);
       enrichedOrder = serializeMarketplaceOrder(order);
@@ -4453,9 +4501,18 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       /* ignore SSE failures */
     }
 
+    console.info('[CHECKOUT] Returning success response', {
+      id: enrichedOrder?.id || order.id,
+      orderId: enrichedOrder?.orderId || orderPayload.orderId,
+    });
     res.json(enrichedOrder);
   } catch (error) {
-    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+    console.error('[CHECKOUT] Order placement failed:', error);
+    console.error('[CHECKOUT] Stack:', error instanceof Error ? error.stack : error);
+    res.status(500).json({
+      success: false,
+      message: 'We could not place your order right now. Please try again.',
+    });
   }
 });
 
