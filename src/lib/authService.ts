@@ -1,12 +1,85 @@
 import { supabase } from '../supabaseClient';
 import { userAPI } from '../services/api';
 import { useAuthStore } from '../store/auth';
+import { getFirebaseConfigStatus, logFirebaseAuthDebug } from './firebase';
 
 const IS_DEV = import.meta.env.DEV;
 
 function logAuthDev(level: 'warn' | 'debug' | 'error', message: string, ...args: any[]) {
   if (!IS_DEV) return;
   console[level](message, ...args);
+}
+
+function getAuthRuntimeContext() {
+  const firebaseStatus = getFirebaseConfigStatus();
+  return {
+    hostname: typeof window === 'undefined' ? '' : window.location.hostname || '',
+    origin: typeof window === 'undefined' ? '' : window.location.origin || '',
+    firebaseProjectId: firebaseStatus.projectId,
+    firebaseAuthDomain: firebaseStatus.authDomain,
+    firebaseConfigReady: firebaseStatus.hasFirebaseWebConfig,
+    missingFirebaseEnvVars: firebaseStatus.missingFirebaseEnvVars,
+  };
+}
+
+function createAuthError(code: string, message: string) {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+}
+
+function normalizeAuthFailure(error: any) {
+  const code = String(error?.code || '').trim();
+  const message = String(error?.message || '').trim();
+  const normalized = `${code} ${message}`.toLowerCase();
+
+  if (normalized.includes('invalid login credentials') || normalized.includes('invalid-credential')) {
+    return createAuthError('auth/invalid-credential', 'Invalid email or password. Please check your credentials and try again.');
+  }
+
+  if (normalized.includes('user not found') || normalized.includes('user-not-found')) {
+    return createAuthError('auth/user-not-found', 'No account was found for this email address.');
+  }
+
+  if (normalized.includes('wrong-password')) {
+    return createAuthError('auth/wrong-password', 'Invalid email or password. Please check your credentials and try again.');
+  }
+
+  if (normalized.includes('too many requests') || normalized.includes('too-many-requests')) {
+    return createAuthError('auth/too-many-requests', 'Too many failed login attempts. Please try again later.');
+  }
+
+  if (normalized.includes('network') || normalized.includes('failed to fetch') || normalized.includes('network-request-failed')) {
+    return createAuthError('auth/network-request-failed', 'Network issue detected. Please try again.');
+  }
+
+  if (normalized.includes('email not confirmed')) {
+    return createAuthError('auth/email-not-confirmed', 'Please confirm your email. Check your inbox for a confirmation link.');
+  }
+
+  if (normalized.includes('configuration') || normalized.includes('missing required firebase env vars')) {
+    return createAuthError('auth/configuration-not-available', 'Login is temporarily unavailable due to site configuration.');
+  }
+
+  if (normalized.includes('internal-error') || normalized.includes('non-json') || normalized.includes('index.html')) {
+    return createAuthError('auth/internal-error', 'Login is temporarily unavailable. Please try again shortly.');
+  }
+
+  return createAuthError(code || 'auth/internal-error', message || 'Login is temporarily unavailable. Please try again shortly.');
+}
+
+function logAuthFailure(label: string, error: any, extra: Record<string, unknown> = {}) {
+  console.error(`[auth] ${label}`, {
+    code: String(error?.code || ''),
+    message: String(error?.message || ''),
+    ...getAuthRuntimeContext(),
+    ...extra,
+  });
+  logFirebaseAuthDebug(label, {
+    code: String(error?.code || ''),
+    message: String(error?.message || ''),
+    ...extra,
+  });
 }
 
 interface AuthUser {
@@ -243,6 +316,10 @@ export class AuthService {
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const requireBackendSession = Boolean(options?.requireBackendSession);
+      logFirebaseAuthDebug('sign-in-attempt', {
+        emailPasswordLoginPathEnabled: true,
+        requireBackendSession,
+      });
 
       try {
         const backendLoginResponse = await userAPI.login(normalizedEmail, password);
@@ -299,24 +376,18 @@ export class AuthService {
       logAuthDev('error', '[AUTH] Sign-in error:', error?.message || error);
 
       const msg = String(error?.message || 'Failed to sign in');
+      const normalizedError = isHtmlErrorMessage(msg)
+        ? createAuthError(
+            'auth/internal-error',
+            'Authentication service returned an invalid response. Please check live auth configuration.'
+          )
+        : normalizeAuthFailure(error);
 
-      if (msg === 'Failed to fetch') {
-        throw new Error('Network error. Please check your internet connection and try again.');
-      }
+      logAuthFailure('sign-in-failure', normalizedError, {
+        backendHtmlResponse: isHtmlErrorMessage(msg),
+      });
 
-      if (isHtmlErrorMessage(msg)) {
-        throw new Error('Authentication service returned an invalid response. Please check live auth configuration.');
-      }
-
-      if (msg.toLowerCase().includes('email not confirmed')) {
-        throw new Error('Please confirm your email. Check your inbox for a confirmation link.');
-      }
-
-      if (msg.toLowerCase().includes('invalid login credentials')) {
-        throw new Error('Invalid email or password.');
-      }
-
-      throw new Error(msg);
+      throw normalizedError;
     }
   }
 

@@ -16,6 +16,7 @@ import {
 import AuthService from '../../lib/authService';
 import { userAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
+import { getFirebaseConfigStatus, logFirebaseAuthDebug } from '../../lib/firebase';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -36,6 +37,11 @@ const Login = () => {
     console.info('[login] mounted', {
       from,
       reason: loginReason,
+    });
+    logFirebaseAuthDebug('login-page-mounted', {
+      from,
+      reason: loginReason,
+      emailPasswordLoginPathEnabled: true,
     });
   }, [from, loginReason]);
 
@@ -74,17 +80,27 @@ const Login = () => {
       const result = await AuthService.signIn(email, password);
       await handleAuthSuccess(result.user, result);
     } catch (err: any) {
-      console.error('Login error:', err);
-      if (err.code === 'auth/operation-not-allowed') {
+      console.error('Login error:', {
+        code: err?.code || '',
+        message: err?.message || '',
+        ...getFirebaseConfigStatus(),
+      });
+      if (err.code === 'auth/configuration-not-available') {
+        setError('Login is temporarily unavailable due to site configuration.');
+      } else if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password login is not enabled in Firebase. Please enable it in the Firebase Console under Authentication > Sign-in method.');
       } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError('Invalid email or password. Please check your credentials and try again.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError('Network issue detected. Please try again.');
       } else if (err.code === 'auth/invalid-email') {
         setError('Please enter a valid email address.');
       } else if (err.code === 'auth/too-many-requests') {
         setError('Too many failed login attempts. Please try again later or reset your password.');
+      } else if (err.code === 'auth/internal-error') {
+        setError('Login is temporarily unavailable. Please try again shortly.');
       } else {
-        setError(err.message || 'Invalid email or password');
+        setError(err.message || 'Login is temporarily unavailable. Please try again shortly.');
       }
     } finally {
       setLoading(false);

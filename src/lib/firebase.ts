@@ -24,6 +24,9 @@ function logFirebaseRuntime(label: string, details: Record<string, unknown>) {
   console.info(`[firebase] ${label}`, details);
 }
 
+const FIREBASE_DEBUG_ENABLED =
+  import.meta.env.DEV || String(import.meta.env.VITE_ENABLE_AUTH_DEBUG || '').trim().toLowerCase() === 'true';
+
 export function isLivePhoneVerificationRuntime() {
   const host = getRuntimeHostname();
   if (!host) return false;
@@ -65,50 +68,56 @@ const missingFirebaseEnvVars = [
   !firebaseConfig.apiKey ? 'VITE_FIREBASE_API_KEY' : '',
   !firebaseConfig.authDomain ? 'VITE_FIREBASE_AUTH_DOMAIN' : '',
   !firebaseConfig.projectId ? 'VITE_FIREBASE_PROJECT_ID' : '',
+  !firebaseConfig.storageBucket ? 'VITE_FIREBASE_STORAGE_BUCKET' : '',
   !firebaseConfig.appId ? 'VITE_FIREBASE_APP_ID' : '',
   !firebaseConfig.messagingSenderId ? 'VITE_FIREBASE_MESSAGING_SENDER_ID' : '',
 ].filter(Boolean);
 
 const hasFirebasePhoneConfig = missingFirebaseEnvVars.length === 0;
+const hasFirebaseWebConfig = missingFirebaseEnvVars.length === 0;
 
-if (typeof window !== 'undefined') {
-  console.log('FIREBASE ENV CHECK', {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-    hostname: window.location.hostname,
-    origin: window.location.origin,
-  });
+export function getFirebaseConfigStatus() {
+  const hostname = typeof window === 'undefined' ? '' : window.location.hostname || '';
+  const origin = typeof window === 'undefined' ? '' : window.location.origin || '';
+  return {
+    hostname,
+    origin,
+    projectId: firebaseConfig.projectId || '',
+    authDomain: firebaseConfig.authDomain || '',
+    hasFirebaseWebConfig,
+    missingFirebaseEnvVars: [...missingFirebaseEnvVars],
+    authorizedDomainExpected: EXPECTED_FIREBASE_AUTHORIZED_DOMAINS.includes(hostname),
+  };
+}
 
-  if (!hasFirebasePhoneConfig) {
-    console.error('[firebase] Missing required Firebase env vars for Phone Auth', {
-      missingFirebaseEnvVars,
-      firebaseConfig,
-      hostname: window.location.hostname,
-      origin: window.location.origin,
-    });
-  }
+export function logFirebaseAuthDebug(label: string, details: Record<string, unknown> = {}) {
+  if (!FIREBASE_DEBUG_ENABLED || typeof window === 'undefined') return;
 
-  logFirebaseRuntime('config', {
-    hostname: getRuntimeHostname(),
-    origin: window.location.origin,
-    apiKey: firebaseConfig.apiKey,
-    projectId: firebaseConfig.projectId,
-    authDomain: firebaseConfig.authDomain,
-    appId: firebaseConfig.appId,
-    messagingSenderId: firebaseConfig.messagingSenderId,
-    liveRuntime: isLivePhoneVerificationRuntime(),
-    hasFirebasePhoneConfig,
-    missingFirebaseEnvVars,
-    expectedAuthorizedDomains: EXPECTED_FIREBASE_AUTHORIZED_DOMAINS,
+  console.info(`[firebase-auth-debug] ${label}`, {
+    ...getFirebaseConfigStatus(),
+    ...details,
   });
 }
 
-export const firebaseApp = hasFirebasePhoneConfig
+if (typeof window !== 'undefined') {
+  if (!hasFirebaseWebConfig) {
+    console.error('[firebase] Missing required Firebase env vars', {
+      missingFirebaseEnvVars,
+      hostname: window.location.hostname,
+      origin: window.location.origin,
+      projectId: firebaseConfig.projectId || '',
+      authDomain: firebaseConfig.authDomain || '',
+    });
+  }
+
+  logFirebaseAuthDebug('config', {
+    liveRuntime: isLivePhoneVerificationRuntime(),
+    expectedAuthorizedDomains: EXPECTED_FIREBASE_AUTHORIZED_DOMAINS,
+    emailPasswordLoginPathEnabled: true,
+  });
+}
+
+export const firebaseApp = hasFirebaseWebConfig
   ? getApps().length
     ? getApp()
     : initializeApp(firebaseConfig)
@@ -124,6 +133,10 @@ if (firebaseAuth) {
 
 export function isFirebasePhoneVerificationEnabled() {
   return hasFirebasePhoneConfig;
+}
+
+export function isFirebaseWebAuthConfigured() {
+  return hasFirebaseWebConfig;
 }
 
 export function getMissingFirebasePhoneEnvVars() {
