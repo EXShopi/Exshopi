@@ -4528,7 +4528,11 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       id: enrichedOrder?.id || order.id,
       orderId: enrichedOrder?.orderId || orderPayload.orderId,
     });
-    res.json(enrichedOrder);
+    res.json({
+      success: true,
+      message: 'Order placed successfully.',
+      order: enrichedOrder,
+    });
   } catch (error) {
     console.error('[CHECKOUT] Order placement failed:', error);
     console.error('[CHECKOUT] Stack:', error instanceof Error ? error.stack : error);

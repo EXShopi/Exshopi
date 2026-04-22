@@ -666,7 +666,11 @@ export default function Checkout() {
           paymentMethod: "cod",
           deliveryCountry: selectedCountry,
         });
-        createdOrders.push(created);
+        const createdOrder = created?.order ?? created;
+        if (!createdOrder?.id && !createdOrder?.orderId && !createdOrder?.trackingCode) {
+          throw new Error("Order was not created successfully.");
+        }
+        createdOrders.push(createdOrder);
       }
 
       const primaryOrder = createdOrders[0];
