@@ -44,10 +44,20 @@ export type CountryConfig = {
   cities: string[];
   defaultCity: string;
   addressLabels: {
+    country: string;
     city: string;
     area: string;
+    flat: string;
     building: string;
     address: string;
+    landmark: string;
+    postalCode: string;
+  };
+  addressPlaceholders: {
+    address: string;
+    area: string;
+    building: string;
+    flat: string;
     landmark: string;
     postalCode: string;
   };
@@ -90,12 +100,22 @@ export const COUNTRY_CONFIG: Record<SupportedCountryCode, CountryConfig> = {
     cities: ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'],
     defaultCity: 'Dubai',
     addressLabels: {
+      country: 'Country',
       city: 'Emirate',
-      area: 'Area',
+      area: 'Area / Community',
+      flat: 'Apartment / Office No.',
       building: 'Building / Villa',
-      address: 'Full Address',
+      address: 'Street / Building',
       landmark: 'Landmark',
       postalCode: 'Postal Code',
+    },
+    addressPlaceholders: {
+      address: 'Street address, building, etc.',
+      area: 'Al Barsha, Deira, Khalidiya...',
+      building: 'Building 9, Villa 14, Tower B',
+      flat: 'Apartment 1204, Office 22',
+      landmark: 'Near Metro, Opposite Mall...',
+      postalCode: 'Optional postal code',
     },
   },
   SA: {
@@ -131,15 +151,44 @@ export const COUNTRY_CONFIG: Record<SupportedCountryCode, CountryConfig> = {
         description: 'Faster delivery for high-demand metro routes.',
       },
     ],
-    cities: ['Riyadh', 'Jeddah', 'Dammam', 'Mecca', 'Medina', 'Khobar', 'Taif'],
+    cities: [
+      'Riyadh',
+      'Jeddah',
+      'Makkah',
+      'Madinah',
+      'Dammam',
+      'Khobar',
+      'Dhahran',
+      'Taif',
+      'Tabuk',
+      'Abha',
+      'Khamis Mushait',
+      'Jizan',
+      'Hail',
+      'Al Qassim',
+      'Najran',
+      'Al Ahsa',
+      'Jubail',
+      'Yanbu',
+    ],
     defaultCity: 'Riyadh',
     addressLabels: {
-      city: 'City',
-      area: 'District',
-      building: 'Building Number',
-      address: 'Street',
-      landmark: 'Additional Directions',
+      country: 'Country',
+      city: 'Region / City',
+      area: 'District / Area',
+      flat: 'Apartment / Villa / Unit',
+      building: 'Street / Building',
+      address: 'Street Address',
+      landmark: 'Landmark',
       postalCode: 'Postal Code',
+    },
+    addressPlaceholders: {
+      address: 'Street name and nearby address details',
+      area: 'Al Olaya, Al Rawdah, Al Malqa...',
+      building: 'Street 24, Building 18',
+      flat: 'Unit 9, Villa 12, Apartment 5A',
+      landmark: 'Near mosque, opposite mall...',
+      postalCode: '12345',
     },
   },
 };

@@ -1124,6 +1124,7 @@ const createOrderSchema = z.object({
   shippingCost: z.coerce.number().nonnegative().optional(),
   shippingAddress: z.object({
     emirate: z.string().optional().default(''),
+    region: z.string().optional().default(''),
     city: z.string().optional().default(''),
     area: z.string().min(1),
     district: z.string().optional().default(''),
@@ -1135,6 +1136,9 @@ const createOrderSchema = z.object({
     street: z.string().optional().default(''),
     postalCode: z.string().optional().default(''),
     country: z.string().optional().default('AE'),
+    countryCode: z.string().optional().default('AE'),
+    countryName: z.string().optional().default(''),
+    phone: z.string().optional().default(''),
     method: z.string().optional().default('standard'),
   }),
   customerName: z.string().min(3),
@@ -1143,6 +1147,8 @@ const createOrderSchema = z.object({
   verificationToken: z.string().min(8),
   paymentMethod: z.enum(['cod']).default('cod'),
   deliveryCountry: z.string().min(2).max(10).default('AE'),
+  countryCode: z.string().optional().default('AE'),
+  countryName: z.string().optional().default(''),
   deliveryType: z.string().optional().default('Standard UAE Delivery'),
 });
 
@@ -1177,10 +1183,18 @@ const stripeCheckoutSchema = z.object({
   ).min(1),
   shippingAddress: z.object({
     emirate: z.string().min(2),
+    region: z.string().optional().default(''),
     area: z.string().min(2),
     building: z.string().optional().default(''),
     flat: z.string().optional().default(''),
     addressLine: z.string().min(3),
+    city: z.string().optional().default(''),
+    district: z.string().optional().default(''),
+    street: z.string().optional().default(''),
+    postalCode: z.string().optional().default(''),
+    country: z.string().optional().default('AE'),
+    countryCode: z.string().optional().default('AE'),
+    countryName: z.string().optional().default(''),
     method: z.string().optional().default('standard'),
   }),
   deliveryCountry: z.string().min(2).max(10).default('AE'),
@@ -1798,6 +1812,7 @@ const buildOrderPayloadFromItems = async ({
   const normalizedShippingAddress = {
     ...shippingAddress,
     emirate: shippingAddress?.emirate || shippingAddress?.city || '',
+    region: shippingAddress?.region || shippingAddress?.emirate || shippingAddress?.city || '',
     city: shippingAddress?.city || shippingAddress?.emirate || '',
     area: shippingAddress?.area || shippingAddress?.district || '',
     district: shippingAddress?.district || shippingAddress?.area || '',
@@ -1807,6 +1822,9 @@ const buildOrderPayloadFromItems = async ({
     street: shippingAddress?.street || shippingAddress?.addressLine || '',
     postalCode: shippingAddress?.postalCode || '',
     country: shippingAddress?.country || deliveryCountry,
+    countryCode: shippingAddress?.countryCode || deliveryCountry,
+    countryName: shippingAddress?.countryName || (deliveryCountry === 'SA' ? 'Saudi Arabia' : 'United Arab Emirates'),
+    phone: shippingAddress?.phone || customerPhone || customer?.phone || '',
   };
 
   return {

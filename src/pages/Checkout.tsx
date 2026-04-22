@@ -30,10 +30,13 @@ import {
   verifyFirebasePhoneCode,
 } from "../lib/firebasePhoneVerification";
 import {
+  COUNTRY_CONFIG,
+  SUPPORTED_COUNTRY_CODES,
   calculateVat,
   getCountryConfig,
   getProductCountryPrice,
   getShippingOption,
+  isSupportedCountryCode,
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 import { getInvalidPhoneMessage, isValidPhoneForCountry, normalizePhoneByCountry } from "../utils/phone";
@@ -70,6 +73,7 @@ export default function Checkout() {
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const selectedCity = useCountryStore((state) => state.selectedCity);
   const selectedShippingOption = useCountryStore((state) => state.selectedShippingOption);
+  const setCountrySelection = useCountryStore((state) => state.setCountry);
   const setCitySelection = useCountryStore((state) => state.setCity);
   const setShippingSelection = useCountryStore((state) => state.setShippingOption);
   const country = getCountryConfig(selectedCountry);
@@ -87,6 +91,7 @@ export default function Checkout() {
     city: selectedCity,
     area: "",
     building: "",
+    flat: "",
     landmark: "",
     postalCode: "",
     // Step 3: Delivery Method
@@ -102,6 +107,19 @@ export default function Checkout() {
   const shippingFee = activeShipping.fee;
   const vatAmount = Math.round(calculateVat(total, selectedCountry));
   const totalPayable = total + shippingFee + vatAmount;
+  const normalizedPhone = normalizePhoneByCountry(form.phone, selectedCountry);
+
+  const resetOtpState = () => {
+    setOtpVerified(false);
+    setOtpSessionId("");
+    setOtpCode("");
+    setOtpMessage("");
+    setOtpError("");
+    setOtpResendAvailableAt("");
+    setOtpCooldownSeconds(0);
+    setOtpProvider("firebase");
+    resetFirebasePhoneVerification();
+  };
 
   useEffect(() => {
     console.info("[checkout] mounted", {
@@ -162,7 +180,6 @@ export default function Checkout() {
 
   useEffect(() => {
     const persistedSession = getActiveFirebasePhoneOtpSession();
-    const normalizedPhone = normalizePhoneByCountry(form.phone, selectedCountry);
     if (!persistedSession?.phone || !normalizedPhone) return;
     if (persistedSession.phone !== normalizedPhone || otpVerified) return;
 
@@ -176,7 +193,7 @@ export default function Checkout() {
       current ||
       `Verification code already sent to ${persistedSession.phone}. Enter the 6-digit code to continue your COD order.`
     );
-  }, [form.phone, otpVerified, selectedCountry]);
+  }, [normalizedPhone, otpVerified]);
 
   useEffect(() => {
     let mounted = true;
@@ -418,44 +435,83 @@ export default function Checkout() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     if (e.target.name === "phone") {
-      setOtpVerified(false);
-      setOtpSessionId("");
-      setOtpCode("");
-      setOtpMessage("");
-      setOtpError("");
-      setOtpResendAvailableAt("");
-      setOtpCooldownSeconds(0);
-      setOtpProvider("firebase");
-      resetFirebasePhoneVerification();
+      resetOtpState();
     }
+    setPageError("");
     setForm((prev) => ({
       ...prev,
       [e.target.name]: e.target.value,
     }));
   };
 
-  const validateStep = (step: number): boolean => {
+  const handleCountryChange = (nextCountry: string) => {
+    if (!isSupportedCountryCode(nextCountry) || nextCountry === selectedCountry) return;
+    setCountrySelection(nextCountry);
+    setForm((prev) => ({
+      ...prev,
+      city: COUNTRY_CONFIG[nextCountry].defaultCity,
+      deliveryType: COUNTRY_CONFIG[nextCountry].shippingOptions[0].id,
+      postalCode: nextCountry === "AE" ? "" : prev.postalCode,
+    }));
+    resetOtpState();
+    setPageError("");
+  };
+
+  const getStepValidationMessage = (step: number) => {
     if (step === 1) {
-      return !!(form.firstName && form.lastName && form.email && isValidPhoneForCountry(form.phone, selectedCountry));
+      if (!form.firstName.trim() || !form.lastName.trim()) {
+        return "Please enter your full name.";
+      }
+      if (!form.email.trim()) {
+        return "Please enter your email address.";
+      }
+      if (!isValidPhoneForCountry(form.phone, selectedCountry)) {
+        return selectedCountry === "AE"
+          ? "Please enter a valid UAE mobile number."
+          : "Please enter a valid Saudi mobile number.";
+      }
+      return "";
     }
+
     if (step === 2) {
-      return !!(form.address && form.city && form.area && form.building);
+      if (!form.address.trim()) {
+        return `Please enter your ${country.addressLabels.address.toLowerCase()}.`;
+      }
+      if (!form.city.trim() || !country.cities.includes(form.city)) {
+        return selectedCountry === "AE" ? "Please select your Emirate." : "Please select your Region / City.";
+      }
+      if (!form.area.trim()) {
+        return `Please enter your ${country.addressLabels.area.toLowerCase()}.`;
+      }
+      if (!form.building.trim()) {
+        return `Please enter your ${country.addressLabels.building.toLowerCase()}.`;
+      }
+      return "";
     }
-    if (step === 3) {
-      return !!form.deliveryType;
+
+    if (step === 3 && !form.deliveryType) {
+      return "Please select your delivery method.";
     }
-    if (step === 4) {
-      return form.paymentMethod === "cod" && otpVerified;
+
+    if (step === 4 && !(form.paymentMethod === "cod" && otpVerified)) {
+      return "Please complete the COD verification step.";
     }
-    return true;
+
+    return "";
+  };
+
+  const validateStep = (step: number): boolean => {
+    return !getStepValidationMessage(step);
   };
 
   const handleNextStep = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      alert("Please fill all required fields");
+    const validationMessage = getStepValidationMessage(currentStep);
+    if (validationMessage) {
+      setPageError(validationMessage);
+      return;
     }
+    setPageError("");
+    setCurrentStep(currentStep + 1);
   };
 
   const handleSendOtp = async () => {
@@ -476,9 +532,9 @@ export default function Checkout() {
 
       sendOtpLockRef.current = true;
       setSendingOtp(true);
+      setPageError("");
       setOtpError("");
       setOtpMessage("");
-      const normalizedPhone = normalizePhoneByCountry(form.phone, selectedCountry);
       const persistedSession = getActiveFirebasePhoneOtpSession();
       const cooldownRemainingMs = getFirebasePhoneSendCooldownRemainingMs();
 
@@ -595,7 +651,7 @@ export default function Checkout() {
     e.preventDefault();
 
     if (!validateStep(4)) {
-      alert("Please complete the COD verification step.");
+      setPageError("Please complete the COD verification step.");
       return;
     }
 
@@ -627,15 +683,16 @@ export default function Checkout() {
           }),
           customerName: `${form.firstName} ${form.lastName}`.trim(),
           customerEmail: form.email,
-          customerPhone: normalizePhoneByCountry(form.phone, selectedCountry),
+          customerPhone: normalizedPhone,
           verificationToken: otpSessionId,
           shippingCost: sellerShippingCost,
           deliveryType: activeShipping.label,
           shippingAddress: {
-            emirate: selectedCountry === 'AE' ? form.city : '',
+            emirate: form.city,
+            region: form.city,
             area: form.area,
             building: form.building,
-            flat: '',
+            flat: form.flat,
             landmark: form.landmark,
             addressLine: form.address,
             method: form.deliveryType,
@@ -645,9 +702,14 @@ export default function Checkout() {
             buildingNumber: form.building,
             postalCode: form.postalCode,
             country: selectedCountry,
+            countryCode: selectedCountry,
+            countryName: country.name,
+            phone: normalizedPhone,
           },
           paymentMethod: "cod",
           deliveryCountry: selectedCountry,
+          countryCode: selectedCountry,
+          countryName: country.name,
         });
         const createdOrder = created?.order ?? created;
         if (!createdOrder?.id && !createdOrder?.orderId && !createdOrder?.trackingCode) {
@@ -814,13 +876,31 @@ export default function Checkout() {
 
                     <div>
                       <label className="mb-2 block text-sm font-bold text-slate-900">
+                        {country.addressLabels.country} *
+                      </label>
+                      <select
+                        name="country"
+                        value={selectedCountry}
+                        onChange={(event) => handleCountryChange(event.target.value)}
+                        className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      >
+                        {SUPPORTED_COUNTRY_CODES.map((countryCode) => (
+                          <option key={countryCode} value={countryCode}>
+                            {COUNTRY_CONFIG[countryCode].name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-900">
                         Phone Number *
                       </label>
                       <input
                         name="phone"
-                          value={form.phone}
-                          onChange={handleChange}
-                          placeholder={selectedCountry === 'AE' ? '+971 50 123 4567' : '+966 5X XXX XXXX'}
+                        value={form.phone}
+                        onChange={handleChange}
+                        placeholder={selectedCountry === 'AE' ? '+971 50 123 4567' : '+966 5X XXX XXXX'}
                         className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       />
                       <p className="mt-2 text-xs font-semibold text-slate-500">{country.shortName} mobile verification is required before COD order confirmation.</p>
@@ -846,7 +926,7 @@ export default function Checkout() {
                         name="address"
                         value={form.address}
                         onChange={handleChange}
-                        placeholder={selectedCountry === 'AE' ? 'Street address, building, etc.' : 'Street name'}
+                        placeholder={country.addressPlaceholders.address}
                         rows={3}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       />
@@ -879,7 +959,7 @@ export default function Checkout() {
                           name="area"
                           value={form.area}
                           onChange={handleChange}
-                          placeholder={selectedCountry === 'AE' ? 'Al Barsha, Deira, Khalidiya...' : 'Al Olaya, Al Rawdah, Al Malqa...'}
+                          placeholder={country.addressPlaceholders.area}
                           className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         />
                       </div>
@@ -894,10 +974,25 @@ export default function Checkout() {
                           name="building"
                           value={form.building}
                           onChange={handleChange}
-                          placeholder={selectedCountry === 'AE' ? 'Building 9, Villa 14, Tower B' : 'Building 24'}
+                          placeholder={country.addressPlaceholders.building}
                           className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         />
                       </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-900">
+                          {country.addressLabels.flat}
+                        </label>
+                        <input
+                          name="flat"
+                          value={form.flat}
+                          onChange={handleChange}
+                          placeholder={country.addressPlaceholders.flat}
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-sm font-bold text-slate-900">
                           {country.addressLabels.landmark}
@@ -906,23 +1001,22 @@ export default function Checkout() {
                           name="landmark"
                           value={form.landmark}
                           onChange={handleChange}
-                          placeholder="Near Metro, Opposite Mall..."
+                          placeholder={country.addressPlaceholders.landmark}
                           className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         />
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-900">
-                        {country.addressLabels.postalCode}
-                      </label>
-                      <input
-                        name="postalCode"
-                        value={form.postalCode}
-                        onChange={handleChange}
-                        placeholder={selectedCountry === 'AE' ? 'Optional postal code' : '12345'}
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      />
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-900">
+                          {country.addressLabels.postalCode}
+                        </label>
+                        <input
+                          name="postalCode"
+                          value={form.postalCode}
+                          onChange={handleChange}
+                          placeholder={country.addressPlaceholders.postalCode}
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1101,7 +1195,8 @@ export default function Checkout() {
                           </span>
                         </p>
                         <p>{form.email}</p>
-                        <p>{form.phone}</p>
+                        <p>{normalizedPhone || form.phone}</p>
+                        <p>{country.name}</p>
                       </div>
                     </div>
 
@@ -1113,9 +1208,10 @@ export default function Checkout() {
                       <div className="text-sm text-slate-600 space-y-1">
                         <p>{form.address}</p>
                         <p>
-                          {form.building}, {form.area}, {form.city}, {selectedCountry}
+                          {form.building}{form.flat ? `, ${form.flat}` : ""}, {form.area}, {form.city}, {country.name}
                         </p>
                         {form.landmark && <p>Landmark: {form.landmark}</p>}
+                        {form.postalCode && <p>{country.addressLabels.postalCode}: {form.postalCode}</p>}
                       </div>
                     </div>
 
