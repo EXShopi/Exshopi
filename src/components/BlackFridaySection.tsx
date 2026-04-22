@@ -322,10 +322,10 @@ export default function BlackFridaySection() {
         const selectedDeals = (
           preferredCampaignDeals.length
             ? preferredCampaignDeals
-            : fallbackCategoryDeals.length
-            ? fallbackCategoryDeals
             : campaignProducts.length
             ? campaignProducts
+            : fallbackCategoryDeals.length
+            ? fallbackCategoryDeals
             : fallbackLiveDeals
         )
           .sort((a, b) => {

@@ -10,6 +10,13 @@ export type MerchandisingProductLike = {
   slug?: string | null;
 };
 
+export function normalizeMerchandisingSelectionValue(value: unknown) {
+  const normalized = String(value || "").trim().replace(/^\/+|\/+$/g, "");
+  if (!normalized) return "";
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] || "";
+}
+
 export const HOMEPAGE_MERCHANDISING_TARGETS: Array<{
   key: HomepageMerchandisingTarget;
   label: string;
@@ -44,21 +51,23 @@ export const HOMEPAGE_MERCHANDISING_TARGETS: Array<{
 
 export function getMerchandisingProductTokens(product: MerchandisingProductLike) {
   return [product?.id, product?.slug]
-    .map((value) => String(value || "").trim())
+    .map((value) => normalizeMerchandisingSelectionValue(value))
     .filter(Boolean);
 }
 
 export function pickPreferredMerchandisingToken(product: MerchandisingProductLike) {
-  const slug = String(product?.slug || "").trim();
-  if (slug) return slug;
-  return String(product?.id || "").trim();
+  const id = normalizeMerchandisingSelectionValue(product?.id);
+  if (id) return id;
+  return normalizeMerchandisingSelectionValue(product?.slug);
 }
 
 export function isProductSelectedForMerchandising(
   selections: string[] | undefined,
   product: MerchandisingProductLike
 ) {
-  const normalizedSelections = new Set((selections || []).map((value) => String(value || "").trim()).filter(Boolean));
+  const normalizedSelections = new Set(
+    (selections || []).map((value) => normalizeMerchandisingSelectionValue(value)).filter(Boolean)
+  );
   return getMerchandisingProductTokens(product).some((token) => normalizedSelections.has(token));
 }
 
@@ -68,12 +77,12 @@ export function upsertMerchandisingSelection(
 ) {
   const preferredToken = pickPreferredMerchandisingToken(product);
   if (!preferredToken) {
-    return (selections || []).map((value) => String(value || "").trim()).filter(Boolean);
+    return (selections || []).map((value) => normalizeMerchandisingSelectionValue(value)).filter(Boolean);
   }
 
   const productTokens = new Set(getMerchandisingProductTokens(product));
   const nextSelections = (selections || [])
-    .map((value) => String(value || "").trim())
+    .map((value) => normalizeMerchandisingSelectionValue(value))
     .filter((value) => value && !productTokens.has(value));
 
   return [...nextSelections, preferredToken];
@@ -85,6 +94,6 @@ export function removeMerchandisingSelection(
 ) {
   const productTokens = new Set(getMerchandisingProductTokens(product));
   return (selections || [])
-    .map((value) => String(value || "").trim())
+    .map((value) => normalizeMerchandisingSelectionValue(value))
     .filter((value) => value && !productTokens.has(value));
 }

@@ -1,5 +1,6 @@
 import type { ProductCardProps } from "../components/ProductCard";
 import { getProductLifecycleState } from "./productLifecycle";
+import { normalizeMerchandisingSelectionValue } from "./homepageMerchandising";
 
 export type LiveMarketplaceProduct = ProductCardProps & {
   raw: any;
@@ -174,15 +175,23 @@ export function getLiveMarketplaceProducts(items: any[]) {
 
 export function getCampaignProducts(items: any[], featuredProductIds: string[] = []) {
   const liveProducts = getLiveMarketplaceProducts(items);
-  const normalizedFeaturedIds = featuredProductIds.map((value) => String(value).trim()).filter(Boolean);
+  const normalizedFeaturedIds = featuredProductIds
+    .map((value) => normalizeMerchandisingSelectionValue(value))
+    .filter(Boolean);
 
   if (normalizedFeaturedIds.length) {
-    const selected = liveProducts.filter((product) =>
-      normalizedFeaturedIds.includes(String(product.id)) ||
-      normalizedFeaturedIds.includes(String(product.slug)) ||
-      normalizedFeaturedIds.includes(String(product.raw?.id || '')) ||
-      normalizedFeaturedIds.includes(String(product.raw?.slug || ''))
-    );
+    const selected = liveProducts.filter((product) => {
+      const candidateTokens = [
+        product.id,
+        product.slug,
+        product.raw?.id,
+        product.raw?.slug,
+      ]
+        .map((value) => normalizeMerchandisingSelectionValue(value))
+        .filter(Boolean);
+
+      return candidateTokens.some((token) => normalizedFeaturedIds.includes(token));
+    });
 
     if (selected.length) {
       return selected;
