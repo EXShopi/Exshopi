@@ -20,6 +20,8 @@ import AuthService from "../lib/authService";
 import {
   canAttemptFirebasePhoneVerification,
   describeFirebasePhoneVerificationError,
+  getActiveFirebasePhoneOtpSession,
+  getFirebasePhoneSendCooldownRemainingMs,
   getFirebasePhoneVerificationRuntimeInfo,
   getReadableFirebasePhoneVerificationError,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
@@ -158,6 +160,25 @@ export default function Checkout() {
       resetFirebasePhoneVerification();
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedCountry !== "AE") return;
+    const persistedSession = getActiveFirebasePhoneOtpSession();
+    const normalizedPhone = normalizePhoneForCountry(form.phone, selectedCountry);
+    if (!persistedSession?.phone || !normalizedPhone) return;
+    if (persistedSession.phone !== normalizedPhone || otpVerified) return;
+
+    const cooldownMs = getFirebasePhoneSendCooldownRemainingMs();
+    setOtpProvider("firebase");
+    setOtpSessionId(`firebase:${persistedSession.phone}`);
+    if (cooldownMs > 0) {
+      setOtpResendAvailableAt(new Date(Date.now() + cooldownMs).toISOString());
+    }
+    setOtpMessage((current) =>
+      current ||
+      `Verification code already sent to ${persistedSession.phone}. Enter the 6-digit code to continue your COD order.`
+    );
+  }, [form.phone, otpVerified, selectedCountry]);
 
   useEffect(() => {
     let mounted = true;
@@ -331,7 +352,13 @@ export default function Checkout() {
       return `Enter a valid ${country.shortName} phone number.`;
     }
     if (normalized.includes("auth/too-many-requests")) {
-      return "Too many attempts. Please wait.";
+      const remaining = Math.max(
+        otpCooldownSeconds,
+        Math.ceil(getFirebasePhoneSendCooldownRemainingMs() / 1000)
+      );
+      return remaining > 0
+        ? `Please wait ${remaining}s before requesting another code.`
+        : "Too many attempts. Please wait before requesting another code.";
     }
     if (normalized.includes("auth/billing-not-enabled")) {
       return "Firebase billing issue. Contact support.";
@@ -454,6 +481,25 @@ export default function Checkout() {
       setOtpError("");
       setOtpMessage("");
       const normalizedPhone = normalizePhoneForCountry(form.phone, selectedCountry);
+      const persistedSession =
+        selectedCountry === "AE" ? getActiveFirebasePhoneOtpSession() : null;
+      const cooldownRemainingMs =
+        selectedCountry === "AE" ? getFirebasePhoneSendCooldownRemainingMs() : 0;
+
+      if (
+        selectedCountry === "AE" &&
+        persistedSession?.phone === normalizedPhone &&
+        cooldownRemainingMs > 0
+      ) {
+        setOtpProvider("firebase");
+        setOtpSessionId(`firebase:${persistedSession.phone}`);
+        setOtpResendAvailableAt(new Date(Date.now() + cooldownRemainingMs).toISOString());
+        setOtpMessage(
+          `Verification code already sent to ${persistedSession.phone}. Enter the 6-digit code to continue your COD order.`
+        );
+        return;
+      }
+
       console.info("[checkout] send-code requested", {
         ...getFirebasePhoneVerificationRuntimeInfo(),
         phone: normalizedPhone,
@@ -480,6 +526,10 @@ export default function Checkout() {
         ...getFirebasePhoneVerificationRuntimeInfo(),
         error: describeFirebasePhoneVerificationError(error),
       });
+      const remaining = Math.ceil(getFirebasePhoneSendCooldownRemainingMs() / 1000);
+      if (remaining > 0) {
+        setOtpResendAvailableAt(new Date(Date.now() + remaining * 1000).toISOString());
+      }
       setOtpError(mapOtpError(error, "send"));
     } finally {
       sendOtpLockRef.current = false;
