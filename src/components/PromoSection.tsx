@@ -18,12 +18,12 @@ type PromoSectionProps = {
 };
 
 const DEFAULT_PROMO_IMAGES: Record<string, string> = {
-  "promo-1": "/categories/Clothing.png",
+  "promo-1": "/categories/Tshirt1.png",
   "promo-2": "/Category Card/footwear.webp",
 };
 
 const DEFAULT_PROMO_FALLBACKS: Record<string, string> = {
-  "promo-1": "/categories/Clothing.png",
+  "promo-1": "/categories/Tshirt1.png",
   "promo-2": "/Category Card/footwear.png",
 };
 
