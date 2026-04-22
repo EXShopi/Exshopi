@@ -66,6 +66,7 @@ interface OrderState {
   ) => string; // returns order ID
   
   getOrder: (orderId: string) => Order | undefined;
+  hydrateOrderFromApi: (order: any) => Order | null;
   updateOrderStatus: (orderId: string, status: Order["status"]) => void;
   getCurrentOrder: () => Order | null;
   setCurrentOrder: (orderId: string) => void;
@@ -114,6 +115,73 @@ export const useOrderStore = create<OrderState>()(
 
       getOrder: (orderId: string) => {
         return get().orders.find((o) => o.id === orderId);
+      },
+
+      hydrateOrderFromApi: (order: any) => {
+        if (!order) return null;
+
+        const customerName = String(order.customerName || '').trim();
+        const nameParts = customerName ? customerName.split(/\s+/) : [];
+        const hydratedOrder: Order = {
+          id: String(order.orderId || order.orderNumber || order.id || ''),
+          trackingCode: String(order.trackingCode || ''),
+          items: Array.isArray(order.items) ? order.items : Array.isArray(order.products) ? order.products : [],
+          customer: {
+            firstName: nameParts[0] || 'Customer',
+            lastName: nameParts.slice(1).join(' '),
+            email: String(order.customerEmail || ''),
+            phone: String(order.customerPhone || ''),
+          },
+          shipping: {
+            address:
+              String(
+                order.shippingAddress?.addressLine ||
+                  order.shippingAddress?.address ||
+                  order.shippingAddress?.street ||
+                  ''
+              ),
+            city: String(order.shippingAddress?.city || order.shippingAddress?.emirate || ''),
+            postalCode: String(order.shippingAddress?.postalCode || ''),
+            country: String(order.deliveryCountry || order.shippingAddress?.country || 'AE'),
+          },
+          payment: {
+            method: (String(order.paymentMethod || 'cod').toLowerCase() as Order["payment"]["method"]),
+            status:
+              String(order.paymentStatus || '').toLowerCase() === 'completed' ||
+              String(order.paymentStatus || '').toLowerCase() === 'paid'
+                ? 'completed'
+                : String(order.paymentStatus || '').toLowerCase() === 'failed'
+                ? 'failed'
+                : 'pending',
+          },
+          summary: {
+            subtotal: Number(order.subtotal || 0),
+            shipping: Number(order.shippingCost || order.deliveryFee || 0),
+            vat: Number(order.vatAmount || 0),
+            currency: String(order.currency || 'AED'),
+            taxRate: typeof order.taxRate === 'number' ? order.taxRate : undefined,
+            discount: Number(order.discountAmount || 0),
+            total: Number(order.totalAmount || order.total || order.subtotal || 0),
+          },
+          status:
+            String(order.status || 'pending').toLowerCase() === 'pending_confirmation'
+              ? 'pending'
+              : (String(order.status || 'pending').toLowerCase() as Order["status"]),
+          createdAt: String(order.createdAt || new Date().toISOString()),
+          estimatedDelivery: String(order.deliveryEta || ''),
+        };
+
+        set((state) => {
+          const nextOrders = state.orders.filter(
+            (existing) => existing.id !== hydratedOrder.id && existing.trackingCode !== hydratedOrder.trackingCode
+          );
+          return {
+            orders: [...nextOrders, hydratedOrder],
+            currentOrder: hydratedOrder,
+          };
+        });
+
+        return hydratedOrder;
       },
 
       updateOrderStatus: (orderId: string, status: Order["status"]) => {

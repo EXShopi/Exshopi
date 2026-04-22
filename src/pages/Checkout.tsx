@@ -44,7 +44,7 @@ export default function Checkout() {
   const location = useLocation();
   const { items, getCartTotal, clearCart } = useCartStore();
   const removeCartItem = useCartStore((state) => state.removeItem);
-  const { createOrder } = useOrderStore();
+  const hydrateOrderFromApi = useOrderStore((state) => state.hydrateOrderFromApi);
   const authUser = useAuthStore((state) => state.user);
   const authRole = useAuthStore((state) => state.role);
   const setUser = useAuthStore((state) => state.setUser);
@@ -670,38 +670,19 @@ export default function Checkout() {
       }
 
       const primaryOrder = createdOrders[0];
-      createOrder(
-        items,
-        {
-          firstName: form.firstName,
-          lastName: form.lastName,
-          email: form.email,
-          phone: form.phone,
-        },
-        {
-          address: form.address,
-          city: form.city,
-          postalCode: form.postalCode,
-          country: country.name,
-        },
-        {
-          method: "cod",
-          status: "pending",
-        },
-        {
-          subtotal: total,
-          shipping: shippingFee,
-          vat: vatAmount,
-          currency: country.currency,
-          taxRate: country.vatRate,
-          discount: 0,
-          total: totalPayable,
-        }
-      );
+      if (primaryOrder) {
+        hydrateOrderFromApi(primaryOrder);
+      }
 
       // Clear cart and redirect to success
       clearCart();
-      navigate(primaryOrder?.trackingCode ? `/order-success?tracking=${primaryOrder.trackingCode}` : "/order-success");
+      navigate(
+        primaryOrder?.trackingCode
+          ? `/order-success?tracking=${encodeURIComponent(primaryOrder.trackingCode)}`
+          : primaryOrder?.orderId || primaryOrder?.orderNumber || primaryOrder?.id
+          ? `/order-success?order=${encodeURIComponent(String(primaryOrder.orderId || primaryOrder.orderNumber || primaryOrder.id))}`
+          : "/order-success"
+      );
     } catch (error: any) {
       console.error("Order creation failed:", error);
       const message = "We could not place your order right now. Please try again.";

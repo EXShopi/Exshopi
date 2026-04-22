@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CheckCircle,
   Copy,
@@ -15,20 +15,32 @@ import { useOrderStore } from "../store/orders";
 import { useCartStore } from "../store/cart";
 import { useAuthStore } from "../store/auth";
 import { orderAPI } from "../services/api";
+import { trackingAPI } from "../services/api";
 import { formatCurrencyForCountry } from "../lib/currency";
 import { getCountryConfig, isSupportedCountryCode } from "../lib/countryConfig";
 
 export default function OrderSuccess() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { currentOrder } = useOrderStore();
+  const currentOrder = useOrderStore((state) => state.currentOrder);
+  const hydrateOrderFromApi = useOrderStore((state) => state.hydrateOrderFromApi);
   const clearCart = useCartStore((state) => state.clearCart);
   const user = useAuthStore((state) => state.user);
   const [copied, setCopied] = useState(false);
   const [restoredOrder, setRestoredOrder] = useState<any>(null);
   const [loadingRestoredOrder, setLoadingRestoredOrder] = useState(false);
   const stripeSessionId = searchParams.get("session_id");
+  const trackingCodeFromQuery = searchParams.get("tracking");
+  const orderRefFromQuery = searchParams.get("order");
   const isStripeReturn = useMemo(() => Boolean(searchParams.get("session_id") || searchParams.get("provider") === "stripe"), [searchParams]);
+  const stateOrder = (location.state as { order?: any } | null)?.order || null;
+
+  useEffect(() => {
+    if (stateOrder) {
+      hydrateOrderFromApi(stateOrder);
+    }
+  }, [hydrateOrderFromApi, stateOrder]);
 
   useEffect(() => {
     if (currentOrder) {
@@ -36,6 +48,37 @@ export default function OrderSuccess() {
         clearCart();
       }
       return;
+    }
+
+    if (stateOrder) {
+      return;
+    }
+
+    if (trackingCodeFromQuery) {
+      let mounted = true;
+      setLoadingRestoredOrder(true);
+      trackingAPI
+        .get(trackingCodeFromQuery)
+        .then((result) => {
+          if (!mounted) return;
+          if (result?.order) {
+            const hydrated = hydrateOrderFromApi(result.order);
+            setRestoredOrder(hydrated || result.order);
+            clearCart();
+          } else {
+            navigate("/");
+          }
+        })
+        .catch(() => {
+          if (mounted) navigate("/");
+        })
+        .finally(() => {
+          if (mounted) setLoadingRestoredOrder(false);
+        });
+
+      return () => {
+        mounted = false;
+      };
     }
 
     if (!isStripeReturn || !user?.id) {
@@ -57,7 +100,7 @@ export default function OrderSuccess() {
           const primaryOrder = selectedOrders[0];
           setRestoredOrder({
             id: primaryOrder.orderId || primaryOrder.id,
-            trackingCode: primaryOrder.trackingCode || "",
+            trackingCode: primaryOrder.trackingCode || trackingCodeFromQuery || "",
             createdAt: primaryOrder.createdAt || new Date().toISOString(),
             customer: {
               firstName: primaryOrder.customerName?.split(" ")[0] || user.fullName?.split(" ")[0] || "Customer",
@@ -93,7 +136,7 @@ export default function OrderSuccess() {
     return () => {
       mounted = false;
     };
-  }, [clearCart, currentOrder, isStripeReturn, navigate, stripeSessionId, user?.email, user?.fullName, user?.id]);
+  }, [clearCart, currentOrder, hydrateOrderFromApi, isStripeReturn, navigate, stripeSessionId, trackingCodeFromQuery, orderRefFromQuery, user?.email, user?.fullName, user?.id]);
 
   const activeOrder = currentOrder || restoredOrder;
   const activeCountryCode = isSupportedCountryCode(activeOrder?.shipping?.country) ? activeOrder.shipping.country : 'AE';
