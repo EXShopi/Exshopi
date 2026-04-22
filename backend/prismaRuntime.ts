@@ -1638,7 +1638,23 @@ export const prismaRuntime = {
   async createOrder(input: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) {
     if (!enabled) return null;
     const storeId = input.sellerId;
-    const store = await prisma.store.findUnique({ where: { id: storeId } });
+    let store = await prisma.store.findUnique({ where: { id: storeId } });
+    if (!store && storeId) {
+      store = await prisma.store.findFirst({
+        where: {
+          OR: [
+            { sellerUserId: storeId },
+            { slug: storeId },
+          ],
+        },
+      });
+    }
+    if (!store) {
+      console.error('[ORDER] Store resolution failed for order creation', {
+        requestedSellerId: input.sellerId,
+        orderNumber: input.orderId,
+      });
+    }
     if (!store) return null;
     console.info('[ORDER] Creating order record', {
       orderNumber: input.orderId,

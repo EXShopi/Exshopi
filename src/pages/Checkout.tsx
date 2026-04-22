@@ -583,18 +583,13 @@ export default function Checkout() {
 
     for (const item of items) {
       const [baseProductId] = String(item.id || '').split('::');
-      const currentSellerId = String(item.sellerId || '').trim();
-      let canonicalSellerId = currentSellerId;
-
-      if (!canonicalSellerId && baseProductId) {
-        let product = productCache.get(baseProductId);
-        if (!product) {
-          product = await productAPI.get(baseProductId);
-          productCache.set(baseProductId, product);
-        }
-
-        canonicalSellerId = String(product?.sellerId || product?.storeId || '').trim();
+      let product = productCache.get(baseProductId);
+      if (!product && baseProductId) {
+        product = await productAPI.get(baseProductId);
+        productCache.set(baseProductId, product);
       }
+      const currentSellerId = String(item.sellerId || '').trim();
+      const canonicalSellerId = String(product?.storeId || product?.sellerId || currentSellerId || '').trim();
 
       if (!canonicalSellerId) {
         throw new Error(`We could not determine the seller for "${item.title}". Please refresh the cart and try again.`);
@@ -711,7 +706,6 @@ export default function Checkout() {
       console.error("Order creation failed:", error);
       const message = "We could not place your order right now. Please try again.";
       setPageError(message);
-      alert(message);
     } finally {
       setIsProcessing(false);
     }
