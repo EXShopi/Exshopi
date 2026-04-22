@@ -653,6 +653,317 @@ const escapeXml = (value: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
+const PUBLIC_SITE_URL = 'https://exshopi.com';
+const UAE_TIMEZONE = 'Asia/Dubai';
+const UAE_TIMEZONE_OFFSET = '+04:00';
+
+type MerchantFeedItem = {
+  id: string;
+  title: string;
+  description: string;
+  link: string;
+  mobile_link: string;
+  image_link: string;
+  price: string;
+  availability: 'in_stock' | 'out_of_stock' | 'preorder';
+  condition: 'new' | 'used' | 'refurbished';
+  availability_date?: string;
+  expiration_date?: string;
+};
+
+type MerchantFeedDiagnosticsEntry = {
+  product_id: string;
+  product_title: string;
+  missing_fields: string[];
+  invalid_fields: string[];
+  reason: string;
+  suggested_fix: string;
+};
+
+const stripHtml = (value: unknown) =>
+  String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const normalizePublicHttpsUrl = (value: unknown, fallbackPath = '') => {
+  const raw = String(value || '').trim();
+  const fallback = String(fallbackPath || '').trim();
+  const candidate = raw || fallback;
+  if (!candidate) return '';
+
+  try {
+    const url = candidate.startsWith('http://') || candidate.startsWith('https://')
+      ? new URL(candidate)
+      : new URL(candidate.startsWith('/') ? candidate : `/${candidate}`, PUBLIC_SITE_URL);
+
+    if (url.protocol === 'http:') {
+      url.protocol = 'https:';
+    }
+
+    return url.toString();
+  } catch {
+    return '';
+  }
+};
+
+const isAbsoluteHttpsUrl = (value: unknown) => {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const formatDateToUaeIso8601 = (value: unknown) => {
+  if (!value) return '';
+
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: UAE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(parsed);
+
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = byType.year || '1970';
+  const month = byType.month || '01';
+  const day = byType.day || '01';
+  const hour = byType.hour || '00';
+  const minute = byType.minute || '00';
+  const second = byType.second || '00';
+
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${UAE_TIMEZONE_OFFSET}`;
+};
+
+const resolveMerchantAvailability = (product: any): MerchantFeedItem['availability'] => {
+  const normalizedProductStatus = String(product?.productStatus || product?.status || '').trim().toLowerCase();
+  const rawAvailability = String(
+    product?.availability ||
+      product?.specs?.availability ||
+      product?.specs?.attributes?.availability ||
+      ''
+  ).trim().toLowerCase();
+
+  if (normalizedProductStatus.includes('preorder') || rawAvailability.includes('preorder')) {
+    return 'preorder';
+  }
+
+  return Number(product?.stock || 0) > 0 ? 'in_stock' : 'out_of_stock';
+};
+
+const resolveMerchantCondition = (product: any): MerchantFeedItem['condition'] => {
+  const rawCondition = String(
+    [
+      product?.specs?.attributes?.condition,
+      product?.condition,
+      product?.specs?.condition,
+      product?.title,
+      product?.description,
+      product?.specs?.shortDescription,
+    ]
+      .filter(Boolean)
+      .join(' ')
+  ).trim().toLowerCase();
+
+  if (/refurb|renewed/.test(rawCondition)) return 'refurbished';
+  if (/used|pre.?owned|open.?box|like.?new/.test(rawCondition)) return 'used';
+  if (/new/.test(rawCondition)) return 'new';
+  return 'used';
+};
+
+const buildMerchantFeedCandidate = (product: any): MerchantFeedItem => {
+  const pathname = getProductCanonicalPath(product);
+  const link = normalizePublicHttpsUrl('', pathname);
+  const imageLink = normalizePublicHttpsUrl(
+    product?.image ||
+      (Array.isArray(product?.images) ? product.images.find(Boolean) : '') ||
+      product?.ogImage
+  );
+
+  const title = stripHtml(product?.title || product?.name || product?.slug || product?.id);
+  const description = stripHtml(
+    product?.specs?.shortDescription ||
+      product?.description ||
+      product?.specs?.longDescription ||
+      product?.specs?.seoDescription ||
+      title
+  );
+  const numericPrice = Number(product?.salePrice ?? product?.price ?? 0);
+  const currency = String(product?.currency || 'AED').trim().toUpperCase() || 'AED';
+
+  const specs = product?.specs || {};
+  const availabilityDate = formatDateToUaeIso8601(
+    specs.availabilityDate || specs.availability_date || specs.availableAt || product?.availabilityDate
+  );
+  const expirationDate = formatDateToUaeIso8601(
+    specs.expirationDate ||
+      specs.expiration_date ||
+      specs.expiryDate ||
+      specs.expiresAt ||
+      product?.expirationDate
+  );
+
+  const item: MerchantFeedItem = {
+    id: String(product?.id || product?.slug || title).trim(),
+    title,
+    description,
+    link,
+    mobile_link: link,
+    image_link: imageLink,
+    price: Number.isFinite(numericPrice) ? `${numericPrice.toFixed(2)} ${currency}` : '',
+    availability: resolveMerchantAvailability(product),
+    condition: resolveMerchantCondition(product),
+  };
+
+  // Google accepts these only when they are valid ISO 8601 values.
+  if (availabilityDate) item.availability_date = availabilityDate;
+  if (expirationDate) item.expiration_date = expirationDate;
+
+  return item;
+};
+
+const diagnoseMerchantFeedProduct = (product: any) => {
+  const candidate = buildMerchantFeedCandidate(product);
+  const missingFields: string[] = [];
+  const invalidFields: string[] = [];
+  const canonicalPath = getProductCanonicalPath(product);
+  const canonicalSegments = canonicalPath.split('/').filter(Boolean);
+
+  if (!candidate.id) missingFields.push('id');
+  if (!candidate.title) missingFields.push('title');
+  if (!candidate.description) missingFields.push('description');
+  if (!candidate.link) missingFields.push('link');
+  if (!candidate.mobile_link) missingFields.push('mobile_link');
+  if (!candidate.image_link) missingFields.push('image_link');
+  if (!candidate.price) missingFields.push('price');
+  if (!candidate.availability) missingFields.push('availability');
+  if (!candidate.condition) missingFields.push('condition');
+
+  if (candidate.link && !isAbsoluteHttpsUrl(candidate.link)) invalidFields.push('link');
+  if (candidate.mobile_link && !isAbsoluteHttpsUrl(candidate.mobile_link)) invalidFields.push('mobile_link');
+  if (candidate.image_link && !isAbsoluteHttpsUrl(candidate.image_link)) invalidFields.push('image_link');
+
+  if (candidate.price) {
+    const priceMatch = candidate.price.match(/^(\d+(?:\.\d{2})?)\s+([A-Z]{3})$/);
+    const priceValue = priceMatch ? Number(priceMatch[1]) : NaN;
+    if (!priceMatch || !Number.isFinite(priceValue) || priceValue <= 0) {
+      invalidFields.push('price');
+    }
+  }
+
+  if (candidate.availability && !['in_stock', 'out_of_stock', 'preorder'].includes(candidate.availability)) {
+    invalidFields.push('availability');
+  }
+
+  if (candidate.condition && !['new', 'used', 'refurbished'].includes(candidate.condition)) {
+    invalidFields.push('condition');
+  }
+
+  if (canonicalSegments.length !== 3 || !candidate.link || candidate.link !== normalizePublicHttpsUrl('', canonicalPath)) {
+    invalidFields.push('link');
+  }
+
+  const uniqueMissingFields = Array.from(new Set(missingFields));
+  const uniqueInvalidFields = Array.from(new Set(invalidFields));
+  const skipped = uniqueMissingFields.length > 0 || uniqueInvalidFields.length > 0;
+
+  const reason = skipped
+    ? [
+        uniqueMissingFields.length ? `Missing required fields: ${uniqueMissingFields.join(', ')}` : '',
+        uniqueInvalidFields.length ? `Invalid Merchant fields: ${uniqueInvalidFields.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join('. ')
+    : 'Included in Google Merchant feed.';
+
+  const suggestedFix = skipped
+    ? [
+        uniqueMissingFields.includes('title') ? 'Populate a non-empty product title.' : '',
+        uniqueMissingFields.includes('description') ? 'Add a product description or short description.' : '',
+        uniqueMissingFields.includes('image_link') ? 'Add a primary product image with a public https URL.' : '',
+        uniqueMissingFields.includes('price') || uniqueInvalidFields.includes('price')
+          ? 'Set a valid positive product price and currency.'
+          : '',
+        uniqueMissingFields.includes('link') ||
+        uniqueMissingFields.includes('mobile_link') ||
+        uniqueInvalidFields.includes('link') ||
+        uniqueInvalidFields.includes('mobile_link')
+          ? 'Ensure parent/category/product slugs resolve to a canonical https product URL.'
+          : '',
+        uniqueInvalidFields.includes('availability') ? 'Use a valid Merchant availability value such as in_stock.' : '',
+        uniqueInvalidFields.includes('condition') ? 'Set product condition to new, used, or refurbished.' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : 'No action needed.';
+
+  return {
+    included: !skipped,
+    candidate,
+    diagnostics: skipped
+      ? {
+          product_id: String(product?.id || candidate.id || '').trim(),
+          product_title: String(product?.title || candidate.title || '').trim(),
+          missing_fields: uniqueMissingFields,
+          invalid_fields: uniqueInvalidFields,
+          reason,
+          suggested_fix: suggestedFix || 'Review product feed fields and canonical route slugs.',
+        }
+      : null,
+  };
+};
+
+const buildMerchantFeedItem = (product: any): MerchantFeedItem | null => {
+  const diagnosed = diagnoseMerchantFeedProduct(product);
+  return diagnosed.included ? diagnosed.candidate : null;
+};
+
+const buildMerchantFeedXml = (items: MerchantFeedItem[], generatedAt: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">
+  <channel>
+    <title>ExShopi Google Merchant Feed</title>
+    <link>${escapeXml(PUBLIC_SITE_URL)}</link>
+    <description>Canonical marketplace product feed for Google Merchant Center.</description>
+    <lastBuildDate>${escapeXml(new Date(generatedAt).toUTCString())}</lastBuildDate>
+${items
+  .map((item) => {
+    const optionalDates = [
+      item.availability_date
+        ? `      <g:availability_date>${escapeXml(item.availability_date)}</g:availability_date>`
+        : '',
+      item.expiration_date
+        ? `      <g:expiration_date>${escapeXml(item.expiration_date)}</g:expiration_date>`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    return `    <item>
+      <g:id>${escapeXml(item.id)}</g:id>
+      <title>${escapeXml(item.title)}</title>
+      <description>${escapeXml(item.description)}</description>
+      <link>${escapeXml(item.link)}</link>
+      <g:mobile_link>${escapeXml(item.mobile_link)}</g:mobile_link>
+      <g:image_link>${escapeXml(item.image_link)}</g:image_link>
+      <g:price>${escapeXml(item.price)}</g:price>
+      <g:availability>${escapeXml(item.availability)}</g:availability>
+      <g:condition>${escapeXml(item.condition)}</g:condition>${optionalDates ? `\n${optionalDates}` : ''}
+    </item>`;
+  })
+  .join('\n')}
+  </channel>
+</rss>`;
+
 const BLOG_SITEMAP_SLUGS = ['best-laptops-uae', 'macbook-buying-guide'];
 const STATIC_SITEMAP_PATHS = [
   '/',
@@ -6421,8 +6732,78 @@ Sitemap: https://exshopi.com/sitemap.xml
 `);
 });
 
+async function getGoogleMerchantFeedData() {
+  const generatedAt = new Date().toISOString();
+  const rawProducts = prismaRuntime.enabled
+    ? await prismaRuntime.getAllProducts()
+    : supabaseRuntime.enabled
+    ? await supabaseRuntime.getAllProducts()
+    : db.getAllProducts();
+
+  const serializedProducts = await Promise.all(
+    (rawProducts || [])
+      .filter((product) => isCustomerVisibleProduct(product))
+      .map((product) => serializeMarketplaceProductAsync(product))
+  );
+
+  const items = serializedProducts
+    .map((product) => buildMerchantFeedItem(product))
+    .filter((item): item is MerchantFeedItem => Boolean(item));
+
+  return {
+    generatedAt,
+    siteUrl: PUBLIC_SITE_URL,
+    itemCount: items.length,
+    items,
+  };
+}
+
+async function getGoogleMerchantFeedDiagnostics() {
+  const rawProducts = prismaRuntime.enabled
+    ? await prismaRuntime.getAllProducts()
+    : supabaseRuntime.enabled
+    ? await supabaseRuntime.getAllProducts()
+    : db.getAllProducts();
+
+  const serializedProducts = await Promise.all(
+    (rawProducts || [])
+      .filter((product) => isCustomerVisibleProduct(product))
+      .map((product) => serializeMarketplaceProductAsync(product))
+  );
+
+  const results = serializedProducts.map((product) => diagnoseMerchantFeedProduct(product));
+  const includedProductIds = results
+    .filter((result) => result.included)
+    .map((result) => result.candidate.id);
+  const skippedProducts = results
+    .filter((result) => !result.included && result.diagnostics)
+    .map((result) => result.diagnostics as MerchantFeedDiagnosticsEntry);
+
+  const hasFieldIssue = (entry: MerchantFeedDiagnosticsEntry, field: string) =>
+    entry.missing_fields.includes(field) || entry.invalid_fields.includes(field);
+
+  return {
+    total_products_checked: results.length,
+    total_products_included: includedProductIds.length,
+    total_products_skipped: skippedProducts.length,
+    included_product_ids: includedProductIds,
+    issue_summary: {
+      missing_image_count: skippedProducts.filter((entry) => hasFieldIssue(entry, 'image_link')).length,
+      missing_price_count: skippedProducts.filter((entry) => hasFieldIssue(entry, 'price')).length,
+      missing_title_count: skippedProducts.filter((entry) => hasFieldIssue(entry, 'title')).length,
+      invalid_url_count: skippedProducts.filter(
+        (entry) => hasFieldIssue(entry, 'link') || hasFieldIssue(entry, 'mobile_link') || hasFieldIssue(entry, 'image_link')
+      ).length,
+      invalid_condition_count: skippedProducts.filter((entry) => hasFieldIssue(entry, 'condition')).length,
+      invalid_availability_count: skippedProducts.filter((entry) => hasFieldIssue(entry, 'availability')).length,
+      missing_description_count: skippedProducts.filter((entry) => hasFieldIssue(entry, 'description')).length,
+    },
+    skipped_products: skippedProducts,
+  };
+}
+
 async function getPublicSitemapData() {
-  const siteUrl = 'https://exshopi.com';
+  const siteUrl = PUBLIC_SITE_URL;
   const lastmod = new Date().toISOString().slice(0, 10);
   const products = prismaRuntime.enabled
     ? await prismaRuntime.getAllProducts()
@@ -6506,6 +6887,58 @@ async function getPublicSitemapData() {
 
   return { siteUrl, lastmod, staticEntries, categoryEntries, brandEntries, productChunks };
 }
+
+app.get('/api/feeds/google-merchant.json', async (_req: Request, res: Response) => {
+  try {
+    const feed = await getGoogleMerchantFeedData();
+    res.json(feed);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/feeds/google-merchant.xml', async (_req: Request, res: Response) => {
+  try {
+    const feed = await getGoogleMerchantFeedData();
+    res.type('application/xml').send(buildMerchantFeedXml(feed.items, feed.generatedAt));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- merchant feed generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+
+app.get('/api/feeds/google-merchant', async (req: Request, res: Response) => {
+  try {
+    const requestedFormat = String(req.query.format || '').trim().toLowerCase();
+    const accept = String(req.headers.accept || '').toLowerCase();
+    const wantsXml = requestedFormat === 'xml' || (!requestedFormat && accept.includes('xml'));
+    const feed = await getGoogleMerchantFeedData();
+
+    if (wantsXml) {
+      return res.type('application/xml').send(buildMerchantFeedXml(feed.items, feed.generatedAt));
+    }
+
+    return res.json(feed);
+  } catch (error) {
+    const requestedFormat = String(req.query.format || '').trim().toLowerCase();
+    if (requestedFormat === 'xml') {
+      return res.status(500).type('application/xml').send(`<!-- merchant feed generation failed: ${escapeXml(String(error))} -->`);
+    }
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/feeds/google-merchant-diagnostics', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!isAdminLike(req.user?.role)) {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+
+    const diagnostics = await getGoogleMerchantFeedDiagnostics();
+    return res.json(diagnostics);
+  } catch (error) {
+    return res.status(500).json({ error: String(error) });
+  }
+});
 
 app.get('/sitemap.xml', async (_req: Request, res: Response) => {
   try {
