@@ -14,7 +14,12 @@ import { useCartStore } from "../store/cart";
 import { useSettingsStore } from "../store/settings";
 import { formatCurrencyPlainForCountry } from "../lib/currency";
 import { analyticsAPI, productAPI } from "../services/api";
-import { getCampaignProducts, type LiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
+import {
+  getCampaignProducts,
+  getLiveMarketplaceProducts,
+  productMatchesCategoryTerms,
+  type LiveMarketplaceProduct,
+} from "../lib/liveMarketplaceProducts";
 import { OrbitLoader } from "./ui/OrbitLoader";
 import { OptimizedImage } from "./OptimizedImage";
 import {
@@ -224,25 +229,33 @@ const DealCard = React.memo(function DealCard({ item }: DealCardProps) {
 });
 
 export default function BlackFridaySection() {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const desktopScrollRef = useRef<HTMLDivElement | null>(null);
   const { settings } = useSettingsStore();
   const [deals, setDeals] = useState<DealItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
   const campaignSection = settings.homepage.sections.find((section) => section.id === "flash-deals");
   const campaignSettings = settings.homepage.campaignSection;
-  const countdown = useMemo(() => {
-    const target = new Date(campaignSettings.endAt || "").getTime();
-    if (!target || Number.isNaN(target)) {
-      return [
-        { value: "00", label: "days" },
-        { value: "00", label: "hours" },
-        { value: "00", label: "minutes" },
-        { value: "00", label: "seconds" },
-      ];
+  const countdownTarget = useMemo(() => {
+    const cycleMs = 30 * 24 * 60 * 60 * 1000;
+    const configuredTarget = new Date(campaignSettings.endAt || "").getTime();
+
+    if (configuredTarget && !Number.isNaN(configuredTarget) && configuredTarget > now) {
+      return configuredTarget;
     }
 
-    const diff = Math.max(0, target - now);
+    const anchor = new Date();
+    anchor.setHours(23, 59, 59, 999);
+    const baseTarget = anchor.getTime() + cycleMs;
+
+    if (baseTarget > now) return baseTarget;
+
+    const elapsedCycles = Math.floor((now - baseTarget) / cycleMs) + 1;
+    return baseTarget + elapsedCycles * cycleMs;
+  }, [campaignSettings.endAt, now]);
+
+  const countdown = useMemo(() => {
+    const diff = Math.max(0, countdownTarget - now);
     const totalSeconds = Math.floor(diff / 1000);
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -255,7 +268,7 @@ export default function BlackFridaySection() {
       { value: String(minutes).padStart(2, "0"), label: "minutes" },
       { value: String(seconds).padStart(2, "0"), label: "seconds" },
     ];
-  }, [campaignSettings.endAt, now]);
+  }, [countdownTarget, now]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -269,7 +282,52 @@ export default function BlackFridaySection() {
       .getAll()
       .then((items) => {
         if (!mounted) return;
-        const liveDeals = getCampaignProducts(items, campaignSettings.featuredProductIds)
+        const liveProducts = getLiveMarketplaceProducts(items);
+        const campaignProducts = getCampaignProducts(items, campaignSettings.featuredProductIds);
+        const apparelTerms = [
+          "fashion",
+          "clothing",
+          "t-shirt",
+          "t shirts",
+          "tshirts",
+          "shirt",
+          "apparel",
+          "men-clothing",
+          "womens-clothing",
+        ];
+        const footwearTerms = [
+          "footwear",
+          "shoe",
+          "shoes",
+          "sneaker",
+          "sneakers",
+          "mens-shoes",
+          "womens-shoes",
+        ];
+
+        const preferredCampaignDeals = campaignProducts.filter(
+          (product) => productMatchesCategoryTerms(product, apparelTerms) || productMatchesCategoryTerms(product, footwearTerms)
+        );
+        const fallbackCategoryDeals = liveProducts.filter(
+          (product) => productMatchesCategoryTerms(product, apparelTerms) || productMatchesCategoryTerms(product, footwearTerms)
+        );
+        const fallbackLiveDeals = liveProducts.filter(
+          (product) =>
+            !product.raw?.isDeleted &&
+            Boolean(String(product.title || "").trim()) &&
+            Boolean(String(product.image || "").trim()) &&
+            Number(product.price || 0) > 0
+        );
+
+        const selectedDeals = (
+          preferredCampaignDeals.length
+            ? preferredCampaignDeals
+            : fallbackCategoryDeals.length
+            ? fallbackCategoryDeals
+            : campaignProducts.length
+            ? campaignProducts
+            : fallbackLiveDeals
+        )
           .sort((a, b) => {
             if (b.discount !== a.discount) return b.discount - a.discount;
             return b.reviews - a.reviews;
@@ -277,7 +335,7 @@ export default function BlackFridaySection() {
           .slice(0, 10)
           .map(mapDealItem);
 
-        setDeals(liveDeals);
+        setDeals(selectedDeals);
       })
       .catch(() => {
         if (mounted) setDeals([]);
@@ -292,7 +350,7 @@ export default function BlackFridaySection() {
   }, [campaignSettings.featuredProductIds]);
 
   const scrollByCards = (direction: "left" | "right") => {
-    const el = scrollRef.current;
+    const el = desktopScrollRef.current;
     if (!el) return;
 
     const amount = 260;
@@ -389,12 +447,16 @@ export default function BlackFridaySection() {
               </div>
             ) : deals.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 gap-3 pb-2 md:hidden">
-                  {deals.slice(0, 4).map((deal) => (
-                    <DealCard key={deal.id || deal.title} item={deal} />
-                  ))}
+                <div className="overflow-x-auto overflow-y-hidden pb-1 md:hidden no-scrollbar">
+                  <div className="flex w-fit gap-3 pr-2">
+                    {deals.map((deal) => (
+                      <div key={deal.id || deal.title} className="w-[172px] min-w-[172px]">
+                        <DealCard item={deal} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div ref={scrollRef} className="hidden overflow-x-auto overflow-y-hidden px-0 pb-1 md:block no-scrollbar">
+                <div className="hidden overflow-x-auto overflow-y-hidden px-0 pb-1 md:block no-scrollbar" ref={desktopScrollRef}>
                   <div className="flex w-fit gap-2.5">
                     {deals.map((deal) => (
                       <DealCard key={deal.id || deal.title} item={deal} />
@@ -407,7 +469,7 @@ export default function BlackFridaySection() {
                 className="rounded-[18px] px-6 py-16 text-center text-sm font-semibold text-white/90"
                 style={{ backgroundColor: campaignSettings.productRailBgColor || "rgba(255,255,255,0.10)" }}
               >
-                No active campaign products are live right now.
+                <OrbitLoader label="Preparing campaign picks..." size={24} />
               </div>
             )}
           </div>

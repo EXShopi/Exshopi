@@ -8,6 +8,8 @@ export type LiveMarketplaceProduct = ProductCardProps & {
   categoryKey: string;
 };
 
+const MARKETPLACE_PLACEHOLDER_IMAGE = "/placeholder.svg";
+
 function extractMarketplaceImageUrl(value: unknown): string {
   if (!value) return "";
 
@@ -49,7 +51,7 @@ function resolveMarketplaceProductImage(product: any) {
     .map((item) => extractMarketplaceImageUrl(item))
     .filter(Boolean);
 
-  return resolvedImages[0] || "/placeholder.svg";
+  return resolvedImages[0] || MARKETPLACE_PLACEHOLDER_IMAGE;
 }
 
 function normalizeMarketplaceValue(value: any) {
@@ -161,7 +163,13 @@ export function getLiveMarketplaceProducts(items: any[]) {
   return (items || [])
     .filter(isLiveMarketplaceProduct)
     .map(mapLiveMarketplaceProduct)
-    .filter((product) => product.price > 0);
+    .filter(
+      (product) =>
+        product.price > 0 &&
+        Boolean(String(product.title || "").trim()) &&
+        Boolean(String(product.image || "").trim()) &&
+        product.image !== MARKETPLACE_PLACEHOLDER_IMAGE
+    );
 }
 
 export function getCampaignProducts(items: any[], featuredProductIds: string[] = []) {
@@ -182,6 +190,35 @@ export function getCampaignProducts(items: any[], featuredProductIds: string[] =
   }
 
   return liveProducts.filter((product) => product.discount > 0 || /deal|offer|sale|flash|campaign/i.test(product.badge || ""));
+}
+
+export function productMatchesCategoryTerms(product: LiveMarketplaceProduct, terms: string[]) {
+  const normalizedTerms = (terms || []).map((term) => String(term || "").trim().toLowerCase()).filter(Boolean);
+  if (!normalizedTerms.length) return false;
+
+  const haystack = [
+    product.title,
+    product.category,
+    product.categoryKey,
+    product.seller,
+    product.raw?.category,
+    product.raw?.subcategory,
+    product.raw?.categoryName,
+    product.raw?.subcategoryName,
+    product.raw?.specs?.categorySlug,
+    product.raw?.specs?.subcategorySlug,
+    product.raw?.specs?.categoryName,
+    product.raw?.specs?.subcategoryName,
+    product.raw?.specs?.templateId,
+    product.raw?.specs?.templateName,
+    product.raw?.brand,
+    product.raw?.specs?.brand,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return normalizedTerms.some((term) => haystack.includes(term));
 }
 
 export function productMatchesBrand(product: LiveMarketplaceProduct, brandSlug: string) {

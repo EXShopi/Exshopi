@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 
 type PromoBox = {
   id: string;
@@ -15,6 +16,55 @@ type PromoBox = {
 type PromoSectionProps = {
   boxes?: PromoBox[];
 };
+
+const DEFAULT_PROMO_IMAGES: Record<string, string> = {
+  "promo-1": "/categories/Clothing.png",
+  "promo-2": "/Category Card/footwear.webp",
+};
+
+const DEFAULT_PROMO_FALLBACKS: Record<string, string> = {
+  "promo-1": "/categories/Clothing.png",
+  "promo-2": "/Category Card/footwear.png",
+};
+
+function resolvePromoImage(box: PromoBox) {
+  const title = String(box.title || "").toLowerCase();
+
+  if (box.imageUrl?.trim()) return box.imageUrl.trim();
+  if (title.includes("t-shirt") || title.includes("clothing")) return DEFAULT_PROMO_IMAGES["promo-1"];
+  if (title.includes("shoe") || title.includes("footwear")) return DEFAULT_PROMO_IMAGES["promo-2"];
+  return DEFAULT_PROMO_IMAGES[box.id] || "";
+}
+
+function PromoImage({ box }: { box: PromoBox }) {
+  const initialImage = useMemo(() => resolvePromoImage(box), [box]);
+  const fallbackImage = DEFAULT_PROMO_FALLBACKS[box.id] || DEFAULT_PROMO_IMAGES[box.id] || "";
+  const [imageSrc, setImageSrc] = useState(initialImage);
+
+  if (!imageSrc) {
+    return (
+      <div className={`flex h-full w-full items-center justify-center text-center text-sm font-bold ${
+        box.tone === 'dark' ? 'text-slate-200' : 'text-slate-600'
+      }`}>
+        Featured collection image
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageSrc}
+      alt={box.title}
+      className="h-full w-full object-cover object-center"
+      loading="lazy"
+      onError={() => {
+        if (fallbackImage && imageSrc !== fallbackImage) {
+          setImageSrc(fallbackImage);
+        }
+      }}
+    />
+  );
+}
 
 export default function PromoSection({ boxes = [] }: PromoSectionProps) {
   const visibleBoxes = boxes.filter((box) => box.show).slice(0, 2);
@@ -63,20 +113,7 @@ export default function PromoSection({ boxes = [] }: PromoSectionProps) {
               </div>
 
               <div className="relative flex h-[200px] w-full max-w-full items-end justify-center overflow-hidden rounded-[24px] border border-white/30 bg-white/10 backdrop-blur-sm md:h-[230px] md:max-w-[260px] md:rounded-[28px]">
-                {box.imageUrl ? (
-                  <img
-                    src={box.imageUrl}
-                    alt={box.title}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className={`flex h-full w-full items-center justify-center text-center text-sm font-bold ${
-                    box.tone === 'dark' ? 'text-slate-200' : 'text-slate-600'
-                  }`}>
-                    Upload a collection image
-                  </div>
-                )}
+                <PromoImage box={box} />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/20 to-transparent" />
               </div>
             </div>
