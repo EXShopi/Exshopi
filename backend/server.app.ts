@@ -665,10 +665,10 @@ type MerchantFeedItem = {
   mobile_link: string;
   image_link: string;
   price: string;
-  availability: 'in_stock' | 'out_of_stock' | 'preorder';
-  condition: 'new' | 'used' | 'refurbished';
-  availability_date?: string;
-  expiration_date?: string;
+  availability: 'in stock' | 'out of stock' | 'preorder';
+  condition: 'refurbished';
+  brand?: string;
+  google_product_category?: string;
 };
 
 type MerchantFeedDiagnosticsEntry = {
@@ -717,34 +717,6 @@ const isAbsoluteHttpsUrl = (value: unknown) => {
   }
 };
 
-const formatDateToUaeIso8601 = (value: unknown) => {
-  if (!value) return '';
-
-  const parsed = value instanceof Date ? value : new Date(String(value));
-  if (Number.isNaN(parsed.getTime())) return '';
-
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: UAE_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(parsed);
-
-  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const year = byType.year || '1970';
-  const month = byType.month || '01';
-  const day = byType.day || '01';
-  const hour = byType.hour || '00';
-  const minute = byType.minute || '00';
-  const second = byType.second || '00';
-
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}${UAE_TIMEZONE_OFFSET}`;
-};
-
 const resolveMerchantAvailability = (product: any): MerchantFeedItem['availability'] => {
   const normalizedProductStatus = String(product?.productStatus || product?.status || '').trim().toLowerCase();
   const rawAvailability = String(
@@ -758,27 +730,42 @@ const resolveMerchantAvailability = (product: any): MerchantFeedItem['availabili
     return 'preorder';
   }
 
-  return Number(product?.stock || 0) > 0 ? 'in_stock' : 'out_of_stock';
+  return Number(product?.stock || 0) > 0 ? 'in stock' : 'out of stock';
 };
 
-const resolveMerchantCondition = (product: any): MerchantFeedItem['condition'] => {
-  const rawCondition = String(
+const resolveMerchantCondition = (_product: any): MerchantFeedItem['condition'] => 'refurbished';
+
+const resolveMerchantBrand = (product: any) =>
+  stripHtml(
+    product?.brand ||
+      product?.specs?.attributes?.brand ||
+      product?.specs?.brand ||
+      ''
+  );
+
+const resolveMerchantGoogleProductCategory = (product: any) => {
+  const haystack = String(
     [
-      product?.specs?.attributes?.condition,
-      product?.condition,
-      product?.specs?.condition,
       product?.title,
-      product?.description,
-      product?.specs?.shortDescription,
+      product?.category,
+      product?.subcategory,
+      product?.specs?.categoryName,
+      product?.specs?.subcategoryName,
+      product?.specs?.templateName,
     ]
       .filter(Boolean)
       .join(' ')
-  ).trim().toLowerCase();
+  ).toLowerCase();
 
-  if (/refurb|renewed/.test(rawCondition)) return 'refurbished';
-  if (/used|pre.?owned|open.?box|like.?new/.test(rawCondition)) return 'used';
-  if (/new/.test(rawCondition)) return 'new';
-  return 'used';
+  if (/laptop|macbook|notebook|ultrabook/.test(haystack)) return 'Computers & Electronics > Computers > Laptops';
+  if (/desktop|pc|workstation|all-in-one/.test(haystack)) return 'Computers & Electronics > Computers > Desktop Computers';
+  if (/iphone|smartphone|phone|mobile/.test(haystack)) return 'Electronics > Communications > Telephony > Mobile Phones';
+  if (/tablet|ipad/.test(haystack)) return 'Computers & Electronics > Computers > Tablet Computers';
+  if (/keyboard/.test(haystack)) return 'Computers & Electronics > Computer Components > Input Devices > Keyboards';
+  if (/mouse/.test(haystack)) return 'Computers & Electronics > Computer Components > Input Devices > Computer Mice';
+  if (/monitor|display/.test(haystack)) return 'Computers & Electronics > Computer Components > Computer Monitors';
+  if (/headphone|earbud|speaker|audio/.test(haystack)) return 'Electronics > Audio > Audio Accessories > Headphones';
+  return 'Computers & Electronics';
 };
 
 const buildMerchantFeedCandidate = (product: any): MerchantFeedItem => {
@@ -800,18 +787,8 @@ const buildMerchantFeedCandidate = (product: any): MerchantFeedItem => {
   );
   const numericPrice = Number(product?.salePrice ?? product?.price ?? 0);
   const currency = String(product?.currency || 'AED').trim().toUpperCase() || 'AED';
-
-  const specs = product?.specs || {};
-  const availabilityDate = formatDateToUaeIso8601(
-    specs.availabilityDate || specs.availability_date || specs.availableAt || product?.availabilityDate
-  );
-  const expirationDate = formatDateToUaeIso8601(
-    specs.expirationDate ||
-      specs.expiration_date ||
-      specs.expiryDate ||
-      specs.expiresAt ||
-      product?.expirationDate
-  );
+  const brand = resolveMerchantBrand(product);
+  const googleProductCategory = resolveMerchantGoogleProductCategory(product);
 
   const item: MerchantFeedItem = {
     id: String(product?.id || product?.slug || title).trim(),
@@ -820,14 +797,12 @@ const buildMerchantFeedCandidate = (product: any): MerchantFeedItem => {
     link,
     mobile_link: link,
     image_link: imageLink,
-    price: Number.isFinite(numericPrice) ? `${numericPrice.toFixed(2)} ${currency}` : '',
+    price: Number.isFinite(numericPrice) && numericPrice > 0 ? `${Number(numericPrice.toFixed(2))} ${currency}` : '',
     availability: resolveMerchantAvailability(product),
     condition: resolveMerchantCondition(product),
+    ...(brand ? { brand } : {}),
+    ...(googleProductCategory ? { google_product_category: googleProductCategory } : {}),
   };
-
-  // Google accepts these only when they are valid ISO 8601 values.
-  if (availabilityDate) item.availability_date = availabilityDate;
-  if (expirationDate) item.expiration_date = expirationDate;
 
   return item;
 };
@@ -861,11 +836,11 @@ const diagnoseMerchantFeedProduct = (product: any) => {
     }
   }
 
-  if (candidate.availability && !['in_stock', 'out_of_stock', 'preorder'].includes(candidate.availability)) {
+  if (candidate.availability && !['in stock', 'out of stock', 'preorder'].includes(candidate.availability)) {
     invalidFields.push('availability');
   }
 
-  if (candidate.condition && !['new', 'used', 'refurbished'].includes(candidate.condition)) {
+  if (candidate.condition && candidate.condition !== 'refurbished') {
     invalidFields.push('condition');
   }
 
@@ -900,8 +875,8 @@ const diagnoseMerchantFeedProduct = (product: any) => {
         uniqueInvalidFields.includes('mobile_link')
           ? 'Ensure parent/category/product slugs resolve to a canonical https product URL.'
           : '',
-        uniqueInvalidFields.includes('availability') ? 'Use a valid Merchant availability value such as in_stock.' : '',
-        uniqueInvalidFields.includes('condition') ? 'Set product condition to new, used, or refurbished.' : '',
+        uniqueInvalidFields.includes('availability') ? 'Use a valid Merchant availability value such as in stock.' : '',
+        uniqueInvalidFields.includes('condition') ? 'Set product condition to refurbished.' : '',
       ]
         .filter(Boolean)
         .join(' ')
@@ -937,12 +912,10 @@ const buildMerchantFeedXml = (items: MerchantFeedItem[], generatedAt: string) =>
     <lastBuildDate>${escapeXml(new Date(generatedAt).toUTCString())}</lastBuildDate>
 ${items
   .map((item) => {
-    const optionalDates = [
-      item.availability_date
-        ? `      <g:availability_date>${escapeXml(item.availability_date)}</g:availability_date>`
-        : '',
-      item.expiration_date
-        ? `      <g:expiration_date>${escapeXml(item.expiration_date)}</g:expiration_date>`
+    const optionalFields = [
+      item.brand ? `      <g:brand>${escapeXml(item.brand)}</g:brand>` : '',
+      item.google_product_category
+        ? `      <g:google_product_category>${escapeXml(item.google_product_category)}</g:google_product_category>`
         : '',
     ]
       .filter(Boolean)
@@ -957,7 +930,7 @@ ${items
       <g:image_link>${escapeXml(item.image_link)}</g:image_link>
       <g:price>${escapeXml(item.price)}</g:price>
       <g:availability>${escapeXml(item.availability)}</g:availability>
-      <g:condition>${escapeXml(item.condition)}</g:condition>${optionalDates ? `\n${optionalDates}` : ''}
+      <g:condition>${escapeXml(item.condition)}</g:condition>${optionalFields ? `\n${optionalFields}` : ''}
     </item>`;
   })
   .join('\n')}
