@@ -30,6 +30,9 @@ export interface SiteSettings {
       bestchoiceProductIds: string[];
       onsaleProductIds: string[];
     };
+    mostPopularSection: {
+      featuredProductIds: string[];
+    };
     campaignSection: {
       badgeText: string;
       expiresLabel: string;
@@ -166,6 +169,9 @@ export const defaultSettings: SiteSettings = {
       bestsellersProductIds: [],
       bestchoiceProductIds: [],
       onsaleProductIds: [],
+    },
+    mostPopularSection: {
+      featuredProductIds: [],
     },
     campaignSection: {
       badgeText: 'Campaign',
@@ -314,6 +320,13 @@ export async function getSiteSettings(): Promise<SiteSettings> {
           onsaleProductIds: Array.isArray(remote?.homepage?.featuredSection?.onsaleProductIds)
             ? remote.homepage.featuredSection.onsaleProductIds.map((value: unknown) => String(value))
             : defaultSettings.homepage.featuredSection.onsaleProductIds,
+        },
+        mostPopularSection: {
+          ...defaultSettings.homepage.mostPopularSection,
+          ...(remote?.homepage?.mostPopularSection || {}),
+          featuredProductIds: Array.isArray(remote?.homepage?.mostPopularSection?.featuredProductIds)
+            ? remote.homepage.mostPopularSection.featuredProductIds.map((value: unknown) => String(value))
+            : defaultSettings.homepage.mostPopularSection.featuredProductIds,
         },
         campaignSection: {
           ...defaultSettings.homepage.campaignSection,

@@ -1,6 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { authFetch } from '../../services/api';
-import { AlertCircle, Boxes, CheckCircle2, Loader2, Search, TrendingDown, Warehouse } from 'lucide-react';
+import {
+  AlertCircle,
+  Boxes,
+  CheckCircle2,
+  Loader2,
+  Search,
+  Star,
+  TrendingDown,
+  Warehouse,
+} from 'lucide-react';
+import { getProductLifecycleState } from '../../lib/productLifecycle';
+import {
+  HOMEPAGE_MERCHANDISING_TARGETS,
+  type HomepageMerchandisingTarget,
+  isProductSelectedForMerchandising,
+  removeMerchandisingSelection,
+  upsertMerchandisingSelection,
+} from '../../lib/homepageMerchandising';
+import { defaultSettings, getSiteSettings, type SiteSettings, updateSiteSettings } from '../../services/settingsService';
 
 const statusTone: Record<string, string> = {
   live: 'bg-emerald-100 text-emerald-700',
@@ -13,10 +31,13 @@ const statusTone: Record<string, string> = {
 
 export function AdminInventory() {
   const [inventoryRows, setInventoryRows] = useState<any[]>([]);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
   const [error, setError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [savingTarget, setSavingTarget] = useState<string>('');
   const [stats, setStats] = useState({
     totalSkus: 0,
     totalUnits: 0,
@@ -29,8 +50,12 @@ export function AdminInventory() {
       try {
         setLoading(true);
         setError('');
+        setSaveError('');
 
-        const res = await authFetch('/admin/products');
+        const [res, settings] = await Promise.all([
+          authFetch('/admin/products'),
+          getSiteSettings(),
+        ]);
         const data = await res.json().catch(() => null);
 
         if (!res.ok) {
@@ -41,6 +66,7 @@ export function AdminInventory() {
         const rows = adminProducts.map(mapProductToInventoryRow);
 
         setInventoryRows(rows);
+        setSiteSettings(settings);
         setStats({
           totalSkus: rows.length,
           totalUnits: rows.reduce((sum: number, row: any) => sum + (row.stock ?? 0), 0),
@@ -80,6 +106,33 @@ export function AdminInventory() {
       return matchesSearch && matchesFilter;
     });
   }, [filter, inventoryRows, search]);
+
+  const handleMerchandisingToggle = async (product: any, target: HomepageMerchandisingTarget) => {
+    const targetKey = `${target}:${String(product.id || product.slug || '')}`;
+    const currentSelections = getMerchandisingSelections(siteSettings, target);
+    const isSelected = isProductSelectedForMerchandising(currentSelections, product);
+    const nextSelections = isSelected
+      ? removeMerchandisingSelection(currentSelections, product)
+      : upsertMerchandisingSelection(currentSelections, product);
+
+    const nextSettings = applyMerchandisingSelections(siteSettings, target, nextSelections);
+
+    try {
+      setSavingTarget(targetKey);
+      setSaveError('');
+      setSiteSettings(nextSettings);
+      await updateSiteSettings(nextSettings);
+      dispatchMerchandisingToast(
+        `${product.title || 'Product'} ${isSelected ? 'removed from' : 'added to'} ${getMerchandisingLabel(target)}`
+      );
+    } catch (err: any) {
+      console.error('Failed to update homepage merchandising settings:', err);
+      setSiteSettings((current) => applyMerchandisingSelections(current, target, currentSelections));
+      setSaveError(err?.message || 'Failed to update homepage merchandising');
+    } finally {
+      setSavingTarget('');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -144,6 +197,11 @@ export function AdminInventory() {
             {error}
           </div>
         ) : null}
+        {saveError ? (
+          <div className="border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm font-bold text-amber-700">
+            {saveError}
+          </div>
+        ) : null}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -160,12 +218,15 @@ export function AdminInventory() {
                   <th className="px-4 py-4">Signals</th>
                   <th className="px-4 py-4">Approval</th>
                   <th className="px-4 py-4">Visibility</th>
+                  <th className="px-4 py-4">Homepage Sections</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredProducts.map((product) => {
                   const stock = Number(product.stock || 0);
                   const stockLabel = stock === 0 ? 'Out of stock' : stock <= lowStockThreshold ? 'Low stock' : 'Healthy';
+                  const lifecycle = getProductLifecycleState(product);
+                  const isEligibleForHomepage = lifecycle.isCustomerVisible;
                   return (
                     <tr key={product.id} className="hover:bg-slate-50/80">
                       <td className="px-4 py-4">
@@ -215,12 +276,65 @@ export function AdminInventory() {
                           {product.visibilityStatus || 'hidden'}
                         </span>
                       </td>
+                      <td className="px-4 py-4">
+                        <div className="min-w-[280px] space-y-3">
+                          <div className="flex flex-wrap gap-2">
+                            {HOMEPAGE_MERCHANDISING_TARGETS.map((target) => {
+                              const isSelected = isProductSelectedForMerchandising(
+                                getMerchandisingSelections(siteSettings, target.key),
+                                product
+                              );
+                              const isSaving = savingTarget === `${target.key}:${String(product.id || product.slug || '')}`;
+                              return (
+                                <button
+                                  key={target.key}
+                                  type="button"
+                                  disabled={!isEligibleForHomepage || Boolean(savingTarget)}
+                                  onClick={() => void handleMerchandisingToggle(product, target.key)}
+                                  title={target.description}
+                                  className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition ${
+                                    isSelected
+                                      ? 'bg-violet-600 text-white hover:bg-violet-700'
+                                      : 'border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700'
+                                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                  {isSaving ? 'Saving...' : isSelected ? `${target.label} Added` : `Add to ${target.label}`}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {HOMEPAGE_MERCHANDISING_TARGETS.map((target) => {
+                              const isSelected = isProductSelectedForMerchandising(
+                                getMerchandisingSelections(siteSettings, target.key),
+                                product
+                              );
+                              if (!isSelected) return null;
+
+                              return (
+                                <span
+                                  key={`${product.id}-${target.key}-active`}
+                                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-violet-700"
+                                >
+                                  <Star size={10} />
+                                  {target.label}
+                                </span>
+                              );
+                            })}
+                            {!isEligibleForHomepage ? (
+                              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                                Needs live + approved + visible status
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-16 text-center text-sm font-medium text-slate-500">
+                    <td colSpan={8} className="px-6 py-16 text-center text-sm font-medium text-slate-500">
                       No inventory rows found for this filter.
                     </td>
                   </tr>
@@ -239,6 +353,105 @@ function mapProductToInventoryRow(product: any) {
     ...product,
     stock: Number(product?.stock || 0),
   };
+}
+
+function getMerchandisingSelections(settings: SiteSettings, target: HomepageMerchandisingTarget) {
+  switch (target) {
+    case 'campaign':
+      return settings.homepage.campaignSection.featuredProductIds || [];
+    case 'bestsellers':
+      return settings.homepage.featuredSection.bestsellersProductIds || [];
+    case 'bestchoice':
+      return settings.homepage.featuredSection.bestchoiceProductIds || [];
+    case 'onsale':
+      return settings.homepage.featuredSection.onsaleProductIds || [];
+    case 'mostpopular':
+      return settings.homepage.mostPopularSection.featuredProductIds || [];
+    default:
+      return [];
+  }
+}
+
+function applyMerchandisingSelections(
+  settings: SiteSettings,
+  target: HomepageMerchandisingTarget,
+  selections: string[]
+) {
+  switch (target) {
+    case 'campaign':
+      return {
+        ...settings,
+        homepage: {
+          ...settings.homepage,
+          campaignSection: {
+            ...settings.homepage.campaignSection,
+            featuredProductIds: selections,
+          },
+        },
+      };
+    case 'bestsellers':
+      return {
+        ...settings,
+        homepage: {
+          ...settings.homepage,
+          featuredSection: {
+            ...settings.homepage.featuredSection,
+            bestsellersProductIds: selections,
+          },
+        },
+      };
+    case 'bestchoice':
+      return {
+        ...settings,
+        homepage: {
+          ...settings.homepage,
+          featuredSection: {
+            ...settings.homepage.featuredSection,
+            bestchoiceProductIds: selections,
+          },
+        },
+      };
+    case 'onsale':
+      return {
+        ...settings,
+        homepage: {
+          ...settings.homepage,
+          featuredSection: {
+            ...settings.homepage.featuredSection,
+            onsaleProductIds: selections,
+          },
+        },
+      };
+    case 'mostpopular':
+      return {
+        ...settings,
+        homepage: {
+          ...settings.homepage,
+          mostPopularSection: {
+            ...settings.homepage.mostPopularSection,
+            featuredProductIds: selections,
+          },
+        },
+      };
+    default:
+      return settings;
+  }
+}
+
+function getMerchandisingLabel(target: HomepageMerchandisingTarget) {
+  return HOMEPAGE_MERCHANDISING_TARGETS.find((item) => item.key === target)?.label || 'homepage section';
+}
+
+function dispatchMerchandisingToast(message: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('exshopi:toast', {
+      detail: {
+        type: 'success',
+        message,
+      },
+    })
+  );
 }
 
 function safeDate(value: any) {

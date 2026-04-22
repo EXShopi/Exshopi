@@ -23,6 +23,8 @@ import {
   type CountryAwarePriced,
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
+import { useSettingsStore } from "../store/settings";
+import { isProductSelectedForMerchandising } from "../lib/homepageMerchandising";
 
 type PopularProduct = CountryAwarePriced & {
   id: string;
@@ -253,6 +255,9 @@ const PopularCard = React.memo(function PopularCard({ product }: PopularCardProp
 export default function MostPopularSection() {
   const navigate = useNavigate();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const featuredProductIds = useSettingsStore(
+    (state) => state.settings.homepage.mostPopularSection.featuredProductIds
+  );
   const [activeTab, setActiveTab] = useState<TabKey>("under200");
   const [catalog, setCatalog] = useState<PopularProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -267,7 +272,12 @@ export default function MostPopularSection() {
       .getAll()
       .then((items) => {
         if (!mounted) return;
-        const liveProducts = getLiveMarketplaceProducts(items)
+        const liveProducts = getLiveMarketplaceProducts(items);
+        const manuallySelected = liveProducts.filter((product) =>
+          isProductSelectedForMerchandising(featuredProductIds, product)
+        );
+
+        const prioritizedProducts = (manuallySelected.length ? manuallySelected : liveProducts)
           .sort((a, b) => {
             if (b.reviews !== a.reviews) return b.reviews - a.reviews;
             if (b.rating !== a.rating) return b.rating - a.rating;
@@ -276,7 +286,7 @@ export default function MostPopularSection() {
           .slice(0, 24)
           .map(mapPopularProduct);
 
-        setCatalog(liveProducts);
+        setCatalog(prioritizedProducts);
       })
       .catch(() => {
         if (mounted) setCatalog([]);
@@ -288,7 +298,7 @@ export default function MostPopularSection() {
     return () => {
       mounted = false;
     };
-  }, [selectedCountry]);
+  }, [featuredProductIds, selectedCountry]);
 
   const activeProducts = useMemo<PopularProduct[]>(() => {
     const activeFilter = tabs.find((tab) => tab.key === activeTab);
