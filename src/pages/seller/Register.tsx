@@ -10,19 +10,20 @@ import {
   Upload,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth';
+import { useCountryStore } from '../../store/country';
 import AuthService from '../../lib/authService';
+import { getCountryConfig } from '../../lib/countryConfig';
 import { sellerApplicationAPI } from '../../services/api';
 import { UAE_EMIRATES } from '../../lib/marketplaceTemplates';
 import { uploadDocumentFile, uploadImageFile } from '../../lib/uploadClient';
 import {
   getReadableFirebasePhoneVerificationError,
   getFirebasePhoneVerificationRuntimeInfo,
-  isValidUaePhone,
-  normalizeUaePhone,
   resetFirebasePhoneVerification,
   sendFirebasePhoneCode,
   verifyFirebasePhoneCode,
 } from '../../lib/firebasePhoneVerification';
+import { getInvalidPhoneMessage, isValidPhoneForCountry, normalizePhoneByCountry } from '../../utils/phone';
 
 type SellerType = 'individual' | 'company' | 'distributor';
 
@@ -94,6 +95,8 @@ export function SellerRegister() {
   const [verifyingPhoneCode, setVerifyingPhoneCode] = useState(false);
   const navigate = useNavigate();
   const { setUser, setRole, setSellerApplication } = useAuthStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const country = getCountryConfig(selectedCountry);
 
   const [formData, setFormData] = useState<SellerRegisterForm>(initialFormData);
 
@@ -193,7 +196,7 @@ export function SellerRegister() {
     if (!formData.email.trim()) return 'Email is required.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return 'Invalid email address.';
     if (!formData.phone.trim()) return 'Phone number is required.';
-    if (!isValidUaePhone(formData.phone)) return 'Enter a valid UAE phone number.';
+    if (!isValidPhoneForCountry(formData.phone, selectedCountry)) return getInvalidPhoneMessage(selectedCountry);
     if (!phoneVerified) return 'Phone verification is required before continuing.';
     if (!formData.password) return 'Password is required.';
     if (formData.password.length < 6) return 'Password must be at least 6 characters.';
@@ -239,7 +242,7 @@ export function SellerRegister() {
       return 'Firebase phone verification is not configured yet for this environment.';
     }
     if (raw.includes('auth/invalid-phone-number')) {
-      return 'Enter a valid UAE mobile number before requesting verification.';
+      return getInvalidPhoneMessage(selectedCountry);
     }
     if (raw.includes('auth/too-many-requests')) {
       return 'Too many verification attempts. Please wait and try again.';
@@ -265,18 +268,22 @@ export function SellerRegister() {
     if (raw.includes('auth/code-expired')) {
       return 'The verification code expired. Request a new code and try again.';
     }
-    return getReadableFirebasePhoneVerificationError(errorValue);
+    return getReadableFirebasePhoneVerificationError(errorValue, selectedCountry);
   };
 
   const handleSendPhoneCode = async () => {
     try {
       setError('');
-      if (!isValidUaePhone(formData.phone)) {
-        setError('Enter a valid UAE mobile number before requesting verification.');
+      if (!isValidPhoneForCountry(formData.phone, selectedCountry)) {
+        setError(getInvalidPhoneMessage(selectedCountry));
         return;
       }
       setSendingPhoneCode(true);
-      const response = await sendFirebasePhoneCode(normalizeUaePhone(formData.phone), 'seller-register-firebase-recaptcha');
+      const response = await sendFirebasePhoneCode(
+        normalizePhoneByCountry(formData.phone, selectedCountry),
+        'seller-register-firebase-recaptcha',
+        selectedCountry
+      );
       setPhoneVerificationSession(`firebase:${response.phone}`);
       setPhoneMessage(`Verification code sent to ${response.phone}. Enter it to confirm your seller phone.`);
     } catch (err) {
@@ -295,10 +302,12 @@ export function SellerRegister() {
       }
       setVerifyingPhoneCode(true);
       const result = await verifyFirebasePhoneCode(phoneCode);
-      if (normalizeUaePhone(result.phone) !== normalizeUaePhone(formData.phone)) {
+      const normalizedPhone = normalizePhoneByCountry(result.phone, selectedCountry);
+      if (normalizedPhone !== normalizePhoneByCountry(formData.phone, selectedCountry)) {
         throw new Error('Verified phone does not match the seller phone number.');
       }
-      setPhoneVerificationSession(`firebase:${normalizeUaePhone(result.phone)}`);
+      setPhoneVerificationSession(`firebase:${normalizedPhone}`);
+      setFormData((prev) => ({ ...prev, phone: normalizedPhone }));
       setPhoneVerified(true);
       setPhoneMessage('Phone verification complete. Your seller application is ready to submit.');
     } catch (err) {
@@ -320,7 +329,14 @@ export function SellerRegister() {
 
     setLoading(true);
     try {
-      const result = await AuthService.signUp(formData.email, formData.password, formData.fullName);
+      const normalizedPhone = normalizePhoneByCountry(formData.phone, selectedCountry);
+      const result = await AuthService.signUp(
+        formData.email,
+        formData.password,
+        formData.fullName,
+        normalizedPhone,
+        selectedCountry
+      );
 
       setUser({
         id: result.user.id,
@@ -335,9 +351,9 @@ export function SellerRegister() {
         businessName: formData.storeName,
         ownerName: formData.fullName,
         email: formData.email,
-        phone: formData.phone,
+        phone: normalizedPhone,
         businessType: formData.businessType,
-        country: 'UAE',
+        country: selectedCountry,
         city: formData.city,
         warehouseAddress: formData.warehouseAddress,
         vatTrn: formData.vatTrn,
@@ -571,11 +587,11 @@ export function SellerRegister() {
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    placeholder="+971 5X XXX XXXX"
+                    placeholder={selectedCountry === 'AE' ? '+971 5X XXX XXXX' : '+966 5X XXX XXXX'}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
                   />
                   <p className="mt-2 text-xs font-semibold text-slate-500">
-                    UAE phone verification is required before your seller application can be submitted.
+                    {country.shortName} phone verification is required before your seller application can be submitted.
                   </p>
                 </div>
                 <div>

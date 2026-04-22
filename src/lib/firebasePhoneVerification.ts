@@ -17,6 +17,7 @@ import {
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
   isLivePhoneVerificationRuntime,
 } from './firebase';
+import { getInvalidPhoneMessage, normalizePhoneByCountry } from '../utils/phone';
 
 export {
   canAttemptFirebasePhoneVerification,
@@ -195,14 +196,14 @@ function isBillingNotEnabledError(error: unknown) {
   );
 }
 
-export function getReadableFirebasePhoneVerificationError(error: unknown) {
+export function getReadableFirebasePhoneVerificationError(error: unknown, countryCode?: string | null) {
   const normalized = describeFirebasePhoneVerificationError(error).toLowerCase();
 
   if (isBillingNotEnabledError(error)) {
     return 'Firebase billing issue. Contact support.';
   }
   if (normalized.includes('auth/invalid-phone-number')) {
-    return 'Enter a valid UAE phone number';
+    return getInvalidPhoneMessage(countryCode);
   }
   if (normalized.includes('auth/too-many-requests') || normalized.includes('auth/quota-exceeded')) {
     return 'Too many attempts. Please wait.';
@@ -263,16 +264,11 @@ export function shouldFallbackToBackendOtp(error: unknown) {
 }
 
 export function normalizeUaePhone(phone: string) {
-  const raw = String(phone || '').replace(/[^\d+]/g, '');
-  if (raw.startsWith('+971')) return raw;
-  if (raw.startsWith('971')) return `+${raw}`;
-  if (raw.startsWith('05')) return `+971${raw.slice(1)}`;
-  if (raw.startsWith('5')) return `+971${raw}`;
-  return raw;
+  return normalizePhoneByCountry(phone, 'AE');
 }
 
 export function isValidUaePhone(phone: string) {
-  return /^\+971(5\d{8}|[234679]\d{7,8})$/.test(normalizeUaePhone(phone));
+  return /^\+9715\d{8}$/.test(normalizeUaePhone(phone));
 }
 
 function resetRecaptchaState() {
@@ -416,9 +412,13 @@ function clearPhoneConfirmationState(options?: { resetRecaptcha?: boolean }) {
   }
 }
 
-export async function sendFirebasePhoneCode(phone: string, containerId: string): Promise<FirebasePhoneSendResult> {
+export async function sendFirebasePhoneCode(
+  phone: string,
+  containerId: string,
+  countryCode?: string | null
+): Promise<FirebasePhoneSendResult> {
   const state = getGlobalState();
-  const normalizedPhone = normalizeUaePhone(phone);
+  const normalizedPhone = normalizePhoneByCountry(phone, countryCode);
   const cooldownRemainingMs = getFirebasePhoneSendCooldownRemainingMs();
   if (cooldownRemainingMs > 0) {
     logPhoneVerification('send-code-blocked-cooldown', {

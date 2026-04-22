@@ -1,3 +1,5 @@
+import { isValidPhoneForCountry as isValidSharedPhoneForCountry, normalizePhoneByCountry } from '../utils/phone';
+
 export type SupportedCountryCode = 'AE' | 'SA';
 
 export type CountryAwarePriced = {
@@ -253,33 +255,11 @@ export function normalizeCountryAwarePricing<T extends Record<string, any>>(prod
 }
 
 export function normalizePhoneForCountry(phone: string, countryCode?: string | null) {
-  const raw = String(phone || '').replace(/[^\d+]/g, '');
-  const country = getCountryConfig(countryCode);
-
-  if (country.code === 'AE') {
-    if (raw.startsWith('+971')) return raw;
-    if (raw.startsWith('971')) return `+${raw}`;
-    if (raw.startsWith('05')) return `+971${raw.slice(1)}`;
-    if (raw.startsWith('5')) return `+971${raw}`;
-    return raw;
-  }
-
-  if (raw.startsWith('+966')) return raw;
-  if (raw.startsWith('966')) return `+${raw}`;
-  if (raw.startsWith('05')) return `+966${raw.slice(1)}`;
-  if (raw.startsWith('5')) return `+966${raw}`;
-  return raw;
+  return normalizePhoneByCountry(phone, countryCode);
 }
 
 export function isValidPhoneForCountry(phone: string, countryCode?: string | null) {
-  const normalized = normalizePhoneForCountry(phone, countryCode);
-  const country = getCountryConfig(countryCode);
-
-  if (country.code === 'AE') {
-    return /^\+971(5\d{8}|[234679]\d{7,8})$/.test(normalized);
-  }
-
-  return /^\+9665\d{8}$/.test(normalized);
+  return isValidSharedPhoneForCountry(phone, countryCode);
 }
 
 export function getAvailabilityText(countryCode?: string | null) {

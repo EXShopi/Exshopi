@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { userAPI, sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
+import { useCountryStore } from '../../store/country';
 import { auth, googleProvider, signInWithPopup } from '../../supabaseClient';
 import {
   canAttemptFirebasePhoneVerification,
@@ -28,12 +29,11 @@ import {
   getFirebasePhoneVerificationRuntimeInfo,
   getReadableFirebasePhoneVerificationError,
   isFirebasePhoneVerificationSupportedOnCurrentOrigin,
-  isValidUaePhone,
-  normalizeUaePhone,
   resetFirebasePhoneVerification,
   sendFirebasePhoneCode,
   verifyFirebasePhoneCode,
 } from '../../lib/firebasePhoneVerification';
+import { getInvalidPhoneMessage, isValidPhoneForCountry, normalizePhoneByCountry } from '../../utils/phone';
 
 const REGISTER_FLOW_STORAGE_KEY = 'exshopi:register-flow:v1';
 const REGISTER_RECAPTCHA_CONTAINER_ID = 'register-recaptcha-container';
@@ -41,6 +41,7 @@ const REGISTER_RECAPTCHA_CONTAINER_ID = 'register-recaptcha-container';
 const Register = () => {
   const navigate = useNavigate();
   const { setUser, setRole } = useAuthStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -153,7 +154,7 @@ const Register = () => {
     if (raw.includes('missing env vars:')) {
       return error instanceof Error ? error.message : String(error || '').trim();
     }
-    if (raw.includes('auth/invalid-phone-number')) return 'Enter a valid UAE phone number before requesting verification.';
+    if (raw.includes('auth/invalid-phone-number')) return `${getInvalidPhoneMessage(selectedCountry)} Please request verification again.`;
     if (raw.includes('auth/too-many-requests') || raw.includes('auth/quota-exceeded')) {
       return 'Too many attempts. Please wait before requesting another code.';
     }
@@ -172,7 +173,7 @@ const Register = () => {
     if (raw.includes('requires localhost or https')) return 'Phone verification requires localhost or a secure HTTPS domain.';
     if (raw.includes('not configured')) return 'Firebase phone verification is not configured for this environment.';
 
-    return getReadableFirebasePhoneVerificationError(error);
+    return getReadableFirebasePhoneVerificationError(error, selectedCountry);
   };
 
   const handleSendOtp = async () => {
@@ -188,8 +189,8 @@ const Register = () => {
       return;
     }
 
-    if (!formData.phone || !isValidUaePhone(formData.phone)) {
-      setError('Enter a valid UAE phone number before requesting verification.');
+    if (!formData.phone || !isValidPhoneForCountry(formData.phone, selectedCountry)) {
+      setError(`${getInvalidPhoneMessage(selectedCountry)} Please request verification again.`);
       return;
     }
 
@@ -201,7 +202,7 @@ const Register = () => {
     setOtp('');
 
     try {
-      const normalizedPhone = normalizeUaePhone(formData.phone);
+      const normalizedPhone = normalizePhoneByCountry(formData.phone, selectedCountry);
       console.info('[Register Phone Verification] send pressed', {
         phone: normalizedPhone,
         resendCooldown,
@@ -221,7 +222,7 @@ const Register = () => {
         throw new Error('reCAPTCHA container missing');
       }
 
-      const response = await sendFirebasePhoneCode(normalizedPhone, REGISTER_RECAPTCHA_CONTAINER_ID);
+      const response = await sendFirebasePhoneCode(normalizedPhone, REGISTER_RECAPTCHA_CONTAINER_ID, selectedCountry);
       console.info('[Register Phone Verification] send success', {
         phone: response.phone,
         verificationId: response.verificationId,
@@ -276,8 +277,8 @@ const Register = () => {
           logo: '',
           banner: '',
           city: '',
-          country: '',
-          phone: formData.phone || '',
+          country: selectedCountry,
+          phone: normalizePhoneByCountry(formData.phone, selectedCountry),
           email: sessionUser.email,
           bankAccount: '',
           bankName: '',
@@ -314,13 +315,13 @@ const Register = () => {
       try {
         if (useFirebaseOtp) {
           console.info('[Register Phone Verification] verify start', {
-            phone: normalizeUaePhone(formData.phone),
+            phone: normalizePhoneByCountry(formData.phone, selectedCountry),
             otpLength: otp.trim().length,
             runtime: getFirebasePhoneVerificationRuntimeInfo(),
           });
           const response = await verifyFirebasePhoneCode(otp);
-          const verifiedPhone = normalizeUaePhone(response.phone);
-          if (verifiedPhone !== normalizeUaePhone(formData.phone)) {
+          const verifiedPhone = normalizePhoneByCountry(response.phone, selectedCountry);
+          if (verifiedPhone !== normalizePhoneByCountry(formData.phone, selectedCountry)) {
             throw new Error('Verified phone does not match the registration number.');
           }
           console.info('[Register Phone Verification] verify success', {
@@ -341,15 +342,16 @@ const Register = () => {
         try {
           console.info('[Register Phone Verification] profile creation start', {
             email: formData.email,
-            phone: normalizeUaePhone(formData.phone),
+            phone: normalizePhoneByCountry(formData.phone, selectedCountry),
           });
 
           await userAPI.register({
             name: formData.name,
             email: formData.email,
             password: formData.password,
-            phone: normalizeUaePhone(formData.phone),
+            phone: normalizePhoneByCountry(formData.phone, selectedCountry),
             role: formData.role,
+            country: selectedCountry,
           });
 
           const logged = await userAPI.login(formData.email, formData.password);
@@ -585,7 +587,7 @@ const Register = () => {
                         required
                         value={formData.phone}
                         onChange={handleChange}
-                        placeholder="+971 50 123 4567"
+                        placeholder={selectedCountry === 'AE' ? '+971 50 123 4567' : '+966 5X XXX XXXX'}
                         className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all font-bold text-slate-900 placeholder:text-slate-300"
                       />
                     </div>
@@ -638,7 +640,7 @@ const Register = () => {
                     </div>
                     <h3 className="text-xl font-black text-slate-900">Verify Phone</h3>
                     <p className="text-xs text-slate-500 font-medium">
-                      {otpMessage || `Enter the 6-digit code sent to ${normalizeUaePhone(formData.phone)}`}
+                      {otpMessage || `Enter the 6-digit code sent to ${normalizePhoneByCountry(formData.phone, selectedCountry)}`}
                     </p>
                   </div>
 

@@ -25,7 +25,9 @@ import {
 import AuthService from '../lib/authService';
 import { userAPI } from '../services/api';
 import { useAuthStore } from '../store/auth';
+import { useCountryStore } from '../store/country';
 import { auth } from '../supabaseClient';
+import { normalizePhoneByCountry } from '../utils/phone';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -53,7 +55,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const { user, setUser, setRole, setAccessToken, setSellerApplication } = useAuthStore();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const modalRef = useRef<HTMLDivElement>(null);
+  const phonePlaceholder = selectedCountry === 'AE' ? '+971 50 000 0000' : '+966 5X XXX XXXX';
+  const phoneOtpPreview = normalizePhoneByCountry(phone, selectedCountry) || phonePlaceholder;
 
   useEffect(() => {
     const checkProfile = async () => {
@@ -171,7 +176,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
     try {
       const fullName = profileData.fullName.trim();
-      const normalizedPhone = phone.trim();
+      const normalizedPhone = normalizePhoneByCountry(phone, selectedCountry);
       const fallbackName =
         email.split('@')[0]?.replace(/[._-]+/g, ' ').trim() || 'ExShopi Customer';
 
@@ -179,7 +184,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         email,
         password,
         fullName || fallbackName,
-        normalizedPhone
+        normalizedPhone,
+        selectedCountry
       );
 
       if (resp?.user) {
@@ -592,7 +598,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-medium outline-none transition-all focus:border-violet-500 focus:ring-4 focus:ring-violet-500/5"
-                      placeholder="+971 50 000 0000"
+                      placeholder={phonePlaceholder}
                     />
                   </div>
 
@@ -710,7 +716,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     </h2>
                     <p className="font-medium leading-relaxed text-slate-500">
                       Enter the code sent to your phone <br />
-                      <span className="font-bold text-slate-900">+971 ••• ••• 45</span>
+                      <span className="font-bold text-slate-900">{phoneOtpPreview}</span>
                     </p>
                   </div>
                 </div>
@@ -837,7 +843,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-12 pr-4 text-sm font-medium outline-none transition-all focus:border-violet-500"
-                        placeholder="+971 50 000 0000"
+                        placeholder={phonePlaceholder}
                       />
                     </div>
                   </div>

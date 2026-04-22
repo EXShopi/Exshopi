@@ -34,10 +34,9 @@ import {
   getCountryConfig,
   getProductCountryPrice,
   getShippingOption,
-  isValidPhoneForCountry,
-  normalizePhoneForCountry,
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
+import { getInvalidPhoneMessage, isValidPhoneForCountry, normalizePhoneByCountry } from "../utils/phone";
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -162,9 +161,8 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    if (selectedCountry !== "AE") return;
     const persistedSession = getActiveFirebasePhoneOtpSession();
-    const normalizedPhone = normalizePhoneForCountry(form.phone, selectedCountry);
+    const normalizedPhone = normalizePhoneByCountry(form.phone, selectedCountry);
     if (!persistedSession?.phone || !normalizedPhone) return;
     if (persistedSession.phone !== normalizedPhone || otpVerified) return;
 
@@ -322,7 +320,7 @@ export default function Checkout() {
       return "Please sign in to your customer account to continue COD verification.";
     }
     if (normalized.includes("valid uae phone")) {
-      return `Enter a valid ${country.shortName} phone number before requesting OTP.`;
+      return getInvalidPhoneMessage(selectedCountry);
     }
     if (normalized.includes("wait before requesting another otp")) {
       return "Please wait a moment before requesting another OTP.";
@@ -349,7 +347,7 @@ export default function Checkout() {
       return "Firebase phone verification is not configured yet for this environment.";
     }
     if (normalized.includes("auth/invalid-phone-number")) {
-      return `Enter a valid ${country.shortName} phone number.`;
+      return getInvalidPhoneMessage(selectedCountry);
     }
     if (normalized.includes("auth/too-many-requests")) {
       const remaining = Math.max(
@@ -406,7 +404,7 @@ export default function Checkout() {
       return "Phone verification works only on localhost or an HTTPS domain. Your current LAN HTTP URL is not supported by Firebase phone auth.";
     }
 
-    const readable = getReadableFirebasePhoneVerificationError(raw);
+    const readable = getReadableFirebasePhoneVerificationError(raw, selectedCountry);
     if (readable && readable !== raw) {
       return readable;
     }
@@ -472,7 +470,7 @@ export default function Checkout() {
         return;
       }
       if (!form.email || !isValidPhoneForCountry(form.phone, selectedCountry)) {
-        setOtpError(`Enter a valid ${country.shortName} phone number and email before requesting verification.`);
+        setOtpError(`${getInvalidPhoneMessage(selectedCountry)} Enter your email before requesting verification.`);
         return;
       }
 
@@ -480,14 +478,11 @@ export default function Checkout() {
       setSendingOtp(true);
       setOtpError("");
       setOtpMessage("");
-      const normalizedPhone = normalizePhoneForCountry(form.phone, selectedCountry);
-      const persistedSession =
-        selectedCountry === "AE" ? getActiveFirebasePhoneOtpSession() : null;
-      const cooldownRemainingMs =
-        selectedCountry === "AE" ? getFirebasePhoneSendCooldownRemainingMs() : 0;
+      const normalizedPhone = normalizePhoneByCountry(form.phone, selectedCountry);
+      const persistedSession = getActiveFirebasePhoneOtpSession();
+      const cooldownRemainingMs = getFirebasePhoneSendCooldownRemainingMs();
 
       if (
-        selectedCountry === "AE" &&
         persistedSession?.phone === normalizedPhone &&
         cooldownRemainingMs > 0
       ) {
@@ -504,23 +499,11 @@ export default function Checkout() {
         ...getFirebasePhoneVerificationRuntimeInfo(),
         phone: normalizedPhone,
       });
-      if (selectedCountry === "AE") {
-        const response = await sendFirebasePhoneCode(normalizedPhone, "checkout-firebase-recaptcha");
-        setOtpProvider("firebase");
-        setOtpSessionId(`firebase:${response.phone}`);
-        setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
-        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
-      } else {
-        const response = await codAPI.sendOtp({
-          phone: normalizedPhone,
-          email: form.email,
-          country: selectedCountry,
-        } as any);
-        setOtpProvider("backend");
-        setOtpSessionId(response.sessionId);
-        setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
-        setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
-      }
+      const response = await sendFirebasePhoneCode(normalizedPhone, "checkout-firebase-recaptcha", selectedCountry);
+      setOtpProvider("firebase");
+      setOtpSessionId(`firebase:${response.phone}`);
+      setOtpResendAvailableAt(response.resendAvailableAt || new Date(Date.now() + 60 * 1000).toISOString());
+      setOtpMessage(`Verification code sent to ${response.phone}. Enter the 6-digit code to continue your COD order.`);
     } catch (error: any) {
       console.error("[checkout] send-code failed", {
         ...getFirebasePhoneVerificationRuntimeInfo(),
@@ -547,8 +530,8 @@ export default function Checkout() {
       setOtpError("");
       if (otpProvider === "firebase") {
         const response = await verifyFirebasePhoneCode(otpCode);
-        const verifiedPhone = normalizePhoneForCountry(response.phone, selectedCountry);
-        if (verifiedPhone !== normalizePhoneForCountry(form.phone, selectedCountry)) {
+        const verifiedPhone = normalizePhoneByCountry(response.phone, selectedCountry);
+        if (verifiedPhone !== normalizePhoneByCountry(form.phone, selectedCountry)) {
           throw new Error("Verified phone does not match the checkout number.");
         }
         setOtpSessionId(`firebase:${verifiedPhone}`);
@@ -560,8 +543,8 @@ export default function Checkout() {
           sessionId: otpSessionId,
           code: otpCode,
         });
-        const verifiedPhone = normalizePhoneForCountry(response.phone, selectedCountry);
-        if (verifiedPhone !== normalizePhoneForCountry(form.phone, selectedCountry)) {
+        const verifiedPhone = normalizePhoneByCountry(response.phone, selectedCountry);
+        if (verifiedPhone !== normalizePhoneByCountry(form.phone, selectedCountry)) {
           throw new Error("Verified phone does not match the checkout number.");
         }
         setOtpSessionId(response.verificationToken);
@@ -644,7 +627,7 @@ export default function Checkout() {
           }),
           customerName: `${form.firstName} ${form.lastName}`.trim(),
           customerEmail: form.email,
-          customerPhone: normalizePhoneForCountry(form.phone, selectedCountry),
+          customerPhone: normalizePhoneByCountry(form.phone, selectedCountry),
           verificationToken: otpSessionId,
           shippingCost: sellerShippingCost,
           deliveryType: activeShipping.label,
@@ -1087,7 +1070,7 @@ export default function Checkout() {
                         </p>
                         {!otpVerified && otpSessionId && (
                           <p className="mt-2 text-xs font-semibold text-slate-500">
-                            Code sent to {normalizePhoneForCountry(form.phone, selectedCountry)}
+                            Code sent to {normalizePhoneByCountry(form.phone, selectedCountry)}
                           </p>
                         )}
                       </div>

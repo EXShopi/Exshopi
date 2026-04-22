@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { userAPI } from '../services/api';
 import { useAuthStore } from '../store/auth';
 import { getFirebaseConfigStatus, logFirebaseAuthDebug } from './firebase';
+import { normalizePhoneByCountry } from '../utils/phone';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -395,10 +396,12 @@ export class AuthService {
     email: string,
     password: string,
     displayName: string,
-    phone = ''
+    phone = '',
+    country: string = 'AE'
   ): Promise<AuthResponse> {
     try {
       const normalizedEmail = email.trim().toLowerCase();
+      const normalizedPhone = normalizePhoneByCountry(phone, country);
 
       try {
         const backendSession = mapBackendSessionToAuthResult(
@@ -406,9 +409,9 @@ export class AuthService {
             name: displayName,
             email: normalizedEmail,
             password,
-            phone,
+            phone: normalizedPhone,
             role: 'customer',
-            country: 'AE',
+            country,
           })
         );
 
@@ -428,7 +431,7 @@ export class AuthService {
           data: {
             displayName,
             name: displayName,
-            phone,
+            phone: normalizedPhone,
           },
         },
       });
@@ -444,8 +447,8 @@ export class AuthService {
         email: normalizedEmail,
         name: displayName,
         full_name: displayName,
-        phone,
-        country: 'AE',
+        phone: normalizedPhone,
+        country,
         role: 'customer',
         status: 'active',
       };
