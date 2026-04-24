@@ -1,0 +1,853 @@
+{
+  "generatedAt": "2026-04-24T14:49:51.097Z",
+  "backupPath": "backend/db.json.pre-draft-catalog-apply-1777042191032.bak",
+  "changedProducts": 24,
+  "logs": [
+    {
+      "productId": "prod_import_xlsx_1776538003641_51",
+      "title": "Dell Latitude 7280 Refurbished Laptop – Core i5-7300U | 8GB | 256GB | 12.5-inch | Windows 10 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_52",
+      "title": "Dell Latitude 7290 Refurbished Laptop – Core i5-7300U | 8GB | 256GB | 12.5-inch | Windows 10 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_53",
+      "title": "Dell Latitude 7300 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_54",
+      "title": "Dell Latitude 7390 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_55",
+      "title": "Dell Latitude 7400 Refurbished Laptop – Core i5-10310U | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_56",
+      "title": "Dell Latitude 7410 Refurbished Laptop – Core i5-1145G7 | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_57",
+      "title": "Dell Latitude 7420 Refurbished Laptop – Core i5-1235U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_58",
+      "title": "Dell Latitude 7430 Refurbished Laptop – Core i5-1335U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_61",
+      "title": "Dell Latitude 7480 Refurbished Laptop – Core i5-7300U | 8GB | 256GB | 14-inch | Windows 10 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_62",
+      "title": "Dell Latitude 7490 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_63",
+      "title": "Dell Latitude 5400 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_64",
+      "title": "Dell Latitude 5410 Refurbished Laptop – Core i5-10310U | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_65",
+      "title": "Dell Latitude 5420 Refurbished Laptop – Core i5-1145G7 | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_66",
+      "title": "Dell Latitude 5430 Refurbished Laptop – Core i5-1235U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_67",
+      "title": "Dell Latitude 5440 Refurbished Laptop – Core i5-1335U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_70",
+      "title": "Dell Latitude 5490 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_71",
+      "title": "Dell Latitude 5500 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_72",
+      "title": "Dell Latitude 5510 Refurbished Laptop – Core i5-10310U | 16GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_73",
+      "title": "Dell Latitude 5520 Refurbished Laptop – Core i5-1145G7 | 16GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_74",
+      "title": "Dell Latitude 5530 Refurbished Laptop – Core i5-1235U | 16GB | 512GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_75",
+      "title": "Dell Latitude 5540 Refurbished Laptop – Core i5-1335U | 16GB | 512GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_86",
+      "title": "Dell Vostro 3400 Refurbished Laptop – Core i5-1135G7 | 8GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_87",
+      "title": "Dell Vostro 3500 Refurbished Laptop – Core i5-1135G7 | 8GB | 512GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_89",
+      "title": "Dell Vostro 3520 Refurbished Laptop – Core i5-1235U | 8GB | 512GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_90",
+      "title": "Dell Vostro 3530 Refurbished Laptop – Core i5-1335U | 8GB | 512GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_91",
+      "title": "Dell XPS 13 (9310) Renewed Laptop – Core i7-1165G7 | 16GB | 512GB | 13.4-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_92",
+      "title": "Dell XPS 13 (9320) Renewed Laptop – Core i7-1260P | 16GB | 512GB | 13.4-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_93",
+      "title": "Dell XPS 15 (9500) Renewed Laptop – Core i7-10750H | 16GB | 512GB | 15.6-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_94",
+      "title": "Dell XPS 15 (9510) Renewed Laptop – Core i7-11800H | 16GB | 512GB | 15.6-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_95",
+      "title": "Dell XPS 15 (9520) Renewed Laptop – Core i7-12700H | 16GB | 512GB | 15.6-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_101",
+      "title": "Lenovo ThinkPad T480 Refurbished Laptop – Core i5-8350U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_102",
+      "title": "Lenovo ThinkPad T490 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_103",
+      "title": "Lenovo ThinkPad T14 Refurbished Laptop – Core i5-10210U | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_104",
+      "title": "Lenovo ThinkPad T14 Gen 2 Refurbished Laptop – Core i5-1135G7 | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_105",
+      "title": "Lenovo ThinkPad T14 Gen 3 Refurbished Laptop – Core i5-1235U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_106",
+      "title": "Lenovo ThinkPad T14 Gen 4 Refurbished Laptop – Core i5-1335U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_111",
+      "title": "Lenovo ThinkPad X1 Carbon Gen 6 Refurbished Laptop – Core i5-8350U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_112",
+      "title": "Lenovo ThinkPad X1 Carbon Gen 7 Refurbished Laptop – Core i5-8265U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_113",
+      "title": "Lenovo ThinkPad X1 Carbon Gen 8 Refurbished Laptop – Core i5-10210U | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_114",
+      "title": "Lenovo ThinkPad X1 Carbon Gen 9 Refurbished Laptop – Core i5-1135G7 | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_115",
+      "title": "Lenovo ThinkPad X1 Carbon Gen 10 Refurbished Laptop – Core i5-1240P | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_116",
+      "title": "Lenovo ThinkPad X1 Yoga Gen 3 Renewed Laptop – Core i5-8350U | 16GB | 512GB | 14-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_117",
+      "title": "Lenovo ThinkPad X1 Yoga Gen 4 Renewed Laptop – Core i5-10210U | 16GB | 512GB | 14-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_118",
+      "title": "Lenovo ThinkPad X1 Yoga Gen 5 Renewed Laptop – Core i5-1135G7 | 16GB | 512GB | 14-inch | Windows 11 Home",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_119",
+      "title": "Lenovo ThinkPad E480 Refurbished Laptop – Core i5-8350U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_120",
+      "title": "Lenovo ThinkPad E490 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_155",
+      "title": "Apple iPhone 11 64GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_156",
+      "title": "Apple iPhone 11 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_157",
+      "title": "Apple iPhone 11 Pro 64GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_158",
+      "title": "Apple iPhone 11 Pro Max 64GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_159",
+      "title": "Apple iPhone 12 64GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_160",
+      "title": "Apple iPhone 12 Mini 64GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_161",
+      "title": "Apple iPhone 12 Pro 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_162",
+      "title": "Apple iPhone 12 Pro Max 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_163",
+      "title": "Apple iPhone 13 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_164",
+      "title": "Apple iPhone 13 Mini 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_165",
+      "title": "Apple iPhone 13 Pro 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_166",
+      "title": "Apple iPhone 13 Pro Max 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_167",
+      "title": "Apple iPhone 14 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_168",
+      "title": "Apple iPhone 14 Plus 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_169",
+      "title": "Apple iPhone 14 Pro 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_170",
+      "title": "Apple iPhone 14 Pro Max 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_171",
+      "title": "Apple iPhone 15 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_172",
+      "title": "Apple iPhone 15 Plus 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_173",
+      "title": "Apple iPhone 15 Pro 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_174",
+      "title": "Apple iPhone 15 Pro Max 256GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_175",
+      "title": "Apple iPhone 16 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_176",
+      "title": "Apple iPhone 16 Plus 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_177",
+      "title": "Apple iPhone 16 Pro 128GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_178",
+      "title": "Apple iPhone 16 Pro Max 256GB Refurbished Smartphone - UAE",
+      "fieldsChanged": [
+        "title",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "ogTitle",
+        "ogDescription",
+        "shortDescription",
+        "longDescription",
+        "sellerNotes"
+      ],
+      "skipped": false
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_1",
+      "title": "HP EliteBook 840 G3 Refurbished Laptop – Core i5-6300U | 8GB | 256GB | 14-inch | Windows 10 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_2",
+      "title": "HP EliteBook 840 G5 Refurbished Laptop – Core i5-8250U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_3",
+      "title": "HP EliteBook 840 G6 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_4",
+      "title": "HP EliteBook 840 G7 Refurbished Laptop – Core i5-10310U | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_5",
+      "title": "HP EliteBook 840 G8 Refurbished Laptop – Core i5-1135G7 | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_6",
+      "title": "HP EliteBook 850 G5 Refurbished Laptop – Core i5-8250U | 8GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_7",
+      "title": "HP EliteBook 850 G6 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_8",
+      "title": "HP EliteBook 850 G7 Refurbished Laptop – Core i5-10310U | 16GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_9",
+      "title": "HP EliteBook 745 G5 Refurbished Laptop – Ryzen 5 PRO 2500U | 8GB | 256GB | 14-inch | Windows 11",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_10",
+      "title": "HP EliteBook 745 G6 Refurbished Laptop – Ryzen 5 PRO 3500U | 8GB | 256GB | 14-inch | Windows 11",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_11",
+      "title": "HP ProBook 440 G5 Refurbished Laptop – Core i5-8250U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_12",
+      "title": "HP ProBook 440 G6 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_13",
+      "title": "HP ProBook 440 G7 Refurbished Laptop – Core i5-10310U | 16GB | 256GB | 14-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_14",
+      "title": "HP ProBook 450 G5 Refurbished Laptop – Core i5-8250U | 8GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_15",
+      "title": "HP ProBook 450 G6 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_16",
+      "title": "HP ProBook 450 G7 Refurbished Laptop – Core i5-10310U | 16GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_bundle2_1776543525241_151",
+      "title": "Apple MacBook Pro 13-inch (2016) A1706 – Core i7 3.3GHz, 16GB RAM, 256GB SSD, Silver (Refurbished)",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_bundle2_1776543525241_152",
+      "title": "Apple MacBook Pro 13-inch (2020) M1, 8GB RAM, 256GB SSD, Silver, Arabic/English Keyboard (Renewed)",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_bundle2_1776543525241_153",
+      "title": "Apple MacBook Pro 13-inch (2019) A1989 – Core i5 2.4GHz, 16GB RAM, 256GB SSD, Touch Bar, Silver (Refurbished)",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    },
+    {
+      "productId": "prod_import_bundle2_1776543525241_154",
+      "title": "Apple MacBook Air 13-inch (2020) M1 – 8GB RAM, 256GB SSD, Space Grey (Renewed)",
+      "fieldsChanged": [],
+      "skipped": true,
+      "reason": "no_better_data_to_apply"
+    }
+  ]
+}
