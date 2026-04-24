@@ -24,7 +24,6 @@ import {
   type CountryAwarePriced,
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
-import { getPrimaryProductImage, handleProductImageError, PRODUCT_PLACEHOLDER_IMAGE } from "../utils/productImages";
 
 const tabs = ["bestsellers", "bestchoice", "onsale"] as const;
 
@@ -51,7 +50,6 @@ const FeaturedCard = React.memo(function FeaturedCard({ product }: { product: Fe
   const navigate = useNavigate();
   const displayPrice = getProductCountryPrice(product, selectedCountry);
   const displayComparePrice = getProductCountryCompareAtPrice(product, selectedCountry);
-  const resolvedImage = getPrimaryProductImage(product);
 
   const saved = useWishlistStore((state) =>
     state.collections.some((collection) =>
@@ -138,17 +136,13 @@ const FeaturedCard = React.memo(function FeaturedCard({ product }: { product: Fe
 
         <div className="aspect-square w-full overflow-hidden rounded-[14px] bg-white flex items-center justify-center md:h-[245px] md:aspect-auto md:rounded-[18px]">
           <OptimizedImage
-            src={resolvedImage}
+            src={product.image}
             alt={product.title}
             className="h-full w-full object-contain object-center transition duration-300 group-hover:scale-[1.03]"
             lazy={true}
             width={245}
             height={245}
             sizes="(max-width: 768px) 50vw, 245px"
-            fallbackSrc={PRODUCT_PLACEHOLDER_IMAGE}
-            onError={(event) =>
-              handleProductImageError(event, { id: product.id, title: product.title }, resolvedImage)
-            }
           />
         </div>
       </div>

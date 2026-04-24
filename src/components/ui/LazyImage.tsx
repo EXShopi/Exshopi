@@ -6,13 +6,11 @@ export default function LazyImage({
   alt,
   className = "",
   wrapperClassName = "",
-  onError,
 }: {
   src: string;
   alt: string;
   className?: string;
   wrapperClassName?: string;
-  onError?: React.ReactEventHandler<HTMLImageElement>;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
@@ -46,10 +44,10 @@ export default function LazyImage({
           alt={alt}
           loading="lazy"
           onLoad={() => setLoaded(true)}
-          onError={onError}
           className={`${className} transition-all duration-500 ${loaded ? "scale-100 opacity-100 blur-0" : "scale-[1.03] opacity-0 blur-sm"}`}
         />
       ) : null}
     </div>
   );
 }
+

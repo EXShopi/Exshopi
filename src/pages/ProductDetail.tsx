@@ -42,7 +42,6 @@ import { readRouteSnapshot, resolveProductSnapshot } from "../lib/routeSnapshot"
 import { getCountryConfig, getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 import { buildCountryAwareWhatsAppMessage, getExShopiWhatsAppNumber } from "../lib/whatsapp";
-import { getPrimaryProductImage, getProductImageUrls, handleProductImageError, PRODUCT_PLACEHOLDER_IMAGE } from "../utils/productImages";
 // Local helpers for safe category path and slugification
 function slugifyLocal(value?: string) {
   return String(value || "")
@@ -277,9 +276,41 @@ function colorToHex(color: string) {
   return COLOR_HEX_MAP[color.trim().toLowerCase()] || "#94a3b8";
 }
 
+function extractImageUrl(value: unknown): string {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "object") {
+    const candidate = value as Record<string, unknown>;
+    const nestedUrl =
+      candidate.url ||
+      candidate.image ||
+      candidate.src ||
+      candidate.secure_url ||
+      candidate.secureUrl ||
+      candidate.preview ||
+      candidate.thumbnail ||
+      candidate.path;
+
+    if (typeof nestedUrl === "string") {
+      return nestedUrl.trim();
+    }
+  }
+
+  return "";
+}
+
 function getProductImages(image?: string, gallery?: unknown) {
-  const uniqueImages = getProductImageUrls({ image, gallery });
-  return uniqueImages.length > 0 ? uniqueImages : [PRODUCT_PLACEHOLDER_IMAGE];
+  const galleryImages = Array.isArray(gallery)
+    ? gallery.map((item) => extractImageUrl(item)).filter(Boolean)
+    : [];
+
+  const images = [extractImageUrl(image), ...galleryImages].filter(Boolean);
+  const uniqueImages = Array.from(new Set(images));
+  return uniqueImages.length > 0 ? uniqueImages : ["/hero/hero-1.webp"];
 }
 
 function mapToCardProduct(item: any) {
@@ -296,7 +327,7 @@ function mapToCardProduct(item: any) {
     compareAtPriceKsa: item.compareAtPriceKsa,
     rating: item.rating || 4.5,
     reviews: item.reviews || 0,
-    image: getPrimaryProductImage(item),
+    image: item.image,
     category: item.category || item.brand || "Marketplace",
     stock:
       typeof item.stock === "number"
@@ -436,13 +467,10 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
         </div>
 
         <img
-          src={getPrimaryProductImage(product)}
+          src={product.image}
           alt={buildProductImageAlt(product)}
           loading="lazy"
           className="h-[160px] w-full object-contain p-3 transition duration-300 group-hover:scale-105"
-          onError={(event) =>
-            handleProductImageError(event, { id: product.id, title: product.title }, product.image)
-          }
         />
       </div>
 
@@ -1243,12 +1271,8 @@ const structuredTemplate = getSpecificationTemplate(
     return buildDetailedSpecificationGroups(sourceValues, structuredTemplate, extraGroups);
   }, [productSpecs?.specificationGroups, productSpecs?.specificationValues, productSpecs?.additionalSpecificationGroups, baseSpecifications, baseAttributes, structuredTemplate]);
   const productImages = useMemo(
-    () =>
-      getProductImages(
-        activeVariant?.image || product?.image,
-        product?.images || product?.gallery || product?.media || product?.productImages
-      ),
-    [product?.gallery, product?.image, product?.images, product?.media, product?.productImages, activeVariant?.image]
+    () => getProductImages(activeVariant?.image || product?.image, product?.images || product?.gallery || product?.media),
+    [product?.gallery, product?.image, product?.images, product?.media, activeVariant?.image]
   );
 
   useEffect(() => {
@@ -1602,13 +1626,6 @@ const structuredTemplate = getSpecificationTemplate(
                   className="h-full w-full object-contain p-8 transition duration-300 hover:scale-105"
                   loading={mainImage === 0 ? "eager" : "lazy"}
                   decoding="async"
-                  onError={(event) =>
-                    handleProductImageError(
-                      event,
-                      { id: product?.id, title: product?.title },
-                      productImages[mainImage]
-                    )
-                  }
                 />
                 <div className="absolute right-5 top-5 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-bold text-white shadow-lg">
                   Save 23%
@@ -1634,9 +1651,6 @@ const structuredTemplate = getSpecificationTemplate(
                         className="h-full w-full object-cover"
                         loading="lazy"
                         decoding="async"
-                        onError={(event) =>
-                          handleProductImageError(event, { id: product?.id, title: product?.title }, img)
-                        }
                       />
                     </button>
                   ))}

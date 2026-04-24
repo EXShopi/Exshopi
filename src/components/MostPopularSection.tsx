@@ -25,7 +25,6 @@ import {
 import { useCountryStore } from "../store/country";
 import { useSettingsStore } from "../store/settings";
 import { isProductSelectedForMerchandising } from "../lib/homepageMerchandising";
-import { getPrimaryProductImage, handleProductImageError, PRODUCT_PLACEHOLDER_IMAGE } from "../utils/productImages";
 
 type PopularProduct = CountryAwarePriced & {
   id: string;
@@ -82,7 +81,6 @@ const PopularCard = React.memo(function PopularCard({ product }: PopularCardProp
   const [isAdded, setIsAdded] = useState(false);
   const displayPrice = getProductCountryPrice(product, selectedCountry);
   const displayComparePrice = getProductCountryCompareAtPrice(product, selectedCountry);
-  const resolvedImage = getPrimaryProductImage(product);
 
   const saved = useWishlistStore((state) =>
     state.collections.some((collection) => collection.productIds.includes(product.id))
@@ -176,17 +174,13 @@ const PopularCard = React.memo(function PopularCard({ product }: PopularCardProp
 
         <div className="aspect-square flex items-center justify-center md:h-[245px] md:aspect-auto">
           <OptimizedImage
-            src={resolvedImage}
+            src={product.image}
             alt={product.title}
             className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
             lazy={true}
             width={245}
             height={245}
             sizes="(max-width: 768px) 50vw, 245px"
-            fallbackSrc={PRODUCT_PLACEHOLDER_IMAGE}
-            onError={(event) =>
-              handleProductImageError(event, { id: product.id, title: product.title }, resolvedImage)
-            }
           />
         </div>
       </div>
