@@ -266,14 +266,15 @@ export const DEFAULT_SPECIFICATION_TEMPLATES: SpecificationTemplate[] = [
     title: 'Accessories',
     description: 'Compatibility-focused accessory specifications for electronics and lifestyle listings.',
     appliesTo: {
-      subcategorySlugs: ['accessories', 'computer-accessories', 'mobile-accessories', 'sports-accessories', 'car-accessories', 'air-tags'],
-      subcategoryNameIncludes: ['accessor', 'case', 'cable', 'charger', 'adapter', 'airtag', 'air tag', 'tracker'],
+      subcategorySlugs: ['accessories', 'computer-accessories', 'mobile-accessories', 'laptop-accessories', 'sports-accessories', 'car-accessories'],
+      subcategoryNameIncludes: ['accessor', 'case', 'cable', 'charger', 'adapter', 'keyboard', 'mouse', 'tracker'],
     },
     sections: ['General', 'Compatibility', 'Material', 'Connectivity', 'In The Box', 'Warranty'],
     variantDimensions: ['color', 'size'],
     highlightSuggestions: ['Wide device compatibility', 'Compact everyday use', 'Premium finishing'],
     fields: [
       { key: 'brand', label: 'Brand', type: 'select', section: 'General', options: BRAND_OPTIONS, required: true },
+      { key: 'accessoryCategory', label: 'Accessory Category', type: 'select', section: 'General', required: true, options: ['Mobile Accessory', 'Laptop Accessory', 'Tablet Accessory', 'Charging Accessory', 'Protection Accessory', 'Smart Accessory', 'Audio Accessory'] },
       { key: 'type', label: 'Type', type: 'text', section: 'General', required: true, placeholder: 'Cable / Charger / Case / Mouse' },
       { key: 'compatibility', label: 'Compatibility', type: 'tags', section: 'Compatibility', required: true, placeholder: 'iPhone 15, MacBook Air, USB-C' },
       { key: 'material', label: 'Material', type: 'text', section: 'Material', placeholder: 'Silicone / Aluminum / TPU' },

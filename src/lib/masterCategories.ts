@@ -58,9 +58,9 @@ export const MASTER_CATEGORIES: CategoryNode[] = [
         description: 'Portable laptops, notebooks, ultrabooks, and MacBook-ready computing deals.',
       },
       {
-        slug: 'air-tags',
-        name: 'Air Tags',
-        description: 'Bluetooth item trackers, AirTag-style finders, and smart location accessories.',
+        slug: 'accessories',
+        name: 'Accessories',
+        description: 'Mobile, laptop, charging, protection, and smart accessories for everyday electronics.',
       },
       {
         slug: 'mobiles-tablets',
