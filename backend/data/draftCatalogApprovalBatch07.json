@@ -1,0 +1,193 @@
+{
+  "generatedAt": "2026-04-24T14:54:27.040Z",
+  "batch": "Batch 07",
+  "approvedCount": 0,
+  "products": [],
+  "unapprovedCount": 23,
+  "unapprovedProducts": [
+    {
+      "productId": "prod_import_xlsx_1776538003641_59",
+      "currentTitle": "Dell Latitude 7440 Laptop",
+      "improvedTitle": "Dell Latitude 7440 Refurbished Laptop – Core i5 Ultra | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Processor string is too generic (\"Core i5 Ultra\") to safely confirm the exact CPU/spec combination from current draft data."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_60",
+      "currentTitle": "Dell Latitude 7450 Laptop",
+      "improvedTitle": "Dell Latitude 7450 Refurbished Laptop – Core i5 Ultra | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Processor string is too generic (\"Core i5 Ultra\") to safely confirm the exact CPU/spec combination from current draft data."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_68",
+      "currentTitle": "Dell Latitude 5450 Laptop",
+      "improvedTitle": "Dell Latitude 5450 Refurbished Laptop – Core i5 Ultra | 16GB | 512GB | 14-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Processor string is too generic (\"Core i5 Ultra\") to safely confirm the exact CPU/spec combination from current draft data."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_69",
+      "currentTitle": "Dell Latitude 5480 Laptop",
+      "improvedTitle": "Dell Latitude 5480 Refurbished Laptop – Core i5 | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Processor is recorded only as \"Core i5\", so the exact model/spec bundle is still too weak for safe approval."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_76",
+      "currentTitle": "Dell Inspiron 14 3000 Laptop",
+      "improvedTitle": "Dell Inspiron 14 3000 Renewed Laptop – Core i5-1235U | 8GB | 512GB | 14-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Model is still a broad series-level identifier (Inspiron 14 3000) rather than a clearly pinned exact SKU/config."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_77",
+      "currentTitle": "Dell Inspiron 15 3000 Laptop",
+      "improvedTitle": "Dell Inspiron 15 3000 Renewed Laptop – Core i5-1235U | 8GB | 512GB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Model is still a broad series-level identifier (Inspiron 15 3000) rather than a clearly pinned exact SKU/config."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_78",
+      "currentTitle": "Dell Inspiron 14 5000 Laptop",
+      "improvedTitle": "Dell Inspiron 14 5000 Renewed Laptop – Core i5-11320H | 16GB | 512GB | 14-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Model is still a broad series-level identifier (Inspiron 14 5000) rather than a clearly pinned exact SKU/config."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_79",
+      "currentTitle": "Dell Inspiron 15 5000 Laptop",
+      "improvedTitle": "Dell Inspiron 15 5000 Renewed Laptop – Core i5-11320H | 16GB | 512GB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Model is still a broad series-level identifier (Inspiron 15 5000) rather than a clearly pinned exact SKU/config."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_80",
+      "currentTitle": "Dell Inspiron 14 7000 Laptop",
+      "improvedTitle": "Dell Inspiron 14 7000 Renewed Laptop – Core i7-1260P | 16GB | 512GB | 14-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Model is still a broad series-level identifier (Inspiron 14 7000) rather than a clearly pinned exact SKU/config."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_81",
+      "currentTitle": "Dell Inspiron 15 7000 Laptop",
+      "improvedTitle": "Dell Inspiron 15 7000 Renewed Laptop – Core i7-1260P | 16GB | 512GB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Model is still a broad series-level identifier (Inspiron 15 7000) rather than a clearly pinned exact SKU/config."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_82",
+      "currentTitle": "Dell Inspiron 3501 Laptop",
+      "improvedTitle": "Dell Inspiron 3501 Renewed Laptop – Core i5-1135G7 | 8GB | 512GB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Consumer model family is plausible, but current draft data still does not prove the exact variant-specific spec bundle strongly enough."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_83",
+      "currentTitle": "Dell Inspiron 3511 Laptop",
+      "improvedTitle": "Dell Inspiron 3511 Renewed Laptop – Core i5-1135G7 | 8GB | 512GB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Consumer model family is plausible, but current draft data still does not prove the exact variant-specific spec bundle strongly enough."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_84",
+      "currentTitle": "Dell Inspiron 3520 Laptop",
+      "improvedTitle": "Dell Inspiron 3520 Renewed Laptop – Core i5-1235U | 8GB | 512GB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Consumer model family is plausible, but current draft data still does not prove the exact variant-specific spec bundle strongly enough."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_85",
+      "currentTitle": "Dell Inspiron 3530 Laptop",
+      "improvedTitle": "Dell Inspiron 3530 Renewed Laptop – Core i5-1335U | 8GB | 512GB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Consumer model family is plausible, but current draft data still does not prove the exact variant-specific spec bundle strongly enough."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_88",
+      "currentTitle": "Dell Vostro 3510 Laptop",
+      "improvedTitle": "Dell Vostro 3510 Refurbished Laptop – Core i5-1335U | 8GB | 512GB | 15.6-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Spec suggestion looks too strong for the currently stored model-only record, so exact CPU/config confirmation is still missing."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_96",
+      "currentTitle": "Dell G3 15 Laptop",
+      "improvedTitle": "Dell G3 15 Renewed Laptop – Core i5-10300H | 16GB | 1TB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Gaming family title is too broad to safely approve the exact configuration without stronger variant evidence."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_97",
+      "currentTitle": "Dell G5 15 Laptop",
+      "improvedTitle": "Dell G5 15 Renewed Laptop – Core i7-10750H | 16GB | 1TB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Gaming family title is too broad to safely approve the exact configuration without stronger variant evidence."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_98",
+      "currentTitle": "Dell G15 Gaming Laptop",
+      "improvedTitle": "Dell G15 Gaming Renewed Laptop – Core i7-13650HX | 16GB | 1TB | 15.6-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Gaming family title is too broad to safely approve the exact configuration without stronger variant evidence."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_107",
+      "currentTitle": "Lenovo ThinkPad T15 Laptop",
+      "improvedTitle": "Lenovo ThinkPad T15 Refurbished Laptop – Core i5 | 8GB | 256GB | 15.6-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Processor is recorded only as \"Core i5\", so the exact ThinkPad T15 configuration is still not safely pinned down."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_108",
+      "currentTitle": "Lenovo ThinkPad T16 Laptop",
+      "improvedTitle": "Lenovo ThinkPad T16 Refurbished Laptop – Core i5 | 8GB | 256GB | 16-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Processor is recorded only as \"Core i5\", so the exact ThinkPad T16 configuration is still not safely pinned down."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_109",
+      "currentTitle": "Lenovo ThinkPad X280 Laptop",
+      "improvedTitle": "Lenovo ThinkPad X280 Refurbished Laptop – Core i5-8350U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Current spec suggestion likely conflicts with the model’s usual screen class, so the stored configuration needs review before approval."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_110",
+      "currentTitle": "Lenovo ThinkPad X390 Laptop",
+      "improvedTitle": "Lenovo ThinkPad X390 Refurbished Laptop – Core i5-8365U | 8GB | 256GB | 14-inch | Windows 11 Pro",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "Current spec suggestion likely conflicts with the model’s usual screen class, so the stored configuration needs review before approval."
+    },
+    {
+      "productId": "prod_import_xlsx_1776538003641_133",
+      "currentTitle": "Lenovo IdeaPad S340 Laptop",
+      "improvedTitle": "Lenovo IdeaPad S340 Renewed Laptop – Core i5-10210U | 8GB | 512GB | 14-inch | Windows 11 Home",
+      "confidenceLevel": "high",
+      "approvedForApply": false,
+      "reason": "IdeaPad S340 is still a broad family identifier and the current record does not safely prove the exact variant-specific spec set."
+    }
+  ]
+}

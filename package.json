@@ -17,6 +17,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "validate:category-assignment": "node --import tsx scripts/validateCategoryAssignment.ts",
+    "audit:draft-catalog": "tsx scripts/auditDraftCatalog.ts",
+    "apply:draft-catalog-updates": "tsx scripts/applyDraftCatalogUpdates.ts",
     "start": "node dist/backend/server.js",
     "start:api": "node dist/backend/server.js",
     "render:start:api": "node dist/backend/server.js",
