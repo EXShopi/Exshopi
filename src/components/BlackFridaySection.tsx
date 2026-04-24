@@ -28,6 +28,7 @@ import {
   type CountryAwarePriced,
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
+import { getPrimaryProductImage, handleProductImageError, PRODUCT_PLACEHOLDER_IMAGE } from "../utils/productImages";
 
 type DealItem = CountryAwarePriced & {
   id: string;
@@ -74,6 +75,7 @@ const DealCard = React.memo(function DealCard({ item }: DealCardProps) {
   const [isAdded, setIsAdded] = useState(false);
   const displayPrice = getProductCountryPrice(item, selectedCountry);
   const displayComparePrice = getProductCountryCompareAtPrice(item, selectedCountry);
+  const resolvedImage = getPrimaryProductImage(item);
 
   const saved = useWishlistStore((state) =>
     state.collections.some((collection) => collection.productIds.includes(item.id))
@@ -156,13 +158,17 @@ const DealCard = React.memo(function DealCard({ item }: DealCardProps) {
 
           <div className="flex aspect-square items-center justify-center overflow-hidden rounded-[12px] bg-white md:h-[150px] md:aspect-auto">
             <OptimizedImage
-              src={item.image}
+              src={resolvedImage}
               alt={item.title}
               className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
               lazy={true}
               width={150}
               height={150}
               sizes="(max-width: 768px) 50vw, 150px"
+              fallbackSrc={PRODUCT_PLACEHOLDER_IMAGE}
+              onError={(event) =>
+                handleProductImageError(event, { id: item.id, title: item.title }, resolvedImage)
+              }
             />
           </div>
         </div>
@@ -315,7 +321,6 @@ export default function BlackFridaySection() {
           (product) =>
             !product.raw?.isDeleted &&
             Boolean(String(product.title || "").trim()) &&
-            Boolean(String(product.image || "").trim()) &&
             Number(product.price || 0) > 0
         );
 

@@ -1,6 +1,7 @@
 import type { ProductCardProps } from "../components/ProductCard";
 import { getProductLifecycleState } from "./productLifecycle";
 import { normalizeMerchandisingSelectionValue } from "./homepageMerchandising";
+import { getPrimaryProductImage } from "../utils/productImages";
 
 export type LiveMarketplaceProduct = ProductCardProps & {
   raw: any;
@@ -8,52 +9,6 @@ export type LiveMarketplaceProduct = ProductCardProps & {
   discount: number;
   categoryKey: string;
 };
-
-const MARKETPLACE_PLACEHOLDER_IMAGE = "/placeholder.svg";
-
-function extractMarketplaceImageUrl(value: unknown): string {
-  if (!value) return "";
-
-  if (typeof value === "string") {
-    return value.trim();
-  }
-
-  if (typeof value === "object") {
-    const candidate = value as Record<string, unknown>;
-    const nestedUrl =
-      candidate.url ||
-      candidate.image ||
-      candidate.src ||
-      candidate.secure_url ||
-      candidate.secureUrl ||
-      candidate.preview ||
-      candidate.thumbnail ||
-      candidate.path;
-
-    if (typeof nestedUrl === "string") {
-      return nestedUrl.trim();
-    }
-  }
-
-  return "";
-}
-
-function resolveMarketplaceProductImage(product: any) {
-  const galleryCandidates = [
-    product?.primaryImage,
-    product?.image,
-    product?.thumbnail,
-    ...(Array.isArray(product?.images) ? product.images : []),
-    ...(Array.isArray(product?.gallery) ? product.gallery : []),
-    ...(Array.isArray(product?.media) ? product.media : []),
-  ];
-
-  const resolvedImages = galleryCandidates
-    .map((item) => extractMarketplaceImageUrl(item))
-    .filter(Boolean);
-
-  return resolvedImages[0] || MARKETPLACE_PLACEHOLDER_IMAGE;
-}
 
 function normalizeMarketplaceValue(value: any) {
   return String(value || '').trim().toLowerCase();
@@ -135,7 +90,7 @@ export function mapLiveMarketplaceProduct(product: any): LiveMarketplaceProduct 
     compareAtPriceKsa,
     rating: Number(product.rating || 4.5),
     reviews: Number(product.reviews || 0),
-    image: resolveMarketplaceProductImage(product),
+    image: getPrimaryProductImage(product),
     badge:
       product.badge ||
       (discount >= 30
@@ -167,9 +122,7 @@ export function getLiveMarketplaceProducts(items: any[]) {
     .filter(
       (product) =>
         product.price > 0 &&
-        Boolean(String(product.title || "").trim()) &&
-        Boolean(String(product.image || "").trim()) &&
-        product.image !== MARKETPLACE_PLACEHOLDER_IMAGE
+        Boolean(String(product.title || "").trim())
     );
 }
 
