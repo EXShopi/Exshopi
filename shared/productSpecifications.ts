@@ -266,8 +266,8 @@ export const DEFAULT_SPECIFICATION_TEMPLATES: SpecificationTemplate[] = [
     title: 'Accessories',
     description: 'Compatibility-focused accessory specifications for electronics and lifestyle listings.',
     appliesTo: {
-      subcategorySlugs: ['accessories', 'computer-accessories', 'mobile-accessories', 'sports-accessories', 'car-accessories'],
-      subcategoryNameIncludes: ['accessor', 'case', 'cable', 'charger', 'adapter'],
+      subcategorySlugs: ['accessories', 'computer-accessories', 'mobile-accessories', 'sports-accessories', 'car-accessories', 'air-tags'],
+      subcategoryNameIncludes: ['accessor', 'case', 'cable', 'charger', 'adapter', 'airtag', 'air tag', 'tracker'],
     },
     sections: ['General', 'Compatibility', 'Material', 'Connectivity', 'In The Box', 'Warranty'],
     variantDimensions: ['color', 'size'],
