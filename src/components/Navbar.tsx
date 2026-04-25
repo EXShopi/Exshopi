@@ -44,9 +44,16 @@ export default function Navbar() {
 
   const [searchText, setSearchText] = useState("");
   const [searchCatalog, setSearchCatalog] = useState<LiveMarketplaceProduct[]>([]);
+  const [suggestions, setSuggestions] = useState<LiveMarketplaceProduct[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [searchCatalogLoaded, setSearchCatalogLoaded] = useState(false);
   const searchCatalogRequestRef = useRef<Promise<void> | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const suggestionRequestRef = useRef(0);
   const { lang } = useLanguageStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const setCountry = useCountryStore((state) => state.setCountry);
@@ -98,6 +105,7 @@ export default function Navbar() {
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
       setSearchText(transcript);
+      setActiveSuggestionIndex(-1);
       setListening(false);
     };
 
@@ -124,7 +132,23 @@ export default function Navbar() {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-  const handleSearchSubmit = () => {
+  const closeSearchSuggestions = useCallback(
+    ({ blur = false, clearQuery = false }: { blur?: boolean; clearQuery?: boolean } = {}) => {
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+      setSearchLoading(false);
+      if (clearQuery) {
+        setSearchText("");
+        setSuggestions([]);
+      }
+      if (blur) {
+        searchInputRef.current?.blur();
+      }
+    },
+    []
+  );
+
+  const handleSearchSubmit = useCallback(() => {
     const query = searchText.trim();
     if (query) {
       analyticsAPI
@@ -135,8 +159,17 @@ export default function Navbar() {
         })
         .catch(() => undefined);
     }
+    closeSearchSuggestions({ blur: true });
     navigate(query ? `/products?search=${encodeURIComponent(query)}` : "/products");
-  };
+  }, [closeSearchSuggestions, navigate, searchText]);
+
+  const handleSuggestionClick = useCallback(
+    (product: LiveMarketplaceProduct) => {
+      closeSearchSuggestions({ blur: true, clearQuery: true });
+      navigate(buildProductPath(product));
+    },
+    [closeSearchSuggestions, navigate]
+  );
 
   const navigateToCategory = (categoryName: string, itemName?: string) => {
     setMegaOpen(false);
@@ -144,17 +177,75 @@ export default function Navbar() {
     navigate(getCategoryPath(categoryName, itemName));
   };
 
-  const quickSuggestions = useMemo(
-    () =>
-      searchCatalog
-        .filter((product) =>
-          searchText.trim()
-            ? `${product.title} ${product.seller} ${product.category}`.toLowerCase().includes(searchText.trim().toLowerCase())
-            : false
-        )
-        .slice(0, 6),
-    [searchCatalog, searchText]
-  );
+  useEffect(() => {
+    const query = searchText.trim();
+    let cancelled = false;
+
+    if (query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+      setSearchLoading(false);
+      return;
+    }
+
+    const requestId = suggestionRequestRef.current + 1;
+    suggestionRequestRef.current = requestId;
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        await ensureSearchCatalogLoaded();
+        if (cancelled || suggestionRequestRef.current !== requestId) return;
+
+        const nextSuggestions = searchCatalog
+          .filter((product) =>
+            `${product.title} ${product.seller} ${product.category}`
+              .toLowerCase()
+              .includes(query.toLowerCase())
+          )
+          .slice(0, 8);
+
+        if (cancelled || suggestionRequestRef.current !== requestId) return;
+        setSuggestions(nextSuggestions);
+        setShowSuggestions(nextSuggestions.length > 0);
+        setActiveSuggestionIndex((current) =>
+          nextSuggestions.length === 0 ? -1 : current >= nextSuggestions.length ? -1 : current
+        );
+      } catch {
+        if (!cancelled && suggestionRequestRef.current === requestId) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+          setActiveSuggestionIndex(-1);
+        }
+      } finally {
+        if (!cancelled && suggestionRequestRef.current === requestId) {
+          setSearchLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [ensureSearchCatalogLoaded, searchCatalog, searchText]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (!searchContainerRef.current?.contains(event.target as Node)) {
+        closeSearchSuggestions({ blur: false });
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [closeSearchSuggestions]);
 
   return (
     <>
@@ -318,28 +409,68 @@ export default function Navbar() {
                   )}
                 </div>
 
-                <div className="relative group flex h-[44px] min-w-0 w-full max-w-full items-center overflow-visible rounded-[15px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,250,255,0.92))] pl-2.5 pr-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur-2xl transition-all duration-300 hover:border-slate-300 hover:shadow-[0_22px_50px_rgba(15,23,42,0.12)] focus-within:border-slate-300 focus-within:bg-white focus-within:shadow-[0_22px_50px_rgba(15,23,42,0.12)] md:h-[70px] md:rounded-[24px] md:pl-5 xl:flex-1">
+                <div
+                  ref={searchContainerRef}
+                  className="relative group flex h-[44px] min-w-0 w-full max-w-full items-center overflow-visible rounded-[15px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,250,255,0.92))] pl-2.5 pr-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur-2xl transition-all duration-300 hover:border-slate-300 hover:shadow-[0_22px_50px_rgba(15,23,42,0.12)] focus-within:border-slate-300 focus-within:bg-white focus-within:shadow-[0_22px_50px_rgba(15,23,42,0.12)] md:h-[70px] md:rounded-[24px] md:pl-5 xl:flex-1"
+                >
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-white shadow-inner md:h-11 md:w-11">
                     <Search className="h-4 w-4 text-blue-600 font-semibold md:h-5 md:w-5" />
                   </div>
 
                   <input
+                    ref={searchInputRef}
                     type="text"
                     aria-label="Search products and sellers"
                     value={searchText}
                     onFocus={() => {
                       void ensureSearchCatalogLoaded();
+                      if (searchText.trim().length >= 2 && suggestions.length > 0) {
+                        setShowSuggestions(true);
+                      }
                     }}
                     onChange={(e) => {
                       const nextValue = e.target.value;
                       setSearchText(nextValue);
+                      setActiveSuggestionIndex(-1);
                       if (nextValue.trim()) {
                         void ensureSearchCatalogLoaded();
                       }
                     }}
                     onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        closeSearchSuggestions({ blur: true });
+                        return;
+                      }
+
+                      if (e.key === "ArrowDown" && suggestions.length > 0) {
+                        e.preventDefault();
+                        setShowSuggestions(true);
+                        setActiveSuggestionIndex((current) =>
+                          current < suggestions.length - 1 ? current + 1 : 0
+                        );
+                        return;
+                      }
+
+                      if (e.key === "ArrowUp" && suggestions.length > 0) {
+                        e.preventDefault();
+                        setShowSuggestions(true);
+                        setActiveSuggestionIndex((current) =>
+                          current > 0 ? current - 1 : suggestions.length - 1
+                        );
+                        return;
+                      }
+
                       if (e.key === "Enter") {
                         e.preventDefault();
+                        if (
+                          showSuggestions &&
+                          activeSuggestionIndex >= 0 &&
+                          activeSuggestionIndex < suggestions.length
+                        ) {
+                          handleSuggestionClick(suggestions[activeSuggestionIndex]!);
+                          return;
+                        }
                         handleSearchSubmit();
                       }
                     }}
@@ -370,18 +501,29 @@ export default function Navbar() {
                     {storefrontT(lang, "search")}
                   </button>
 
-                  {quickSuggestions.length > 0 && (
+                  {(showSuggestions || searchLoading) && searchText.trim().length >= 2 && (
                     <div className="absolute left-0 right-0 top-[calc(100%+12px)] z-[95] max-w-full overflow-hidden rounded-[24px] border border-white/60 bg-white/92 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
                       <div className="border-b border-slate-100 px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                         {storefrontT(lang, "search")}
                       </div>
                       <div className="p-3">
-                          {quickSuggestions.map((product) => (
+                        {searchLoading ? (
+                          <div className="px-4 py-3 text-sm font-medium text-slate-500">
+                            Searching...
+                          </div>
+                        ) : suggestions.length > 0 ? (
+                          suggestions.map((product, index) => (
                           <button
                             key={product.id}
                             type="button"
-                            onClick={() => navigate(buildProductPath(product))}
-                            className="flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              handleSuggestionClick(product);
+                            }}
+                            className={`flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left transition ${
+                              activeSuggestionIndex === index ? "bg-slate-50" : "hover:bg-slate-50"
+                            }`}
                           >
                             <div className="flex items-center gap-3">
                               <img
@@ -396,7 +538,12 @@ export default function Navbar() {
                             </div>
                             <div className="text-sm font-black text-blue-600">{formatCurrencyPlainForCountry(product.price, selectedCountry)}</div>
                           </button>
-                        ))}
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-sm font-medium text-slate-500">
+                            No matching products found.
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
