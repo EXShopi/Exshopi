@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   Menu,
@@ -34,6 +34,7 @@ type SubCategoryGroup = {
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const authUser = useAuthStore((state) => state.user);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
@@ -246,6 +247,10 @@ export default function Navbar() {
       document.removeEventListener("touchstart", handleClickOutside);
     };
   }, [closeSearchSuggestions]);
+
+  useEffect(() => {
+    closeSearchSuggestions({ blur: true });
+  }, [closeSearchSuggestions, location.pathname]);
 
   return (
     <>

@@ -532,7 +532,7 @@ export default function ProductDetail() {
   const authUser = useAuthStore((state) => state.user);
   const cacheKey = identifier ? String(identifier) : "";
   const cachedProduct = cacheKey ? productDetailCache.get(cacheKey) : null;
-  const routeSnapshot = readRouteSnapshot();
+  const routeSnapshot = useMemo(() => readRouteSnapshot(), [location.pathname]);
   const snapshotProduct = useMemo(() => {
     const resolvedProduct = resolveProductSnapshot(routeSnapshot, {
       identifier,
@@ -542,10 +542,13 @@ export default function ProductDetail() {
     });
     return resolvedProduct ? normalizeMarketplaceProduct(resolvedProduct) : null;
   }, [identifier, location.pathname, paramCategory, paramSubcategory, routeSnapshot]);
-  const snapshotRelatedProducts =
-    routeSnapshot?.kind === "product" && Array.isArray(routeSnapshot.relatedProducts)
-      ? routeSnapshot.relatedProducts.map((item) => normalizeMarketplaceProduct(item))
-      : [];
+  const snapshotRelatedProducts = useMemo(
+    () =>
+      routeSnapshot?.kind === "product" && Array.isArray(routeSnapshot.relatedProducts)
+        ? routeSnapshot.relatedProducts.map((item) => normalizeMarketplaceProduct(item))
+        : [],
+    [routeSnapshot]
+  );
   // ...existing state and hooks...
   // ...existing state and hooks...
 
@@ -589,13 +592,14 @@ export default function ProductDetail() {
     reason?: string;
     retryable?: boolean;
   } | null>(null);
+  const seededProduct = useMemo(() => cachedProduct || snapshotProduct || null, [cachedProduct, snapshotProduct]);
+  const seededProductId = seededProduct?.id ? String(seededProduct.id) : "";
 
   useEffect(() => {
     if (!identifier) return;
 
     let active = true;
     const controller = new AbortController();
-    const seededProduct = cachedProduct || snapshotProduct || null;
 
     const fetchProduct = async () => {
       const logRouteMatch = (message: string, extra?: Record<string, unknown>) => {
@@ -804,7 +808,7 @@ export default function ProductDetail() {
       active = false;
       controller.abort();
     };
-  }, [cachedProduct, identifier, snapshotProduct, cacheKey, paramCategory, paramSubcategory]);
+  }, [cacheKey, cachedProduct, identifier, paramCategory, paramSubcategory, seededProduct, seededProductId]);
 
   useEffect(() => {
     if (!product?.id) {
@@ -850,7 +854,18 @@ export default function ProductDetail() {
     if (location.pathname !== canonicalPath) {
       navigate(canonicalPath, { replace: true });
     }
-  }, [product, location.pathname, navigate]);
+  }, [
+    location.pathname,
+    navigate,
+    product?.id,
+    product?.slug,
+    product?.title,
+    product?.category,
+    product?.subcategory,
+    product?.specs?.parentCategorySlug,
+    product?.specs?.categorySlug,
+    product?.specs?.subcategorySlug,
+  ]);
 
   useEffect(() => {
     if (!product?.id) {
@@ -1197,7 +1212,7 @@ const productSchema = product
             normalizeSellerSlug(item.seller || item.sellerName || item.vendor || "") === sellerProfile.slug
           ) &&
           String(item.id) !== String(product?.id)
-      ),
+      ).slice(0, 8),
     [allProducts, product?.id, product?.sellerId, sellerProfile.slug]
   );
 
@@ -1221,7 +1236,7 @@ const productSchema = product
       );
 
       const source = sameCategory.length ? sameCategory : allProducts.filter((item) => String(item.id) !== String(product?.id));
-      return source.slice(0, 8).map(mapToCardProduct);
+      return source.slice(0, 12).map(mapToCardProduct);
     },
     [allProducts, product?.category, product?.id, product?.specs?.categorySlug, product?.specs?.subcategorySlug]
   );
@@ -1235,11 +1250,23 @@ const productSchema = product
     [allProducts, product?.id]
   );
 
-const structuredTemplate = getSpecificationTemplate(
-  productSpecs?.parentCategorySlug || product?.category || "",
-  productSpecs?.subcategorySlug || productSpecs?.templateId || product?.subcategory || "",
-  productSpecs?.subcategoryName || productSpecs?.templateName || product?.subcategory || ""
-);
+  const structuredTemplate = useMemo(
+    () =>
+      getSpecificationTemplate(
+        productSpecs?.parentCategorySlug || product?.category || "",
+        productSpecs?.subcategorySlug || productSpecs?.templateId || product?.subcategory || "",
+        productSpecs?.subcategoryName || productSpecs?.templateName || product?.subcategory || ""
+      ),
+    [
+      product?.category,
+      product?.subcategory,
+      productSpecs?.parentCategorySlug,
+      productSpecs?.subcategoryName,
+      productSpecs?.subcategorySlug,
+      productSpecs?.templateId,
+      productSpecs?.templateName,
+    ]
+  );
 
   const specificationGroups = useMemo(() => {
     if (Array.isArray(productSpecs?.specificationGroups) && productSpecs.specificationGroups.length) {
@@ -1637,9 +1664,14 @@ const structuredTemplate = getSpecificationTemplate(
                   {productImages.map((img, idx) => (
                     <button
                       key={idx}
-                      onClick={() => setMainImage(idx)}
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setMainImage(idx);
+                      }}
                       aria-label={`View ${product.title} image ${idx + 1}`}
-                      className={`h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl border-2 transition ${
+                      className={`relative z-10 h-24 w-24 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border-2 transition ${
                         mainImage === idx
                           ? "border-blue-600 ring-2 ring-blue-200 ring-offset-2"
                           : "border-slate-200 hover:border-slate-300"
@@ -1648,7 +1680,7 @@ const structuredTemplate = getSpecificationTemplate(
                       <img
                         src={img}
                         alt={buildProductImageAlt(product, idx)}
-                        className="h-full w-full object-cover"
+                        className="pointer-events-none h-full w-full object-cover"
                         loading="lazy"
                         decoding="async"
                       />
