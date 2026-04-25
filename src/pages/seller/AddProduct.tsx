@@ -1421,7 +1421,7 @@ useEffect(() => {
       {
         ...specificationValues,
         brand: formData.brand.trim() || specificationValues.brand || '',
-        ...(primaryVariant?.color ? { color: primaryVariant.color } : {}),
+        ...(!specificationValues.color && primaryVariant?.color ? { color: primaryVariant.color } : {}),
         ...(primaryVariant?.size ? { size: primaryVariant.size } : {}),
         ...(primaryVariant?.storage ? { storage: primaryVariant.storage } : {}),
         ...(primaryVariant?.ram ? { ram: primaryVariant.ram } : {}),

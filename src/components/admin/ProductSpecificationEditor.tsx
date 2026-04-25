@@ -34,6 +34,8 @@ type ProductSpecificationEditorProps = {
   enabledVariantDimensions: VariantDimensionKey[];
 };
 
+const MOBILE_COLOR_TEMPLATE_IDS = new Set(['mobiles-smartphones', 'tablets']);
+
 function ensureList(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item || '')) : [];
 }
@@ -47,7 +49,179 @@ function ensureKeyValueList(value: unknown) {
     : [];
 }
 
+function normalizeColorValue(raw: unknown) {
+  return String(raw || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+}
+
+function ensureColorList(value: unknown) {
+  const rawList = Array.isArray(value)
+    ? value
+    : String(value || '')
+        .split(',')
+        .map((item) => item.trim());
+
+  const seen = new Set<string>();
+  return rawList
+    .map((item) => normalizeColorValue(item))
+    .filter(Boolean)
+    .filter((item) => {
+      const normalized = item.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function ColorFieldInput(props: {
+  field: SpecificationFieldDefinition;
+  value: any;
+  onChange: (nextValue: any) => void;
+  allowMultiple: boolean;
+}) {
+  const { field, value, onChange, allowMultiple } = props;
+  const [query, setQuery] = React.useState('');
+  const datalistId = React.useId();
+  const selectedValues = React.useMemo(() => ensureColorList(value), [value]);
+  const availableOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    return [...(field.options || []), ...selectedValues]
+      .map((option) => normalizeColorValue(option))
+      .filter(Boolean)
+      .filter((option) => {
+        const normalized = option.toLowerCase();
+        if (seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      });
+  }, [field.options, selectedValues]);
+  const filteredOptions = React.useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return availableOptions.slice(0, 12);
+    return availableOptions
+      .filter((option) => option.toLowerCase().includes(normalizedQuery))
+      .slice(0, 12);
+  }, [availableOptions, query]);
+  const normalizedQuery = normalizeColorValue(query);
+  const hasExactMatch = availableOptions.some((option) => option.toLowerCase() === normalizedQuery.toLowerCase());
+
+  React.useEffect(() => {
+    if (allowMultiple) return;
+    setQuery(selectedValues[0] || '');
+  }, [allowMultiple, selectedValues]);
+
+  const commitSingleValue = (nextValue: string) => {
+    const normalized = normalizeColorValue(nextValue);
+    setQuery(normalized);
+    onChange(normalized);
+  };
+
+  const addMultiValue = (nextValue: string) => {
+    const normalized = normalizeColorValue(nextValue);
+    if (!normalized) return;
+    onChange(ensureColorList([...selectedValues, normalized]));
+    setQuery('');
+  };
+
+  if (!allowMultiple) {
+    return (
+      <div className="space-y-3">
+        <input
+          type="text"
+          list={datalistId}
+          value={query}
+          onChange={(event) => commitSingleValue(event.target.value)}
+          onBlur={() => commitSingleValue(query)}
+          placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+        />
+        <datalist id={datalistId}>
+          {availableOptions.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+        {normalizedQuery && !hasExactMatch ? (
+          <button
+            type="button"
+            onClick={() => commitSingleValue(normalizedQuery)}
+            className="rounded-full border border-dashed border-blue-300 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+          >
+            Add custom color "{normalizedQuery}"
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {selectedValues.map((selectedValue) => (
+          <button
+            key={selectedValue}
+            type="button"
+            onClick={() => onChange(selectedValues.filter((item) => item.toLowerCase() !== selectedValue.toLowerCase()))}
+            className="rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+          >
+            {selectedValue} <span className="ml-1 text-blue-500">×</span>
+          </button>
+        ))}
+      </div>
+      <input
+        type="text"
+        list={datalistId}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ',') {
+            event.preventDefault();
+            addMultiValue(query);
+          }
+        }}
+        placeholder={field.placeholder || `Search or add ${field.label.toLowerCase()}`}
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+      />
+      <datalist id={datalistId}>
+        {availableOptions.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+      <div className="flex flex-wrap gap-2">
+        {filteredOptions.map((option) => {
+          const active = selectedValues.some((item) => item.toLowerCase() === option.toLowerCase());
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => addMultiValue(option)}
+              className={`rounded-full border px-3 py-2 text-xs font-bold transition ${
+                active
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              {option}
+            </button>
+          );
+        })}
+        {normalizedQuery && !hasExactMatch ? (
+          <button
+            type="button"
+            onClick={() => addMultiValue(normalizedQuery)}
+            className="rounded-full border border-dashed border-blue-300 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+          >
+            Add custom color "{normalizedQuery}"
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function renderFieldInput(
+  template: SpecificationTemplate,
   field: SpecificationFieldDefinition,
   value: any,
   onChange: (nextValue: any) => void
@@ -63,6 +237,17 @@ function renderFieldInput(
         onChange={(event) => onChange(event.target.value)}
         placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
         className={`${baseClassName} leading-7`}
+      />
+    );
+  }
+
+  if (field.key === 'color') {
+    return (
+      <ColorFieldInput
+        field={field}
+        value={value}
+        onChange={onChange}
+        allowMultiple={field.type === 'multi-select' || MOBILE_COLOR_TEMPLATE_IDS.has(template.id)}
       />
     );
   }
@@ -421,7 +606,7 @@ export default function ProductSpecificationEditor({
                   <label className="mb-2 block text-sm font-bold text-slate-700">
                     {field.label} {field.required ? '*' : null}
                   </label>
-                  {renderFieldInput(field, specificationValues[field.key], (nextValue) => onSpecificationChange(field.key, nextValue))}
+                  {renderFieldInput(template, field, specificationValues[field.key], (nextValue) => onSpecificationChange(field.key, nextValue))}
                   {field.helpText ? <p className="mt-2 text-xs font-medium text-slate-500">{field.helpText}</p> : null}
                 </div>
               ))}

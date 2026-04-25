@@ -108,7 +108,91 @@ function createTemplate(template: SpecificationTemplate): SpecificationTemplate 
 
 const BRAND_OPTIONS = ['Apple', 'Samsung', 'Xiaomi', 'Oppo', 'Vivo', 'OnePlus', 'Dell', 'HP', 'Lenovo', 'Asus', 'Acer', 'Sony', 'LG', 'Canon', 'Nikon', 'Bose', 'JBL', 'Dyson', 'Generic'];
 const CONDITION_OPTIONS = ['New', 'Open Box', 'Refurbished', 'Used - Excellent', 'Used - Good', 'Used - Fair'];
-const COLOR_OPTIONS = ['Black', 'White', 'Blue', 'Silver', 'Gray', 'Gold', 'Green', 'Red', 'Pink', 'Purple', 'Titanium', 'Beige', 'Brown'];
+const COLOR_OPTIONS = [
+  'Black',
+  'White',
+  'Gray',
+  'Silver',
+  'Gold',
+  'Blue',
+  'Navy Blue',
+  'Sky Blue',
+  'Red',
+  'Green',
+  'Purple',
+  'Pink',
+  'Yellow',
+  'Orange',
+  'Brown',
+  'Bronze',
+  'Beige',
+  'Cream',
+  'Graphite',
+  'Charcoal',
+  'Titanium',
+  'Transparent',
+  'Space Gray',
+  'Rose Gold',
+  'Midnight',
+  'Starlight',
+  'Product Red',
+  'Natural Titanium',
+  'Black Titanium',
+  'White Titanium',
+  'Blue Titanium',
+  'Desert Titanium',
+  'Deep Purple',
+  'Sierra Blue',
+  'Alpine Green',
+  'Pacific Blue',
+  'Jet Black',
+  'Matte Black',
+  'Coral',
+  'Aura Glow',
+  'Aura Black',
+  'Aura White',
+  'Aura Blue',
+  'Aura Red',
+  'Phantom Black',
+  'Phantom Silver',
+  'Phantom Violet',
+  'Phantom Green',
+  'Phantom Navy',
+  'Mystic Bronze',
+  'Mystic Black',
+  'Mystic White',
+  'Awesome Black',
+  'Awesome White',
+  'Awesome Blue',
+  'Awesome Violet',
+  'Lavender',
+  'Lime',
+  'Bora Purple',
+  'Burgundy',
+  'Titanium Gray',
+  'Titanium Black',
+  'Titanium Violet',
+  'Titanium Yellow',
+  'Titanium Blue',
+  'Titanium Orange',
+  'Titanium Green',
+];
+const MOBILE_COLOR_OPTIONS = [
+  ...COLOR_OPTIONS,
+  'Pearl White',
+  'Pearl Blue',
+  'Ice Blue',
+  'Obsidian',
+  'Hazel',
+  'Porcelain',
+  'Sorta Sunny',
+  'Sorta Seafoam',
+  'Just Black',
+  'Clearly White',
+  'Cloudy White',
+  'Mirror Black',
+  'Ceramic White',
+];
 const STORAGE_OPTIONS = ['32GB', '64GB', '128GB', '256GB', '512GB', '1TB', '2TB'];
 const RAM_OPTIONS = ['2GB', '4GB', '6GB', '8GB', '12GB', '16GB', '24GB', '32GB', '64GB'];
 const NETWORK_OPTIONS = ['Wi-Fi', '4G LTE', '5G', 'Wi-Fi + Cellular'];
@@ -134,7 +218,7 @@ export const DEFAULT_SPECIFICATION_TEMPLATES: SpecificationTemplate[] = [
       { key: 'model', label: 'Model', type: 'text', required: true, section: 'General', placeholder: 'iPhone 15 Pro Max' },
       { key: 'series', label: 'Series', type: 'text', section: 'General', placeholder: 'Galaxy S / iPhone Pro / Redmi Note' },
       { key: 'condition', label: 'Condition', type: 'select', required: true, section: 'General', options: CONDITION_OPTIONS },
-      { key: 'color', label: 'Color', type: 'select', required: true, section: 'General', options: COLOR_OPTIONS, variantDimension: 'color' },
+      { key: 'color', label: 'Color', type: 'multi-select', required: true, section: 'General', options: MOBILE_COLOR_OPTIONS, variantDimension: 'color', helpText: 'Search, select multiple colors, or add a custom mobile color.' },
       { key: 'storage', label: 'Storage', type: 'select', required: true, section: 'General', options: STORAGE_OPTIONS, variantDimension: 'storage' },
       { key: 'ram', label: 'RAM', type: 'select', required: true, section: 'Performance', options: RAM_OPTIONS, variantDimension: 'ram' },
       { key: 'screenSize', label: 'Screen Size', type: 'text', required: true, section: 'Display', placeholder: '6.7-inch' },
@@ -181,7 +265,7 @@ export const DEFAULT_SPECIFICATION_TEMPLATES: SpecificationTemplate[] = [
       { key: 'network', label: 'Network', type: 'select', section: 'Connectivity', options: NETWORK_OPTIONS },
       { key: 'operatingSystem', label: 'OS', type: 'text', section: 'Performance', placeholder: 'iPadOS / Android' },
       { key: 'camera', label: 'Camera', type: 'text', section: 'Camera', placeholder: '12MP rear / 12MP front' },
-      { key: 'color', label: 'Color', type: 'select', section: 'General', options: COLOR_OPTIONS, variantDimension: 'color' },
+      { key: 'color', label: 'Color', type: 'multi-select', section: 'General', options: MOBILE_COLOR_OPTIONS, variantDimension: 'color', helpText: 'Search, select multiple colors, or add a custom tablet color.' },
       { key: 'warranty', label: 'Warranty', type: 'select', section: 'Warranty', options: WARRANTY_OPTIONS },
     ],
   }),
@@ -631,6 +715,28 @@ function normalizeListValue(raw: unknown) {
     .filter(Boolean);
 }
 
+function normalizeColorToken(raw: unknown) {
+  return String(raw || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+}
+
+function normalizeColorCollection(raw: unknown) {
+  const seen = new Set<string>();
+  const values = normalizeListValue(raw)
+    .map((item) => normalizeColorToken(item))
+    .filter(Boolean)
+    .filter((item) => {
+      const normalized = item.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+
+  return values;
+}
+
 function normalizeKeyValueValue(raw: unknown) {
   if (Array.isArray(raw)) {
     return raw
@@ -675,11 +781,18 @@ export function normalizeSpecificationValue(
   }
 
   if (field.type === 'multi-select' || field.type === 'tags' || field.type === 'list') {
+    if (field.key === 'color') {
+      return normalizeColorCollection(raw);
+    }
     return normalizeListValue(raw);
   }
 
   if (field.type === 'key-value') {
     return normalizeKeyValueValue(raw);
+  }
+
+  if (field.key === 'color') {
+    return normalizeColorToken(raw);
   }
 
   return String(raw || '').trim();
