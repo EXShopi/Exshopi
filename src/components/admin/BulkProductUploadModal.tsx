@@ -392,6 +392,15 @@ const TEMPLATE_SAMPLE_ROWS: Array<Record<string, string>> = [
 ];
 
 const PRODUCT_PLACEHOLDER_IMAGE = '/assets/product-placeholder.png';
+const LAPTOP_CATEGORY_SLUG = 'laptops';
+const LAPTOP_SUBCATEGORY_OPTIONS: BulkCategoryLeaf[] = [
+  { id: 'macbooks', name: 'MacBooks', slug: 'macbooks' },
+  { id: 'business-laptops', name: 'Business Laptops', slug: 'business-laptops' },
+  { id: 'gaming-laptops', name: 'Gaming Laptops', slug: 'gaming-laptops' },
+  { id: 'used-windows-laptops', name: 'Used Windows Laptops', slug: 'used-windows-laptops' },
+  { id: 'chromebooks', name: 'Chromebooks', slug: 'chromebooks' },
+  { id: 'premium-ultrabooks', name: 'Premium Ultrabooks', slug: 'premium-ultrabooks' },
+];
 
 const slugifyValue = (value: unknown) =>
   String(value || '')
@@ -444,6 +453,8 @@ const buildCategoryTree = (items: any[]): BulkCategoryTree[] => {
                   name: String(child.name || ''),
                   slug: String(child.slug || ''),
                 }))
+              : normalizeMatchKey(category.slug || category.name) === LAPTOP_CATEGORY_SLUG
+              ? [...LAPTOP_SUBCATEGORY_OPTIONS]
               : [],
           }))
         : [],
@@ -465,6 +476,8 @@ const buildCategoryTree = (items: any[]): BulkCategoryTree[] => {
                 name: String(child?.name || ''),
                 slug: String(child?.slug || slugifyValue(child?.name || '')),
               }))
+            : normalizeMatchKey(category?.slug || category?.name) === LAPTOP_CATEGORY_SLUG
+            ? [...LAPTOP_SUBCATEGORY_OPTIONS]
             : [],
         }))
       : [];
@@ -495,6 +508,63 @@ const findLeafOption = (branch: BulkCategoryBranch | null, subcategorySlug: stri
     (entry) => normalizeMatchKey(entry.slug) === normalizeMatchKey(subcategorySlug) || normalizeMatchKey(entry.name) === normalizeMatchKey(subcategorySlug)
   ) || null;
 
+const buildLaptopSearchCorpus = (fields: BulkUploadEditableRow) =>
+  normalizeMatchKey(
+    [
+      fields.productTitle,
+      fields.model,
+      fields.brand,
+      fields.operatingSystem,
+      fields.shortDescription,
+      fields.longDescription,
+      fields.productHighlights,
+      fields.processor,
+    ].join(' ')
+  );
+
+const inferLaptopLeaf = (fields: BulkUploadEditableRow): BulkCategoryLeaf => {
+  const corpus = buildLaptopSearchCorpus(fields);
+  const brand = normalizeMatchKey(fields.brand);
+
+  if (corpus.includes('chromebook') || corpus.includes('chrome os')) {
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'chromebooks')!;
+  }
+  if (corpus.includes('macbook') || corpus.includes('mac book') || (brand === 'apple' && corpus.includes('macos'))) {
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'macbooks')!;
+  }
+  if (
+    corpus.includes('surface') ||
+    corpus.includes('ultrabook') ||
+    corpus.includes('ultra book') ||
+    corpus.includes('xps 13') ||
+    corpus.includes('x1 carbon')
+  ) {
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'premium-ultrabooks')!;
+  }
+  if (
+    corpus.includes('rog') ||
+    corpus.includes('legion') ||
+    corpus.includes('predator') ||
+    corpus.includes('msi') ||
+    corpus.includes('gaming') ||
+    corpus.includes('tuf') ||
+    corpus.includes('omen')
+  ) {
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'gaming-laptops')!;
+  }
+  if (
+    corpus.includes('latitude') ||
+    corpus.includes('elitebook') ||
+    corpus.includes('probook') ||
+    corpus.includes('thinkpad') ||
+    corpus.includes('travelmate') ||
+    corpus.includes('lifebook')
+  ) {
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'business-laptops')!;
+  }
+  return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'used-windows-laptops')!;
+};
+
 const resolveRowCategorySelection = (fields: BulkUploadEditableRow, categories: BulkCategoryTree[]) => {
   const parent =
     findCategoryOption(categories, fields.parentCategory) ||
@@ -504,7 +574,11 @@ const resolveRowCategorySelection = (fields: BulkUploadEditableRow, categories: 
     findBranchOption(parent, fields.category) ||
     findBranchOption(parent, fields.subcategory) ||
     null;
-  const leaf = findLeafOption(branch, fields.subcategory) || null;
+  let leaf = findLeafOption(branch, fields.subcategory) || null;
+
+  if (branch && normalizeMatchKey(branch.slug || branch.name) === LAPTOP_CATEGORY_SLUG && !leaf) {
+    leaf = inferLaptopLeaf(fields);
+  }
 
   return { parent, branch, leaf };
 };
@@ -527,6 +601,7 @@ const MANAGED_WARNING_PREFIXES = [
   'Image URL returned',
   'Image URL is not a valid absolute URL',
   'Image URL could not be verified',
+  'Auto-mapped laptop subcategory',
 ];
 
 const filterManagedMessages = (messages: string[], prefixes: string[]) =>
@@ -552,6 +627,7 @@ const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[
     const errors = [...preservedErrors];
     const warnings = [...preservedWarnings];
     const { parent, branch, leaf } = resolveRowCategorySelection(row.fields, categories);
+    const isLaptopCategory = normalizeMatchKey(branch?.slug || branch?.name) === LAPTOP_CATEGORY_SLUG;
     const sku = normalizeMatchKey(row.fields.sku);
     const slug = normalizeMatchKey(buildSeoSlug(row.fields));
     const price = Number(String(row.fields.salePrice || row.fields.regularPrice || '').replace(/[^0-9.\-]/g, ''));
@@ -569,7 +645,7 @@ const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[
       errors.push('Invalid parent/category mapping');
     } else if (normalizeText(row.fields.category) && !branch) {
       errors.push('Needs category mapping');
-    } else if (normalizeText(row.fields.subcategory) && !leaf) {
+    } else if (normalizeText(row.fields.subcategory) && !leaf && !isLaptopCategory) {
       errors.push('Needs subcategory mapping');
     }
     if (sku && (skuCounts.get(sku) || 0) > 1) errors.push('Duplicate SKU found in upload file');
@@ -579,12 +655,16 @@ const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[
     if (!normalizeText(row.fields.mainImageUrl)) {
       warnings.push('Missing main image URL. Placeholder will be used unless you upload one.');
     }
+    if (isLaptopCategory && leaf) {
+      warnings.push(`Auto-mapped laptop subcategory: ${leaf.name}`);
+    }
 
     return {
       ...row,
       fields: {
         ...row.fields,
         seoSlug: row.fields.seoSlug || buildSeoSlug(row.fields),
+        subcategory: row.fields.subcategory || leaf?.name || '',
       },
       resolved: {
         ...row.resolved,

@@ -178,6 +178,15 @@ function dedupe(values: string[]) {
 }
 
 const PRODUCT_PLACEHOLDER_IMAGE = '/assets/product-placeholder.png';
+const LAPTOP_CATEGORY_SLUG = 'laptops';
+const LAPTOP_SUBCATEGORY_OPTIONS = [
+  { id: 'macbooks', name: 'MacBooks', slug: 'macbooks' },
+  { id: 'business-laptops', name: 'Business Laptops', slug: 'business-laptops' },
+  { id: 'gaming-laptops', name: 'Gaming Laptops', slug: 'gaming-laptops' },
+  { id: 'used-windows-laptops', name: 'Used Windows Laptops', slug: 'used-windows-laptops' },
+  { id: 'chromebooks', name: 'Chromebooks', slug: 'chromebooks' },
+  { id: 'premium-ultrabooks', name: 'Premium Ultrabooks', slug: 'premium-ultrabooks' },
+] as const;
 
 function decodeXml(value: string) {
   return value
@@ -496,17 +505,99 @@ function normalizeCategories(categories: GenericRecord[]) {
             id: text(entry.id),
             name: text(entry.name),
             slug: text(entry.slug),
-            subcategories: Array.isArray(entry.childCategories)
+          subcategories: Array.isArray(entry.childCategories)
               ? entry.childCategories.map((child: any) => ({
                   id: text(child.id),
                   name: text(child.name),
                   slug: text(child.slug),
                 }))
+              : lower(entry.slug) === LAPTOP_CATEGORY_SLUG || lower(entry.name) === LAPTOP_CATEGORY_SLUG
+              ? [...LAPTOP_SUBCATEGORY_OPTIONS]
               : [],
           }))
         : [],
     }))
     .filter((entry) => entry.id && entry.slug);
+}
+
+function buildLaptopSearchCorpus(fieldRow: BulkUploadEditableRow) {
+  return lower(
+    [
+      fieldRow.productTitle,
+      fieldRow.model,
+      fieldRow.brand,
+      fieldRow.operatingSystem,
+      fieldRow.shortDescription,
+      fieldRow.longDescription,
+      fieldRow.productHighlights,
+      fieldRow.processor,
+    ].join(' ')
+  );
+}
+
+function inferLaptopSubcategory(fieldRow: BulkUploadEditableRow) {
+  const corpus = buildLaptopSearchCorpus(fieldRow);
+  const brand = lower(fieldRow.brand);
+
+  if (!corpus) {
+    return { slug: 'used-windows-laptops', name: 'Used Windows Laptops', reason: 'fallback' as const };
+  }
+
+  if (corpus.includes('chromebook') || corpus.includes('chrome os')) {
+    return { slug: 'chromebooks', name: 'Chromebooks', reason: 'keyword' as const };
+  }
+
+  if (
+    corpus.includes('macbook') ||
+    corpus.includes('mac book') ||
+    (brand === 'apple' && corpus.includes('macos'))
+  ) {
+    return { slug: 'macbooks', name: 'MacBooks', reason: 'keyword' as const };
+  }
+
+  if (
+    corpus.includes('surface') ||
+    corpus.includes('ultrabook') ||
+    corpus.includes('ultra book') ||
+    corpus.includes('xps 13') ||
+    corpus.includes('x1 carbon')
+  ) {
+    return { slug: 'premium-ultrabooks', name: 'Premium Ultrabooks', reason: 'keyword' as const };
+  }
+
+  if (
+    corpus.includes('rog') ||
+    corpus.includes('legion') ||
+    corpus.includes('predator') ||
+    corpus.includes('msi') ||
+    corpus.includes('gaming') ||
+    corpus.includes('tuf') ||
+    corpus.includes('omen')
+  ) {
+    return { slug: 'gaming-laptops', name: 'Gaming Laptops', reason: 'keyword' as const };
+  }
+
+  if (
+    corpus.includes('latitude') ||
+    corpus.includes('elitebook') ||
+    corpus.includes('probook') ||
+    corpus.includes('thinkpad') ||
+    corpus.includes('travelmate') ||
+    corpus.includes('lifebook')
+  ) {
+    return { slug: 'business-laptops', name: 'Business Laptops', reason: 'keyword' as const };
+  }
+
+  if (
+    ['dell', 'hp', 'lenovo', 'acer', 'asus', 'toshiba', 'fujitsu'].includes(brand) ||
+    corpus.includes('windows') ||
+    corpus.includes('intel') ||
+    corpus.includes('amd')
+  ) {
+    return { slug: 'used-windows-laptops', name: 'Used Windows Laptops', reason: 'fallback' as const };
+  }
+
+  return { slug: 'used-windows-laptops', name: 'Used Windows Laptops', reason: 'fallback' as const };
 }
 
 function resolveCategoryMatch(
@@ -540,10 +631,23 @@ function resolveCategoryMatch(
     .map((value) => lower(value))
     .filter(Boolean);
 
-  const subcategory =
+  let subcategory =
     category?.subcategories.find(
       (entry) => subCandidates.includes(lower(entry.slug)) || subCandidates.includes(lower(entry.name))
     ) || null;
+
+  if (
+    category &&
+    (lower(category.slug) === LAPTOP_CATEGORY_SLUG || lower(category.name) === LAPTOP_CATEGORY_SLUG) &&
+    !subcategory
+  ) {
+    const inferred = inferLaptopSubcategory(fieldRow);
+    subcategory = category.subcategories.find((entry) => lower(entry.slug) === inferred.slug) || {
+      id: inferred.slug,
+      slug: inferred.slug,
+      name: inferred.name,
+    };
+  }
 
   return { parent, category, subcategory };
 }
@@ -729,12 +833,19 @@ export async function buildBulkUploadPreviewRows(input: {
       }
 
       const categoryMatch = resolveCategoryMatch(categories, fieldRow);
+      const isLaptopCategory =
+        lower(categoryMatch.category?.slug || categoryMatch.category?.name || '') === LAPTOP_CATEGORY_SLUG;
+
       if (!categoryMatch.parent) {
         errors.push('Invalid parent/category mapping');
       } else if (fieldRow.category && !categoryMatch.category) {
         errors.push('Needs category mapping');
-      } else if (fieldRow.subcategory && !categoryMatch.subcategory) {
+      } else if (fieldRow.subcategory && !categoryMatch.subcategory && !isLaptopCategory) {
         errors.push('Needs subcategory mapping');
+      } else if (!fieldRow.subcategory && isLaptopCategory && categoryMatch.subcategory) {
+        warnings.push(`Auto-mapped laptop subcategory: ${categoryMatch.subcategory.name}`);
+      } else if (fieldRow.subcategory && isLaptopCategory && categoryMatch.subcategory) {
+        warnings.push(`Smart-mapped laptop subcategory: ${categoryMatch.subcategory.name}`);
       }
 
       const sellerMatch = resolveSellerMatch(sellers, fieldRow, input.mode, input.uploaderSeller || null);
