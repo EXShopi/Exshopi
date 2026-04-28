@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 
 type GenericRecord = Record<string, any>;
 
@@ -600,6 +601,55 @@ function inferLaptopSubcategory(fieldRow: BulkUploadEditableRow) {
   return { slug: 'used-windows-laptops', name: 'Used Windows Laptops', reason: 'fallback' as const };
 }
 
+function inferProcessorBrand(fieldRow: BulkUploadEditableRow) {
+  const processorText = lower(`${fieldRow.processor} ${fieldRow.productTitle} ${fieldRow.model}`);
+  if (processorText.includes('ryzen') || processorText.includes('athlon') || processorText.includes('amd')) {
+    return 'AMD';
+  }
+  if (processorText.includes('snapdragon') || processorText.includes('qualcomm')) {
+    return 'Qualcomm';
+  }
+  if (
+    processorText.includes('m1') ||
+    processorText.includes('m2') ||
+    processorText.includes('m3') ||
+    processorText.includes('apple silicon')
+  ) {
+    return 'Apple';
+  }
+  return 'Intel';
+}
+
+function buildDefaultHighlights(fieldRow: BulkUploadEditableRow) {
+  const candidates = [
+    fieldRow.productHighlights,
+    fieldRow.shortDescription,
+    fieldRow.processor ? `Processor: ${fieldRow.processor}` : '',
+    fieldRow.ram ? `RAM: ${fieldRow.ram}` : '',
+    fieldRow.storage ? `Storage: ${fieldRow.storage}` : '',
+    fieldRow.screenSize ? `Display: ${fieldRow.screenSize}` : '',
+    fieldRow.operatingSystem ? `OS: ${fieldRow.operatingSystem}` : '',
+    fieldRow.condition ? `Condition: ${fieldRow.condition}` : '',
+  ];
+
+  const flattened = dedupe(
+    candidates
+      .flatMap((item) => splitList(item))
+      .map((item) => item.trim())
+      .filter(Boolean)
+  );
+
+  const fallbacks = [
+    fieldRow.brand && fieldRow.model ? `${fieldRow.brand} ${fieldRow.model}` : fieldRow.productTitle,
+    fieldRow.storage ? `${fieldRow.storage} storage` : 'Catalog-ready product',
+    fieldRow.condition ? `${fieldRow.condition} condition` : 'Ready for marketplace listing',
+  ]
+    .map((item) => text(item))
+    .filter(Boolean);
+
+  return dedupe([...flattened, ...fallbacks]).slice(0, 10);
+}
+
 function resolveCategoryMatch(
   categories: ReturnType<typeof normalizeCategories>,
   fieldRow: BulkUploadEditableRow
@@ -882,6 +932,35 @@ export async function buildBulkUploadPreviewRows(input: {
 
       const lifecycle = resolveLifecycle(fieldRow, input.mode);
 
+      if (errors.length === 0) {
+        try {
+          const previewPayload = buildBulkImportPayload({
+            row: fieldRow,
+            mode: input.mode,
+            categories: input.categories,
+            sellers: input.sellers,
+            uploaderSeller: input.uploaderSeller || null,
+          });
+          const normalizedPreviewSpecs = normalizeProductSpecifications(previewPayload.specs || {}, {
+            parentCategorySlug: previewPayload.specs?.parentCategorySlug || '',
+            parentCategoryName: previewPayload.specs?.parentCategoryName || '',
+            categorySlug: previewPayload.specs?.categorySlug || '',
+            categoryName: previewPayload.specs?.categoryName || '',
+            subcategorySlug: previewPayload.specs?.subcategorySlug || '',
+            subcategoryName: previewPayload.specs?.subcategoryName || '',
+            title: previewPayload.title || fieldRow.productTitle,
+          });
+
+          if (lifecycle.status !== 'draft') {
+            validateProductSpecificationsForTemplate(normalizedPreviewSpecs.specs, normalizedPreviewSpecs.template, {
+              requireHighlights: true,
+            });
+          }
+        } catch (validationError) {
+          errors.push(String(validationError instanceof Error ? validationError.message : validationError));
+        }
+      }
+
       return {
         clientId: fieldRow.clientId,
         rowNumber: fieldRow.rowNumber,
@@ -949,7 +1028,7 @@ export function buildBulkImportPayload(input: {
   const salePrice = numberValue(fieldRow.salePrice || fieldRow.flashSalePrice, regularPrice || 0);
   const finalPrice = salePrice > 0 ? salePrice : regularPrice;
   const compareAt = regularPrice > finalPrice ? regularPrice : finalPrice;
-  const highlights = dedupe(splitList(fieldRow.productHighlights)).slice(0, 12);
+  const highlights = buildDefaultHighlights(fieldRow);
   const boxContents = dedupe(splitList(fieldRow.boxContents)).slice(0, 12);
   const badges = [
     fieldRow.featuredProduct === 'yes' ? 'Featured' : '',
@@ -958,6 +1037,67 @@ export function buildBulkImportPayload(input: {
     fieldRow.eidOffer === 'yes' ? 'Eid Offer' : '',
     fieldRow.blackFridaySection === 'yes' ? 'Black Friday' : '',
   ].filter(Boolean);
+
+  const processorBrand = inferProcessorBrand(fieldRow);
+  const specificationValues = {
+    brand: fieldRow.brand,
+    model: fieldRow.model || fieldRow.productTitle,
+    series: fieldRow.model,
+    product_type: fieldRow.productType,
+    condition: fieldRow.condition || 'Refurbished',
+    color: fieldRow.color,
+    storage: fieldRow.storage,
+    ram: fieldRow.ram,
+    size: fieldRow.size,
+    capacity: fieldRow.capacity,
+    material: fieldRow.material,
+    connectivity: fieldRow.connectivity,
+    compatibility: fieldRow.compatibility,
+    processorBrand,
+    processor: fieldRow.processor,
+    generation: '',
+    screenSize: fieldRow.screenSize,
+    screenResolution: '',
+    graphics: fieldRow.graphics,
+    operatingSystem: fieldRow.operatingSystem,
+    batteryHealth: fieldRow.batteryHealth,
+    rearCamera: fieldRow.camera,
+    frontCamera: '',
+    camera: fieldRow.camera,
+    refreshRate: fieldRow.refreshRate,
+    chipset: fieldRow.chipset,
+    network: fieldRow.network,
+    simType: fieldRow.simType,
+    warranty: fieldRow.warranty,
+    boxContents: boxContents,
+    dimensions: fieldRow.dimensions,
+    weight: fieldRow.weight,
+    warrantyPolicy: fieldRow.warrantyPolicy,
+    returnPolicy: fieldRow.returnPolicy,
+    shippingWeight: fieldRow.weight,
+    packageSize: fieldRow.dimensions,
+    stock_location: fieldRow.warehouseLocation,
+    barcode: fieldRow.barcode,
+    serial_number: fieldRow.serialNumber,
+    delivery_country: fieldRow.deliveryCountry,
+    uae_delivery_available: fieldRow.uaeDeliveryAvailable,
+    saudi_delivery_available: fieldRow.saudiDeliveryAvailable,
+    gcc_delivery_available: fieldRow.gccDeliveryAvailable,
+    shipping_time: fieldRow.shippingTime,
+    shipping_price: fieldRow.shippingPrice,
+    cod_available: fieldRow.codAvailable,
+    cod_fee: fieldRow.codFee,
+    tabby_eligible: fieldRow.tabbyEligible,
+    tamara_eligible: fieldRow.tamaraEligible,
+    currency: fieldRow.currency,
+    vat_status: fieldRow.vatStatus,
+    seller_type: fieldRow.sellerType,
+    vendor_commission: fieldRow.vendorCommission,
+    seller_store_visibility: fieldRow.sellerStoreVisibility,
+    breadcrumb_category_data: fieldRow.breadcrumbCategoryData,
+    homepage_section_visibility: fieldRow.homepageSectionVisibility,
+    deal_timer: fieldRow.dealTimer,
+  } as Record<string, any>;
 
   return {
     sellerId: sellerMatch.id,
@@ -999,8 +1139,8 @@ export function buildBulkImportPayload(input: {
       ogTitle: fieldRow.seoTitle || fieldRow.productTitle,
       ogDescription: fieldRow.seoDescription || fieldRow.shortDescription || fieldRow.longDescription.slice(0, 220),
       ogImage: fieldRow.mainImageUrl,
-      briefHighlights: highlights.length ? highlights : dedupe(splitList(fieldRow.shortDescription)).slice(0, 3),
-      keyFeatures: highlights.length ? highlights : dedupe(splitList(fieldRow.shortDescription)).slice(0, 3),
+      briefHighlights: highlights.length >= 3 ? highlights : buildDefaultHighlights(fieldRow),
+      keyFeatures: highlights.length >= 3 ? highlights : buildDefaultHighlights(fieldRow),
       whatsInTheBox: boxContents,
       sellerNotes: fieldRow.sellerNotes,
       buyerNotes: fieldRow.buyerNotes,
@@ -1016,6 +1156,8 @@ export function buildBulkImportPayload(input: {
       subcategorySlug: categoryMatch.subcategory?.slug || '',
       subcategoryName: categoryMatch.subcategory?.name || '',
       categoryPath: [categoryMatch.parent.slug, categoryMatch.category?.slug, categoryMatch.subcategory?.slug].filter(Boolean).join('/'),
+      templateId: categoryMatch.subcategory?.slug || categoryMatch.category?.slug || categoryMatch.parent.slug,
+      templateName: categoryMatch.subcategory?.name || categoryMatch.category?.name || categoryMatch.parent.name,
       ownership: {
         sellerId: sellerMatch.id,
         sellerName: sellerMatch.storeName,
@@ -1025,57 +1167,8 @@ export function buildBulkImportPayload(input: {
         source: 'bulk-upload',
         rowNumber: fieldRow.rowNumber,
       },
-      specificationValues: {
-        brand: fieldRow.brand,
-        model: fieldRow.model,
-        product_type: fieldRow.productType,
-        condition: fieldRow.condition,
-        color: fieldRow.color,
-        storage: fieldRow.storage,
-        ram: fieldRow.ram,
-        size: fieldRow.size,
-        capacity: fieldRow.capacity,
-        material: fieldRow.material,
-        connectivity: fieldRow.connectivity,
-        compatibility: fieldRow.compatibility,
-        processor: fieldRow.processor,
-        screen_size: fieldRow.screenSize,
-        graphics: fieldRow.graphics,
-        operating_system: fieldRow.operatingSystem,
-        battery_health: fieldRow.batteryHealth,
-        camera: fieldRow.camera,
-        refresh_rate: fieldRow.refreshRate,
-        chipset: fieldRow.chipset,
-        network: fieldRow.network,
-        sim_type: fieldRow.simType,
-        warranty: fieldRow.warranty,
-        box_contents: fieldRow.boxContents,
-        dimensions: fieldRow.dimensions,
-        weight: fieldRow.weight,
-        warranty_policy: fieldRow.warrantyPolicy,
-        return_policy: fieldRow.returnPolicy,
-        stock_location: fieldRow.warehouseLocation,
-        barcode: fieldRow.barcode,
-        serial_number: fieldRow.serialNumber,
-        delivery_country: fieldRow.deliveryCountry,
-        uae_delivery_available: fieldRow.uaeDeliveryAvailable,
-        saudi_delivery_available: fieldRow.saudiDeliveryAvailable,
-        gcc_delivery_available: fieldRow.gccDeliveryAvailable,
-        shipping_time: fieldRow.shippingTime,
-        shipping_price: fieldRow.shippingPrice,
-        cod_available: fieldRow.codAvailable,
-        cod_fee: fieldRow.codFee,
-        tabby_eligible: fieldRow.tabbyEligible,
-        tamara_eligible: fieldRow.tamaraEligible,
-        currency: fieldRow.currency,
-        vat_status: fieldRow.vatStatus,
-        seller_type: fieldRow.sellerType,
-        vendor_commission: fieldRow.vendorCommission,
-        seller_store_visibility: fieldRow.sellerStoreVisibility,
-        breadcrumb_category_data: fieldRow.breadcrumbCategoryData,
-        homepage_section_visibility: fieldRow.homepageSectionVisibility,
-        deal_timer: fieldRow.dealTimer,
-      },
+      specificationValues,
+      specifications: specificationValues,
       attributes: {
         brand: fieldRow.brand,
         subcategory: categoryMatch.subcategory?.slug || categoryMatch.category?.slug || '',

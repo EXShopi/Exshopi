@@ -833,6 +833,23 @@ function buildErrorReportCsv(rows: PreviewRow[]) {
   return `${lines.join('\n')}\n`;
 }
 
+function buildImportResultsCsv(rows: ImportResult[]) {
+  const headers = ['client_id', 'title', 'status', 'product_id', 'error'];
+  const lines = [
+    headers.join(','),
+    ...rows.map((row) =>
+      [
+        csvEscape(row.clientId),
+        csvEscape(row.title),
+        row.success ? 'success' : 'failed',
+        csvEscape(row.id || ''),
+        csvEscape(row.error || ''),
+      ].join(',')
+    ),
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
 type Props = {
   onImported?: () => void;
   mode?: 'admin' | 'seller';
@@ -1140,6 +1157,14 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
     );
   };
 
+  const downloadImportResults = () => {
+    downloadBlob(
+      'exshopi-bulk-upload-import-results.csv',
+      buildImportResultsCsv(importResults),
+      'text/csv;charset=utf-8;'
+    );
+  };
+
   return (
     <>
       <button
@@ -1370,12 +1395,56 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
 
                   {importResults.length ? (
                     <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-wrap gap-3">
-                        <div className="rounded-2xl bg-emerald-100 px-4 py-2 text-sm font-black text-emerald-700">
-                          Successful: {importResults.filter((item) => item.success).length}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap gap-3">
+                          <div className="rounded-2xl bg-emerald-100 px-4 py-2 text-sm font-black text-emerald-700">
+                            Successful: {importResults.filter((item) => item.success).length}
+                          </div>
+                          <div className="rounded-2xl bg-rose-100 px-4 py-2 text-sm font-black text-rose-700">
+                            Failed: {importResults.filter((item) => !item.success).length}
+                          </div>
                         </div>
-                        <div className="rounded-2xl bg-rose-100 px-4 py-2 text-sm font-black text-rose-700">
-                          Failed: {importResults.filter((item) => !item.success).length}
+                        <button
+                          type="button"
+                          onClick={downloadImportResults}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-700"
+                        >
+                          Download Import Report
+                        </button>
+                      </div>
+
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <div className="max-h-72 overflow-y-auto">
+                          <table className="w-full min-w-[760px] divide-y divide-slate-100 text-left">
+                            <thead className="bg-slate-50">
+                              <tr className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3">Title</th>
+                                <th className="px-4 py-3">Product ID</th>
+                                <th className="px-4 py-3">Reason</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {importResults.map((item) => (
+                                <tr key={`${item.clientId}-${item.title}-${item.id || item.error || 'result'}`}>
+                                  <td className="px-4 py-3">
+                                    <span
+                                      className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
+                                        item.success ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                      }`}
+                                    >
+                                      {item.success ? 'Success' : 'Failed'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm font-semibold text-slate-900">{item.title}</td>
+                                  <td className="px-4 py-3 text-xs font-medium text-slate-500">{item.id || 'Not created'}</td>
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-600">
+                                    {item.success ? 'Imported successfully' : item.error || 'Unknown import error'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     </div>

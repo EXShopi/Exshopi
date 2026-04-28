@@ -4394,8 +4394,9 @@ app.post('/api/admin/products/bulk-upload/import', authMiddleware, async (req: R
 
     for (const entry of payload.rows as Array<{ fields?: BulkUploadEditableRow; clientId?: string }>) {
       const rowFields = entry?.fields || (entry as unknown as BulkUploadEditableRow);
+      let productPayload: any = null;
       try {
-        const productPayload = buildBulkImportPayload({
+        productPayload = buildBulkImportPayload({
           row: rowFields,
           mode,
           categories,
@@ -4410,11 +4411,37 @@ app.post('/api/admin/products/bulk-upload/import', authMiddleware, async (req: R
           id: String(created?.id || ''),
         });
       } catch (error) {
+        const errorCode = error && typeof error === 'object' && 'code' in (error as any) ? String((error as any).code || '') : '';
+        const errorMessage = String(error instanceof Error ? error.message : error);
+        console.error('[bulk-upload] row import failed', {
+          clientId: rowFields?.clientId || entry?.clientId || '',
+          sku: rowFields?.sku || '',
+          title: rowFields?.productTitle || 'Untitled',
+          errorCode,
+          errorMessage,
+          payload: productPayload
+            ? {
+                sellerId: productPayload.sellerId,
+                categoryId: productPayload.categoryId,
+                slug: productPayload.slug,
+                status: productPayload.status,
+                approvalStatus: productPayload.approvalStatus,
+                visibilityStatus: productPayload.visibilityStatus,
+                productStatus: productPayload.productStatus,
+                image: productPayload.image,
+                imagesCount: Array.isArray(productPayload.images) ? productPayload.images.length : 0,
+                specTemplateId: productPayload.specs?.templateId,
+                parentCategorySlug: productPayload.specs?.parentCategorySlug,
+                categorySlug: productPayload.specs?.categorySlug,
+                subcategorySlug: productPayload.specs?.subcategorySlug,
+              }
+            : null,
+        });
         results.push({
           clientId: rowFields?.clientId || entry?.clientId || '',
           title: rowFields?.productTitle || 'Untitled',
           success: false,
-          error: String(error instanceof Error ? error.message : error),
+          error: errorCode ? `${errorCode}: ${errorMessage}` : errorMessage,
         });
       }
     }
