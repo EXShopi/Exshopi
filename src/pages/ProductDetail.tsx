@@ -1650,8 +1650,8 @@ const productSchema = product
       <div className="mx-auto max-w-[1800px] px-4 py-7 md:px-6 md:py-8">
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-5">
           <div className="xl:col-span-5">
-            <div className="sticky top-[150px] overflow-hidden rounded-[34px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.98))] shadow-[0_26px_70px_rgba(15,23,42,0.10)] ring-1 ring-white/70 backdrop-blur-sm">
-              <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)] before:absolute before:inset-[7%] before:rounded-[2rem] before:bg-white/70 before:shadow-[0_30px_90px_rgba(15,23,42,0.08)] before:content-['']">
+            <div className="sticky top-[150px] overflow-visible rounded-[34px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.98))] shadow-[0_26px_70px_rgba(15,23,42,0.10)] ring-1 ring-white/70 backdrop-blur-sm">
+              <div className="relative aspect-[1/1.02] overflow-hidden rounded-t-[34px] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)] before:absolute before:inset-[7%] before:rounded-[2rem] before:bg-white/70 before:shadow-[0_30px_90px_rgba(15,23,42,0.08)] before:content-['']">
                 <img
                   src={productImages[mainImage]}
                   alt={buildProductImageAlt(product, mainImage)}
@@ -1660,7 +1660,7 @@ const productSchema = product
                   decoding="async"
                 />
                 {displayOriginalPrice > displayPrice ? (
-                  <div className="absolute right-5 top-5 rounded-full bg-gradient-to-r from-rose-500 via-red-500 to-orange-500 px-4 py-2 text-sm font-black text-white shadow-[0_18px_34px_rgba(239,68,68,0.28)]">
+                  <div className="pointer-events-none absolute right-4 top-4 z-30 rounded-full bg-gradient-to-r from-rose-500 via-red-500 to-orange-500 px-4 py-2 text-sm font-black text-white shadow-[0_18px_34px_rgba(239,68,68,0.28)] md:right-5 md:top-5">
                     Save {Math.max(1, Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100))}%
                   </div>
                 ) : null}
