@@ -278,6 +278,8 @@ export default function Navbar() {
                   <img
                     src="/logo.png"
                     alt="Exshopi"
+                    width={192}
+                    height={48}
                     className="h-6 w-auto shrink-0 object-contain drop-shadow-[0_4px_10px_rgba(255,255,255,0.9)] sm:h-7 md:h-12"
                   />
                   <div className="min-w-0 leading-[1.02]">
@@ -534,6 +536,8 @@ export default function Navbar() {
                               <img
                                 src={product.image}
                                 alt={product.title}
+                                width={48}
+                                height={48}
                                 className="h-12 w-12 rounded-2xl border border-slate-100 bg-slate-50 object-cover"
                               />
                               <div>

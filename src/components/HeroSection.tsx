@@ -13,38 +13,62 @@ export default function HeroSection() {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    let timeoutId: number | null = null;
+
+    const loadRemoteSlide = async () => {
       try {
         const banners = await bannerAPI.getAll();
         if (!mounted || !Array.isArray(banners) || banners.length === 0) return;
-        const first = banners
-          .sort((a, b) => (a.order || 0) - (b.order || 0))[0];
+        const first = [...banners].sort((a, b) => (a.order || 0) - (b.order || 0))[0];
         if (first) {
-          // Normalize any legacy .png hero references to .webp where possible
           let imageUrl = first.image || settings.homepage.hero.productImageUrl;
           if (typeof imageUrl === 'string' && !imageUrl.startsWith('http')) {
             imageUrl = imageUrl.replace(/\.png$/i, '.webp');
           }
 
-          setRemoteSlide({
-            id: first.id,
-            tag: first.badge || "EXSHOPI MARKETPLACE",
-            title: first.title || settings.homepage.hero.title,
-            description: first.subtitle || settings.homepage.hero.subtitle,
-            primaryCta: first.cta || settings.homepage.hero.primaryCtaText,
-            primaryLink: first.link || settings.homepage.hero.primaryCtaLink,
-            secondaryLink: "/categories",
-            bg: first.color || "from-[#06142c] via-[#0f2347] to-[#31545f]",
-            image: imageUrl,
-            glowColor: "rgba(52, 168, 219, 0.5)",
+          setRemoteSlide((current) => {
+            const next = {
+              id: first.id,
+              tag: first.badge || "EXSHOPI MARKETPLACE",
+              title: first.title || settings.homepage.hero.title,
+              description: first.subtitle || settings.homepage.hero.subtitle,
+              primaryCta: first.cta || settings.homepage.hero.primaryCtaText,
+              primaryLink: first.link || settings.homepage.hero.primaryCtaLink,
+              secondaryLink: "/categories",
+              bg: first.color || "from-[#06142c] via-[#0f2347] to-[#31545f]",
+              image: imageUrl,
+              glowColor: "rgba(52, 168, 219, 0.5)",
+            };
+
+            if (
+              current &&
+              current.id === next.id &&
+              current.image === next.image &&
+              current.title === next.title
+            ) {
+              return current;
+            }
+
+            return next;
           });
         }
       } catch (error) {
         console.error("Failed to load homepage banners", error);
       }
-    })();
+    };
+
+    const scheduleLoad = () => {
+      timeoutId = window.setTimeout(() => {
+        void loadRemoteSlide();
+      }, 900);
+    };
+
+    const rafId = window.requestAnimationFrame(scheduleLoad);
+
     return () => {
       mounted = false;
+      window.cancelAnimationFrame(rafId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
   }, [settings.homepage.hero.primaryCtaLink, settings.homepage.hero.primaryCtaText, settings.homepage.hero.productImageUrl, settings.homepage.hero.subtitle, settings.homepage.hero.title]);
 
@@ -130,6 +154,8 @@ export default function HeroSection() {
                   <img
                     src={slide.image}
                     alt={slide.title}
+                    width={1280}
+                    height={420}
                     className="absolute inset-0 h-full w-full object-cover opacity-[0.97] brightness-[1.14] saturate-[1.05]"
                     loading="eager"
                     fetchPriority="high"

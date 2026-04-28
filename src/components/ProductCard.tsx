@@ -159,6 +159,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
             alt={buildProductImageAlt({ title })}
             wrapperClassName="h-full w-full overflow-hidden rounded-[14px] bg-white md:rounded-[18px]"
             className="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-[1.03]"
+            width={320}
+            height={320}
+            sizes="(max-width: 768px) 50vw, 320px"
           />
           
           {/* Badge */}

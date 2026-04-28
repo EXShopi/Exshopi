@@ -142,6 +142,13 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const mergedStyle: React.CSSProperties = {
     ...style,
     backgroundColor: placeholderColor,
+    display: style?.display || 'block',
+    ...(width && height
+      ? {
+          aspectRatio: `${width} / ${height}`,
+          height: style?.height,
+        }
+      : null),
   };
 
   const imgProps = {

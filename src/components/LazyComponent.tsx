@@ -66,7 +66,14 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
   }, [delayMs, deferUntilVisible, shouldRender]);
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div
+      ref={containerRef}
+      className="w-full"
+      style={{
+        contentVisibility: shouldRender ? 'visible' : 'auto',
+        containIntrinsicSize: shouldRender ? undefined : '600px',
+      }}
+    >
       {shouldRender ? children : placeholder}
     </div>
   );

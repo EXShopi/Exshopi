@@ -6,11 +6,19 @@ export default function LazyImage({
   alt,
   className = "",
   wrapperClassName = "",
+  width,
+  height,
+  sizes,
+  priority = false,
 }: {
   src: string;
   alt: string;
   className?: string;
   wrapperClassName?: string;
+  width?: number;
+  height?: number;
+  sizes?: string;
+  priority?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
@@ -35,14 +43,25 @@ export default function LazyImage({
     return () => observer.disconnect();
   }, []);
 
+  const wrapperStyle =
+    width && height
+      ? ({
+          aspectRatio: `${width} / ${height}`,
+        } satisfies React.CSSProperties)
+      : undefined;
+
   return (
-    <div ref={ref} className={`relative overflow-hidden ${wrapperClassName}`}>
+    <div ref={ref} className={`relative overflow-hidden ${wrapperClassName}`} style={wrapperStyle}>
       {!loaded && <Skeleton className="absolute inset-0 h-full w-full rounded-none" />}
       {shouldLoad ? (
         <img
           src={src}
           alt={alt}
-          loading="lazy"
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          width={width}
+          height={height}
+          sizes={sizes}
           onLoad={() => setLoaded(true)}
           className={`${className} transition-all duration-500 ${loaded ? "scale-100 opacity-100 blur-0" : "scale-[1.03] opacity-0 blur-sm"}`}
         />
@@ -50,4 +69,3 @@ export default function LazyImage({
     </div>
   );
 }
-

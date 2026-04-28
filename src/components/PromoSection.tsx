@@ -55,6 +55,8 @@ function PromoImage({ box }: { box: PromoBox }) {
     <img
       src={imageSrc}
       alt={box.title}
+      width={520}
+      height={460}
       className="h-full w-full object-cover object-center"
       loading="lazy"
       onError={() => {

@@ -18,7 +18,11 @@ export default function BannerCarousel() {
         <img
           src={banner.image}
           alt={banner.title}
+          width={1600}
+          height={420}
           className="h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
         />
 
         <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-transparent" />
