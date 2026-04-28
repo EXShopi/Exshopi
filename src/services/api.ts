@@ -1325,6 +1325,45 @@ export const adminProductBulkUploadAPI = {
     return parseApiResponse(res);
   },
 
+  async createImportSession(data: { rows: any[]; mode?: 'admin' | 'seller' }) {
+    const res = await fetchWithAuthRetry('/admin/products/bulk-upload/session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
+
+  async getImportSession(sessionId: string) {
+    const res = await fetchWithAuthRetry(`/admin/products/bulk-upload/session/${encodeURIComponent(sessionId)}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+    });
+    return parseApiResponse(res);
+  },
+
+  async importBatch(data: { sessionId: string; batchSize?: number }) {
+    const res = await fetchWithAuthRetry('/admin/products/bulk-upload/import-batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches();
+    return payload;
+  },
+
   async importRows(data: { rows: any[]; mode?: 'admin' | 'seller' }) {
     const res = await fetchWithAuthRetry('/admin/products/bulk-upload/import', {
       method: 'POST',

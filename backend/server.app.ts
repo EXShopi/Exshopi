@@ -1753,6 +1753,67 @@ const bulkUploadImportSchema = z.object({
   rows: z.array(z.any()).min(1).max(1000),
 });
 
+const bulkUploadImportSessionCreateSchema = z.object({
+  mode: z.enum(['admin', 'seller']).optional().default('admin'),
+  rows: z.array(z.any()).min(1).max(1000),
+});
+
+const bulkUploadImportBatchSchema = z.object({
+  sessionId: z.string().min(8).max(120),
+  batchSize: z.number().int().min(1).max(25).optional().default(10),
+});
+
+type BulkUploadImportResult = {
+  clientId: string;
+  sku: string;
+  title: string;
+  success: boolean;
+  id?: string;
+  error?: string;
+};
+
+type BulkUploadImportSession = {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  mode: BulkUploadMode;
+  uploaderUserId: string;
+  rows: Array<{ clientId: string; fields: BulkUploadEditableRow }>;
+  processedClientIds: Set<string>;
+  results: BulkUploadImportResult[];
+};
+
+const bulkUploadImportSessions = new Map<string, BulkUploadImportSession>();
+const BULK_UPLOAD_SESSION_TTL_MS = 1000 * 60 * 60 * 4;
+
+const purgeExpiredBulkUploadSessions = () => {
+  const cutoff = Date.now() - BULK_UPLOAD_SESSION_TTL_MS;
+  for (const [sessionId, session] of bulkUploadImportSessions.entries()) {
+    if (session.updatedAt < cutoff) {
+      bulkUploadImportSessions.delete(sessionId);
+    }
+  }
+};
+
+const createBulkUploadSessionId = () =>
+  `bulk-import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const summarizeBulkUploadSession = (session: BulkUploadImportSession) => {
+  const imported = session.results.filter((item) => item.success).length;
+  const failed = session.results.filter((item) => !item.success).length;
+  const processed = imported + failed;
+  return {
+    sessionId: session.id,
+    mode: session.mode,
+    total: session.rows.length,
+    processed,
+    imported,
+    failed,
+    remaining: Math.max(0, session.rows.length - processed),
+    done: processed >= session.rows.length,
+  };
+};
+
 const parseAdminDateRange = (query: unknown) => {
   const parsed = adminDashboardQuerySchema.parse(query || {});
   const now = new Date();
@@ -4368,6 +4429,194 @@ app.post('/api/admin/products/bulk-upload/preview', authMiddleware, async (req: 
       fileName: payload.fileName,
       mode,
       ...preview,
+    });
+  } catch (error) {
+    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+  }
+});
+
+app.post('/api/admin/products/bulk-upload/session', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    purgeExpiredBulkUploadSessions();
+
+    const role = req.user?.role || null;
+    if (!(isAdminLike(role) || role === 'seller')) {
+      return res.status(403).json({ error: 'Only admin or approved sellers can use bulk upload.' });
+    }
+
+    const payload = bulkUploadImportSessionCreateSchema.parse(req.body || {});
+    const mode: BulkUploadMode = isAdminLike(role) && payload.mode !== 'seller' ? 'admin' : 'seller';
+    const uploaderSeller = mode === 'seller' ? await resolveUploaderSeller(req.user?.id || null) : null;
+
+    if (mode === 'seller' && !uploaderSeller) {
+      return res.status(403).json({ error: 'Seller store record is required before bulk upload.' });
+    }
+
+    const rows = (payload.rows as Array<{ fields?: BulkUploadEditableRow; clientId?: string }>)
+      .map((entry) => {
+        const fields = entry?.fields || (entry as unknown as BulkUploadEditableRow);
+        return {
+          clientId: fields.clientId || entry?.clientId || `bulk-row-${Math.random().toString(36).slice(2, 10)}`,
+          fields,
+        };
+      })
+      .filter((entry) => entry.fields?.productTitle);
+
+    if (!rows.length) {
+      return res.status(400).json({ error: 'There are no valid approved rows ready to import.' });
+    }
+
+    const sessionId = createBulkUploadSessionId();
+    const session: BulkUploadImportSession = {
+      id: sessionId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      mode,
+      uploaderUserId: String(req.user?.id || ''),
+      rows,
+      processedClientIds: new Set<string>(),
+      results: [],
+    };
+
+    bulkUploadImportSessions.set(sessionId, session);
+
+    res.json({
+      sessionId,
+      ...summarizeBulkUploadSession(session),
+    });
+  } catch (error) {
+    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+  }
+});
+
+app.get('/api/admin/products/bulk-upload/session/:sessionId', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    purgeExpiredBulkUploadSessions();
+
+    const role = req.user?.role || null;
+    if (!(isAdminLike(role) || role === 'seller')) {
+      return res.status(403).json({ error: 'Only admin or approved sellers can use bulk upload.' });
+    }
+
+    const session = bulkUploadImportSessions.get(String(req.params.sessionId || ''));
+    if (!session) {
+      return res.status(404).json({ error: 'Bulk import session not found or expired.' });
+    }
+
+    if (session.uploaderUserId && String(req.user?.id || '') !== session.uploaderUserId && !isAdminLike(role)) {
+      return res.status(403).json({ error: 'You do not have permission to resume this bulk import session.' });
+    }
+
+    res.json({
+      ...summarizeBulkUploadSession(session),
+      results: session.results,
+    });
+  } catch (error) {
+    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+  }
+});
+
+app.post('/api/admin/products/bulk-upload/import-batch', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    purgeExpiredBulkUploadSessions();
+
+    const role = req.user?.role || null;
+    if (!(isAdminLike(role) || role === 'seller')) {
+      return res.status(403).json({ error: 'Only admin or approved sellers can use bulk upload.' });
+    }
+
+    const payload = bulkUploadImportBatchSchema.parse(req.body || {});
+    const session = bulkUploadImportSessions.get(payload.sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Bulk import session not found or expired.' });
+    }
+
+    if (session.uploaderUserId && String(req.user?.id || '') !== session.uploaderUserId && !isAdminLike(role)) {
+      return res.status(403).json({ error: 'You do not have permission to continue this bulk import session.' });
+    }
+
+    const uploaderSeller = session.mode === 'seller' ? await resolveUploaderSeller(req.user?.id || null) : null;
+
+    if (session.mode === 'seller' && !uploaderSeller) {
+      return res.status(403).json({ error: 'Seller store record is required before bulk upload.' });
+    }
+
+    const [categories, sellers] = await Promise.all([getAllCatalogCategories(), getAllCatalogSellers()]);
+    const pendingRows = session.rows.filter((entry) => !session.processedClientIds.has(entry.clientId));
+    const rowsToProcess = pendingRows.slice(0, payload.batchSize);
+    const batchResults: BulkUploadImportResult[] = [];
+
+    for (const entry of rowsToProcess) {
+      const rowFields = entry.fields;
+      let productPayload: any = null;
+      try {
+        productPayload = buildBulkImportPayload({
+          row: rowFields,
+          mode: session.mode,
+          categories,
+          sellers,
+          uploaderSeller,
+        });
+        const created = await createAdminProductRecord(productPayload);
+        const result: BulkUploadImportResult = {
+          clientId: entry.clientId,
+          sku: rowFields.sku || '',
+          title: rowFields.productTitle || created?.title || 'Untitled',
+          success: true,
+          id: String(created?.id || ''),
+        };
+        session.processedClientIds.add(entry.clientId);
+        session.results.push(result);
+        batchResults.push(result);
+      } catch (error) {
+        const errorCode = error && typeof error === 'object' && 'code' in (error as any) ? String((error as any).code || '') : '';
+        const errorMessage = String(error instanceof Error ? error.message : error);
+        console.error('[bulk-upload] row import failed', {
+          clientId: rowFields?.clientId || entry?.clientId || '',
+          sku: rowFields?.sku || '',
+          title: rowFields?.productTitle || 'Untitled',
+          errorCode,
+          errorMessage,
+          payload: productPayload
+            ? {
+                sellerId: productPayload.sellerId,
+                categoryId: productPayload.categoryId,
+                slug: productPayload.slug,
+                status: productPayload.status,
+                approvalStatus: productPayload.approvalStatus,
+                visibilityStatus: productPayload.visibilityStatus,
+                productStatus: productPayload.productStatus,
+                image: productPayload.image,
+                imagesCount: Array.isArray(productPayload.images) ? productPayload.images.length : 0,
+                specTemplateId: productPayload.specs?.templateId,
+                parentCategorySlug: productPayload.specs?.parentCategorySlug,
+                categorySlug: productPayload.specs?.categorySlug,
+                subcategorySlug: productPayload.specs?.subcategorySlug,
+              }
+            : null,
+        });
+        const result: BulkUploadImportResult = {
+          clientId: entry.clientId,
+          sku: rowFields?.sku || '',
+          title: rowFields?.productTitle || 'Untitled',
+          success: false,
+          error: errorCode ? `${errorCode}: ${errorMessage}` : errorMessage,
+        };
+        session.processedClientIds.add(entry.clientId);
+        session.results.push(result);
+        batchResults.push(result);
+      }
+    }
+
+    session.updatedAt = Date.now();
+    const summary = summarizeBulkUploadSession(session);
+
+    res.json({
+      ...summary,
+      batchSize: rowsToProcess.length,
+      batchImported: batchResults.filter((item) => item.success).length,
+      batchFailed: batchResults.filter((item) => !item.success).length,
+      results: batchResults,
     });
   } catch (error) {
     res.status(400).json({ error: String(error instanceof Error ? error.message : error) });

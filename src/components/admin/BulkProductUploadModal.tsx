@@ -133,10 +133,24 @@ type PreviewRow = {
 
 type ImportResult = {
   clientId: string;
+  sku?: string;
   title: string;
   success: boolean;
   id?: string;
   error?: string;
+};
+
+type ImportSessionProgress = {
+  sessionId: string;
+  processed: number;
+  imported: number;
+  failed: number;
+  total: number;
+  remaining: number;
+  done: boolean;
+  batchSize?: number;
+  batchImported?: number;
+  batchFailed?: number;
 };
 
 type BulkCategoryLeaf = {
@@ -834,12 +848,13 @@ function buildErrorReportCsv(rows: PreviewRow[]) {
 }
 
 function buildImportResultsCsv(rows: ImportResult[]) {
-  const headers = ['client_id', 'title', 'status', 'product_id', 'error'];
+  const headers = ['client_id', 'sku', 'title', 'status', 'product_id', 'error'];
   const lines = [
     headers.join(','),
     ...rows.map((row) =>
       [
         csvEscape(row.clientId),
+        csvEscape(row.sku || ''),
         csvEscape(row.title),
         row.success ? 'success' : 'failed',
         csvEscape(row.id || ''),
@@ -875,6 +890,8 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
+  const [importSessionId, setImportSessionId] = useState<string | null>(null);
+  const [lastBatchSize, setLastBatchSize] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const mainImageInputRef = useRef<HTMLInputElement | null>(null);
   const galleryImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -893,6 +910,13 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
       invalid: previewRows.filter((row) => !row.canImport).length,
     };
   }, [previewRows]);
+
+  const importBatchInfo = useMemo(() => {
+    const batchSize = lastBatchSize || 10;
+    const totalBatches = importProgress.total ? Math.max(1, Math.ceil(importProgress.total / batchSize)) : 0;
+    const currentBatch = importProgress.current ? Math.min(totalBatches, Math.ceil(importProgress.current / batchSize)) : 0;
+    return { batchSize, totalBatches, currentBatch };
+  }, [importProgress.current, importProgress.total, lastBatchSize]);
 
   const editingCategorySelection = useMemo(
     () => (editingRow ? resolveRowCategorySelection(editingRow.fields, categories) : { parent: null, branch: null, leaf: null }),
@@ -972,6 +996,8 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
     setImporting(false);
     setImportProgress({ current: 0, total: 0 });
     setImportResults([]);
+    setImportSessionId(null);
+    setLastBatchSize(0);
   };
 
   const handleClose = () => {
@@ -987,6 +1013,9 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
     setLoadingPreview(true);
     setError('');
     setImportResults([]);
+    setImportSessionId(null);
+    setImportProgress({ current: 0, total: 0 });
+    setLastBatchSize(0);
     try {
       const fileDataBase64 = await fileToBase64(file);
       const preview = await adminProductBulkUploadAPI.preview({
@@ -1120,30 +1149,71 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
     }
 
     setImporting(true);
-    setImportResults([]);
-    setImportProgress({ current: 0, total: candidates.length });
     setError('');
-
-    const chunkSize = 25;
-    const results: ImportResult[] = [];
+    const batchSize = 10;
+    let activeSessionId = importSessionId;
+    setLastBatchSize(batchSize);
 
     try {
-      for (let index = 0; index < candidates.length; index += chunkSize) {
-        const chunk = candidates.slice(index, index + chunkSize);
-        const response = await adminProductBulkUploadAPI.importRows({
+      let currentResults = importResults;
+
+      if (!activeSessionId) {
+        setImportResults([]);
+        setImportProgress({ current: 0, total: candidates.length });
+        const session = await adminProductBulkUploadAPI.createImportSession({
           mode,
-          rows: chunk.map((row) => ({ clientId: row.clientId, fields: row.fields })),
+          rows: candidates.map((row) => ({ clientId: row.clientId, fields: row.fields })),
         });
-        results.push(...(response.results || []));
-        setImportResults([...results]);
-        setImportProgress({ current: Math.min(index + chunk.length, candidates.length), total: candidates.length });
+        activeSessionId = String(session.sessionId || '');
+        if (!activeSessionId) {
+          throw new Error('Bulk import session could not be created.');
+        }
+        setImportSessionId(activeSessionId);
+        setImportProgress({ current: Number(session.processed || 0), total: Number(session.total || candidates.length) });
+      } else {
+        const session = await adminProductBulkUploadAPI.getImportSession(activeSessionId);
+        currentResults = Array.isArray(session.results) ? session.results : currentResults;
+        setImportResults(currentResults);
+        setImportProgress({ current: Number(session.processed || 0), total: Number(session.total || candidates.length) });
       }
 
-      if (results.some((item) => item.success) && onImported) {
+      if (!activeSessionId) {
+        throw new Error('Bulk import session is missing.');
+      }
+
+      while (true) {
+        const response: ImportSessionProgress & { results?: ImportResult[] } = await adminProductBulkUploadAPI.importBatch({
+          sessionId: activeSessionId,
+          batchSize,
+        });
+        currentResults = [...currentResults, ...((response.results || []) as ImportResult[])];
+        setImportResults([...currentResults]);
+        setImportProgress({ current: Number(response.processed || 0), total: Number(response.total || candidates.length) });
+
+        if (response.done) {
+          setImportSessionId(null);
+          break;
+        }
+      }
+
+      if (currentResults.some((item) => item.success) && onImported) {
         onImported();
       }
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : 'Bulk import failed');
+      const message = importError instanceof Error ? importError.message : 'Bulk import failed';
+      if (activeSessionId) {
+        try {
+          const session = await adminProductBulkUploadAPI.getImportSession(activeSessionId);
+          setImportResults(Array.isArray(session.results) ? session.results : []);
+          setImportProgress({ current: Number(session.processed || 0), total: Number(session.total || candidates.length) });
+          setImportSessionId(session.done ? null : activeSessionId);
+        } catch {
+          setImportSessionId(activeSessionId);
+        }
+        setError(`${message} You can resume the existing import session.`);
+      } else {
+        setError(message);
+      }
     } finally {
       setImporting(false);
     }
@@ -1350,7 +1420,7 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                         disabled={importing || previewStats.ready === 0}
                         className="rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Import All Valid Rows
+                        {importSessionId ? 'Resume Import' : 'Import All Valid Rows'}
                       </button>
                     </div>
                   </div>
@@ -1381,6 +1451,12 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                         <div className="text-sm font-black text-blue-700">
                           {importProgress.current}/{importProgress.total}
                         </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-blue-700">
+                        <span>Batch {importBatchInfo.currentBatch || 1}/{importBatchInfo.totalBatches || 1}</span>
+                        <span>Batch size {importBatchInfo.batchSize}</span>
+                        <span>Success {importResults.filter((item) => item.success).length}</span>
+                        <span>Failed {importResults.filter((item) => !item.success).length}</span>
                       </div>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-blue-100">
                         <div
@@ -1419,6 +1495,7 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                             <thead className="bg-slate-50">
                               <tr className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
                                 <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3">SKU</th>
                                 <th className="px-4 py-3">Title</th>
                                 <th className="px-4 py-3">Product ID</th>
                                 <th className="px-4 py-3">Reason</th>
@@ -1436,6 +1513,7 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                                       {item.success ? 'Success' : 'Failed'}
                                     </span>
                                   </td>
+                                  <td className="px-4 py-3 text-xs font-semibold text-slate-500">{item.sku || 'No SKU'}</td>
                                   <td className="px-4 py-3 text-sm font-semibold text-slate-900">{item.title}</td>
                                   <td className="px-4 py-3 text-xs font-medium text-slate-500">{item.id || 'Not created'}</td>
                                   <td className="px-4 py-3 text-sm font-medium text-slate-600">
