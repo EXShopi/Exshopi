@@ -21,10 +21,15 @@ export default function LazyImage({
   priority?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [shouldLoad, setShouldLoad] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(priority);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (priority) {
+      setShouldLoad(true);
+      return;
+    }
+
     const node = ref.current;
     if (!node) return;
 
@@ -41,7 +46,7 @@ export default function LazyImage({
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [priority]);
 
   const wrapperStyle =
     width && height

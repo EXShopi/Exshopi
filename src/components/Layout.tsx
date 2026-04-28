@@ -5,6 +5,7 @@ import Navbar from "./Navbar";
 import PremiumCategoryNav from "./PremiumCategoryNav";
 import Footer from "./Footer";
 import { useLanguageStore } from "../store/language";
+import LazyComponent from "./LazyComponent";
 
 const FloatingChatbot = lazy(() => import("./FloatingChatbot"));
 const FirstVisitCountryModal = lazy(() => import("./FirstVisitCountryModal"));
@@ -24,13 +25,31 @@ export default function Layout() {
     let cancelled = false;
     let timeoutId: number | null = null;
     let idleId: number | null = null;
+    let loadTimeoutId: number | null = null;
+    let interactionTimer: number | null = null;
+    let mounted = false;
+
+    const revealDeferredUi = () => {
+      if (cancelled || mounted) return;
+      mounted = true;
+      setDeferredUiReady(true);
+    };
+
+    const clearInteractionListeners = () => {
+      window.removeEventListener("pointerdown", onFirstInteraction);
+      window.removeEventListener("keydown", onFirstInteraction);
+      window.removeEventListener("touchstart", onFirstInteraction);
+      window.removeEventListener("scroll", onFirstInteraction);
+    };
 
     const mountDeferredUi = () => {
-      timeoutId = window.setTimeout(() => {
-        if (!cancelled) {
-          setDeferredUiReady(true);
-        }
-      }, 700);
+      timeoutId = window.setTimeout(revealDeferredUi, 450);
+    };
+
+    const onFirstInteraction = () => {
+      clearInteractionListeners();
+      if (interactionTimer !== null) window.clearTimeout(interactionTimer);
+      interactionTimer = window.setTimeout(mountDeferredUi, 250);
     };
 
     const scheduleMount = () => {
@@ -47,8 +66,15 @@ export default function Layout() {
 
     let rafId: number | null = null;
     const onLoad = () => {
-      rafId = scheduleMount();
+      loadTimeoutId = window.setTimeout(() => {
+        rafId = scheduleMount();
+      }, 6000);
     };
+
+    window.addEventListener("pointerdown", onFirstInteraction, { passive: true });
+    window.addEventListener("keydown", onFirstInteraction, { passive: true });
+    window.addEventListener("touchstart", onFirstInteraction, { passive: true });
+    window.addEventListener("scroll", onFirstInteraction, { passive: true, once: true });
 
     if (document.readyState === "complete") {
       rafId = scheduleMount();
@@ -59,8 +85,11 @@ export default function Layout() {
     return () => {
       cancelled = true;
       window.removeEventListener("load", onLoad);
+      clearInteractionListeners();
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (loadTimeoutId !== null) window.clearTimeout(loadTimeoutId);
+      if (interactionTimer !== null) window.clearTimeout(interactionTimer);
       if (idleId !== null && "cancelIdleCallback" in window) {
         window.cancelIdleCallback(idleId);
       }
@@ -77,7 +106,13 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      <Footer />
+      <LazyComponent
+        deferUntilVisible={false}
+        delayMs={1400}
+        placeholder={<div className="mt-8 min-h-[360px] bg-[#06101f] md:mt-16 md:min-h-[420px]" aria-hidden="true" />}
+      >
+        <Footer />
+      </LazyComponent>
       {deferredUiReady ? (
         <Suspense fallback={null}>
           <FloatingChatbot />

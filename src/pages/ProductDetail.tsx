@@ -42,6 +42,7 @@ import { readRouteSnapshot, resolveProductSnapshot } from "../lib/routeSnapshot"
 import { getCountryConfig, getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 import { buildCountryAwareWhatsAppMessage, getExShopiWhatsAppNumber } from "../lib/whatsapp";
+import LazyComponent from "../components/LazyComponent";
 // Local helpers for safe category path and slugification
 function slugifyLocal(value?: string) {
   return String(value || "")
@@ -396,7 +397,7 @@ type DetailSlimCardProps = {
   countryCode: "AE" | "SA";
 };
 
-const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
+const DetailSlimCard: React.FC<DetailSlimCardProps> = React.memo(({
   product,
   onAddToCart,
   countryCode,
@@ -514,7 +515,7 @@ const DetailSlimCard: React.FC<DetailSlimCardProps> = ({
       </div>
     </Link>
   );
-};
+});
 
 export default function ProductDetail() {
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
@@ -587,6 +588,7 @@ export default function ProductDetail() {
   const [contactOpen, setContactOpen] = useState(false);
   const [contactSent, setContactSent] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  const [deferredContentReady, setDeferredContentReady] = useState(false);
   const [lookupDiagnostics, setLookupDiagnostics] = useState<{
     source?: string;
     reason?: string;
@@ -594,6 +596,43 @@ export default function ProductDetail() {
   } | null>(null);
   const seededProduct = useMemo(() => cachedProduct || snapshotProduct || null, [cachedProduct, snapshotProduct]);
   const seededProductId = seededProduct?.id ? String(seededProduct.id) : "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    const reveal = () => {
+      timeoutId = window.setTimeout(() => {
+        if (!cancelled) setDeferredContentReady(true);
+      }, 900);
+    };
+
+    const schedule = () => {
+      if ("requestIdleCallback" in window) {
+        idleId = window.requestIdleCallback(reveal, { timeout: 2200 });
+      } else {
+        reveal();
+      }
+    };
+
+    if (document.readyState === "complete") {
+      schedule();
+    } else {
+      window.addEventListener("load", schedule, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", schedule);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (idleId !== null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!identifier) return;
@@ -816,26 +855,34 @@ export default function ProductDetail() {
       return;
     }
 
+    if (!deferredContentReady) {
+      return;
+    }
+
     let active = true;
     const controller = new AbortController();
+    let timeoutId: number | null = null;
 
-    productAPI
-      .getAll({ signal: controller.signal })
-      .then((allProds) => {
-        if (!active) return;
-        setAllProducts((allProds || []).map((item: any) => normalizeMarketplaceProduct(item)));
-      })
-      .catch((error) => {
-        if (!active || controller.signal.aborted) return;
-        console.error("Error fetching related products:", error);
-        setAllProducts((current) => (current.length ? current : snapshotRelatedProducts));
-      });
+    timeoutId = window.setTimeout(() => {
+      productAPI
+        .getAll({ signal: controller.signal })
+        .then((allProds) => {
+          if (!active) return;
+          setAllProducts((allProds || []).map((item: any) => normalizeMarketplaceProduct(item)));
+        })
+        .catch((error) => {
+          if (!active || controller.signal.aborted) return;
+          console.error("Error fetching related products:", error);
+          setAllProducts((current) => (current.length ? current : snapshotRelatedProducts));
+        });
+    }, 250);
 
     return () => {
       active = false;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [product?.id, snapshotRelatedProducts]);
+  }, [deferredContentReady, product?.id, snapshotRelatedProducts]);
 
   useEffect(() => {
     setMainImage(0);
@@ -874,6 +921,14 @@ export default function ProductDetail() {
       return;
     }
 
+    if (activeTab !== "reviews" && !deferredContentReady) {
+      return;
+    }
+
+    if (reviews.length && activeTab !== "reviews") {
+      return;
+    }
+
     let active = true;
     setReviewsLoading(true);
 
@@ -896,7 +951,7 @@ export default function ProductDetail() {
     return () => {
       active = false;
     };
-  }, [product?.id]);
+  }, [activeTab, deferredContentReady, product?.id, reviews.length]);
 
   const productSpecs = product?.specs || {};
   const productSeo = getProductSeoPayload({
@@ -1301,6 +1356,7 @@ const productSchema = product
     () => getProductImages(activeVariant?.image || product?.image, product?.images || product?.gallery || product?.media),
     [product?.gallery, product?.image, product?.images, product?.media, activeVariant?.image]
   );
+  const primaryProductImage = productImages[mainImage] || productImages[0] || "/hero/hero-1.webp";
 
   useEffect(() => {
     setMainImage((currentIndex) => (currentIndex < productImages.length ? currentIndex : 0));
@@ -1650,14 +1706,18 @@ const productSchema = product
       <div className="mx-auto max-w-[1800px] px-4 py-7 md:px-6 md:py-8">
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-5">
           <div className="xl:col-span-5">
-            <div className="sticky top-[150px] overflow-visible rounded-[34px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.98))] shadow-[0_26px_70px_rgba(15,23,42,0.10)] ring-1 ring-white/70 backdrop-blur-sm">
+            <div className="sticky top-[150px] overflow-visible rounded-[34px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.98))] shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-white/70 max-md:backdrop-blur-0 md:shadow-[0_26px_70px_rgba(15,23,42,0.10)] md:backdrop-blur-sm">
               <div className="relative aspect-[1/1.02] overflow-hidden rounded-t-[34px] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)] before:absolute before:inset-[7%] before:rounded-[2rem] before:bg-white/70 before:shadow-[0_30px_90px_rgba(15,23,42,0.08)] before:content-['']">
                 <img
-                  src={productImages[mainImage]}
+                  src={primaryProductImage}
                   alt={buildProductImageAlt(product, mainImage)}
                   className="relative z-10 h-full w-full object-contain p-8 drop-shadow-[0_20px_40px_rgba(15,23,42,0.14)] transition duration-500 ease-out hover:scale-[1.075]"
                   loading={mainImage === 0 ? "eager" : "lazy"}
+                  fetchPriority={mainImage === 0 ? "high" : "auto"}
                   decoding="async"
+                  width={1200}
+                  height={1224}
+                  sizes="(max-width: 768px) 100vw, (max-width: 1280px) 58vw, 42vw"
                 />
                 {displayOriginalPrice > displayPrice ? (
                   <div className="pointer-events-none absolute right-4 top-4 z-30 rounded-full bg-gradient-to-r from-rose-500 via-red-500 to-orange-500 px-4 py-2 text-sm font-black text-white shadow-[0_18px_34px_rgba(239,68,68,0.28)] md:right-5 md:top-5">
@@ -1690,6 +1750,9 @@ const productSchema = product
                         className="pointer-events-none h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         loading="lazy"
                         decoding="async"
+                        width={96}
+                        height={96}
+                        sizes="96px"
                       />
                     </button>
                   ))}
@@ -1995,7 +2058,7 @@ const productSchema = product
           </div>
 
           <div className="xl:col-span-3">
-            <div className="sticky top-[150px] rounded-[28px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(249,251,255,0.98))] p-6 shadow-[0_26px_60px_rgba(15,23,42,0.09)] ring-1 ring-white/70">
+            <div className="sticky top-[150px] rounded-[28px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(249,251,255,0.98))] p-6 shadow-[0_18px_34px_rgba(15,23,42,0.08)] ring-1 ring-white/70 max-md:backdrop-blur-0 md:shadow-[0_26px_60px_rgba(15,23,42,0.09)]">
               <div className="rounded-[1.15rem] border border-emerald-200 bg-[linear-gradient(180deg,#f4fff9,#ecfdf5)] p-4 shadow-[0_12px_28px_rgba(16,185,129,0.10)]">
                 <div className="flex items-start gap-2">
                     <Check className="mt-0.5 h-5 w-5 text-emerald-600" />
@@ -2528,83 +2591,104 @@ const productSchema = product
           </div>
         </div>
 
-        <div className="mt-14">
-          <div className="mb-6">
-            <h2 className="text-3xl font-black text-slate-900">Similar Products</h2>
-            <p className="mt-1 text-sm text-slate-500">Handpicked recommendations</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-            {relatedProducts.map((item) => (
-              <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} countryCode={selectedCountry} />
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-14 pb-12">
-          <div className="mb-6">
-            <h2 className="text-3xl font-black text-slate-900">Customers Also Viewed</h2>
-            <p className="mt-1 text-sm text-slate-500">Trending right now</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-            {viewedProducts.map((item) => (
-              <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} countryCode={selectedCountry} />
-            ))}
-          </div>
-        </div>
-
-        <div className="pb-12">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="text-3xl font-black text-slate-900">Customer Reviews</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Real buyer feedback with verified purchase protection
-              </p>
+        <LazyComponent
+          deferUntilVisible={true}
+          delayMs={120}
+          rootMargin="240px"
+          placeholder={<div className="mt-14 min-h-[420px]" aria-hidden="true" />}
+        >
+          <div className="mt-14">
+            <div className="mb-6">
+              <h2 className="text-3xl font-black text-slate-900">Similar Products</h2>
+              <p className="mt-1 text-sm text-slate-500">Handpicked recommendations</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab("reviews")}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-            >
-              Open full reviews
-            </button>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+              {relatedProducts.map((item) => (
+                <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} countryCode={selectedCountry} />
+              ))}
+            </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            {latestReviewCards.length > 0 ? (
-              latestReviewCards.map((review) => (
-                <div key={`footer-${review.id}`} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold text-slate-900">{review.customerName || "Verified Customer"}</p>
-                      <div className="mt-2 flex items-center gap-1">
-                        {[...Array(5)].map((_, index) => (
-                          <Star
-                            key={index}
-                            className={`h-4 w-4 ${
-                              index < Number(review.rating || 0)
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-slate-300"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
-                      {formatReviewDate(review.createdAt)}
-                    </span>
-                  </div>
-                  <p className="mt-4 text-sm leading-7 text-slate-600">{review.comment}</p>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-[28px] border border-slate-200 bg-white p-6 lg:col-span-3">
-                <p className="text-lg font-bold text-slate-900">No reviews published yet</p>
-                <p className="mt-2 text-sm leading-7 text-slate-600">
-                  Delivered customers will be able to rate this product here, and those original reviews will appear on this page.
+        </LazyComponent>
+
+        <LazyComponent
+          deferUntilVisible={true}
+          delayMs={180}
+          rootMargin="260px"
+          placeholder={<div className="mt-14 min-h-[420px]" aria-hidden="true" />}
+        >
+          <div className="mt-14 pb-12">
+            <div className="mb-6">
+              <h2 className="text-3xl font-black text-slate-900">Customers Also Viewed</h2>
+              <p className="mt-1 text-sm text-slate-500">Trending right now</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+              {viewedProducts.map((item) => (
+                <DetailSlimCard key={item.slug} product={item} onAddToCart={handleAddRelatedToCart} countryCode={selectedCountry} />
+              ))}
+            </div>
+          </div>
+        </LazyComponent>
+
+        <LazyComponent
+          deferUntilVisible={true}
+          delayMs={240}
+          rootMargin="300px"
+          placeholder={<div className="pb-12 min-h-[320px]" aria-hidden="true" />}
+        >
+          <div className="pb-12">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900">Customer Reviews</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Real buyer feedback with verified purchase protection
                 </p>
               </div>
-            )}
+              <button
+                type="button"
+                onClick={() => setActiveTab("reviews")}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+              >
+                Open full reviews
+              </button>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {latestReviewCards.length > 0 ? (
+                latestReviewCards.map((review) => (
+                  <div key={`footer-${review.id}`} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-slate-900">{review.customerName || "Verified Customer"}</p>
+                        <div className="mt-2 flex items-center gap-1">
+                          {[...Array(5)].map((_, index) => (
+                            <Star
+                              key={index}
+                              className={`h-4 w-4 ${
+                                index < Number(review.rating || 0)
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-slate-300"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                        {formatReviewDate(review.createdAt)}
+                      </span>
+                    </div>
+                    <p className="mt-4 text-sm leading-7 text-slate-600">{review.comment}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[28px] border border-slate-200 bg-white p-6 lg:col-span-3">
+                  <p className="text-lg font-bold text-slate-900">No reviews published yet</p>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    Delivered customers will be able to rate this product here, and those original reviews will appear on this page.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </LazyComponent>
       </div>
 
       {contactOpen && (
