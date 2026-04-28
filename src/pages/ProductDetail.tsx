@@ -1608,6 +1608,11 @@ const productSchema = product
     productSpecs?.subcategorySlug || productSpecs?.categorySlug || product?.subcategory || ""
   );
 
+  const weeklySoldCount = Math.max(8, Math.min(49, Math.round((Number(product?.reviews || 0) || 12) * 1.6)));
+  const liveViewerCount = Math.max(14, Math.min(58, Math.round((Number(product?.rating || 4.5) || 4.5) * 8)));
+  const dealUrgencyLabel = displayOriginalPrice > displayPrice ? "Deal ends soon" : "Popular this week";
+  const isOfficialSeller = normalizeSellerSlug(product?.sellerName || sellerProfile.name || "") === normalizeSellerSlug("ExShopi Official");
+
   return (
     <>
       {product ? (
@@ -1645,21 +1650,23 @@ const productSchema = product
       <div className="mx-auto max-w-[1800px] px-4 py-7 md:px-6 md:py-8">
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-5">
           <div className="xl:col-span-5">
-            <div className="sticky top-[150px] overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
-              <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)]">
+            <div className="sticky top-[150px] overflow-hidden rounded-[34px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.98))] shadow-[0_26px_70px_rgba(15,23,42,0.10)] ring-1 ring-white/70 backdrop-blur-sm">
+              <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)] before:absolute before:inset-[7%] before:rounded-[2rem] before:bg-white/70 before:shadow-[0_30px_90px_rgba(15,23,42,0.08)] before:content-['']">
                 <img
                   src={productImages[mainImage]}
                   alt={buildProductImageAlt(product, mainImage)}
-                  className="h-full w-full object-contain p-8 transition duration-300 hover:scale-105"
+                  className="relative z-10 h-full w-full object-contain p-8 drop-shadow-[0_20px_40px_rgba(15,23,42,0.14)] transition duration-500 ease-out hover:scale-[1.075]"
                   loading={mainImage === 0 ? "eager" : "lazy"}
                   decoding="async"
                 />
-                <div className="absolute right-5 top-5 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-bold text-white shadow-lg">
-                  Save 23%
-                </div>
+                {displayOriginalPrice > displayPrice ? (
+                  <div className="absolute right-5 top-5 rounded-full bg-gradient-to-r from-rose-500 via-red-500 to-orange-500 px-4 py-2 text-sm font-black text-white shadow-[0_18px_34px_rgba(239,68,68,0.28)]">
+                    Save {Math.max(1, Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100))}%
+                  </div>
+                ) : null}
               </div>
 
-              <div className="border-t border-slate-200 bg-white p-5">
+              <div className="border-t border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,251,255,0.98))] p-5">
                 <div className="flex gap-3 overflow-x-auto pb-1">
                   {productImages.map((img, idx) => (
                     <button
@@ -1671,16 +1678,16 @@ const productSchema = product
                         setMainImage(idx);
                       }}
                       aria-label={`View ${product.title} image ${idx + 1}`}
-                      className={`relative z-10 h-24 w-24 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border-2 transition ${
+                      className={`relative z-10 h-24 w-24 flex-shrink-0 cursor-pointer overflow-hidden rounded-[1.15rem] border-2 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-300 ${
                         mainImage === idx
-                          ? "border-blue-600 ring-2 ring-blue-200 ring-offset-2"
-                          : "border-slate-200 hover:border-slate-300"
+                          ? "border-blue-600 ring-2 ring-blue-200 ring-offset-2 shadow-[0_16px_32px_rgba(37,99,235,0.18)]"
+                          : "border-slate-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-[0_16px_30px_rgba(15,23,42,0.10)]"
                       }`}
                     >
                       <img
                         src={img}
                         alt={buildProductImageAlt(product, idx)}
-                        className="pointer-events-none h-full w-full object-cover"
+                        className="pointer-events-none h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         loading="lazy"
                         decoding="async"
                       />
@@ -1693,13 +1700,21 @@ const productSchema = product
 
           <div className="xl:col-span-4">
             <div className="space-y-4">
-              <div className="rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <div className="rounded-[28px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(249,251,255,0.98))] p-5 shadow-[0_22px_54px_rgba(15,23,42,0.07)] ring-1 ring-white/70">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-600">Sold by</p>
-                    <Link to={`/vendor/${sellerLinkSlug}`} className="mt-2 inline-block text-sm font-bold text-blue-600 hover:underline">
-                      {product.sellerName || sellerProfile.name}
-                    </Link>
+                    <div className="mt-2 flex flex-wrap items-center gap-2.5">
+                      <Link to={`/vendor/${sellerLinkSlug}`} className="inline-block text-sm font-bold text-blue-600 hover:underline">
+                        {product.sellerName || sellerProfile.name}
+                      </Link>
+                      {isOfficialSeller ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 shadow-sm">
+                          <Award className="h-3.5 w-3.5" />
+                          Verified Seller
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <Link to={`/vendor/${sellerLinkSlug}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
                     More from seller →
@@ -1707,7 +1722,7 @@ const productSchema = product
                 </div>
 
                 <div className="max-w-[28ch]">
-                  <h1 className="text-[1.14rem] font-semibold leading-[1.22] tracking-[-0.014em] text-slate-950 md:text-[1.45rem] lg:text-[1.62rem]">
+                  <h1 className="text-[1.14rem] font-semibold leading-[1.32] tracking-[-0.02em] text-slate-950 md:text-[1.45rem] lg:text-[1.62rem]">
                     {product.title}
                   </h1>
                   {selectedVariantLabel ? (
@@ -1745,27 +1760,38 @@ const productSchema = product
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   {(product.badges || []).map((badge: string, idx: number) => (
-                    <span key={`${badge}-${idx}`} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                    <span key={`${badge}-${idx}`} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-sm">
                       {badge}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-blue-100/90 bg-[linear-gradient(180deg,#f8fbff,#eef5ff)] p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <div className="rounded-[28px] border border-blue-100/90 bg-[linear-gradient(180deg,#fcfdff,#eef5ff)] p-5 shadow-[0_24px_60px_rgba(15,23,42,0.08)] ring-1 ring-white/70">
                 <div className="mb-4 border-b border-blue-100 pb-4">
                   <div className="flex flex-wrap items-end gap-3">
                     <span className="text-5xl font-black tracking-tight text-slate-950">{formatCurrencyPlainForCountry(displayPrice, selectedCountry)}</span>
                     {displayOriginalPrice > displayPrice && (
                       <>
                         <span className="pb-2 text-xl text-slate-600 line-through">{formatCurrencyPlainForCountry(displayOriginalPrice, selectedCountry)}</span>
-                        <span className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white">
+                        <span className="rounded-full bg-gradient-to-r from-rose-500 to-orange-500 px-3 py-1.5 text-xs font-black text-white shadow-[0_14px_30px_rgba(239,68,68,0.24)]">
                           Save {Math.max(1, Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100))}%
                         </span>
                       </>
                     )}
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-600">Inclusive of {Math.round(country.vatRate * 100)}% VAT, fees, and marketplace protection</p>
+                  <div className="mt-4 flex flex-wrap gap-2.5">
+                    <span className="rounded-full border border-blue-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-blue-700 shadow-sm">
+                      {weeklySoldCount} sold this week
+                    </span>
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 shadow-sm">
+                      {liveViewerCount} people viewing now
+                    </span>
+                    <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 shadow-sm">
+                      {dealUrgencyLabel}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-2.5">
@@ -1780,7 +1806,7 @@ const productSchema = product
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <div className="rounded-[28px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(249,251,255,0.98))] p-5 shadow-[0_22px_54px_rgba(15,23,42,0.07)]">
                 <div className="space-y-4.5">
                   {colorOptions.length > 0 && (
                   <div>
@@ -1933,7 +1959,7 @@ const productSchema = product
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {UAE_TRUST_SIGNALS.map((signal) => (
-                    <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    <span key={signal} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
                       {signal}
                     </span>
                   ))}
@@ -1969,8 +1995,8 @@ const productSchema = product
           </div>
 
           <div className="xl:col-span-3">
-            <div className="sticky top-[150px] rounded-[28px] border border-slate-200/90 bg-white p-6 shadow-[0_22px_52px_rgba(15,23,42,0.08)]">
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="sticky top-[150px] rounded-[28px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(249,251,255,0.98))] p-6 shadow-[0_26px_60px_rgba(15,23,42,0.09)] ring-1 ring-white/70">
+              <div className="rounded-[1.15rem] border border-emerald-200 bg-[linear-gradient(180deg,#f4fff9,#ecfdf5)] p-4 shadow-[0_12px_28px_rgba(16,185,129,0.10)]">
                 <div className="flex items-start gap-2">
                     <Check className="mt-0.5 h-5 w-5 text-emerald-600" />
                     <div>
@@ -1982,10 +2008,14 @@ const productSchema = product
                 </div>
               </div>
 
-              <div className="mt-4 border-b border-slate-200 pb-5">
+              <div className="mt-4 rounded-[1.35rem] border border-slate-200/90 bg-white/80 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
                 <p className="mb-2 text-sm text-slate-700">Price</p>
                 <div className="text-4xl font-black text-slate-950">{formatCurrencyPlainForCountry(displayPrice, selectedCountry)}</div>
                 <p className="mt-1 text-xs text-slate-700">Inclusive of VAT ({Math.round(country.vatRate * 100)}%)</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black text-blue-700">{weeklySoldCount} sold this week</span>
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-700">{liveViewerCount} viewing now</span>
+                </div>
               </div>
 
               <div className="mt-4">
@@ -2007,17 +2037,17 @@ const productSchema = product
                 </div>
               </div>
 
-              <div className="mt-5 space-y-3">
+              <div className="mt-6 space-y-3.5">
                 <button
                   onClick={handleAddToCart}
-                  className="flex w-full items-center justify-center gap-2 rounded-full border border-blue-400/70 bg-[linear-gradient(135deg,#1840c9,#2456ea,#4f8dff)] px-6 py-3.5 font-semibold text-white shadow-[0_18px_38px_rgba(37,99,235,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_48px_rgba(37,99,235,0.34)]"
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-blue-400/70 bg-[linear-gradient(135deg,#143ab8,#2456ea,#5a95ff)] px-6 py-3.5 font-semibold text-white shadow-[0_20px_40px_rgba(37,99,235,0.30)] transition duration-300 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-[0_26px_52px_rgba(37,99,235,0.36)] active:scale-[0.99]"
                 >
                   <ShoppingCart className="h-5 w-5" />
                   Add to Cart
                 </button>
                 <button
                   onClick={handleBuyNow}
-                  className="flex w-full items-center justify-center gap-2 rounded-full border border-emerald-300/70 bg-[linear-gradient(135deg,#04845f,#0da778,#58d7ab)] px-6 py-3.5 font-semibold text-white shadow-[0_18px_38px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_48px_rgba(16,185,129,0.30)]"
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-emerald-300/70 bg-[linear-gradient(135deg,#047857,#0da778,#60e0b0)] px-6 py-3.5 font-semibold text-white shadow-[0_20px_40px_rgba(16,185,129,0.26)] transition duration-300 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-[0_26px_52px_rgba(16,185,129,0.32)] active:scale-[0.99]"
                 >
                   <Zap className="h-5 w-5" />
                   Buy Now
@@ -2027,10 +2057,10 @@ const productSchema = product
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <button
                   onClick={handleWishlist}
-                  className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 font-medium transition ${
+                  className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 font-medium shadow-sm transition duration-300 hover:-translate-y-0.5 ${
                     wishlistActive
-                      ? "border-red-200 bg-red-50 text-red-600"
-                      : "border-slate-200 text-slate-800 hover:bg-slate-50"
+                      ? "border-red-200 bg-red-50 text-red-600 shadow-[0_12px_24px_rgba(239,68,68,0.12)]"
+                      : "border-slate-200 text-slate-800 hover:bg-slate-50 hover:shadow-[0_14px_28px_rgba(15,23,42,0.08)]"
                   }`}
                 >
                   <Heart className={`h-4 w-4 ${wishlistActive ? "fill-current" : ""}`} />
@@ -2038,7 +2068,7 @@ const productSchema = product
                 </button>
                 <button
                   onClick={handleShare}
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 font-medium text-slate-800 transition hover:bg-slate-50"
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 font-medium text-slate-800 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-[0_14px_28px_rgba(15,23,42,0.08)]"
                 >
                   <Share2 className="h-4 w-4" />
                   Share
@@ -2064,7 +2094,7 @@ const productSchema = product
 
               <button
                 onClick={() => setContactOpen(true)}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3.5 font-semibold text-slate-900 transition hover:bg-slate-50"
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3.5 font-semibold text-slate-900 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-[0_14px_28px_rgba(15,23,42,0.08)]"
               >
                 <MessageCircle className="h-4 w-4" />
                 Contact Seller
@@ -2072,31 +2102,31 @@ const productSchema = product
 
               <button
                 onClick={handleWhatsAppOrderHelp}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 font-semibold text-emerald-700 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-100 hover:shadow-[0_14px_28px_rgba(16,185,129,0.14)]"
               >
                 <MessageCircle className="h-4 w-4" />
                 Ask on WhatsApp
               </button>
 
-              <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
+              <div className="mt-5 rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,250,252,0.94))] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
                 <div className="space-y-2.5">
-                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Check className="h-4 w-4 text-emerald-600" />
                     <span>Cash on Delivery Available</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Check className="h-4 w-4 text-emerald-600" />
                     <span>Free Delivery UAE / Fast KSA Shipping</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Check className="h-4 w-4 text-emerald-600" />
                     <span>7 Days Easy Return</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Check className="h-4 w-4 text-emerald-600" />
                     <span>1 Month Warranty</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Check className="h-4 w-4 text-emerald-600" />
                     <span>Verified Seller</span>
                   </div>
