@@ -26,6 +26,7 @@ export default function FirstVisitCountryModal() {
   const language = useLanguageStore((state) => state.lang);
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [effectsReady, setEffectsReady] = useState(false);
   const firstButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function FirstVisitCountryModal() {
     let cancelled = false;
     let timeoutId: number | null = null;
     let idleId: number | null = null;
+    let effectTimeoutId: number | null = null;
 
     const evaluateVisibility = () => {
       timeoutId = window.setTimeout(() => {
@@ -41,33 +43,54 @@ export default function FirstVisitCountryModal() {
         const alreadySelected = readStoredCountrySelection();
         setVisible(!alreadySelected && !hasExplicitSelection);
         setReady(true);
-      }, 120);
+      }, 700);
     };
 
-    const rafId = window.requestAnimationFrame(() => {
-      if ('requestIdleCallback' in window) {
-        idleId = window.requestIdleCallback(evaluateVisibility, { timeout: 300 });
-      } else {
-        evaluateVisibility();
-      }
-    });
+    const scheduleVisibilityCheck = () => {
+      const rafId = window.requestAnimationFrame(() => {
+        if ('requestIdleCallback' in window) {
+          idleId = window.requestIdleCallback(evaluateVisibility, { timeout: 2000 });
+        } else {
+          evaluateVisibility();
+        }
+      });
+
+      return rafId;
+    };
+
+    let rafId: number | null = null;
+    const onLoad = () => {
+      rafId = scheduleVisibilityCheck();
+    };
+
+    if (document.readyState === 'complete') {
+      rafId = scheduleVisibilityCheck();
+    } else {
+      window.addEventListener('load', onLoad, { once: true });
+    }
 
     return () => {
       cancelled = true;
-      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('load', onLoad);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
       if (idleId !== null && 'cancelIdleCallback' in window) {
         window.cancelIdleCallback(idleId);
+      }
+      if (effectTimeoutId !== null) {
+        window.clearTimeout(effectTimeoutId);
       }
     };
   }, [hasExplicitSelection]);
 
   useEffect(() => {
     if (!visible) return;
+    const effectTimeoutId = window.setTimeout(() => setEffectsReady(true), 120);
     firstButtonRef.current?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
+      window.clearTimeout(effectTimeoutId);
       document.body.style.overflow = previousOverflow;
     };
   }, [visible]);
@@ -97,7 +120,11 @@ export default function FirstVisitCountryModal() {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-[6px]">
+    <div
+      className={`fixed inset-0 z-[100000] flex items-center justify-center px-4 transition-[background-color,backdrop-filter] duration-200 ${
+        effectsReady ? 'bg-slate-950/45 backdrop-blur-[6px]' : 'bg-slate-950/35'
+      }`}
+    >
       <div
         role="dialog"
         aria-modal="true"

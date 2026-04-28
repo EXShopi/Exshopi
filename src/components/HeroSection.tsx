@@ -12,6 +12,8 @@ export default function HeroSection() {
   const isRtlText = ["arabic", "urdu", "persian"].includes(lang.toLowerCase());
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     let mounted = true;
     let timeoutId: number | null = null;
 
@@ -60,14 +62,24 @@ export default function HeroSection() {
     const scheduleLoad = () => {
       timeoutId = window.setTimeout(() => {
         void loadRemoteSlide();
-      }, 900);
+      }, 1800);
     };
 
-    const rafId = window.requestAnimationFrame(scheduleLoad);
+    let rafId: number | null = null;
+    const onLoad = () => {
+      rafId = window.requestAnimationFrame(scheduleLoad);
+    };
+
+    if (document.readyState === "complete") {
+      onLoad();
+    } else {
+      window.addEventListener("load", onLoad, { once: true });
+    }
 
     return () => {
       mounted = false;
-      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("load", onLoad);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
   }, [settings.homepage.hero.primaryCtaLink, settings.homepage.hero.primaryCtaText, settings.homepage.hero.productImageUrl, settings.homepage.hero.subtitle, settings.homepage.hero.title]);
@@ -89,12 +101,13 @@ export default function HeroSection() {
   }, [settings.homepage.hero, settings.general.siteName]);
 
   const slide = remoteSlide || baseSlide;
+  const initialHeroImage = baseSlide.image;
 
   useEffect(() => {
-    if (typeof document === "undefined" || !slide?.image) return;
+    if (typeof document === "undefined" || !initialHeroImage) return;
 
     const managedLinks: HTMLLinkElement[] = [];
-    const imageUrl = String(slide.image);
+    const imageUrl = String(initialHeroImage);
 
     try {
       const resolvedUrl = imageUrl.startsWith("http")
@@ -124,7 +137,7 @@ export default function HeroSection() {
     return () => {
       managedLinks.forEach((link) => link.remove());
     };
-  }, [slide.image]);
+  }, [initialHeroImage]);
 
   const handleBannerClick = (s: any) => {
     if (s?.id) {

@@ -30,20 +30,36 @@ export default function Layout() {
         if (!cancelled) {
           setDeferredUiReady(true);
         }
-      }, 180);
+      }, 700);
     };
 
-    const rafId = window.requestAnimationFrame(() => {
-      if ("requestIdleCallback" in window) {
-        idleId = window.requestIdleCallback(mountDeferredUi, { timeout: 400 });
-      } else {
-        mountDeferredUi();
-      }
-    });
+    const scheduleMount = () => {
+      const rafId = window.requestAnimationFrame(() => {
+        if ("requestIdleCallback" in window) {
+          idleId = window.requestIdleCallback(mountDeferredUi, { timeout: 1600 });
+        } else {
+          mountDeferredUi();
+        }
+      });
+
+      return rafId;
+    };
+
+    let rafId: number | null = null;
+    const onLoad = () => {
+      rafId = scheduleMount();
+    };
+
+    if (document.readyState === "complete") {
+      rafId = scheduleMount();
+    } else {
+      window.addEventListener("load", onLoad, { once: true });
+    }
 
     return () => {
       cancelled = true;
-      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("load", onLoad);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
       if (idleId !== null && "cancelIdleCallback" in window) {
         window.cancelIdleCallback(idleId);

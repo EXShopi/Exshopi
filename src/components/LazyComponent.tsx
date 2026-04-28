@@ -42,11 +42,15 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
     if (shouldRender && !deferUntilVisible) return;
 
     if (deferUntilVisible && typeof window !== 'undefined') {
-      // Use Intersection Observer to defer until visible
+      let timeoutId: number | null = null;
       const observer = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting) {
-            setShouldRender(true);
+            if (delayMs > 0) {
+              timeoutId = window.setTimeout(() => setShouldRender(true), delayMs);
+            } else {
+              setShouldRender(true);
+            }
             observer.disconnect();
           }
         },
@@ -57,7 +61,12 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
         observer.observe(containerRef.current);
       }
 
-      return () => observer.disconnect();
+      return () => {
+        observer.disconnect();
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+      };
     } else {
       // Use setTimeout to defer after initial render
       const timeout = window.setTimeout(() => setShouldRender(true), delayMs);

@@ -22,12 +22,14 @@ const AllProductsSection = lazy(() => import("../components/AllProductsSection")
 function DeferredSection({
   children,
   rootMargin = "120px",
+  delayMs = 0,
 }: {
   children: ReactNode;
   rootMargin?: string;
+  delayMs?: number;
 }) {
   return (
-    <LazyComponent deferUntilVisible={true} rootMargin={rootMargin}>
+    <LazyComponent deferUntilVisible={true} rootMargin={rootMargin} delayMs={delayMs}>
       <Suspense fallback={null}>{children}</Suspense>
     </LazyComponent>
   );
@@ -38,8 +40,44 @@ export default function Home() {
   const homeSeo = generateHomepageSeo();
 
   useEffect(() => {
-    if (hasFetched) return;
-    fetchSettings();
+    if (hasFetched || typeof window === "undefined") return;
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    const loadSettings = () => {
+      timeoutId = window.setTimeout(() => {
+        if (!cancelled) {
+          void fetchSettings();
+        }
+      }, 900);
+    };
+
+    const schedule = () => {
+      if ("requestIdleCallback" in window) {
+        idleId = window.requestIdleCallback(loadSettings, { timeout: 1600 });
+      } else {
+        loadSettings();
+      }
+    };
+
+    const onLoad = () => schedule();
+
+    if (document.readyState === "complete") {
+      schedule();
+    } else {
+      window.addEventListener("load", onLoad, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", onLoad);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (idleId !== null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+    };
   }, [fetchSettings, hasFetched]);
 
   const orderedCmsSections = useMemo(
@@ -54,31 +92,31 @@ export default function Home() {
     switch (sectionId) {
       case "featured-products":
         return (
-          <DeferredSection key={sectionId} rootMargin="120px">
+          <DeferredSection key={sectionId} rootMargin="0px" delayMs={550}>
             <FeaturedProducts />
           </DeferredSection>
         );
       case "brands":
         return (
-          <DeferredSection key={sectionId} rootMargin="120px">
+          <DeferredSection key={sectionId} rootMargin="0px" delayMs={650}>
             <ShopByBrandSection />
           </DeferredSection>
         );
       case "most-popular":
         return (
-          <DeferredSection key={sectionId} rootMargin="120px">
+          <DeferredSection key={sectionId} rootMargin="0px" delayMs={800}>
             <MostPopularSection />
           </DeferredSection>
         );
       case "flash-deals":
         return (
-          <DeferredSection key={sectionId} rootMargin="120px">
+          <DeferredSection key={sectionId} rootMargin="0px" delayMs={950}>
             <BlackFridaySection />
           </DeferredSection>
         );
       case "promo":
         return (
-          <DeferredSection key={sectionId} rootMargin="120px">
+          <DeferredSection key={sectionId} rootMargin="0px" delayMs={1050}>
             <PromoSection boxes={settings.homepage.promoBoxes} />
           </DeferredSection>
         );
@@ -104,17 +142,17 @@ export default function Home() {
         <h1>ExShopi UAE Online Shopping Marketplace</h1>
       </div>
       <CategorySection />
-      <DeferredSection rootMargin="80px">
+      <DeferredSection rootMargin="20px" delayMs={250}>
         <MegaCategoryCarousel />
       </DeferredSection>
-      <DeferredSection rootMargin="160px">
+      <DeferredSection rootMargin="0px" delayMs={450}>
         <AccessoriesSection />
       </DeferredSection>
       {orderedCmsSections.map((section) => renderHomepageSection(section.id))}
-      <DeferredSection rootMargin="180px">
+      <DeferredSection rootMargin="0px" delayMs={900}>
         <AllProductsSection />
       </DeferredSection>
-      <DeferredSection rootMargin="220px">
+      <DeferredSection rootMargin="0px" delayMs={1100}>
         <section className="mx-auto mt-10 max-w-7xl px-4 pb-12 md:px-6">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">UAE & Saudi Arabia</p>
@@ -132,7 +170,7 @@ export default function Home() {
         </section>
       </DeferredSection>
 
-      <DeferredSection rootMargin="240px">
+      <DeferredSection rootMargin="0px" delayMs={1250}>
         <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Landing Pages</p>
@@ -158,7 +196,7 @@ export default function Home() {
         </section>
       </DeferredSection>
 
-      <DeferredSection rootMargin="260px">
+      <DeferredSection rootMargin="0px" delayMs={1400}>
         <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">From The Blog</p>
