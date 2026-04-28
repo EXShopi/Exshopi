@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,7 +11,9 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react';
-import { adminProductBulkUploadAPI } from '../../services/api';
+import { categoryAPI, adminProductBulkUploadAPI } from '../../services/api';
+import { MASTER_CATEGORIES } from '../../lib/masterCategories';
+import { uploadImageFile } from '../../lib/uploadClient';
 
 type BulkUploadEditableRow = {
   clientId: string;
@@ -114,6 +116,8 @@ type PreviewRow = {
     sellerId: string;
     parentCategoryName: string;
     parentCategorySlug: string;
+    categoryName?: string;
+    categorySlug?: string;
     subcategoryName: string;
     subcategorySlug: string;
     seoSlug: string;
@@ -124,6 +128,7 @@ type PreviewRow = {
   canImport: boolean;
   approved?: boolean;
   skipped?: boolean;
+  sourceCategoryKey?: string;
 };
 
 type ImportResult = {
@@ -132,6 +137,26 @@ type ImportResult = {
   success: boolean;
   id?: string;
   error?: string;
+};
+
+type BulkCategoryLeaf = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+type BulkCategoryBranch = BulkCategoryLeaf & {
+  subcategories: BulkCategoryLeaf[];
+};
+
+type BulkCategoryTree = BulkCategoryLeaf & {
+  categories: BulkCategoryBranch[];
+};
+
+type SearchableOption = {
+  value: string;
+  label: string;
+  helper?: string;
 };
 
 const TEMPLATE_HEADERS = [
@@ -366,6 +391,316 @@ const TEMPLATE_SAMPLE_ROWS: Array<Record<string, string>> = [
   },
 ];
 
+const PRODUCT_PLACEHOLDER_IMAGE = '/assets/product-placeholder.png';
+
+const slugifyValue = (value: unknown) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const normalizeText = (value: unknown) => String(value || '').trim();
+
+const normalizeMatchKey = (value: unknown) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const dedupeList = (items: string[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = normalizeMatchKey(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const categoryKeyForRow = (fields: BulkUploadEditableRow) =>
+  [
+    normalizeMatchKey(fields.parentCategory),
+    normalizeMatchKey(fields.category),
+    normalizeMatchKey(fields.subcategory),
+  ].join('::');
+
+const buildCategoryTree = (items: any[]): BulkCategoryTree[] => {
+  const canonical = new Map<string, BulkCategoryTree>();
+
+  (MASTER_CATEGORIES || []).forEach((parent: any) => {
+    canonical.set(String(parent.slug || ''), {
+      id: String(parent.id || parent.slug || parent.name || ''),
+      name: String(parent.name || ''),
+      slug: String(parent.slug || ''),
+      categories: Array.isArray(parent.subcategories)
+        ? parent.subcategories.map((category: any) => ({
+            id: String(category.id || category.slug || category.name || ''),
+            name: String(category.name || ''),
+            slug: String(category.slug || ''),
+            subcategories: Array.isArray(category.childCategories)
+              ? category.childCategories.map((child: any) => ({
+                  id: String(child.id || child.slug || child.name || ''),
+                  name: String(child.name || ''),
+                  slug: String(child.slug || ''),
+                }))
+              : [],
+          }))
+        : [],
+    });
+  });
+
+  (Array.isArray(items) ? items : []).forEach((entry: any) => {
+    const slug = String(entry?.slug || slugifyValue(entry?.name || ''));
+    if (!slug) return;
+    const existing = canonical.get(slug);
+    const mergedCategories = Array.isArray(entry?.subcategories)
+      ? entry.subcategories.map((category: any) => ({
+          id: String(category?.id || category?.slug || category?.name || ''),
+          name: String(category?.name || ''),
+          slug: String(category?.slug || slugifyValue(category?.name || '')),
+          subcategories: Array.isArray(category?.childCategories)
+            ? category.childCategories.map((child: any) => ({
+                id: String(child?.id || child?.slug || child?.name || ''),
+                name: String(child?.name || ''),
+                slug: String(child?.slug || slugifyValue(child?.name || '')),
+              }))
+            : [],
+        }))
+      : [];
+
+    canonical.set(slug, {
+      id: String(entry?.id || existing?.id || slug),
+      name: String(entry?.name || existing?.name || ''),
+      slug,
+      categories: mergedCategories.length ? mergedCategories : existing?.categories || [],
+    });
+  });
+
+  return Array.from(canonical.values()).filter((entry) => entry.slug && entry.name);
+};
+
+const findCategoryOption = (tree: BulkCategoryTree[], parentSlug: string) =>
+  tree.find(
+    (entry) => normalizeMatchKey(entry.slug) === normalizeMatchKey(parentSlug) || normalizeMatchKey(entry.name) === normalizeMatchKey(parentSlug)
+  ) || null;
+
+const findBranchOption = (parent: BulkCategoryTree | null, categorySlug: string) =>
+  parent?.categories.find(
+    (entry) => normalizeMatchKey(entry.slug) === normalizeMatchKey(categorySlug) || normalizeMatchKey(entry.name) === normalizeMatchKey(categorySlug)
+  ) || null;
+
+const findLeafOption = (branch: BulkCategoryBranch | null, subcategorySlug: string) =>
+  branch?.subcategories.find(
+    (entry) => normalizeMatchKey(entry.slug) === normalizeMatchKey(subcategorySlug) || normalizeMatchKey(entry.name) === normalizeMatchKey(subcategorySlug)
+  ) || null;
+
+const resolveRowCategorySelection = (fields: BulkUploadEditableRow, categories: BulkCategoryTree[]) => {
+  const parent =
+    findCategoryOption(categories, fields.parentCategory) ||
+    findCategoryOption(categories, fields.category) ||
+    null;
+  const branch =
+    findBranchOption(parent, fields.category) ||
+    findBranchOption(parent, fields.subcategory) ||
+    null;
+  const leaf = findLeafOption(branch, fields.subcategory) || null;
+
+  return { parent, branch, leaf };
+};
+
+const MANAGED_ERROR_PREFIXES = [
+  'Missing product title',
+  'Missing stock quantity',
+  'Invalid stock quantity',
+  'Invalid selling price',
+  'Invalid parent/category mapping',
+  'Needs category mapping',
+  'Needs subcategory mapping',
+  'Invalid approval status',
+  'Duplicate SKU found in upload file',
+  'Duplicate slug found in upload file',
+];
+
+const MANAGED_WARNING_PREFIXES = [
+  'Missing main image URL',
+  'Image URL returned',
+  'Image URL is not a valid absolute URL',
+  'Image URL could not be verified',
+];
+
+const filterManagedMessages = (messages: string[], prefixes: string[]) =>
+  messages.filter((message) => !prefixes.some((prefix) => message.startsWith(prefix)));
+
+const buildSeoSlug = (fields: BulkUploadEditableRow) =>
+  slugifyValue(fields.seoSlug || fields.productTitle);
+
+const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[]) => {
+  const skuCounts = new Map<string, number>();
+  const slugCounts = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const sku = normalizeMatchKey(row.fields.sku);
+    const slug = normalizeMatchKey(buildSeoSlug(row.fields));
+    if (sku) skuCounts.set(sku, (skuCounts.get(sku) || 0) + 1);
+    if (slug) slugCounts.set(slug, (slugCounts.get(slug) || 0) + 1);
+  });
+
+  return rows.map((row) => {
+    const preservedErrors = filterManagedMessages(row.errors, MANAGED_ERROR_PREFIXES);
+    const preservedWarnings = filterManagedMessages(row.warnings, MANAGED_WARNING_PREFIXES);
+    const errors = [...preservedErrors];
+    const warnings = [...preservedWarnings];
+    const { parent, branch, leaf } = resolveRowCategorySelection(row.fields, categories);
+    const sku = normalizeMatchKey(row.fields.sku);
+    const slug = normalizeMatchKey(buildSeoSlug(row.fields));
+    const price = Number(String(row.fields.salePrice || row.fields.regularPrice || '').replace(/[^0-9.\-]/g, ''));
+    const stock = Number(String(row.fields.stockQuantity || '').replace(/[^0-9.\-]/g, ''));
+    const approval = normalizeMatchKey(row.fields.approvalStatus);
+
+    if (!normalizeText(row.fields.productTitle)) errors.push('Missing product title');
+    if (!normalizeText(row.fields.stockQuantity)) {
+      errors.push('Missing stock quantity');
+    } else if (!Number.isFinite(stock) || stock < 0) {
+      errors.push('Invalid stock quantity');
+    }
+    if (!Number.isFinite(price) || price < 0) errors.push('Invalid selling price');
+    if (!parent) {
+      errors.push('Invalid parent/category mapping');
+    } else if (normalizeText(row.fields.category) && !branch) {
+      errors.push('Needs category mapping');
+    } else if (normalizeText(row.fields.subcategory) && !leaf) {
+      errors.push('Needs subcategory mapping');
+    }
+    if (sku && (skuCounts.get(sku) || 0) > 1) errors.push('Duplicate SKU found in upload file');
+    if (slug && (slugCounts.get(slug) || 0) > 1) errors.push('Duplicate slug found in upload file');
+    if (approval && !['pending', 'approved', 'rejected'].includes(approval)) errors.push('Invalid approval status');
+
+    if (!normalizeText(row.fields.mainImageUrl)) {
+      warnings.push('Missing main image URL. Placeholder will be used unless you upload one.');
+    }
+
+    return {
+      ...row,
+      fields: {
+        ...row.fields,
+        seoSlug: row.fields.seoSlug || buildSeoSlug(row.fields),
+      },
+      resolved: {
+        ...row.resolved,
+        parentCategoryName: parent?.name || '',
+        parentCategorySlug: parent?.slug || '',
+        categoryName: branch?.name || row.fields.category || '',
+        categorySlug: branch?.slug || slugifyValue(row.fields.category),
+        subcategoryName: leaf?.name || row.fields.subcategory || '',
+        subcategorySlug: leaf?.slug || slugifyValue(row.fields.subcategory),
+      },
+      warnings,
+      errors,
+      canImport: errors.length === 0,
+    };
+  });
+};
+
+function SearchableSelect({
+  label,
+  value,
+  options,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: SearchableOption[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (nextValue: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const selected = options.find((option) => option.value === value) || null;
+  const filtered = useMemo(() => {
+    const normalized = normalizeMatchKey(query);
+    if (!normalized) return options;
+    return options.filter(
+      (option) =>
+        normalizeMatchKey(option.label).includes(normalized) ||
+        normalizeMatchKey(option.helper).includes(normalized)
+    );
+  }, [options, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="space-y-2">
+      <label className="text-sm font-bold text-slate-800">{label}</label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) {
+            setOpen((current) => !current);
+            setQuery('');
+          }
+        }}
+        className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+      >
+        <span>{selected?.label || placeholder}</span>
+        <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
+          {disabled ? 'Locked' : 'Select'}
+        </span>
+      </button>
+      {open ? (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_44px_rgba(15,23,42,0.12)]">
+          <div className="border-b border-slate-100 p-3">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${label.toLowerCase()}...`}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto p-2">
+            {filtered.length ? (
+              filtered.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={`w-full rounded-xl px-3 py-2 text-left transition ${
+                    option.value === value ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="text-sm font-bold">{option.label}</div>
+                  {option.helper ? <div className="text-xs font-medium text-slate-500">{option.helper}</div> : null}
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-sm font-medium text-slate-500">No matching options.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function csvEscape(value: unknown) {
   const content = String(value ?? '');
   return /[",\n]/.test(content) ? `"${content.replace(/"/g, '""')}"` : content;
@@ -427,15 +762,25 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
   const [open, setOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [categories, setCategories] = useState<BulkCategoryTree[]>(() => buildCategoryTree([]));
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [summary, setSummary] = useState<{ total: number; valid: number; invalid: number; warnings: number } | null>(null);
   const [error, setError] = useState('');
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [applyCategoryToSimilar, setApplyCategoryToSimilar] = useState(false);
+  const [imageUploadState, setImageUploadState] = useState<{ target: 'main' | 'gallery' | null; busy: boolean; error: string }>({
+    target: null,
+    busy: false,
+    error: '',
+  });
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const mainImageInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const editingRow = useMemo(
     () => previewRows.find((row) => row.clientId === editingRowId) || null,
@@ -451,6 +796,69 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
       invalid: previewRows.filter((row) => !row.canImport).length,
     };
   }, [previewRows]);
+
+  const editingCategorySelection = useMemo(
+    () => (editingRow ? resolveRowCategorySelection(editingRow.fields, categories) : { parent: null, branch: null, leaf: null }),
+    [categories, editingRow]
+  );
+
+  const availableParentOptions = useMemo<SearchableOption[]>(
+    () =>
+      categories.map((entry) => ({
+        value: entry.slug,
+        label: entry.name,
+        helper: entry.slug,
+      })),
+    [categories]
+  );
+
+  const availableCategoryOptions = useMemo<SearchableOption[]>(
+    () =>
+      (editingCategorySelection.parent?.categories || []).map((entry) => ({
+        value: entry.slug,
+        label: entry.name,
+        helper: entry.slug,
+      })),
+    [editingCategorySelection.parent]
+  );
+
+  const availableSubcategoryOptions = useMemo<SearchableOption[]>(
+    () =>
+      (editingCategorySelection.branch?.subcategories || []).map((entry) => ({
+        value: entry.slug,
+        label: entry.name,
+        helper: entry.slug,
+      })),
+    [editingCategorySelection.branch]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+
+    const loadCategories = async () => {
+      setCategoriesLoading(true);
+      try {
+        const apiCategories = await categoryAPI.getAll().catch(() => []);
+        if (!active) return;
+        setCategories(buildCategoryTree(apiCategories || []));
+      } finally {
+        if (active) {
+          setCategoriesLoading(false);
+        }
+      }
+    };
+
+    loadCategories();
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!previewRows.length) return;
+    setPreviewRows((current) => revalidatePreviewRows(current, categories));
+  }, [categories]);
 
   const handleTemplateDownload = () => {
     downloadBlob('exshopi-full-product-template.csv', createTemplateCsv(), 'text/csv;charset=utf-8;');
@@ -472,6 +880,8 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
   const handleClose = () => {
     setOpen(false);
     resetState();
+    setApplyCategoryToSimilar(false);
+    setImageUploadState({ target: null, busy: false, error: '' });
   };
 
   const handleFileChosen = async (file: File | null) => {
@@ -487,11 +897,15 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
         fileDataBase64,
         mode,
       });
-      const nextRows = (preview.rows || []).map((row: PreviewRow) => ({
-        ...row,
-        approved: row.canImport,
-        skipped: false,
-      }));
+      const nextRows = revalidatePreviewRows(
+        (preview.rows || []).map((row: PreviewRow) => ({
+          ...row,
+          approved: row.canImport,
+          skipped: false,
+          sourceCategoryKey: categoryKeyForRow(row.fields),
+        })),
+        categories
+      );
       setPreviewRows(nextRows);
       setSummary(preview.summary || null);
     } catch (previewError) {
@@ -503,8 +917,102 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
     }
   };
 
+  const updateRows = (updater: (rows: PreviewRow[]) => PreviewRow[]) => {
+    setPreviewRows((current) => revalidatePreviewRows(updater(current), categories));
+  };
+
   const updateRow = (clientId: string, updater: (row: PreviewRow) => PreviewRow) => {
-    setPreviewRows((current) => current.map((row) => (row.clientId === clientId ? updater(row) : row)));
+    updateRows((current) => current.map((row) => (row.clientId === clientId ? updater(row) : row)));
+  };
+
+  const applyCategorySelection = (
+    row: PreviewRow,
+    nextSelection: {
+      parent?: BulkCategoryTree | null;
+      branch?: BulkCategoryBranch | null;
+      leaf?: BulkCategoryLeaf | null;
+    }
+  ) => {
+    updateRows((current) =>
+      current.map((entry) => {
+        const shouldApply =
+          entry.clientId === row.clientId ||
+          (applyCategoryToSimilar && entry.sourceCategoryKey && row.sourceCategoryKey && entry.sourceCategoryKey === row.sourceCategoryKey);
+
+        if (!shouldApply) return entry;
+
+        return {
+          ...entry,
+          fields: {
+            ...entry.fields,
+            parentCategory: nextSelection.parent?.name || '',
+            category: nextSelection.branch?.name || '',
+            subcategory: nextSelection.leaf?.name || '',
+          },
+        };
+      })
+    );
+  };
+
+  const handleMainImageUpload = async (file: File | null) => {
+    if (!editingRow || !file) return;
+    setImageUploadState({ target: 'main', busy: true, error: '' });
+    try {
+      const uploadedUrl = await uploadImageFile(file, {
+        folder: 'products/bulk-upload',
+        fileName: file.name,
+      });
+
+      updateRow(editingRow.clientId, (current) => {
+        const nextGallery = current.fields.galleryImageUrls.filter((url) => url && url !== current.fields.mainImageUrl);
+        return {
+          ...current,
+          fields: {
+            ...current.fields,
+            mainImageUrl: uploadedUrl,
+            thumbnailUrl: uploadedUrl,
+            galleryImageUrls: dedupeList(nextGallery).slice(0, 7),
+          },
+        };
+      });
+      setImageUploadState({ target: null, busy: false, error: '' });
+    } catch (uploadError) {
+      setImageUploadState({
+        target: null,
+        busy: false,
+        error: uploadError instanceof Error ? uploadError.message : 'Failed to upload main image.',
+      });
+    }
+  };
+
+  const handleGalleryUpload = async (files: FileList | null) => {
+    if (!editingRow || !files?.length) return;
+    setImageUploadState({ target: 'gallery', busy: true, error: '' });
+    try {
+      const uploaded = await Promise.all(
+        Array.from(files).map((file) =>
+          uploadImageFile(file, {
+            folder: 'products/bulk-upload',
+            fileName: file.name,
+          })
+        )
+      );
+
+      updateRow(editingRow.clientId, (current) => ({
+        ...current,
+        fields: {
+          ...current.fields,
+          galleryImageUrls: dedupeList([...current.fields.galleryImageUrls, ...uploaded]).slice(0, 7),
+        },
+      }));
+      setImageUploadState({ target: null, busy: false, error: '' });
+    } catch (uploadError) {
+      setImageUploadState({
+        target: null,
+        busy: false,
+        error: uploadError instanceof Error ? uploadError.message : 'Failed to upload gallery images.',
+      });
+    }
   };
 
   const handleImport = async () => {
@@ -825,9 +1333,7 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                                   {row.fields.mainImageUrl ? (
                                     <img src={row.fields.mainImageUrl} alt={row.fields.productTitle} className="h-full w-full object-cover" />
                                   ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-slate-300">
-                                      <ImageIcon className="h-5 w-5" />
-                                    </div>
+                                    <img src={PRODUCT_PLACEHOLDER_IMAGE} alt="Product placeholder" className="h-full w-full object-cover" />
                                   )}
                                 </div>
                               </td>
@@ -837,7 +1343,21 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                               </td>
                               <td className="px-4 py-4 text-sm font-semibold text-slate-700">
                                 <p>{row.resolved.parentCategoryName || row.fields.parentCategory || 'Unknown'}</p>
-                                <p className="mt-1 text-xs font-medium text-slate-500">{row.resolved.subcategoryName || row.fields.subcategory || 'No subcategory'}</p>
+                                <p className="mt-1 text-xs font-medium text-slate-500">
+                                  {row.resolved.categoryName || row.fields.category || 'No category selected'}
+                                </p>
+                                <p className="mt-1 text-xs font-medium text-slate-400">
+                                  {row.resolved.subcategoryName || row.fields.subcategory || 'No subcategory'}
+                                </p>
+                                {row.errors.some((issue) => issue.includes('category mapping') || issue.includes('subcategory mapping')) ? (
+                                  <div className="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">
+                                    Needs category mapping
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                                    Category mapped
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-4 text-sm font-semibold text-slate-700">
                                 <p>{row.fields.salePrice || row.fields.regularPrice || '0'}</p>
@@ -918,20 +1438,106 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                   </button>
                 </div>
 
+                <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Category Mapping</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-600">
+                        Categories are locked to the existing Exshopi category tree. Choose the correct path instead of typing free text.
+                      </p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={applyCategoryToSimilar}
+                        onChange={(event) => setApplyCategoryToSimilar(event.target.checked)}
+                      />
+                      Apply this category mapping to similar rows
+                    </label>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    <SearchableSelect
+                      label="Parent Category"
+                      value={editingCategorySelection.parent?.slug || ''}
+                      options={availableParentOptions}
+                      placeholder={categoriesLoading ? 'Loading categories...' : 'Select a parent category'}
+                      disabled={categoriesLoading}
+                      onChange={(nextValue) => {
+                        const parent = categories.find((entry) => entry.slug === nextValue) || null;
+                        const branch = parent?.categories[0] || null;
+                        const leaf = branch?.subcategories[0] || null;
+                        applyCategorySelection(editingRow, { parent, branch, leaf });
+                      }}
+                    />
+                    <SearchableSelect
+                      label="Category"
+                      value={editingCategorySelection.branch?.slug || ''}
+                      options={availableCategoryOptions}
+                      placeholder={
+                        editingCategorySelection.parent
+                          ? 'Select a category'
+                          : 'Choose parent category first'
+                      }
+                      disabled={!editingCategorySelection.parent || categoriesLoading}
+                      onChange={(nextValue) => {
+                        const branch =
+                          editingCategorySelection.parent?.categories.find((entry) => entry.slug === nextValue) || null;
+                        const leaf = branch?.subcategories[0] || null;
+                        applyCategorySelection(editingRow, {
+                          parent: editingCategorySelection.parent,
+                          branch,
+                          leaf,
+                        });
+                      }}
+                    />
+                    <SearchableSelect
+                      label="Subcategory"
+                      value={editingCategorySelection.leaf?.slug || ''}
+                      options={availableSubcategoryOptions}
+                      placeholder={
+                        editingCategorySelection.branch?.subcategories.length
+                          ? 'Select a subcategory'
+                          : 'No subcategory required'
+                      }
+                      disabled={!editingCategorySelection.branch || availableSubcategoryOptions.length === 0 || categoriesLoading}
+                      onChange={(nextValue) => {
+                        const leaf =
+                          editingCategorySelection.branch?.subcategories.find((entry) => entry.slug === nextValue) || null;
+                        applyCategorySelection(editingRow, {
+                          parent: editingCategorySelection.parent,
+                          branch: editingCategorySelection.branch,
+                          leaf,
+                        });
+                      }}
+                    />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-blue-700">
+                      {editingCategorySelection.parent?.name || 'Parent not mapped'}
+                    </div>
+                    <div className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-700">
+                      {editingCategorySelection.branch?.name || 'Category not mapped'}
+                    </div>
+                    <div className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-700">
+                      {editingCategorySelection.leaf?.name || 'No child subcategory'}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
                   {[
                     ['productTitle', 'Product Title'],
                     ['sku', 'SKU'],
                     ['brand', 'Brand'],
                     ['model', 'Model'],
-                    ['parentCategory', 'Parent Category'],
-                    ['subcategory', 'Subcategory'],
                     ['sellerName', 'Seller Name'],
                     ['regularPrice', 'Regular Price'],
                     ['salePrice', 'Sale Price'],
                     ['stockQuantity', 'Stock Quantity'],
-                    ['mainImageUrl', 'Main Image URL'],
                     ['seoSlug', 'SEO Slug'],
+                    ['mainImageUrl', 'Main Image URL'],
                   ].map(([key, label]) => (
                     <div key={key} className="space-y-2">
                       <label className="text-sm font-bold text-slate-800">{label}</label>
@@ -953,6 +1559,156 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                 </div>
 
                 <div className="mt-4 grid gap-4">
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Image Repair</p>
+                        <h4 className="mt-2 text-lg font-black text-slate-950">Main image and gallery</h4>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => mainImageInputRef.current?.click()}
+                          disabled={imageUploadState.busy}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {imageUploadState.busy && imageUploadState.target === 'main' ? 'Uploading Main...' : 'Upload Main Image'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => galleryImageInputRef.current?.click()}
+                          disabled={imageUploadState.busy}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {imageUploadState.busy && imageUploadState.target === 'gallery' ? 'Uploading Gallery...' : 'Upload Gallery Images'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <input
+                      ref={mainImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        void handleMainImageUpload(event.target.files?.[0] || null);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                    <input
+                      ref={galleryImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        void handleGalleryUpload(event.target.files);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
+                      <div className="space-y-3">
+                        <div className="overflow-hidden rounded-[1.25rem] border border-slate-200 bg-slate-50">
+                          <img
+                            src={editingRow.fields.mainImageUrl || PRODUCT_PLACEHOLDER_IMAGE}
+                            alt={editingRow.fields.productTitle || 'Main image preview'}
+                            className="h-52 w-full object-cover"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateRow(editingRow.clientId, (current) => ({
+                                ...current,
+                                fields: {
+                                  ...current.fields,
+                                  mainImageUrl: '',
+                                  thumbnailUrl: '',
+                                },
+                              }))
+                            }
+                            className="flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-slate-700"
+                          >
+                            Remove Main
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => mainImageInputRef.current?.click()}
+                            className="flex-1 rounded-2xl bg-slate-900 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-white"
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                          Broken image URLs remain warnings only. You can keep the URL, upload a replacement, or let the importer use the placeholder.
+                        </div>
+                        {imageUploadState.error ? (
+                          <div className="mt-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                            {imageUploadState.error}
+                          </div>
+                        ) : null}
+
+                        <div className="mt-4 space-y-2">
+                          <label className="text-sm font-bold text-slate-800">Gallery Image URLs</label>
+                          <textarea
+                            value={editingRow.fields.galleryImageUrls.join('\n')}
+                            onChange={(event) =>
+                              updateRow(editingRow.clientId, (current) => ({
+                                ...current,
+                                fields: {
+                                  ...current.fields,
+                                  galleryImageUrls: dedupeList(
+                                    event.target.value
+                                      .split('\n')
+                                      .map((item) => item.trim())
+                                      .filter(Boolean)
+                                  ).slice(0, 7),
+                                },
+                              }))
+                            }
+                            rows={4}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                            placeholder="One gallery image URL per line"
+                          />
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          {editingRow.fields.galleryImageUrls.length ? (
+                            editingRow.fields.galleryImageUrls.map((url, index) => (
+                              <div key={`${url}-${index}`} className="relative h-20 w-20 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                                <img src={url} alt={`Gallery ${index + 1}`} className="h-full w-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateRow(editingRow.clientId, (current) => ({
+                                      ...current,
+                                      fields: {
+                                        ...current.fields,
+                                        galleryImageUrls: current.fields.galleryImageUrls.filter((entry) => entry !== url),
+                                      },
+                                    }))
+                                  }
+                                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/70 text-white"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm font-medium text-slate-500">
+                              No gallery images yet. Upload from your computer or keep URLs from the file.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-800">Short Description</label>
                     <textarea

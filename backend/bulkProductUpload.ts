@@ -108,6 +108,8 @@ export type BulkUploadPreviewRow = {
     sellerId: string;
     parentCategoryName: string;
     parentCategorySlug: string;
+    categoryName: string;
+    categorySlug: string;
     subcategoryName: string;
     subcategorySlug: string;
     seoSlug: string;
@@ -174,6 +176,8 @@ function dedupe(values: string[]) {
     return true;
   });
 }
+
+const PRODUCT_PLACEHOLDER_IMAGE = '/assets/product-placeholder.png';
 
 function decodeXml(value: string) {
   return value
@@ -487,11 +491,18 @@ function normalizeCategories(categories: GenericRecord[]) {
       id: text(category.id),
       name: text(category.name),
       slug: text(category.slug),
-      subcategories: Array.isArray(category.subcategories)
+      categories: Array.isArray(category.subcategories)
         ? category.subcategories.map((entry: any) => ({
             id: text(entry.id),
             name: text(entry.name),
             slug: text(entry.slug),
+            subcategories: Array.isArray(entry.childCategories)
+              ? entry.childCategories.map((child: any) => ({
+                  id: text(child.id),
+                  name: text(child.name),
+                  slug: text(child.slug),
+                }))
+              : [],
           }))
         : [],
     }))
@@ -517,15 +528,24 @@ function resolveCategoryMatch(
     return { parent: null, subcategory: null };
   }
 
-  const subCandidates = [fieldRow.subcategory, fieldRow.productType]
+  const categoryCandidates = [fieldRow.category, fieldRow.productType]
+    .map((value) => lower(value))
+    .filter(Boolean);
+
+  const category =
+    parent.categories.find((entry) => categoryCandidates.includes(lower(entry.slug)) || categoryCandidates.includes(lower(entry.name))) ||
+    null;
+
+  const subCandidates = [fieldRow.subcategory]
     .map((value) => lower(value))
     .filter(Boolean);
 
   const subcategory =
-    parent.subcategories.find((entry) => subCandidates.includes(lower(entry.slug)) || subCandidates.includes(lower(entry.name))) ||
-    null;
+    category?.subcategories.find(
+      (entry) => subCandidates.includes(lower(entry.slug)) || subCandidates.includes(lower(entry.name))
+    ) || null;
 
-  return { parent, subcategory };
+  return { parent, category, subcategory };
 }
 
 function normalizeSellers(sellers: GenericRecord[]) {
@@ -711,8 +731,10 @@ export async function buildBulkUploadPreviewRows(input: {
       const categoryMatch = resolveCategoryMatch(categories, fieldRow);
       if (!categoryMatch.parent) {
         errors.push('Invalid parent/category mapping');
+      } else if (fieldRow.category && !categoryMatch.category) {
+        errors.push('Needs category mapping');
       } else if (fieldRow.subcategory && !categoryMatch.subcategory) {
-        errors.push('Invalid subcategory');
+        errors.push('Needs subcategory mapping');
       }
 
       const sellerMatch = resolveSellerMatch(sellers, fieldRow, input.mode, input.uploaderSeller || null);
@@ -735,7 +757,7 @@ export async function buildBulkUploadPreviewRows(input: {
       }
 
       if (!fieldRow.mainImageUrl) {
-        errors.push('Missing main image URL');
+        warnings.push('Missing main image URL. Placeholder will be used unless you upload one.');
       } else {
         const imageCheck = await verifyImageUrl(fieldRow.mainImageUrl);
         if (!imageCheck.ok) {
@@ -766,6 +788,8 @@ export async function buildBulkUploadPreviewRows(input: {
           sellerId: sellerMatch?.id || fieldRow.sellerId || '',
           parentCategoryName: categoryMatch.parent?.name || '',
           parentCategorySlug: categoryMatch.parent?.slug || '',
+          categoryName: categoryMatch.category?.name || fieldRow.category || '',
+          categorySlug: categoryMatch.category?.slug || slugify(fieldRow.category),
           subcategoryName: categoryMatch.subcategory?.name || fieldRow.subcategory || '',
           subcategorySlug: categoryMatch.subcategory?.slug || slugify(fieldRow.subcategory),
           seoSlug: currentSlug,
@@ -804,12 +828,12 @@ export function buildBulkImportPayload(input: {
   const lifecycle = resolveLifecycle(fieldRow, input.mode);
 
   if (!fieldRow.productTitle) throw new Error('Product title is required.');
-  if (!fieldRow.mainImageUrl) throw new Error('Main image URL is required.');
   if (!categoryMatch.parent) throw new Error('Valid parent category is required.');
+  if (fieldRow.category && !categoryMatch.category) throw new Error('Valid category is required.');
   if (fieldRow.subcategory && !categoryMatch.subcategory) throw new Error('Valid subcategory is required.');
   if (!sellerMatch) throw new Error('Valid seller is required.');
 
-  const allImages = dedupe([fieldRow.mainImageUrl, ...fieldRow.galleryImageUrls].filter(Boolean)).slice(0, 8);
+  const allImages = dedupe([fieldRow.mainImageUrl || PRODUCT_PLACEHOLDER_IMAGE, ...fieldRow.galleryImageUrls].filter(Boolean)).slice(0, 8);
   const regularPrice = numberValue(fieldRow.regularPrice, 0);
   const salePrice = numberValue(fieldRow.salePrice || fieldRow.flashSalePrice, regularPrice || 0);
   const finalPrice = salePrice > 0 ? salePrice : regularPrice;
@@ -876,11 +900,11 @@ export function buildBulkImportPayload(input: {
       searchTags: dedupe(splitList(fieldRow.metaKeywords)).slice(0, 12),
       parentCategorySlug: categoryMatch.parent.slug,
       parentCategoryName: categoryMatch.parent.name,
-      categorySlug: categoryMatch.parent.slug,
-      categoryName: categoryMatch.parent.name,
+      categorySlug: categoryMatch.category?.slug || categoryMatch.parent.slug,
+      categoryName: categoryMatch.category?.name || categoryMatch.parent.name,
       subcategorySlug: categoryMatch.subcategory?.slug || '',
       subcategoryName: categoryMatch.subcategory?.name || '',
-      categoryPath: [categoryMatch.parent.slug, categoryMatch.subcategory?.slug].filter(Boolean).join('/'),
+      categoryPath: [categoryMatch.parent.slug, categoryMatch.category?.slug, categoryMatch.subcategory?.slug].filter(Boolean).join('/'),
       ownership: {
         sellerId: sellerMatch.id,
         sellerName: sellerMatch.storeName,
@@ -943,7 +967,7 @@ export function buildBulkImportPayload(input: {
       },
       attributes: {
         brand: fieldRow.brand,
-        subcategory: categoryMatch.subcategory?.slug || '',
+        subcategory: categoryMatch.subcategory?.slug || categoryMatch.category?.slug || '',
       },
     },
   };
