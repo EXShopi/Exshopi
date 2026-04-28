@@ -48,6 +48,13 @@ import { generateProductSeoPayload, mergeProductSeoIntoSpecs, normalizeSeoText, 
 import { productSeoSchema, validateSeoForPublish } from './validators/productSeo';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 import { buildStoreOperationsAnalytics } from './adminAnalyticsService';
+import {
+  buildBulkImportPayload,
+  buildBulkUploadPreviewRows,
+  parseBulkUploadFile,
+  type BulkUploadEditableRow,
+  type BulkUploadMode,
+} from './bulkProductUpload';
 import { findProductRouteMatch } from '../src/lib/productRouteResolution';
 import { MASTER_CATEGORIES, productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../src/lib/masterCategories';
 import { getCategoryPath } from '../src/lib/seo';
@@ -1148,6 +1155,144 @@ const resolveAdminAssignedSeller = async (requestedSellerId?: string) => {
   return db.getSeller(desiredSellerId) || db.getSeller('exshopi_official') || db.getAllSellers().find((seller) => seller.isOfficial) || null;
 };
 
+const resolveCatalogSellerById = async (sellerId?: string | null) => {
+  const desiredSellerId = String(sellerId || '').trim();
+  if (!desiredSellerId) return null;
+
+  if (prismaRuntime.enabled) {
+    return prismaRuntime.getSeller(desiredSellerId);
+  }
+
+  return db.getSeller(desiredSellerId) || null;
+};
+
+const getAllCatalogCategories = async () => {
+  if (prismaRuntime.enabled) return prismaRuntime.getCategories();
+  return db.getCategories();
+};
+
+const getAllCatalogSellers = async () => {
+  if (prismaRuntime.enabled) return prismaRuntime.getAllSellers();
+  return db.getAllSellers();
+};
+
+const getAllAdminProductsForValidation = async () => {
+  if (prismaRuntime.enabled) return prismaRuntime.getAllProductsForAdmin();
+  if (supabaseRuntime.enabled) return supabaseRuntime.getAllProductsForAdmin();
+  return db.getAllProducts();
+};
+
+const resolveUploaderSeller = async (userId?: string | null) => {
+  if (!userId) return null;
+  const sellers = await getAllCatalogSellers();
+  return (sellers || []).find((seller: any) => String(seller?.userId || '') === String(userId)) || null;
+};
+
+const createAdminProductRecord = async (payload: any) => {
+  const lifecycle = deriveAdminLifecycle(payload);
+  const categoryId = payload.categoryId || payload.category || '';
+  assertAdminProductRequirements({ ...payload, categoryId }, lifecycle.status);
+
+  const categoryIds = flattenCategoryIds(await getAllCatalogCategories());
+  if (categoryId && !categoryIds.has(categoryId)) {
+    throw new Error('Selected category no longer exists. Please choose a valid category.');
+  }
+
+  const assignedSeller =
+    payload.createdByRole === 'seller'
+      ? await resolveCatalogSellerById(payload.sellerId)
+      : await resolveAdminAssignedSeller(payload.sellerId);
+  if (!assignedSeller) {
+    throw new Error(
+      payload.createdByRole === 'seller'
+        ? 'Seller profile is missing. Please create the seller store before bulk upload.'
+        : 'ExShopi Official seller profile is missing. Please seed the official store first.'
+    );
+  }
+
+  const seo = await buildPersistedProductSeo(payload);
+  const normalizedSpecs = normalizeProductSpecifications(payload.specs || {}, {
+    parentCategorySlug: payload.specs?.parentCategorySlug || payload.specs?.categorySlug || '',
+    parentCategoryName: payload.specs?.parentCategoryName || payload.specs?.categoryName || '',
+    categorySlug: payload.specs?.categorySlug || payload.specs?.parentCategorySlug || '',
+    categoryName: payload.specs?.categoryName || payload.specs?.parentCategoryName || '',
+    subcategorySlug: payload.specs?.subcategorySlug || payload.specs?.templateId || '',
+    subcategoryName: payload.specs?.subcategoryName || payload.specs?.templateName || '',
+    title: payload.title || 'Untitled',
+  });
+  if (lifecycle.status !== 'draft') {
+    validateSeoForPublish(seo);
+    validateProductSpecificationsForTemplate(normalizedSpecs.specs, normalizedSpecs.template, {
+      requireHighlights: true,
+    });
+  }
+
+  const productInput = {
+    sellerId: assignedSeller.id,
+    storeId: assignedSeller.id,
+    categoryId,
+    slug: seo.slug,
+    metaTitle: seo.metaTitle,
+    metaDescription: seo.metaDescription,
+    metaKeywords: seo.metaKeywords,
+    canonicalUrl: seo.canonicalUrl,
+    ogTitle: seo.ogTitle,
+    ogDescription: seo.ogDescription,
+    ogImage: seo.ogImage,
+    title: payload.title || 'Untitled',
+    description: payload.description || '',
+    price: Number(payload.price || 0),
+    priceUae: Number(payload.priceUae ?? payload.price ?? 0),
+    priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
+    originalPrice:
+      payload.originalPrice != null ? Number(payload.originalPrice) : Number(payload.salePrice ?? payload.price ?? 0),
+    compareAtPriceUae:
+      payload.compareAtPriceUae != null
+        ? Number(payload.compareAtPriceUae)
+        : Number(payload.originalPrice ?? payload.salePrice ?? payload.price ?? 0),
+    compareAtPriceKsa: payload.compareAtPriceKsa != null ? Number(payload.compareAtPriceKsa) : undefined,
+    salePrice: payload.salePrice != null ? Number(payload.salePrice) : Number(payload.price || 0),
+    image: payload.image || payload.images?.[0] || '',
+    images: Array.isArray(payload.images) ? payload.images : [],
+    stock: Number(payload.stock || 0),
+    rating: Number(payload.rating || 0),
+    reviews: Number(payload.reviews || 0),
+    sku: payload.sku || '',
+    brand: payload.brand || payload.specs?.attributes?.brand || '',
+    specs: {
+      ...mergeProductSeoIntoSpecs(normalizedSpecs.specs || {}, seo),
+      ownership: {
+        sellerId: assignedSeller.id,
+        sellerName: assignedSeller.storeName,
+        isOfficialStore: Boolean(assignedSeller.isOfficial),
+      },
+    },
+    status: lifecycle.status,
+    approvalStatus: lifecycle.approvalStatus,
+    productStatus: lifecycle.productStatus,
+    visibilityStatus: lifecycle.visibilityStatus,
+    ownership: assignedSeller.isOfficial ? 'official' : 'seller',
+    createdByRole: payload.createdByRole === 'seller' ? 'seller' : 'admin',
+    approvalRequestedAt:
+      payload.approvalRequestedAt || (lifecycle.status === 'draft' ? '' : new Date().toISOString()),
+    approvedAt: lifecycle.approvalStatus === 'approved' ? payload.approvedAt || new Date().toISOString() : '',
+    rejectedAt: lifecycle.approvalStatus === 'rejected' ? payload.rejectedAt || new Date().toISOString() : '',
+    approvalNotes: payload.approvalNotes || '',
+    rejectionReason: payload.rejectionReason || '',
+    views: Number(payload.views || 0),
+    wishlistCount: Number(payload.wishlistCount || 0),
+    badges: payload.badges || [],
+  };
+
+  if (prismaRuntime.enabled) {
+    return prismaRuntime.createProduct(productInput as any);
+  }
+  if (supabaseRuntime.enabled) {
+    return supabaseRuntime.createProduct(productInput as any);
+  }
+  return db.createProduct(productInput as any);
+};
+
 const decorateCategory = (category: any) => {
   const interestCount = db
     .getAnalyticsEvents()
@@ -1595,6 +1740,17 @@ const uploadPayloadSchema = z.object({
   dataUrl: z.string().min(20),
   folder: z.string().min(1).max(120).default('general'),
   fileName: z.string().max(120).optional(),
+});
+
+const bulkUploadPreviewSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  fileDataBase64: z.string().min(20),
+  mode: z.enum(['admin', 'seller']).optional().default('admin'),
+});
+
+const bulkUploadImportSchema = z.object({
+  mode: z.enum(['admin', 'seller']).optional().default('admin'),
+  rows: z.array(z.any()).min(1).max(1000),
 });
 
 const parseAdminDateRange = (query: unknown) => {
@@ -4177,106 +4333,109 @@ app.post('/api/admin/products/bulk-review', authMiddleware, async (req: Request,
   }
 });
 
+app.post('/api/admin/products/bulk-upload/preview', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const role = req.user?.role || null;
+    if (!(isAdminLike(role) || role === 'seller')) {
+      return res.status(403).json({ error: 'Only admin or approved sellers can use bulk upload.' });
+    }
+
+    const payload = bulkUploadPreviewSchema.parse(req.body || {});
+    const mode: BulkUploadMode = isAdminLike(role) && payload.mode !== 'seller' ? 'admin' : 'seller';
+    const uploaderSeller = mode === 'seller' ? await resolveUploaderSeller(req.user?.id || null) : null;
+
+    if (mode === 'seller' && !uploaderSeller) {
+      return res.status(403).json({ error: 'Seller store record is required before bulk upload.' });
+    }
+
+    const parsedRows = await parseBulkUploadFile(payload.fileName, payload.fileDataBase64);
+    const [categories, sellers, existingProducts] = await Promise.all([
+      getAllCatalogCategories(),
+      getAllCatalogSellers(),
+      getAllAdminProductsForValidation(),
+    ]);
+
+    const preview = await buildBulkUploadPreviewRows({
+      parsedRows,
+      existingProducts,
+      categories,
+      sellers,
+      mode,
+      uploaderSeller,
+    });
+
+    res.json({
+      fileName: payload.fileName,
+      mode,
+      ...preview,
+    });
+  } catch (error) {
+    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+  }
+});
+
+app.post('/api/admin/products/bulk-upload/import', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const role = req.user?.role || null;
+    if (!(isAdminLike(role) || role === 'seller')) {
+      return res.status(403).json({ error: 'Only admin or approved sellers can use bulk upload.' });
+    }
+
+    const payload = bulkUploadImportSchema.parse(req.body || {});
+    const mode: BulkUploadMode = isAdminLike(role) && payload.mode !== 'seller' ? 'admin' : 'seller';
+    const uploaderSeller = mode === 'seller' ? await resolveUploaderSeller(req.user?.id || null) : null;
+
+    if (mode === 'seller' && !uploaderSeller) {
+      return res.status(403).json({ error: 'Seller store record is required before bulk upload.' });
+    }
+
+    const [categories, sellers] = await Promise.all([getAllCatalogCategories(), getAllCatalogSellers()]);
+    const results: Array<{ clientId: string; title: string; success: boolean; id?: string; error?: string }> = [];
+
+    for (const entry of payload.rows as Array<{ fields?: BulkUploadEditableRow; clientId?: string }>) {
+      const rowFields = entry?.fields || (entry as unknown as BulkUploadEditableRow);
+      try {
+        const productPayload = buildBulkImportPayload({
+          row: rowFields,
+          mode,
+          categories,
+          sellers,
+          uploaderSeller,
+        });
+        const created = await createAdminProductRecord(productPayload);
+        results.push({
+          clientId: rowFields.clientId || entry?.clientId || '',
+          title: rowFields.productTitle || created?.title || 'Untitled',
+          success: true,
+          id: String(created?.id || ''),
+        });
+      } catch (error) {
+        results.push({
+          clientId: rowFields?.clientId || entry?.clientId || '',
+          title: rowFields?.productTitle || 'Untitled',
+          success: false,
+          error: String(error instanceof Error ? error.message : error),
+        });
+      }
+    }
+
+    res.json({
+      mode,
+      imported: results.filter((item) => item.success).length,
+      failed: results.filter((item) => !item.success).length,
+      results,
+    });
+  } catch (error) {
+    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+  }
+});
+
 // Admin create/update/delete products (ExShopi official)
 app.post('/api/admin/products', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
     const payload = await adminProductPayloadSchema.parseAsync(req.body);
-    const lifecycle = deriveAdminLifecycle(payload);
-    const categoryId = payload.categoryId || payload.category || '';
-    assertAdminProductRequirements({ ...payload, categoryId }, lifecycle.status);
-
-    const categoryIds = flattenCategoryIds(prismaRuntime.enabled ? await prismaRuntime.getCategories() : db.getCategories());
-    if (categoryId && !categoryIds.has(categoryId)) {
-      return res.status(400).json({ error: 'Selected category no longer exists. Please choose a valid category.' });
-    }
-
-    const assignedSeller = await resolveAdminAssignedSeller(payload.sellerId);
-    if (!assignedSeller) {
-      return res.status(400).json({ error: 'ExShopi Official seller profile is missing. Please seed the official store first.' });
-    }
-
-    const seo = await buildPersistedProductSeo(payload);
-    const normalizedSpecs = normalizeProductSpecifications(payload.specs || {}, {
-      parentCategorySlug: payload.specs?.parentCategorySlug || payload.specs?.categorySlug || '',
-      parentCategoryName: payload.specs?.parentCategoryName || payload.specs?.categoryName || '',
-      categorySlug: payload.specs?.categorySlug || payload.specs?.parentCategorySlug || '',
-      categoryName: payload.specs?.categoryName || payload.specs?.parentCategoryName || '',
-      subcategorySlug: payload.specs?.subcategorySlug || payload.specs?.templateId || '',
-      subcategoryName: payload.specs?.subcategoryName || payload.specs?.templateName || '',
-      title: payload.title || 'Untitled',
-    });
-    if (lifecycle.status !== 'draft') {
-      validateSeoForPublish(seo);
-      validateProductSpecificationsForTemplate(normalizedSpecs.specs, normalizedSpecs.template, {
-        requireHighlights: true,
-      });
-    }
-
-    const productInput = {
-      sellerId: assignedSeller.id,
-      storeId: assignedSeller.id,
-      categoryId,
-      slug: seo.slug,
-      metaTitle: seo.metaTitle,
-      metaDescription: seo.metaDescription,
-      metaKeywords: seo.metaKeywords,
-      canonicalUrl: seo.canonicalUrl,
-      ogTitle: seo.ogTitle,
-      ogDescription: seo.ogDescription,
-      ogImage: seo.ogImage,
-      title: payload.title || 'Untitled',
-      description: payload.description || '',
-      price: Number(payload.price || 0),
-      priceUae: Number(payload.priceUae ?? payload.price ?? 0),
-      priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
-      originalPrice:
-        payload.originalPrice != null ? Number(payload.originalPrice) : Number(payload.salePrice ?? payload.price ?? 0),
-      compareAtPriceUae:
-        payload.compareAtPriceUae != null
-          ? Number(payload.compareAtPriceUae)
-          : Number(payload.originalPrice ?? payload.salePrice ?? payload.price ?? 0),
-      compareAtPriceKsa: payload.compareAtPriceKsa != null ? Number(payload.compareAtPriceKsa) : undefined,
-      salePrice: payload.salePrice != null ? Number(payload.salePrice) : Number(payload.price || 0),
-      image: payload.image || payload.images?.[0] || '',
-      images: Array.isArray(payload.images) ? payload.images : [],
-      stock: Number(payload.stock || 0),
-      rating: Number(payload.rating || 0),
-      reviews: Number(payload.reviews || 0),
-      sku: payload.sku || '',
-      brand: payload.brand || payload.specs?.attributes?.brand || '',
-      specs: {
-        ...mergeProductSeoIntoSpecs(normalizedSpecs.specs || {}, seo),
-        ownership: {
-          sellerId: assignedSeller.id,
-          sellerName: assignedSeller.storeName,
-          isOfficialStore: Boolean(assignedSeller.isOfficial),
-        },
-      },
-      status: lifecycle.status,
-      approvalStatus: lifecycle.approvalStatus,
-      productStatus: lifecycle.productStatus,
-      visibilityStatus: lifecycle.visibilityStatus,
-      ownership: assignedSeller.isOfficial ? 'official' : 'seller',
-      createdByRole: 'admin',
-      approvalRequestedAt: payload.approvalRequestedAt || new Date().toISOString(),
-      approvedAt: lifecycle.approvalStatus === 'approved' ? payload.approvedAt || new Date().toISOString() : '',
-      rejectedAt: lifecycle.approvalStatus === 'rejected' ? payload.rejectedAt || new Date().toISOString() : '',
-      approvalNotes: payload.approvalNotes || '',
-      rejectionReason: payload.rejectionReason || '',
-      views: Number(payload.views || 0),
-      wishlistCount: Number(payload.wishlistCount || 0),
-      badges: payload.badges || [],
-    };
-
-    let product: any = null;
-    if (prismaRuntime.enabled) {
-      product = await prismaRuntime.createProduct(productInput as any);
-    } else if (supabaseRuntime.enabled) {
-      product = await supabaseRuntime.createProduct(productInput as any);
-    } else {
-      product = db.createProduct(productInput as any);
-    }
+    const product = await createAdminProductRecord(payload);
 
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {

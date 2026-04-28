@@ -6,6 +6,7 @@ import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
 import { getProductLifecycleState, isSoftDeletedProduct } from '../../lib/productLifecycle';
+import BulkProductUploadModal from '../../components/admin/BulkProductUploadModal';
 
 const statusTone: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
@@ -176,6 +177,7 @@ export function AdminProducts() {
           </p>
         </div>
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
+          <BulkProductUploadModal onImported={reloadProducts} />
           <button
             onClick={() => navigate('/admin/products/add')}
             className="rounded-2xl bg-slate-900 px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-white transition hover:bg-blue-600"

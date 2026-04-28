@@ -1311,6 +1311,36 @@ export const adminProductAPI = {
   },
 };
 
+export const adminProductBulkUploadAPI = {
+  async preview(data: { fileName: string; fileDataBase64: string; mode?: 'admin' | 'seller' }) {
+    const res = await fetchWithAuthRetry('/admin/products/bulk-upload/preview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
+
+  async importRows(data: { rows: any[]; mode?: 'admin' | 'seller' }) {
+    const res = await fetchWithAuthRetry('/admin/products/bulk-upload/import', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches();
+    return payload;
+  },
+};
+
 // ==================== ORDERS ====================
 export const orderAPI = {
   async create(data: any) {
