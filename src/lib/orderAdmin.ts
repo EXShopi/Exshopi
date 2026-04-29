@@ -165,12 +165,13 @@ export function downloadBlob(filename: string, blob: Blob) {
 function buildLabelStyles(template: OrderLabelTemplate) {
   const pageSize =
     template === 'compact'
-      ? '@page { size: 4in 6in; margin: 6mm; }'
-      : '@page { size: A4; margin: 12mm; }';
+      ? '@page { size: A4; margin: 8mm; }'
+      : '@page { size: A4; margin: 8mm; }';
 
   return `
     ${pageSize}
     * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
     body { margin: 0; background: #eef2ff; font-family: Inter, Arial, sans-serif; color: #0f172a; }
     .sheet { width: 100%; max-width: ${template === 'compact' ? '100%' : '840px'}; margin: 0 auto; background: #fff; border: 1px solid #cbd5e1; border-radius: ${template === 'compact' ? '18px' : '28px'}; overflow: hidden; }
     .header { padding: ${template === 'compact' ? '18px' : '26px'}; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: white; }
@@ -200,17 +201,22 @@ function buildLabelStyles(template: OrderLabelTemplate) {
     .compact-grid { display: grid; gap: 12px; }
     .compact-address { font-size: 13px; line-height: 1.55; font-weight: 700; color: #0f172a; }
     @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      html, body { background: #fff !important; width: 100%; height: auto; overflow: visible; }
       body { background: #fff; }
       .sheet { max-width: 100%; border-radius: 0; border: 0; box-shadow: none; }
       .print-actions { display: none !important; }
     }
     ${template === 'compact' ? `
       body { background: #fff; }
-      .sheet { width: 100%; max-width: 100%; min-height: calc(100vh - 12mm); border-radius: 0; border: 0; }
-      .header { padding: 16px 18px; }
+      .sheet { width: 100%; max-width: 100%; min-height: auto; border-radius: 0; border: 0; }
+      .header { padding: 18px 20px; }
       .title { font-size: 28px; }
       .subtitle { font-size: 12px; }
-      .section { padding: 10px 14px; }
+      .section { padding: 10px 18px; }
       .grid { gap: 10px; }
       .panel { padding: 12px; border-radius: 16px; }
       .tracking { padding: 10px; border-radius: 20px; }
@@ -221,7 +227,49 @@ function buildLabelStyles(template: OrderLabelTemplate) {
       .compact-summary { display: block; }
       .compact-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; font-weight: 700; color: #334155; }
       .compact-grid { grid-template-columns: 1fr; }
-    ` : ''}
+      @media print {
+        .sheet { width: 100%; max-width: 100%; overflow: hidden; }
+        .header { padding: 14px 16px; }
+        .eyebrow { font-size: 9px; }
+        .title { font-size: 26px; margin-top: 6px; }
+        .subtitle { font-size: 11px; margin-top: 4px; }
+        .section { padding: 8px 14px; }
+        .panel { padding: 10px; border-radius: 14px; }
+        .value { font-size: 13px; }
+        .muted { font-size: 11px; line-height: 1.4; }
+        .tracking { padding: 8px; border-radius: 18px; }
+        .barcode { margin-top: 8px; padding: 8px; }
+        .barcode-code { font-size: 17px; letter-spacing: .14em; }
+        .qr { width: 76px; height: 76px; font-size: 8px; padding: 4px; }
+        .totals { gap: 4px; }
+        .total-row { font-size: 11px; }
+        .total-row strong { font-size: 12px; }
+      }
+    ` : `
+      @media print {
+        .sheet { width: 100%; max-width: 100%; }
+        .header { padding: 18px 20px; }
+        .eyebrow { font-size: 9px; }
+        .title { margin-top: 8px; font-size: 28px; line-height: 1.1; }
+        .subtitle { margin-top: 6px; font-size: 12px; line-height: 1.4; }
+        .section { padding: 12px 18px; }
+        .grid { gap: 10px; }
+        .panel { padding: 12px; border-radius: 16px; }
+        .value { font-size: 14px; }
+        .muted { font-size: 11px; line-height: 1.4; }
+        .tracking { padding: 12px; border-radius: 20px; }
+        .barcode { margin-top: 10px; padding: 10px; border-radius: 14px; }
+        .barcode-code { font-size: 24px; letter-spacing: .16em; }
+        .qr { width: 94px; height: 94px; font-size: 9px; padding: 6px; }
+        .items { margin-top: 4px; }
+        .items th, .items td { padding: 6px 0; font-size: 11px; }
+        .items th { font-size: 9px; }
+        .totals { gap: 6px; margin-top: 4px; }
+        .total-row { font-size: 12px; }
+        .total-row strong { font-size: 14px; }
+        .footer { display: none; }
+      }
+    `}
   `;
 }
 
@@ -269,9 +317,117 @@ function buildOrderLabelSheetHtml(order: AdminOrderLike, template: OrderLabelTem
       ? 'Courier Label'
       : 'Dispatch Label';
   const compactItems = (order.items || [])
-    .slice(0, 3)
+    .slice(0, 2)
     .map((item) => `${Number(item.quantity || 1)}x ${item.title || 'Order item'}`)
     .join(' • ');
+
+  if (template === 'compact') {
+    return `
+      <div class="sheet">
+        <div class="header">
+          <div class="eyebrow">ExShopi Marketplace</div>
+          <div class="title">${escapeHtml(title)}</div>
+          <p class="subtitle">Order ${escapeHtml(order.orderNumber || order.id || '')} • ${escapeHtml(
+            String(order.deliveryType || 'Standard delivery')
+          )} • ${escapeHtml(String(order.paymentMethod || 'cod').toUpperCase())}</p>
+        </div>
+
+        <div class="section">
+          <div class="grid">
+            <div class="panel">
+              <p class="label">Order</p>
+              <p class="value">${escapeHtml(order.orderNumber || order.id || '')}</p>
+              <p class="muted">${escapeHtml(formatOrderDateTime(order.createdAt))}</p>
+            </div>
+            <div class="panel">
+              <p class="label">Courier & Tracking</p>
+              <p class="value">${escapeHtml(order.courierPartner || 'ExShopi Logistics')}</p>
+              <p class="muted">${escapeHtml(trackingCode)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="tracking">
+            <div style="display:flex;justify-content:space-between;gap:14px;align-items:center;">
+              <div style="flex:1;">
+                <p class="label">Tracking Barcode</p>
+                <div class="barcode">
+                  <div class="barcode-code">${escapeHtml(trackingCode)}</div>
+                  <div class="muted" style="margin-top:8px;">Route ref: ${escapeHtml(
+                    order.barcodeReference || trackingCode
+                  )}</div>
+                </div>
+              </div>
+              <div style="flex-shrink:0;">
+                <p class="label">QR / Scan Ref</p>
+                <div class="qr">${escapeHtml(
+                  `${order.orderNumber || order.id}\n${trackingCode}\n${order.customerPhone || ''}`
+                )}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section" style="padding-top:0;">
+          <div class="panel">
+            <p class="label">Recipient</p>
+            <p class="value">${escapeHtml(order.customerName || 'Customer')}</p>
+            <p class="muted" style="font-size:13px;line-height:1.6;margin-top:8px;">${escapeHtml(
+              address.full || 'Address unavailable'
+            )}<br />${escapeHtml(order.customerPhone || 'No phone')}</p>
+          </div>
+        </div>
+
+        <div class="section" style="padding-top:0;">
+          <div class="panel">
+            <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;">
+              <div style="flex:1;">
+                <p class="label">Payment</p>
+                <p class="value">${escapeHtml(String(order.paymentMethod || 'COD').toUpperCase())}</p>
+              </div>
+              <div style="text-align:right;">
+                <p class="label">Total</p>
+                <p class="value">${formatOrderMoney(order, Number(order.totalAmount || 0))}</p>
+              </div>
+            </div>
+            <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <p class="label">Seller</p>
+                <p class="value">${escapeHtml(order.sellerName || 'ExShopi Fulfillment')}</p>
+                <p class="muted">${escapeHtml(order.courierPartner || 'ExShopi Logistics')}</p>
+              </div>
+              <div>
+                <p class="label">Items</p>
+                <p class="muted">${escapeHtml(compactItems || `${itemCount} item(s)`)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section" style="padding-top:0;">
+          <div class="grid">
+            <div class="panel">
+              <p class="label">Sender</p>
+              <p class="value">${escapeHtml(order.sellerName || 'ExShopi Fulfillment')}</p>
+              <p class="muted">ExShopi UAE Operations<br />support@exshopi.com<br />+971 52 260 8063</p>
+            </div>
+            <div class="panel">
+              <p class="label">Dispatch Snapshot</p>
+              <div class="totals">
+                <div class="total-row"><span>Status</span><span>${escapeHtml(
+                  String(order.status || order.operationalStatus || 'pending').replace(/_/g, ' ')
+                )}</span></div>
+                <div class="total-row"><span>Items</span><span>${itemCount}</span></div>
+                <div class="total-row"><span>Commission</span><span>${formatOrderMoney(order, totalCommission)}</span></div>
+                <div class="total-row"><span>Seller payout</span><span>${formatOrderMoney(order, sellerAmount)}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   return `
         <div class="sheet">
