@@ -210,7 +210,11 @@ function decodeXml(value: string) {
 }
 
 function normalizeHeaderKey(value: string) {
-  return slugify(value).replace(/-/g, '_');
+  return slugify(
+    String(value || '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/\s+/g, '_')
+  ).replace(/-/g, '_');
 }
 
 function parseCsvContent(content: string): Record<string, string>[] {
