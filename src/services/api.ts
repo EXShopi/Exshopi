@@ -1309,6 +1309,21 @@ export const adminProductAPI = {
     invalidateProductCaches(id);
     return payload;
   },
+
+  async importBundledDrafts() {
+    const res = await fetchWithAuthRetry('/admin/products/import-bundled-drafts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({}),
+    });
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches();
+    return payload;
+  },
 };
 
 export const adminProductBulkUploadAPI = {

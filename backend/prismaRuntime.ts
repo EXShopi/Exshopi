@@ -913,11 +913,12 @@ export const prismaRuntime = {
     });
   },
 
-  async ensureBundledDraftProductsImported() {
+  async ensureBundledDraftProductsImported(options?: { force?: boolean }) {
+    const force = options?.force === true;
     if (!enabled) {
       return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
     }
-    if (!SHOULD_IMPORT_BUNDLED_DRAFTS) {
+    if (!force && !SHOULD_IMPORT_BUNDLED_DRAFTS) {
       return { attempted: false, imported: 0, duplicates: 0, failed: 0, totalRows: 0 };
     }
 

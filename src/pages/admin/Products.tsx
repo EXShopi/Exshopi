@@ -55,6 +55,8 @@ export function AdminProducts() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkReason, setBulkReason] = useState('');
   const [error, setError] = useState('');
+  const [importingBundledDrafts, setImportingBundledDrafts] = useState(false);
+  const [importNotice, setImportNotice] = useState('');
 
   useEffect(() => {
     reloadProducts();
@@ -77,6 +79,7 @@ export function AdminProducts() {
     try {
       setLoading(true);
       setError('');
+      setImportNotice('');
 
       const params = new URLSearchParams();
       if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
@@ -268,6 +271,22 @@ export function AdminProducts() {
     downloadCsvFile(`exshopi-${fileLabel}-${dateStamp}.csv`, csvLines.join('\n'));
   };
 
+  const handleImportBundledDrafts = async () => {
+    try {
+      setImportingBundledDrafts(true);
+      setError('');
+      const result = await adminProductAPI.importBundledDrafts();
+      setImportNotice(
+        `Draft import completed. Imported ${Number(result?.imported || 0)} rows, skipped ${Number(result?.duplicates || 0)} duplicates, failed ${Number(result?.failed || 0)} rows.`
+      );
+      await reloadProducts();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to import bundled drafts');
+    } finally {
+      setImportingBundledDrafts(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -279,6 +298,13 @@ export function AdminProducts() {
         </div>
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
           <BulkProductUploadModal onImported={reloadProducts} />
+          <button
+            onClick={handleImportBundledDrafts}
+            disabled={importingBundledDrafts}
+            className="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {importingBundledDrafts ? 'Importing Drafts...' : 'Import Draft Catalog'}
+          </button>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => exportProducts('draft')}
@@ -342,6 +368,11 @@ export function AdminProducts() {
         {error ? (
           <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
             {error}
+          </div>
+        ) : null}
+        {importNotice ? (
+          <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+            {importNotice}
           </div>
         ) : null}
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">

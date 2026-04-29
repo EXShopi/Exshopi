@@ -3,6 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import fs from 'node:fs';
 import path from 'path';
 import { z } from 'zod';
 import { db } from './database';
@@ -4391,6 +4392,122 @@ app.post('/api/admin/products/bulk-review', authMiddleware, async (req: Request,
     res.json({ success: true, count: results.length, products: results });
   } catch (error) {
     res.status(500).json({ error: String(error) });
+  }
+});
+
+app.post('/api/admin/products/import-bundled-drafts', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!hasAdminPermission(req.user?.role, 'catalog:review')) {
+      return res.status(403).json({ error: 'Catalog access only' });
+    }
+
+    if (prismaRuntime.enabled) {
+      const result = await prismaRuntime.ensureBundledDraftProductsImported({ force: true });
+      return res.json({
+        mode: 'prisma',
+        ...result,
+      });
+    }
+
+    if (supabaseRuntime.enabled) {
+      return res.status(501).json({
+        error: 'Bundled draft import is not implemented for Supabase runtime yet.',
+      });
+    }
+
+    const draftImportPath = path.join(process.cwd(), 'backend', 'data', 'importedDraftProducts.json');
+    if (!fs.existsSync(draftImportPath)) {
+      return res.status(404).json({ error: 'Bundled draft dataset not found.' });
+    }
+
+    const raw = fs.readFileSync(draftImportPath, 'utf8');
+    const bundledProducts = JSON.parse(raw);
+    if (!Array.isArray(bundledProducts) || !bundledProducts.length) {
+      return res.status(400).json({ error: 'Bundled draft dataset is empty.' });
+    }
+
+    const existingProducts = db.getAllProductsForAdmin();
+    const existingSlugs = new Set(
+      existingProducts.map((product: any) => String(product.slug || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const existingTitles = new Set(
+      existingProducts.map((product: any) => String(product.title || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const existingBrandModels = new Set(
+      existingProducts
+        .map((product: any) => {
+          const brand = String(product.brand || '').trim().toLowerCase();
+          const model = String(product.specs?.model || product.specs?.specificationValues?.model || '').trim().toLowerCase();
+          return brand && model ? `${brand}::${model}` : '';
+        })
+        .filter(Boolean)
+    );
+
+    let imported = 0;
+    let duplicates = 0;
+    let failed = 0;
+
+    for (const product of bundledProducts) {
+      const slug = String(product?.slug || '').trim().toLowerCase();
+      const title = String(product?.title || '').trim().toLowerCase();
+      const brand = String(product?.brand || '').trim().toLowerCase();
+      const model = String(product?.specs?.model || product?.specs?.specificationValues?.model || '').trim().toLowerCase();
+      const brandModelKey = brand && model ? `${brand}::${model}` : '';
+
+      if (!slug || !title) {
+        failed += 1;
+        continue;
+      }
+
+      if (existingSlugs.has(slug) || existingTitles.has(title) || (brandModelKey && existingBrandModels.has(brandModelKey))) {
+        duplicates += 1;
+        continue;
+      }
+
+      try {
+        db.createProduct({
+          ...product,
+          image: '',
+          images: [],
+          status: 'draft',
+          approvalStatus: 'pending',
+          productStatus: 'draft',
+          visibilityStatus: 'hidden',
+          createdByRole: 'admin',
+          ownership: 'official',
+          specs: {
+            ...(product?.specs || {}),
+            approvalStatus: 'pending',
+            productStatus: 'draft',
+            visibilityStatus: 'hidden',
+            createdByRole: 'admin',
+            ownership: 'official',
+          },
+        } as any);
+        existingSlugs.add(slug);
+        existingTitles.add(title);
+        if (brandModelKey) existingBrandModels.add(brandModelKey);
+        imported += 1;
+      } catch (error) {
+        console.error('[admin] bundled draft import failed for db runtime', {
+          slug,
+          title,
+          error: String(error),
+        });
+        failed += 1;
+      }
+    }
+
+    return res.json({
+      mode: 'file-db',
+      attempted: true,
+      imported,
+      duplicates,
+      failed,
+      totalRows: bundledProducts.length,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: String(error) });
   }
 });
 
