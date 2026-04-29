@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -28,11 +28,17 @@ import AuthService from '../lib/authService';
 import { useAuthStore } from '../store/auth';
 import { useSettingsStore } from '../store/settings';
 import { getAdminRoleLabel, hasAdminPermission } from '../lib/adminPermissions';
+import { adminOpsAPI } from '../services/api';
 
 const ADMIN_ROLES = ['admin', 'super_admin', 'finance_manager', 'support_agent'];
 
 export function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const bellRef = useRef<HTMLDivElement | null>(null);
 
   const { settings, fetchSettings } = useSettingsStore();
   const location = useLocation();
@@ -72,6 +78,66 @@ export function AdminLayout() {
   const effectiveRole = (
     ADMIN_ROLES.includes(runtimeRole) ? runtimeRole : 'admin'
   ) as 'admin' | 'super_admin' | 'finance_manager' | 'support_agent';
+
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((item) => !item?.isRead).length,
+    [notifications]
+  );
+
+  const formatNotificationTime = (value?: string) => {
+    if (!value) return 'Just now';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Just now';
+    return date.toLocaleString('en-AE', {
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const emitToast = (type: 'success' | 'error', message: string) => {
+    window.dispatchEvent(new CustomEvent('exshopi:toast', { detail: { type, message } }));
+  };
+
+  const fetchNotifications = async () => {
+    setNotificationsLoading(true);
+    setNotificationsError(null);
+    try {
+      const data = await adminOpsAPI.getNotifications();
+      setNotifications(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load admin notifications:', error);
+      setNotificationsError('Unable to load notifications right now.');
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    fetchNotifications().catch(() => undefined);
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    fetchNotifications().catch(() => undefined);
+  }, [isLoading, user?.id]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (!bellRef.current?.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   const menuItems = [
     {
@@ -176,6 +242,43 @@ export function AdminLayout() {
     localStorage.removeItem('adminId');
     localStorage.removeItem('adminEmail');
     navigate('/admin/login', { replace: true });
+  };
+
+  const handleNotificationClick = async (notification: any) => {
+    try {
+      if (notification?.id && !notification?.isRead) {
+        await adminOpsAPI.markNotificationRead(notification.id);
+        setNotifications((prev) =>
+          prev.map((item) => (item.id === notification.id ? { ...item, isRead: true } : item))
+        );
+      }
+    } catch {
+      //
+    }
+    setNotificationsOpen(false);
+    navigate(notification?.href || '/admin/dashboard');
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await adminOpsAPI.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+      emitToast('success', 'All notifications marked as read.');
+    } catch (error) {
+      console.error('Failed to mark notifications as read:', error);
+      emitToast('error', 'Unable to update notifications right now.');
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      await adminOpsAPI.deleteNotification(id);
+      setNotifications((prev) => prev.filter((item) => item.id !== id));
+      emitToast('success', 'Notification cleared.');
+    } catch (error) {
+      console.error('Failed to clear notification:', error);
+      emitToast('error', 'Unable to clear notification right now.');
+    }
   };
 
   const siteName = settings?.branding?.siteName || 'ExShopi';
@@ -321,13 +424,92 @@ export function AdminLayout() {
               </div>
 
               <div className="flex items-center gap-3">
-                <button
-                  className="relative rounded-2xl border border-slate-200 bg-white p-3 text-slate-500 shadow-sm transition hover:text-blue-600"
-                  type="button"
-                >
-                  <Bell size={20} />
-                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-rose-500" />
-                </button>
+                <div ref={bellRef} className="relative">
+                  <button
+                    className="relative rounded-2xl border border-slate-200 bg-white p-3 text-slate-500 shadow-sm transition hover:text-blue-600"
+                    type="button"
+                    onClick={() => setNotificationsOpen((prev) => !prev)}
+                    aria-label="Open notifications"
+                  >
+                    <Bell size={20} />
+                    {unreadNotificationCount > 0 ? (
+                      <span className="absolute -right-1 -top-1 min-w-[22px] rounded-full border-2 border-white bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white">
+                        {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                      </span>
+                    ) : null}
+                  </button>
+
+                  {notificationsOpen ? (
+                    <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-[360px] max-w-[92vw] overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
+                      <div className="border-b border-slate-200 px-5 py-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-violet-500">Admin Alerts</p>
+                            <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900">Notifications</h3>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleMarkAllRead}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 transition hover:bg-slate-100"
+                          >
+                            Mark all read
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-[420px] overflow-y-auto">
+                        {notificationsLoading ? (
+                          <div className="px-5 py-8 text-sm font-bold text-slate-500">Loading notifications...</div>
+                        ) : notificationsError ? (
+                          <div className="px-5 py-8 text-sm font-bold text-rose-600">{notificationsError}</div>
+                        ) : notifications.length === 0 ? (
+                          <div className="px-5 py-8 text-sm font-bold text-slate-500">No notifications yet.</div>
+                        ) : (
+                          notifications.map((notification) => (
+                            <div
+                              key={notification.id}
+                              className={`border-b border-slate-100 px-5 py-4 last:border-b-0 ${
+                                notification.isRead ? 'bg-white' : 'bg-blue-50/40'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleNotificationClick(notification)}
+                                  className="flex-1 text-left"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-black text-slate-900">{notification.title || 'Notification'}</p>
+                                    {!notification.isRead ? (
+                                      <span className="rounded-full bg-blue-100 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-blue-700">
+                                        Unread
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+                                    {notification.message || 'Open admin workspace for details.'}
+                                  </p>
+                                  <div className="mt-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                                    <span>{notification.type || 'activity'}</span>
+                                    <span>•</span>
+                                    <span>{formatNotificationTime(notification.createdAt)}</span>
+                                  </div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteNotification(notification.id)}
+                                  className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 transition hover:bg-slate-50"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="hidden items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex">
                   <div className="text-right">

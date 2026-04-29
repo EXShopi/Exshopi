@@ -13,10 +13,12 @@ import {
   Printer,
   Search,
   ShieldAlert,
+  Trash2,
   Truck,
   Wallet,
 } from 'lucide-react';
 import { OrderDetailsModal } from '../../components/OrderDetails';
+import AdminDangerConfirmModal from '../../components/admin/AdminDangerConfirmModal';
 import { formatAED } from '../../lib/currency';
 import {
   AdminOrderLike,
@@ -233,6 +235,8 @@ export default function AdminOrderMonitoring() {
   const [dateTo, setDateTo] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilterKey>('all');
   const [actionBanner, setActionBanner] = useState<string>('');
+  const [deleteTarget, setDeleteTarget] = useState<Order | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -418,6 +422,31 @@ export default function AdminOrderMonitoring() {
   const openOrder = (order: Order) => {
     setSelectedOrder(order);
     setShowModal(true);
+  };
+
+  const emitToast = (type: 'success' | 'error', message: string) => {
+    window.dispatchEvent(new CustomEvent('exshopi:toast', { detail: { type, message } }));
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await orderAPI.delete(deleteTarget.id);
+      setOrders((prev) => prev.filter((order) => order.id !== deleteTarget.id));
+      setSelectedIds((prev) => prev.filter((id) => id !== deleteTarget.id));
+      if (selectedOrder?.id === deleteTarget.id) {
+        setSelectedOrder(null);
+        setShowModal(false);
+      }
+      setDeleteTarget(null);
+      emitToast('success', 'Order deleted successfully.');
+    } catch (error: any) {
+      console.error('Failed to delete order:', error);
+      emitToast('error', error?.message || 'Unable to delete order right now.');
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
@@ -811,6 +840,9 @@ export default function AdminOrderMonitoring() {
                             <button onClick={() => printOrderDocuments([order], 'compact')} className="inline-flex items-center rounded-2xl border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50">
                               <Printer className="h-4 w-4" />
                             </button>
+                            <button onClick={() => setDeleteTarget(order)} className="inline-flex items-center rounded-2xl border border-rose-200 bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -910,8 +942,19 @@ export default function AdminOrderMonitoring() {
           onStatusChange={handleStatusChange}
           onUpdateDispatch={handleDispatchUpdate}
           onProcessRefund={handleRefundAction}
+          onDelete={() => setDeleteTarget(selectedOrder)}
         />
       ) : null}
+
+      <AdminDangerConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Order"
+        itemLabel={deleteTarget ? `${deleteTarget.orderNumber || deleteTarget.id} • ${deleteTarget.customerName}` : ''}
+        message="Are you sure you want to delete this order? This action cannot be undone. Related order visibility will be removed safely from the admin workspace."
+        loading={deleteLoading}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteOrder}
+      />
     </div>
   );
 }

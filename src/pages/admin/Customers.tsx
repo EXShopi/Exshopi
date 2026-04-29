@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { customerAPI } from '../../services/api';
-import { Search, User, Heart, Activity, Sparkles, ShieldCheck, TrendingUp, RotateCcw, MapPin } from 'lucide-react';
+import { Search, User, Heart, Activity, Sparkles, ShieldCheck, TrendingUp, RotateCcw, MapPin, Trash2 } from 'lucide-react';
 import { formatAED } from '../../lib/currency';
 import { TableSkeleton } from '../../components/ui/TableSkeleton';
+import AdminDangerConfirmModal from '../../components/admin/AdminDangerConfirmModal';
 
 type CustomerRow = {
   id: string;
@@ -32,6 +33,8 @@ export function AdminCustomers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -79,6 +82,26 @@ export function AdminCustomers() {
       repeatSignals: customers.filter((customer) => customer.ordersCount >= 2).length,
     };
   }, [customers]);
+
+  const emitToast = (type: 'success' | 'error', message: string) => {
+    window.dispatchEvent(new CustomEvent('exshopi:toast', { detail: { type, message } }));
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleteLoading(true);
+      await customerAPI.delete(deleteTarget.id);
+      setCustomers((prev) => prev.filter((customer) => customer.id !== deleteTarget.id));
+      emitToast('success', 'Customer deleted successfully.');
+      setDeleteTarget(null);
+    } catch (error: any) {
+      console.error('Failed to delete customer:', error);
+      emitToast('error', error?.message || 'Unable to delete customer right now.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -182,6 +205,7 @@ export function AdminCustomers() {
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Engagement</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Returns</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Last Login</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -238,11 +262,21 @@ export function AdminCustomers() {
                         </p>
                       </div>
                     </td>
+                    <td className="px-6 py-5">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(customer)}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-rose-700 transition hover:bg-rose-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-16 text-center text-slate-500 font-medium">
+                    <td colSpan={6} className="px-6 py-16 text-center text-slate-500 font-medium">
                       No customers found.
                     </td>
                   </tr>
@@ -252,6 +286,16 @@ export function AdminCustomers() {
           </div>
         </div>
       )}
+
+      <AdminDangerConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Customer"
+        itemLabel={deleteTarget ? `${deleteTarget.name} • ${deleteTarget.email}` : ''}
+        message="Are you sure you want to delete this customer? This action cannot be undone. Existing order history will be preserved, and the account will be soft-deleted from active customer lists."
+        loading={deleteLoading}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteCustomer}
+      />
     </div>
   );
 }

@@ -52,6 +52,18 @@ export type AdminOrderLike = {
   shippingAddressJson?: any;
 };
 
+function emitPrintErrorToast() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('exshopi:toast', {
+      detail: {
+        type: 'error',
+        message: 'Unable to open print label. Please allow popups or try again.',
+      },
+    })
+  );
+}
+
 function getOrderCountryCode(order: AdminOrderLike) {
   const shippingAddress = order.shippingAddressJson
     ? typeof order.shippingAddressJson === 'string'
@@ -222,7 +234,7 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
-export function buildOrderLabelHtml(order: AdminOrderLike, template: OrderLabelTemplate = 'a4') {
+function buildOrderLabelSheetHtml(order: AdminOrderLike, template: OrderLabelTemplate = 'a4') {
   const address = buildOrderAddress(order);
   const itemCount = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const trackingCode = order.trackingCode || `TRK-${String(order.id || '').slice(-8)}`;
@@ -236,14 +248,6 @@ export function buildOrderLabelHtml(order: AdminOrderLike, template: OrderLabelT
       : 'Dispatch Label';
 
   return `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>ExShopi ${title} ${escapeHtml(order.orderNumber || order.id)}</title>
-        <style>${buildLabelStyles(template)}</style>
-      </head>
-      <body>
         <div class="sheet">
           <div class="header">
             <div class="eyebrow">ExShopi Marketplace</div>
@@ -364,6 +368,27 @@ export function buildOrderLabelHtml(order: AdminOrderLike, template: OrderLabelT
             ExShopi trusted marketplace dispatch label. Keep this shipment dry, scan at each handoff, and contact support@exshopi.com for operations issues.
           </div>
         </div>
+  `;
+}
+
+export function buildOrderLabelHtml(order: AdminOrderLike, template: OrderLabelTemplate = 'a4') {
+  const title =
+    template === 'packing-slip'
+      ? 'Packing Slip'
+      : template === 'compact'
+      ? 'Courier Label'
+      : 'Dispatch Label';
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>ExShopi ${title} ${escapeHtml(order.orderNumber || order.id)}</title>
+        <style>${buildLabelStyles(template)}</style>
+      </head>
+      <body>
+        ${buildOrderLabelSheetHtml(order, template)}
       </body>
     </html>
   `;
@@ -372,20 +397,72 @@ export function buildOrderLabelHtml(order: AdminOrderLike, template: OrderLabelT
 export function printOrderDocuments(orders: AdminOrderLike[], template: OrderLabelTemplate = 'a4') {
   if (typeof window === 'undefined' || !orders.length) return;
 
-  const html = orders
-    .map((order) => buildOrderLabelHtml(order, template))
-    .join('<div style="page-break-after:always;"></div>');
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>ExShopi Order Labels</title>
+        <style>
+          ${buildLabelStyles(template)}
+          body { margin: 0; background: #eef2ff; font-family: Inter, Arial, sans-serif; color: #0f172a; }
+          .print-stack { display: grid; gap: 18px; padding: 18px; }
+          .print-page-break { page-break-after: always; break-after: page; }
+          .print-page-break:last-child { page-break-after: auto; break-after: auto; }
+          @media print {
+            .print-stack { padding: 0; gap: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-stack">
+          ${orders
+            .map(
+              (order, index) =>
+                `<section class="print-page-break" data-order-index="${index}">${buildOrderLabelSheetHtml(order, template)}</section>`
+            )
+            .join('')}
+        </div>
+      </body>
+    </html>
+  `;
 
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1100,height=900');
-  if (!printWindow) return;
+  const printWindow = window.open('', '_blank', 'noopener,width=1100,height=900');
+  if (!printWindow) {
+    emitPrintErrorToast();
+    return;
+  }
 
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  window.setTimeout(() => {
-    printWindow.print();
-  }, 350);
+  try {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    const runPrint = () => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch {
+        emitPrintErrorToast();
+      }
+    };
+
+    if (printWindow.document.readyState === 'complete') {
+      window.setTimeout(runPrint, 150);
+      return;
+    }
+
+    printWindow.onload = () => {
+      window.setTimeout(runPrint, 150);
+    };
+  } catch {
+    try {
+      printWindow.close();
+    } catch {
+      //
+    }
+    emitPrintErrorToast();
+  }
 }
 
 function addKeyValueRow(doc: jsPDF, label: string, value: string, x: number, y: number, width = 80) {

@@ -344,6 +344,42 @@ const recordMarketplaceActivity = (input: {
   });
 };
 
+const buildAdminNotificationHref = (entityType?: string) => {
+  switch (entityType) {
+    case 'order':
+    case 'refund':
+    case 'return':
+      return '/admin/orders';
+    case 'customer':
+      return '/admin/customers';
+    case 'seller':
+    case 'vendor':
+    case 'seller_application':
+      return '/admin/vendors';
+    case 'product':
+    case 'inventory':
+      return '/admin/products';
+    case 'banner':
+    case 'offer':
+    case 'campaign':
+      return '/admin/banners';
+    case 'support_ticket':
+      return '/admin/support';
+    case 'payout':
+    case 'payout_request':
+      return '/admin/payouts';
+    default:
+      return '/admin/dashboard';
+  }
+};
+
+const isSoftDeletedEntity = (
+  entityType: 'order' | 'customer' | 'vendor',
+  entityId?: string | null
+) => {
+  return entityId ? db.isSoftDeletedEntity(entityType, String(entityId)) : false;
+};
+
 const getAdminAlertRecipients = async () => {
   const configured = String(ADMIN_ALERT_EMAIL || '')
     .split(',')
@@ -2916,6 +2952,9 @@ app.post('/api/sellers/create', authMiddleware, (req: Request, res: Response) =>
 
 app.get('/api/sellers/:id', async (req: Request, res: Response) => {
   try {
+    if (isSoftDeletedEntity('vendor', req.params.id)) {
+      return res.status(404).json({ error: 'Seller not found' });
+    }
     const seller = prismaRuntime.enabled
       ? await prismaRuntime.getSeller(req.params.id)
       : db.getSeller(req.params.id);
@@ -2933,7 +2972,7 @@ app.get('/api/sellers/store/:storeSlug', async (req: Request, res: Response) => 
     const seller = prismaRuntime.enabled
       ? await prismaRuntime.getSellerBySlug(req.params.storeSlug)
       : db.getSellerBySlug(req.params.storeSlug);
-    if (!seller) {
+    if (!seller || isSoftDeletedEntity('vendor', seller.id)) {
       return res.status(404).json({ error: 'Seller not found' });
     }
     res.json(seller);
@@ -2980,7 +3019,9 @@ app.get('/api/sellers', async (req: Request, res: Response) => {
     const payoutRequests = prismaRuntime.enabled ? await prismaRuntime.getAllPayoutRequests() : db.getAllPayoutRequests();
     const applications = prismaRuntime.enabled ? await prismaRuntime.getSellerApplications() : db.getSellerApplications();
 
-    const enriched = sellers.map((seller) => {
+    const activeSellers = sellers.filter((seller) => !isSoftDeletedEntity('vendor', seller.id));
+
+    const enriched = activeSellers.map((seller) => {
       const sellerOrders = orders.filter((order) => order.sellerId === seller.id);
       const sellerProducts = products.filter((product) => product.sellerId === seller.id || product.storeId === seller.id);
       const liveProductCount = sellerProducts.filter((product) => product.visibilityStatus === 'live' || product.status === 'live' || product.status === 'approved').length;
@@ -6518,11 +6559,68 @@ app.get('/api/admin/orders', authMiddleware, async (req: Request, res: Response)
     if (!isBackofficeRole(req.user?.role)) {
       return res.status(403).json({ error: 'Backoffice only' });
     }
-    const orders = prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders();
+    const orders = (prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders()).filter(
+      (order) => !isSoftDeletedEntity('order', order.id)
+    );
     const enriched = prismaRuntime.enabled
       ? await Promise.all(orders.map((order) => serializeMarketplaceOrderAsync(order)))
       : orders.map((order) => serializeMarketplaceOrder(order));
     res.json(enriched);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.delete('/api/admin/orders/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!isAdminLike(req.user?.role)) {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    const order = prismaRuntime.enabled
+      ? await prismaRuntime.getOrder(req.params.id)
+      : db.getOrder(req.params.id);
+    if (!order || isSoftDeletedEntity('order', req.params.id)) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const deletedAt = new Date().toISOString();
+    const adminEmail = ((req.user as any)?.email as string) || 'admin';
+    const orderLabel = (order as any).orderNumber || order.orderId || order.id;
+    db.recordSoftDeletion({
+      entityType: 'order',
+      entityId: req.params.id,
+      deletedByAdminId: req.user?.id || 'admin',
+      deletedByAdminEmail: adminEmail,
+      deleteReason: String(req.body?.reason || '').trim(),
+      displayName: orderLabel,
+    });
+    db.createAdminNotification({
+      type: 'orders',
+      title: 'Order deleted',
+      message: `${adminEmail} deleted order ${orderLabel}.`,
+      entityType: 'order',
+      entityId: req.params.id,
+      href: '/admin/orders',
+    });
+    recordMarketplaceActivity({
+      actorId: req.user?.id || 'admin',
+      actorRole: isAdminLike(req.user?.role) ? 'admin' : 'system',
+      entityType: 'order',
+      entityId: req.params.id,
+      action: 'deleted',
+      summary: `Order ${orderLabel} deleted by ${adminEmail}`,
+    });
+
+    if (!prismaRuntime.enabled) {
+      db.softDeleteOrder(req.params.id, {
+        deletedByAdminId: req.user?.id || 'admin',
+        deletedByAdminEmail: adminEmail,
+        deleteReason: String(req.body?.reason || '').trim(),
+      });
+    }
+
+    return res.json({ success: true, deletedAt, orderId: req.params.id });
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
@@ -6561,7 +6659,9 @@ app.get('/api/admin/customers', authMiddleware, async (req: Request, res: Respon
     }
 
     if (prismaRuntime.enabled) {
-      const customers = (await prismaRuntime.getAllUsers()).filter((user) => user.role === 'customer');
+      const customers = (await prismaRuntime.getAllUsers()).filter(
+        (user) => user.role === 'customer' && !isSoftDeletedEntity('customer', user.id)
+      );
       const orders = await prismaRuntime.getAllOrders();
       const data = customers.map((customer) => {
         const customerOrders = orders.filter((order) => order.customerId === customer.id);
@@ -6585,7 +6685,9 @@ app.get('/api/admin/customers', authMiddleware, async (req: Request, res: Respon
       return res.json(data);
     }
 
-    const customers = db.getAllUsers().filter((user) => user.role === 'customer');
+    const customers = db.getAllUsers().filter(
+      (user) => user.role === 'customer' && !isSoftDeletedEntity('customer', user.id)
+    );
     const orders = db.getAllOrders();
     const analyticsEvents = db.getAnalyticsEvents();
 
@@ -6616,6 +6718,153 @@ app.get('/api/admin/customers', authMiddleware, async (req: Request, res: Respon
     });
 
     res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.delete('/api/admin/vendors/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!isAdminLike(req.user?.role)) {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    const seller = prismaRuntime.enabled
+      ? await prismaRuntime.getSeller(req.params.id)
+      : db.getSeller(req.params.id);
+    if (!seller || isSoftDeletedEntity('vendor', req.params.id)) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    const sellerOrders = (prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders()).filter(
+      (order) => order.sellerId === seller.id && !isSoftDeletedEntity('order', order.id)
+    );
+    const hasActiveOrders = sellerOrders.some((order) =>
+      !['delivered', 'cancelled', 'refunded', 'returned'].includes(String(order.status || '').toLowerCase())
+    );
+
+    if (hasActiveOrders) {
+      return res.status(400).json({ error: 'Vendor has active orders' });
+    }
+
+    const deleteReason = String(req.body?.reason || '').trim();
+    const adminEmail = ((req.user as any)?.email as string) || 'admin';
+    if (prismaRuntime.enabled) {
+      await prismaRuntime.updateSeller(req.params.id, {
+        status: 'suspended',
+        supportInfo: [seller.supportInfo, `Soft deleted by admin on ${new Date().toISOString()}`]
+          .filter(Boolean)
+          .join(' | '),
+      } as any);
+
+      const sellerProducts = (await prismaRuntime.getAllProductsForAdmin()).filter(
+        (product) => product.sellerId === seller.id || product.storeId === seller.id
+      );
+      await Promise.all(
+        sellerProducts.map((product) =>
+          prismaRuntime.updateProduct(product.id, {
+            status: 'draft',
+            productStatus: 'archived',
+            visibilityStatus: 'hidden',
+          } as any)
+        )
+      );
+
+      db.recordSoftDeletion({
+        entityType: 'vendor',
+        entityId: req.params.id,
+        deletedByAdminId: req.user?.id || 'admin',
+        deletedByAdminEmail: adminEmail,
+        deleteReason,
+        displayName: seller.storeName || req.params.id,
+      });
+    } else {
+      db.softDeleteSeller(req.params.id, {
+        deletedByAdminId: req.user?.id || 'admin',
+        deletedByAdminEmail: adminEmail,
+        deleteReason,
+      });
+    }
+
+    db.createAdminNotification({
+      type: 'vendors',
+      title: 'Vendor deleted',
+      message: `${adminEmail} deleted vendor ${seller.storeName || req.params.id}.`,
+      entityType: 'vendor',
+      entityId: req.params.id,
+      href: '/admin/vendors',
+    });
+    recordMarketplaceActivity({
+      actorId: req.user?.id || 'admin',
+      actorRole: isAdminLike(req.user?.role) ? 'admin' : 'system',
+      entityType: 'vendor',
+      entityId: req.params.id,
+      action: 'deleted',
+      summary: `Vendor ${seller.storeName || req.params.id} deleted by ${adminEmail}`,
+    });
+
+    return res.json({ success: true, vendorId: req.params.id });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.delete('/api/admin/customers/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!isAdminLike(req.user?.role)) {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    const customer = prismaRuntime.enabled
+      ? (await prismaRuntime.getAllUsers()).find((user) => user.id === req.params.id && user.role === 'customer')
+      : db.getUser(req.params.id);
+    if (!customer || customer.role !== 'customer' || isSoftDeletedEntity('customer', req.params.id)) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const deleteReason = String(req.body?.reason || '').trim();
+    const adminEmail = ((req.user as any)?.email as string) || 'admin';
+    if (prismaRuntime.enabled) {
+      await prismaRuntime.updateUser(req.params.id, {
+        name: customer.name ? `Deleted Customer (${customer.id.slice(-6)})` : customer.name,
+        email: `deleted+${customer.id}@exshopi.local`,
+        phone: '',
+        status: 'suspended',
+      } as any);
+      db.recordSoftDeletion({
+        entityType: 'customer',
+        entityId: req.params.id,
+        deletedByAdminId: req.user?.id || 'admin',
+        deletedByAdminEmail: adminEmail,
+        deleteReason,
+        displayName: customer.name || customer.email || req.params.id,
+      });
+    } else {
+      db.softDeleteCustomer(req.params.id, {
+        deletedByAdminId: req.user?.id || 'admin',
+        deletedByAdminEmail: adminEmail,
+        deleteReason,
+      });
+    }
+
+    db.createAdminNotification({
+      type: 'customers',
+      title: 'Customer deleted',
+      message: `${adminEmail} soft-deleted customer ${customer.name || customer.email || req.params.id}.`,
+      entityType: 'customer',
+      entityId: req.params.id,
+      href: '/admin/customers',
+    });
+    recordMarketplaceActivity({
+      actorId: req.user?.id || 'admin',
+      actorRole: isAdminLike(req.user?.role) ? 'admin' : 'system',
+      entityType: 'customer',
+      entityId: req.params.id,
+      action: 'deleted',
+      summary: `Customer ${customer.name || customer.email || req.params.id} deleted by ${adminEmail}`,
+    });
+
+    return res.json({ success: true, customerId: req.params.id });
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
@@ -6847,61 +7096,171 @@ app.get('/api/admin/activity-logs', authMiddleware, (req: Request, res: Response
   }
 });
 
-app.get('/api/admin/notifications', authMiddleware, (req: Request, res: Response) => {
+app.get('/api/admin/notifications', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!canAccessSupport(req.user?.role) && !canAccessFinance(req.user?.role)) {
       return res.status(403).json({ error: 'Backoffice only' });
     }
+    const orders = (prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders()).filter(
+      (order) => !isSoftDeletedEntity('order', order.id)
+    );
+    const products = prismaRuntime.enabled ? await prismaRuntime.getAllProductsForAdmin() : db.getAllProductsForAdmin();
+    const payoutRequests = prismaRuntime.enabled ? await prismaRuntime.getAllPayoutRequests() : db.getAllPayoutRequests();
+    const supportTickets = prismaRuntime.enabled ? await prismaRuntime.getAllSupportTickets() : db.getSupportTickets();
+    const sellerApplications = prismaRuntime.enabled ? await prismaRuntime.getSellerApplications() : db.getSellerApplications();
+    const recentActivities = db.getActivityLogs().slice(0, 50);
+    for (const activity of recentActivities) {
+      db.upsertAdminNotification({
+        id: `activity:${activity.id}`,
+        type: activity.entityType,
+        title: activity.summary.split(':')[0] || activity.summary,
+        message: activity.summary,
+        entityType: activity.entityType,
+        entityId: activity.entityId,
+        href: buildAdminNotificationHref(activity.entityType),
+        isRead: false,
+        createdAt: activity.createdAt,
+        updatedAt: activity.createdAt,
+      });
+    }
 
-    const notifications = [
+    const systemAlerts = [
       {
-        id: 'pending-products',
-        type: 'approvals',
+        id: 'alert:pending-products',
+        type: 'products',
         title: 'Pending product approvals',
-        value: db.getProductsByStatus('pending').length,
+        message: `${products.filter((product) => String(product.approvalStatus || product.status) === 'pending').length} products are waiting for admin approval.`,
+        entityType: 'product',
+        entityId: 'pending-products',
+        href: '/admin/products',
       },
       {
-        id: 'pending-sellers',
-        type: 'sellers',
+        id: 'alert:pending-sellers',
+        type: 'vendors',
         title: 'Pending seller applications',
-        value: db.getSellerApplications().filter((item) => item.status === 'pending_review').length,
+        message: `${sellerApplications.filter((item) => item.status === 'pending_review').length} vendor applications need review.`,
+        entityType: 'seller_application',
+        entityId: 'pending-sellers',
+        href: '/admin/vendors',
       },
       {
-        id: 'refund-requests',
-        type: 'refunds',
+        id: 'alert:refund-requests',
+        type: 'returns',
         title: 'Refund requests waiting review',
-        value: db.getAllOrders().filter((order) => order.refundStatus === 'requested').length,
+        message: `${orders.filter((order) => order.refundStatus === 'requested').length} refunds are pending admin review.`,
+        entityType: 'refund',
+        entityId: 'refund-requests',
+        href: '/admin/orders',
       },
       {
-        id: 'payout-requests',
+        id: 'alert:payout-requests',
         type: 'payouts',
         title: 'Pending payout requests',
-        value: db.getAllPayoutRequests().filter((request) => request.status === 'pending').length,
+        message: `${payoutRequests.filter((request) => request.status === 'pending').length} payout requests need finance approval.`,
+        entityType: 'payout_request',
+        entityId: 'payout-requests',
+        href: '/admin/payouts',
       },
       {
-        id: 'cod-suspicious',
+        id: 'alert:cod-risk',
         type: 'risk',
         title: 'Suspicious COD orders',
-        value: db
-          .getAllOrders()
-          .filter((order) => String(order.shippingAddress?.risk?.level || '').toLowerCase() === 'suspicious').length,
+        message: `${orders.filter((order) => String(order.shippingAddress?.risk?.level || '').toLowerCase() === 'suspicious').length} COD orders are flagged for risk review.`,
+        entityType: 'order',
+        entityId: 'cod-risk',
+        href: '/admin/orders',
+      },
+      {
+        id: 'alert:low-stock',
+        type: 'inventory',
+        title: 'Inventory low stock',
+        message: `${products.filter((product) => Number(product.stock || 0) > 0 && Number(product.stock || 0) <= db.getMarketplaceSettings().lowStockThreshold).length} products are below the low stock threshold.`,
+        entityType: 'inventory',
+        entityId: 'low-stock',
+        href: '/admin/inventory',
+      },
+      {
+        id: 'alert:support-open',
+        type: 'support',
+        title: 'Support ticket backlog',
+        message: `${supportTickets.filter((ticket) => ticket.status !== 'resolved').length} support tickets are still open.`,
+        entityType: 'support_ticket',
+        entityId: 'support-open',
+        href: '/admin/support',
       },
     ];
 
-    const codNotifications = getNotificationsForAudience('admin').slice(0, 25);
-    res.json([
-      ...notifications,
-      ...codNotifications.map((item) => ({
-        id: item.id,
-        type: item.type,
-        title: item.title,
-        value: 1,
-        message: item.message,
-        entityType: item.entityType,
-        entityId: item.entityId,
-        createdAt: item.createdAt,
-      })),
-    ]);
+    for (const alert of systemAlerts) {
+      db.upsertAdminNotification({
+        ...alert,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    const codNotifications = getNotificationsForAudience('admin').slice(0, 25).map((item) => ({
+      id: `cod:${item.id}`,
+      type: item.type || 'risk',
+      title: item.title,
+      message: item.message,
+      entityType: item.entityType,
+      entityId: item.entityId,
+      href: buildAdminNotificationHref(item.entityType),
+      isRead: false,
+      createdAt: item.createdAt,
+      updatedAt: item.createdAt,
+    }));
+
+    const persisted = db.getAdminNotifications();
+    const merged = [...persisted, ...codNotifications]
+      .filter((item, index, array) => array.findIndex((entry) => entry.id === item.id) === index)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 120);
+
+    res.json(merged);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.patch('/api/admin/notifications/:id/read', authMiddleware, (req: Request, res: Response) => {
+  try {
+    if (!canAccessSupport(req.user?.role) && !canAccessFinance(req.user?.role)) {
+      return res.status(403).json({ error: 'Backoffice only' });
+    }
+    const updated = db.markAdminNotificationRead(req.params.id);
+    if (!updated) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.patch('/api/admin/notifications/read-all', authMiddleware, (req: Request, res: Response) => {
+  try {
+    if (!canAccessSupport(req.user?.role) && !canAccessFinance(req.user?.role)) {
+      return res.status(403).json({ error: 'Backoffice only' });
+    }
+    const updated = db.markAllAdminNotificationsRead();
+    res.json({ success: true, updated });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.delete('/api/admin/notifications/:id', authMiddleware, (req: Request, res: Response) => {
+  try {
+    if (!canAccessSupport(req.user?.role) && !canAccessFinance(req.user?.role)) {
+      return res.status(403).json({ error: 'Backoffice only' });
+    }
+    const deleted = db.deleteAdminNotification(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }

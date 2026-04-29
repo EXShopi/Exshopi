@@ -102,6 +102,30 @@ export interface ActivityLog {
   createdAt: string;
 }
 
+export interface SoftDeletionRecord {
+  id: string;
+  entityType: 'order' | 'customer' | 'vendor';
+  entityId: string;
+  deletedAt: string;
+  deletedByAdminId: string;
+  deletedByAdminEmail?: string;
+  deleteReason?: string;
+  displayName?: string;
+}
+
+export interface AdminNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: string;
+  href?: string;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AnalyticsEvent {
   id: string;
   userId?: string;
@@ -542,6 +566,8 @@ interface DatabaseSchema {
   categories: Category[];
   translations: Translation[];
   activityLogs: ActivityLog[];
+  softDeletions: SoftDeletionRecord[];
+  adminNotifications: AdminNotification[];
   analyticsEvents: AnalyticsEvent[];
   marketplaceSettings: MarketplaceSettings;
   siteSettings: SiteSettings;
@@ -564,6 +590,8 @@ function initializeDatabase(): DatabaseSchema {
     categories: defaultCategories(),
     translations: defaultTranslations(),
     activityLogs: [],
+    softDeletions: [],
+    adminNotifications: [],
     analyticsEvents: [],
     marketplaceSettings: defaultMarketplaceSettings(),
     siteSettings: defaultSiteSettings(),
@@ -873,6 +901,13 @@ private data!: DatabaseSchema;
       })),
       sellerApplications: raw.sellerApplications || [],
       activityLogs: raw.activityLogs || [],
+      softDeletions: raw.softDeletions || [],
+      adminNotifications: (raw.adminNotifications || []).map((notification) => ({
+        ...notification,
+        isRead: Boolean(notification.isRead),
+        createdAt: notification.createdAt || new Date().toISOString(),
+        updatedAt: notification.updatedAt || notification.createdAt || new Date().toISOString(),
+      })),
       analyticsEvents: raw.analyticsEvents || [],
       banners: (raw.banners || []).map((banner) => ({
         ...banner,
@@ -1108,6 +1143,34 @@ private data!: DatabaseSchema;
     return user;
   }
 
+  softDeleteCustomer(
+    customerId: string,
+    input: { deletedByAdminId: string; deletedByAdminEmail?: string; deleteReason?: string }
+  ): User | undefined {
+    const customer = this.data.users.find((entry) => entry.id === customerId && entry.role === 'customer');
+    if (!customer) return undefined;
+
+    const tombstone = this.recordSoftDeletion({
+      entityType: 'customer',
+      entityId: customerId,
+      deletedByAdminId: input.deletedByAdminId,
+      deletedByAdminEmail: input.deletedByAdminEmail,
+      deleteReason: input.deleteReason,
+      displayName: customer.name || customer.email || customerId,
+    });
+
+    Object.assign(customer, {
+      name: customer.name ? `Deleted Customer (${customer.id.slice(-6)})` : customer.name,
+      email: `deleted+${customer.id}@exshopi.local`,
+      phone: '',
+      status: 'suspended',
+      updatedAt: tombstone.deletedAt,
+    });
+
+    this.save();
+    return customer;
+  }
+
   // Seller application operations
   createSellerApplication(application: Omit<SellerApplication, 'id' | 'createdAt' | 'updatedAt'>): SellerApplication {
     const newApplication: SellerApplication = {
@@ -1227,6 +1290,45 @@ private data!: DatabaseSchema;
       Object.assign(seller, updates, { storeSlug: nextSlug, updatedAt: new Date().toISOString() });
       this.save();
     }
+    return seller;
+  }
+
+  softDeleteSeller(
+    sellerId: string,
+    input: { deletedByAdminId: string; deletedByAdminEmail?: string; deleteReason?: string }
+  ): Seller | undefined {
+    const seller = this.getSeller(sellerId);
+    if (!seller) return undefined;
+
+    const tombstone = this.recordSoftDeletion({
+      entityType: 'vendor',
+      entityId: sellerId,
+      deletedByAdminId: input.deletedByAdminId,
+      deletedByAdminEmail: input.deletedByAdminEmail,
+      deleteReason: input.deleteReason,
+      displayName: seller.storeName || sellerId,
+    });
+
+    Object.assign(seller, {
+      status: 'suspended',
+      updatedAt: tombstone.deletedAt,
+      supportInfo: [seller.supportInfo, `Soft deleted by admin on ${tombstone.deletedAt}`]
+        .filter(Boolean)
+        .join(' | '),
+    });
+
+    const sellerProducts = this.getAllProductsForAdmin().filter(
+      (product) => product.sellerId === sellerId || product.storeId === sellerId
+    );
+    for (const product of sellerProducts) {
+      this.updateProduct(product.id, {
+        status: 'draft',
+        productStatus: 'archived',
+        visibilityStatus: 'hidden',
+      } as any);
+    }
+
+    this.save();
     return seller;
   }
 
@@ -1415,11 +1517,190 @@ private data!: DatabaseSchema;
     };
     this.data.activityLogs.unshift(log);
     this.data.activityLogs = this.data.activityLogs.slice(0, 2000);
+    this.upsertAdminNotification({
+      id: `activity:${log.id}`,
+      type: this.mapNotificationType(log.entityType),
+      title: this.buildNotificationTitle(log.entityType, log.action),
+      message: log.summary,
+      entityType: log.entityType,
+      entityId: log.entityId,
+      href: this.buildAdminEntityHref(log.entityType, log.entityId),
+      isRead: false,
+      createdAt: log.createdAt,
+      updatedAt: log.createdAt,
+    });
     return log;
   }
 
   getActivityLogs(): ActivityLog[] {
     return this.data.activityLogs;
+  }
+
+  private mapNotificationType(entityType: string): string {
+    switch (entityType) {
+      case 'order':
+      case 'refund':
+      case 'return':
+        return 'orders';
+      case 'customer':
+        return 'customers';
+      case 'seller':
+      case 'vendor':
+      case 'seller_application':
+        return 'vendors';
+      case 'product':
+      case 'inventory':
+        return 'products';
+      case 'banner':
+      case 'offer':
+      case 'campaign':
+        return 'banners';
+      case 'support_ticket':
+        return 'support';
+      case 'payout':
+      case 'payout_request':
+        return 'payouts';
+      default:
+        return 'activity';
+    }
+  }
+
+  private buildNotificationTitle(entityType: string, action: string): string {
+    const entityLabel = entityType
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+    const actionLabel = action
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+    return `${entityLabel} ${actionLabel}`;
+  }
+
+  private buildAdminEntityHref(entityType?: string, entityId?: string): string {
+    switch (entityType) {
+      case 'order':
+      case 'refund':
+      case 'return':
+        return '/admin/orders';
+      case 'customer':
+        return '/admin/customers';
+      case 'seller':
+      case 'vendor':
+      case 'seller_application':
+        return '/admin/vendors';
+      case 'product':
+      case 'inventory':
+        return '/admin/products';
+      case 'banner':
+      case 'offer':
+      case 'campaign':
+        return '/admin/banners';
+      case 'support_ticket':
+        return '/admin/support';
+      case 'payout':
+      case 'payout_request':
+        return '/admin/payouts';
+      default:
+        return entityId ? '/admin/dashboard' : '/admin/dashboard';
+    }
+  }
+
+  upsertAdminNotification(input: AdminNotification): AdminNotification {
+    const existing = this.data.adminNotifications.find((item) => item.id === input.id);
+    if (existing) {
+      Object.assign(existing, {
+        ...input,
+        isRead: existing.isRead || Boolean(input.isRead),
+        updatedAt: new Date().toISOString(),
+      });
+      this.save();
+      return existing;
+    }
+    this.data.adminNotifications.unshift(input);
+    this.data.adminNotifications = this.data.adminNotifications.slice(0, 3000);
+    this.save();
+    return input;
+  }
+
+  createAdminNotification(input: Omit<AdminNotification, 'id' | 'createdAt' | 'updatedAt' | 'isRead'> & { id?: string; isRead?: boolean }): AdminNotification {
+    const createdAt = new Date().toISOString();
+    return this.upsertAdminNotification({
+      id: input.id || `admin_notification_${Date.now()}_${Math.round(Math.random() * 1000)}`,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      href: input.href,
+      isRead: Boolean(input.isRead),
+      createdAt,
+      updatedAt: createdAt,
+    });
+  }
+
+  getAdminNotifications(): AdminNotification[] {
+    return [...this.data.adminNotifications].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  markAdminNotificationRead(id: string): AdminNotification | undefined {
+    const notification = this.data.adminNotifications.find((item) => item.id === id);
+    if (!notification) return undefined;
+    notification.isRead = true;
+    notification.updatedAt = new Date().toISOString();
+    this.save();
+    return notification;
+  }
+
+  markAllAdminNotificationsRead(): number {
+    let updated = 0;
+    const now = new Date().toISOString();
+    for (const notification of this.data.adminNotifications) {
+      if (notification.isRead) continue;
+      notification.isRead = true;
+      notification.updatedAt = now;
+      updated += 1;
+    }
+    if (updated) this.save();
+    return updated;
+  }
+
+  deleteAdminNotification(id: string): boolean {
+    const index = this.data.adminNotifications.findIndex((item) => item.id === id);
+    if (index < 0) return false;
+    this.data.adminNotifications.splice(index, 1);
+    this.save();
+    return true;
+  }
+
+  getSoftDeletion(entityType: SoftDeletionRecord['entityType'], entityId: string): SoftDeletionRecord | undefined {
+    return this.data.softDeletions.find((item) => item.entityType === entityType && item.entityId === entityId);
+  }
+
+  isSoftDeletedEntity(entityType: SoftDeletionRecord['entityType'], entityId: string): boolean {
+    return Boolean(this.getSoftDeletion(entityType, entityId));
+  }
+
+  recordSoftDeletion(entry: Omit<SoftDeletionRecord, 'id' | 'deletedAt'>): SoftDeletionRecord {
+    const existing = this.getSoftDeletion(entry.entityType, entry.entityId);
+    if (existing) {
+      Object.assign(existing, {
+        ...entry,
+        deletedAt: existing.deletedAt || new Date().toISOString(),
+      });
+      this.save();
+      return existing;
+    }
+
+    const record: SoftDeletionRecord = {
+      ...entry,
+      id: `delete_${Date.now()}_${Math.round(Math.random() * 1000)}`,
+      deletedAt: new Date().toISOString(),
+    };
+    this.data.softDeletions.unshift(record);
+    this.data.softDeletions = this.data.softDeletions.slice(0, 5000);
+    this.save();
+    return record;
   }
 
   createAnalyticsEvent(event: Omit<AnalyticsEvent, 'id' | 'createdAt'>): AnalyticsEvent {
@@ -1682,6 +1963,27 @@ private data!: DatabaseSchema;
       updatedAt: new Date().toISOString(),
     });
 
+    this.save();
+    return order;
+  }
+
+  softDeleteOrder(
+    orderId: string,
+    input: { deletedByAdminId: string; deletedByAdminEmail?: string; deleteReason?: string }
+  ): Order | undefined {
+    const order = this.getOrder(orderId);
+    if (!order) return undefined;
+
+    this.recordSoftDeletion({
+      entityType: 'order',
+      entityId: orderId,
+      deletedByAdminId: input.deletedByAdminId,
+      deletedByAdminEmail: input.deletedByAdminEmail,
+      deleteReason: input.deleteReason,
+      displayName: order.orderId || order.id,
+    });
+
+    this.data.trackingEvents = this.data.trackingEvents.filter((entry) => entry.orderId !== orderId);
     this.save();
     return order;
   }

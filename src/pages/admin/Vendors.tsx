@@ -13,10 +13,12 @@ import {
   Phone,
   Search,
   Store,
+  Trash2,
   UserCircle2,
   XCircle,
 } from 'lucide-react';
 import { adminSellerApplicationAPI, sellerAPI } from '../../services/api';
+import AdminDangerConfirmModal from '../../components/admin/AdminDangerConfirmModal';
 
 type SellerApplicationRow = {
   id: string;
@@ -138,6 +140,7 @@ export function AdminVendors() {
   const [selectedSeller, setSelectedSeller] = useState<SellerRow | null>(null);
   const [adminNoteDraft, setAdminNoteDraft] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SellerRow | null>(null);
 
   const loadVendorOps = async () => {
     setLoading(true);
@@ -277,6 +280,27 @@ export function AdminVendors() {
       setSelectedSeller(null);
     } catch (error) {
       console.error('Failed to save seller internal note:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const emitToast = (type: 'success' | 'error', message: string) => {
+    window.dispatchEvent(new CustomEvent('exshopi:toast', { detail: { type, message } }));
+  };
+
+  const handleDeleteSeller = async () => {
+    if (!deleteTarget) return;
+    setActionLoading(`delete:${deleteTarget.id}`);
+    try {
+      await sellerAPI.delete(deleteTarget.id);
+      await loadVendorOps();
+      emitToast('success', 'Vendor deleted successfully.');
+      setSelectedSeller(null);
+      setDeleteTarget(null);
+    } catch (error: any) {
+      console.error('Failed to delete vendor:', error);
+      emitToast('error', error?.message || 'Unable to delete vendor right now.');
     } finally {
       setActionLoading(null);
     }
@@ -478,6 +502,16 @@ export function AdminVendors() {
                                 Storefront
                               </Link>
                             ) : null}
+                            {activeTab === 'sellers' ? (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(row)}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] text-rose-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -643,6 +677,15 @@ export function AdminVendors() {
                     {actionLoading === `note:${selectedSeller.id}` ? 'Saving note...' : 'Save internal note'}
                   </button>
 
+                  <button
+                    type="button"
+                    disabled={!!actionLoading}
+                    onClick={() => setDeleteTarget(selectedSeller)}
+                    className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+                  >
+                    {actionLoading === `delete:${selectedSeller.id}` ? 'Deleting vendor...' : 'Delete vendor'}
+                  </button>
+
                   {selectedSeller.storeSlug ? (
                     <Link
                       to={`/vendor/${selectedSeller.storeSlug}`}
@@ -666,6 +709,16 @@ export function AdminVendors() {
           </div>
         )}
       </section>
+
+      <AdminDangerConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Vendor"
+        itemLabel={deleteTarget ? `${deleteTarget.storeName} • ${deleteTarget.ownerName}` : ''}
+        message="Are you sure you want to delete this vendor? This action cannot be undone. Active vendor orders will block deletion, and vendor products will be hidden safely."
+        loading={Boolean(deleteTarget && actionLoading === `delete:${deleteTarget.id}`)}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteSeller}
+      />
     </div>
   );
 }

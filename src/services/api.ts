@@ -873,6 +873,19 @@ export const sellerAPI = {
     });
     return parseApiResponse(res);
   },
+
+  async delete(id: string, data?: { reason?: string }) {
+    const res = await fetchWithAuthRetry(`/admin/vendors/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data || {}),
+    });
+    return parseApiResponse(res);
+  },
 };
 
 // ==================== PRODUCTS ====================
@@ -1502,6 +1515,19 @@ export const orderAPI = {
     });
     return parseApiResponse(res);
   },
+
+  async delete(id: string, data?: { reason?: string }) {
+    const res = await fetchWithAuthRetry(`/admin/orders/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data || {}),
+    });
+    return parseApiResponse(res);
+  },
 };
 
 export const codAPI = {
@@ -1912,6 +1938,19 @@ export const customerAPI = {
     });
     return parseApiResponse(res);
   },
+
+  async delete(id: string, data?: { reason?: string }) {
+    const res = await fetchWithAuthRetry(`/admin/customers/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data || {}),
+    });
+    return parseApiResponse(res);
+  },
 };
 
 export const adminOpsAPI = {
@@ -1925,6 +1964,33 @@ export const adminOpsAPI = {
   async getNotifications() {
     const res = await fetchWithAuthRetry('/admin/notifications', {
       headers: getAuthHeaders(),
+    });
+    return parseApiResponse(res);
+  },
+
+  async markNotificationRead(id: string) {
+    const res = await fetchWithAuthRetry(`/admin/notifications/${id}/read`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+    return parseApiResponse(res);
+  },
+
+  async markAllNotificationsRead() {
+    const res = await fetchWithAuthRetry('/admin/notifications/read-all', {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+    return parseApiResponse(res);
+  },
+
+  async deleteNotification(id: string) {
+    const res = await fetchWithAuthRetry(`/admin/notifications/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+      credentials: 'include',
     });
     return parseApiResponse(res);
   },

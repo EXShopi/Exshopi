@@ -109,6 +109,7 @@ export interface OrderDetailsModalProps {
     }
   ) => Promise<void> | void;
   onProcessRefund?: (action: 'approve' | 'reject') => Promise<void> | void;
+  onDelete?: () => void;
 }
 
 const STATUS_ACTIONS = [
@@ -143,6 +144,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   onStatusChange,
   onUpdateDispatch,
   onProcessRefund,
+  onDelete,
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'label'>('overview');
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -210,6 +212,14 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                 <Wallet className="h-4 w-4" />
                 Export Invoice
               </button>
+              {onDelete ? (
+                <button
+                  onClick={onDelete}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-rose-500/20 px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-white transition hover:bg-rose-500/30"
+                >
+                  Delete Order
+                </button>
+              ) : null}
               <button
                 onClick={onClose}
                 className="inline-flex items-center justify-center rounded-2xl bg-white/10 p-3 text-white transition hover:bg-white/20"
