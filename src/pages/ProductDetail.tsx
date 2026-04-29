@@ -1706,12 +1706,12 @@ const productSchema = product
       <div className="mx-auto max-w-[1800px] px-4 py-7 md:px-6 md:py-8">
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-5">
           <div className="xl:col-span-5">
-            <div className="sticky top-[150px] overflow-visible rounded-[34px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.98))] shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-white/70 max-md:backdrop-blur-0 md:shadow-[0_26px_70px_rgba(15,23,42,0.10)] md:backdrop-blur-sm">
-              <div className="relative aspect-[1/1.02] overflow-hidden rounded-t-[34px] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_30%),linear-gradient(180deg,#ffffff,#f3f6fb)] before:absolute before:inset-[7%] before:rounded-[2rem] before:bg-white/70 before:shadow-[0_30px_90px_rgba(15,23,42,0.08)] before:content-['']">
+            <div className="sticky top-[150px] overflow-visible rounded-[34px] border border-slate-200/90 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-white/70 max-md:backdrop-blur-0 md:shadow-[0_26px_70px_rgba(15,23,42,0.10)] md:backdrop-blur-sm">
+              <div className="relative aspect-[1/1.02] overflow-hidden rounded-t-[34px] bg-white">
                 <img
                   src={primaryProductImage}
                   alt={buildProductImageAlt(product, mainImage)}
-                  className="relative z-10 h-full w-full object-contain p-8 drop-shadow-[0_20px_40px_rgba(15,23,42,0.14)] transition duration-500 ease-out hover:scale-[1.075]"
+                  className="relative z-10 block h-full max-h-full w-full max-w-full object-contain object-center p-6 md:p-8"
                   loading={mainImage === 0 ? "eager" : "lazy"}
                   fetchPriority={mainImage === 0 ? "high" : "auto"}
                   decoding="async"
@@ -1726,7 +1726,7 @@ const productSchema = product
                 ) : null}
               </div>
 
-              <div className="border-t border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,251,255,0.98))] p-5">
+              <div className="border-t border-slate-200/90 bg-white p-5">
                 <div className="flex gap-3 overflow-x-auto pb-1">
                   {productImages.map((img, idx) => (
                     <button
@@ -1747,7 +1747,7 @@ const productSchema = product
                       <img
                         src={img}
                         alt={buildProductImageAlt(product, idx)}
-                        className="pointer-events-none h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        className="pointer-events-none block h-full max-h-full w-full max-w-full object-contain object-center p-2"
                         loading="lazy"
                         decoding="async"
                         width={96}
