@@ -661,6 +661,70 @@ function buildDefaultHighlights(fieldRow: BulkUploadEditableRow) {
   return dedupe([...flattened, ...fallbacks]).slice(0, 10);
 }
 
+function extractFirstMatch(patterns: RegExp[], corpus: string) {
+  for (const pattern of patterns) {
+    const match = corpus.match(pattern);
+    if (match?.[1]) return text(match[1]);
+    if (match?.[0]) return text(match[0]);
+  }
+  return '';
+}
+
+function inferMobileColor(fieldRow: BulkUploadEditableRow) {
+  if (fieldRow.color) return fieldRow.color;
+  const corpus = `${fieldRow.productTitle} ${fieldRow.shortDescription} ${fieldRow.longDescription} ${fieldRow.productHighlights}`;
+  return extractFirstMatch(
+    [
+      /\b(Phantom Gray|Phantom Black|Phantom Silver|Phantom Violet|Phantom Green|Cosmic Black|Cosmic Gray|Space Gray|Space Grey|Midnight|Starlight|Natural Titanium|Black Titanium|White Titanium|Blue Titanium|Desert Titanium|Deep Purple|Sierra Blue|Alpine Green|Pacific Blue|Graphite|Silver|Gold|Blue|Purple|Green|Pink|Yellow|Black|White|Gray|Grey)\b/i,
+    ],
+    corpus
+  );
+}
+
+function inferStorage(fieldRow: BulkUploadEditableRow) {
+  if (fieldRow.storage) return fieldRow.storage;
+  const corpus = `${fieldRow.productTitle} ${fieldRow.shortDescription} ${fieldRow.longDescription} ${fieldRow.productHighlights}`;
+  return extractFirstMatch([/\b(32GB|64GB|128GB|256GB|512GB|1TB|2TB)\b/i], corpus).toUpperCase();
+}
+
+function inferRam(fieldRow: BulkUploadEditableRow) {
+  if (fieldRow.ram) return fieldRow.ram;
+  const corpus = `${fieldRow.productTitle} ${fieldRow.shortDescription} ${fieldRow.longDescription} ${fieldRow.productHighlights}`;
+  return extractFirstMatch([/\b(2GB|4GB|6GB|8GB|12GB|16GB|24GB|32GB|64GB)\s*RAM\b/i, /\b(2GB|4GB|6GB|8GB|12GB|16GB|24GB|32GB|64GB)\b/i], corpus).toUpperCase().replace(/\s+RAM$/i, '');
+}
+
+function inferScreenSize(fieldRow: BulkUploadEditableRow) {
+  if (fieldRow.screenSize) return fieldRow.screenSize;
+  const corpus = `${fieldRow.productTitle} ${fieldRow.shortDescription} ${fieldRow.longDescription} ${fieldRow.productHighlights}`;
+  return extractFirstMatch([/\b(\d{1,2}(?:\.\d{1,2})?\s*(?:-| )?inch)\b/i, /\b(\d{1,2}(?:\.\d{1,2})?\")/i], corpus)
+    .replace(/"/g, '-inch')
+    .replace(/\s+/g, ' ');
+}
+
+function inferProcessor(fieldRow: BulkUploadEditableRow) {
+  if (fieldRow.processor) return fieldRow.processor;
+  const corpus = `${fieldRow.productTitle} ${fieldRow.shortDescription} ${fieldRow.longDescription} ${fieldRow.productHighlights}`;
+  return extractFirstMatch(
+    [
+      /\b(A\d{2}\s*Pro|A\d{2}\s*Bionic|A\d{1,2}|Snapdragon\s*[\w+ -]+|Exynos\s*[\w+ -]+|Tensor\s*G\d|M1|M2|M3)\b/i,
+      /\b(CPU:\s*[^,\n|•]+)/i,
+    ],
+    corpus
+  ).replace(/^CPU:\s*/i, '');
+}
+
+function inferNetwork(fieldRow: BulkUploadEditableRow) {
+  if (fieldRow.network) return fieldRow.network;
+  const corpus = `${fieldRow.productTitle} ${fieldRow.shortDescription} ${fieldRow.longDescription} ${fieldRow.productHighlights}`;
+  return extractFirstMatch([/\b(5G|4G LTE|Wi-?Fi \+ Cellular|Wi-?Fi)\b/i], corpus);
+}
+
+function inferSimType(fieldRow: BulkUploadEditableRow) {
+  if (fieldRow.simType) return fieldRow.simType;
+  const corpus = `${fieldRow.productTitle} ${fieldRow.shortDescription} ${fieldRow.longDescription} ${fieldRow.productHighlights}`;
+  return extractFirstMatch([/\b(Dual SIM \+ eSIM|Dual SIM|Single SIM|eSIM)\b/i], corpus);
+}
+
 function resolveCategoryMatch(
   categories: ReturnType<typeof normalizeCategories>,
   fieldRow: BulkUploadEditableRow
@@ -1055,24 +1119,31 @@ export function buildBulkImportPayload(input: {
   ].filter(Boolean);
 
   const processorBrand = inferProcessorBrand(fieldRow);
+  const inferredColor = inferMobileColor(fieldRow);
+  const inferredStorage = inferStorage(fieldRow);
+  const inferredRam = inferRam(fieldRow);
+  const inferredScreenSize = inferScreenSize(fieldRow);
+  const inferredProcessor = inferProcessor(fieldRow);
+  const inferredNetwork = inferNetwork(fieldRow);
+  const inferredSimType = inferSimType(fieldRow);
   const specificationValues = {
     brand: fieldRow.brand,
     model: fieldRow.model || fieldRow.productTitle,
     series: fieldRow.model,
     product_type: fieldRow.productType,
     condition: fieldRow.condition || 'Refurbished',
-    color: fieldRow.color,
-    storage: fieldRow.storage,
-    ram: fieldRow.ram,
+    color: inferredColor,
+    storage: inferredStorage,
+    ram: inferredRam,
     size: fieldRow.size,
     capacity: fieldRow.capacity,
     material: fieldRow.material,
     connectivity: fieldRow.connectivity,
     compatibility: fieldRow.compatibility,
     processorBrand,
-    processor: fieldRow.processor,
+    processor: inferredProcessor,
     generation: '',
-    screenSize: fieldRow.screenSize,
+    screenSize: inferredScreenSize,
     screenResolution: '',
     graphics: fieldRow.graphics,
     operatingSystem: fieldRow.operatingSystem,
@@ -1082,8 +1153,8 @@ export function buildBulkImportPayload(input: {
     camera: fieldRow.camera,
     refreshRate: fieldRow.refreshRate,
     chipset: fieldRow.chipset,
-    network: fieldRow.network,
-    simType: fieldRow.simType,
+    network: inferredNetwork,
+    simType: inferredSimType,
     warranty: fieldRow.warranty,
     boxContents: boxContents,
     dimensions: fieldRow.dimensions,
