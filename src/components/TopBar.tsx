@@ -44,10 +44,9 @@ export default function TopBar() {
 
   useEffect(() => {
     if (previousCountryRef.current === selectedCountry) return;
+    const nextCountry = COUNTRY_CONFIG[selectedCountry];
     setCountryToast(
-      selectedCountry === "SA"
-        ? "Prices updated for Saudi Arabia (SAR)"
-        : "Prices updated for UAE (AED)"
+      `Prices updated for ${nextCountry.name} (${nextCountry.currency})`
     );
     previousCountryRef.current = selectedCountry;
     const timer = window.setTimeout(() => setCountryToast(""), 2400);

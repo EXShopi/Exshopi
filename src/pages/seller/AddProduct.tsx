@@ -41,6 +41,7 @@ import {
   slugifySeo,
   trimSeoKeywords,
 } from '../../utils/seo';
+import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, convertFromAed } from '../../lib/countryConfig';
 
 type FormState = {
   title: string;
@@ -50,9 +51,17 @@ type FormState = {
   price: string;
   priceUae: string;
   priceKsa: string;
+  priceQatar: string;
+  priceKuwait: string;
+  priceBahrain: string;
+  priceOman: string;
   originalPrice: string;
   compareAtPriceUae: string;
   compareAtPriceKsa: string;
+  compareAtPriceQatar: string;
+  compareAtPriceKuwait: string;
+  compareAtPriceBahrain: string;
+  compareAtPriceOman: string;
   stock: string;
   sku: string;
   brand: string;
@@ -216,9 +225,17 @@ type ProductPayload = {
   price: number;
   priceUae?: number;
   priceKsa?: number;
+  priceQatar?: number;
+  priceKuwait?: number;
+  priceBahrain?: number;
+  priceOman?: number;
   originalPrice: number;
   compareAtPriceUae?: number;
   compareAtPriceKsa?: number;
+  compareAtPriceQatar?: number;
+  compareAtPriceKuwait?: number;
+  compareAtPriceBahrain?: number;
+  compareAtPriceOman?: number;
   salePrice?: number;
   image: string;
   images: string[];
@@ -256,6 +273,8 @@ type ProductPayload = {
     whatsInTheBox: string[];
     searchTags: string[];
     variantAttributes: VariantDimensionKey[];
+    basePriceAED?: number;
+    pricesByCountry?: Record<string, { currency: string; price: number; compareAtPrice: number }>;
     metaTitle: string;
     metaDescription: string;
     metaKeywords: string;
@@ -343,9 +362,17 @@ const initialFormState: FormState = {
   price: '',
   priceUae: '',
   priceKsa: '',
+  priceQatar: '',
+  priceKuwait: '',
+  priceBahrain: '',
+  priceOman: '',
   originalPrice: '',
   compareAtPriceUae: '',
   compareAtPriceKsa: '',
+  compareAtPriceQatar: '',
+  compareAtPriceKuwait: '',
+  compareAtPriceBahrain: '',
+  compareAtPriceOman: '',
   stock: '',
   sku: '',
   brand: '',
@@ -373,6 +400,19 @@ const stepMeta: { id: StepId; label: string; description: string }[] = [
   { id: 'shipping', label: 'Shipping', description: 'Weight, size, returns, warranty' },
   { id: 'seo', label: 'SEO', description: 'Tags and metadata' },
   { id: 'preview', label: 'Preview', description: 'Review and publish' },
+];
+
+const GCC_PRICE_FIELDS: Array<{
+  code: (typeof SUPPORTED_COUNTRY_CODES)[number];
+  priceKey: keyof FormState;
+  compareKey: keyof FormState;
+}> = [
+  { code: 'AE', priceKey: 'priceUae', compareKey: 'compareAtPriceUae' },
+  { code: 'SA', priceKey: 'priceKsa', compareKey: 'compareAtPriceKsa' },
+  { code: 'QA', priceKey: 'priceQatar', compareKey: 'compareAtPriceQatar' },
+  { code: 'KW', priceKey: 'priceKuwait', compareKey: 'compareAtPriceKuwait' },
+  { code: 'BH', priceKey: 'priceBahrain', compareKey: 'compareAtPriceBahrain' },
+  { code: 'OM', priceKey: 'priceOman', compareKey: 'compareAtPriceOman' },
 ];
 
 const createVariantRow = (): VariantRow => ({
@@ -845,9 +885,17 @@ useEffect(() => {
           price: String(product.price ?? ''),
           priceUae: String((product as any).priceUae ?? product.price ?? ''),
           priceKsa: String((product as any).priceKsa ?? ''),
+          priceQatar: String((product as any).priceQatar ?? product.specs?.pricesByCountry?.QA?.price ?? ''),
+          priceKuwait: String((product as any).priceKuwait ?? product.specs?.pricesByCountry?.KW?.price ?? ''),
+          priceBahrain: String((product as any).priceBahrain ?? product.specs?.pricesByCountry?.BH?.price ?? ''),
+          priceOman: String((product as any).priceOman ?? product.specs?.pricesByCountry?.OM?.price ?? ''),
           originalPrice: String(product.originalPrice ?? product.price ?? ''),
           compareAtPriceUae: String((product as any).compareAtPriceUae ?? product.originalPrice ?? product.price ?? ''),
           compareAtPriceKsa: String((product as any).compareAtPriceKsa ?? ''),
+          compareAtPriceQatar: String((product as any).compareAtPriceQatar ?? product.specs?.pricesByCountry?.QA?.compareAtPrice ?? ''),
+          compareAtPriceKuwait: String((product as any).compareAtPriceKuwait ?? product.specs?.pricesByCountry?.KW?.compareAtPrice ?? ''),
+          compareAtPriceBahrain: String((product as any).compareAtPriceBahrain ?? product.specs?.pricesByCountry?.BH?.compareAtPrice ?? ''),
+          compareAtPriceOman: String((product as any).compareAtPriceOman ?? product.specs?.pricesByCountry?.OM?.compareAtPrice ?? ''),
           stock: String(product.stock ?? ''),
           sku: editingId ? product.sku || '' : '',
           brand: product.brand || product.specs?.attributes?.brand || '',
@@ -1450,6 +1498,46 @@ useEffect(() => {
       templateId: selectedSubcategorySlug,
       title: formData.title.trim(),
     });
+    const basePriceAed = formData.priceUae.trim() ? parseFloat(formData.priceUae) : Number.isFinite(basePrice) ? basePrice : 0;
+    const baseCompareAed = formData.compareAtPriceUae.trim()
+      ? parseFloat(formData.compareAtPriceUae)
+      : Number.isFinite(baseOriginalPrice)
+      ? baseOriginalPrice
+      : Number.isFinite(basePrice)
+      ? basePrice
+      : 0;
+    const pricesByCountry = {
+      AE: {
+        currency: 'AED',
+        price: basePriceAed,
+        compareAtPrice: baseCompareAed,
+      },
+      SA: {
+        currency: 'SAR',
+        price: formData.priceKsa.trim() ? parseFloat(formData.priceKsa) : convertFromAed(basePriceAed, 'SA'),
+        compareAtPrice: formData.compareAtPriceKsa.trim() ? parseFloat(formData.compareAtPriceKsa) : convertFromAed(baseCompareAed, 'SA'),
+      },
+      QA: {
+        currency: 'QAR',
+        price: formData.priceQatar.trim() ? parseFloat(formData.priceQatar) : convertFromAed(basePriceAed, 'QA'),
+        compareAtPrice: formData.compareAtPriceQatar.trim() ? parseFloat(formData.compareAtPriceQatar) : convertFromAed(baseCompareAed, 'QA'),
+      },
+      KW: {
+        currency: 'KWD',
+        price: formData.priceKuwait.trim() ? parseFloat(formData.priceKuwait) : convertFromAed(basePriceAed, 'KW'),
+        compareAtPrice: formData.compareAtPriceKuwait.trim() ? parseFloat(formData.compareAtPriceKuwait) : convertFromAed(baseCompareAed, 'KW'),
+      },
+      BH: {
+        currency: 'BHD',
+        price: formData.priceBahrain.trim() ? parseFloat(formData.priceBahrain) : convertFromAed(basePriceAed, 'BH'),
+        compareAtPrice: formData.compareAtPriceBahrain.trim() ? parseFloat(formData.compareAtPriceBahrain) : convertFromAed(baseCompareAed, 'BH'),
+      },
+      OM: {
+        currency: 'OMR',
+        price: formData.priceOman.trim() ? parseFloat(formData.priceOman) : convertFromAed(basePriceAed, 'OM'),
+        compareAtPrice: formData.compareAtPriceOman.trim() ? parseFloat(formData.compareAtPriceOman) : convertFromAed(baseCompareAed, 'OM'),
+      },
+    };
 
     return {
       categoryId: selectedCategoryId,
@@ -1465,21 +1553,23 @@ useEffect(() => {
       title: formData.title.trim(),
       description: descriptionParts.join('\n\n'),
       price: Number.isFinite(basePrice) ? basePrice : 0,
-      priceUae: formData.priceUae.trim() ? parseFloat(formData.priceUae) : Number.isFinite(basePrice) ? basePrice : 0,
+      priceUae: basePriceAed,
       priceKsa: formData.priceKsa.trim() ? parseFloat(formData.priceKsa) : undefined,
+      priceQatar: formData.priceQatar.trim() ? parseFloat(formData.priceQatar) : undefined,
+      priceKuwait: formData.priceKuwait.trim() ? parseFloat(formData.priceKuwait) : undefined,
+      priceBahrain: formData.priceBahrain.trim() ? parseFloat(formData.priceBahrain) : undefined,
+      priceOman: formData.priceOman.trim() ? parseFloat(formData.priceOman) : undefined,
       originalPrice: Number.isFinite(baseOriginalPrice)
         ? baseOriginalPrice
         : Number.isFinite(basePrice)
         ? basePrice
         : 0,
-      compareAtPriceUae: formData.compareAtPriceUae.trim()
-        ? parseFloat(formData.compareAtPriceUae)
-        : Number.isFinite(baseOriginalPrice)
-        ? baseOriginalPrice
-        : Number.isFinite(basePrice)
-        ? basePrice
-        : 0,
+      compareAtPriceUae: baseCompareAed,
       compareAtPriceKsa: formData.compareAtPriceKsa.trim() ? parseFloat(formData.compareAtPriceKsa) : undefined,
+      compareAtPriceQatar: formData.compareAtPriceQatar.trim() ? parseFloat(formData.compareAtPriceQatar) : undefined,
+      compareAtPriceKuwait: formData.compareAtPriceKuwait.trim() ? parseFloat(formData.compareAtPriceKuwait) : undefined,
+      compareAtPriceBahrain: formData.compareAtPriceBahrain.trim() ? parseFloat(formData.compareAtPriceBahrain) : undefined,
+      compareAtPriceOman: formData.compareAtPriceOman.trim() ? parseFloat(formData.compareAtPriceOman) : undefined,
       salePrice:
         Number.isFinite(baseOriginalPrice) &&
         Number.isFinite(basePrice) &&
@@ -1514,6 +1604,8 @@ useEffect(() => {
         whatsInTheBox,
         searchTags,
         variantAttributes: enabledVariantDimensions,
+        basePriceAED: basePriceAed,
+        pricesByCountry,
         metaTitle: normalizeSeoText(formData.metaTitle || generatedSeoDefaults.metaTitle),
         metaDescription: normalizeSeoText(formData.metaDescription || generatedSeoDefaults.metaDescription),
         metaKeywords: trimSeoKeywords(formData.metaKeywords || generatedSeoDefaults.metaKeywords || searchTags.join(', ')),
@@ -1973,7 +2065,7 @@ useEffect(() => {
             <div>
               <h2 className="text-xl font-black text-slate-900">Pricing & Inventory</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Set base price and stock. Add variants if the product has multiple options.
+                Set your AED base price, then override any GCC market manually when needed. Leave country fields empty to auto-convert from AED.
               </p>
             </div>
 
@@ -1990,53 +2082,57 @@ useEffect(() => {
                 />
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">UAE Price (AED)</label>
-                <input
-                  name="priceUae"
-                  type="number"
-                  value={formData.priceUae}
-                  onChange={handleInputChange}
-                  placeholder="599"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
+              {GCC_PRICE_FIELDS.map(({ code, priceKey, compareKey }) => {
+                const countryConfig = COUNTRY_CONFIG[code];
+                const fallbackPrice = formData.priceUae.trim()
+                  ? convertFromAed(formData.priceUae, code)
+                  : formData.price.trim()
+                    ? convertFromAed(formData.price, code)
+                    : 0;
+                const fallbackCompare = formData.compareAtPriceUae.trim()
+                  ? convertFromAed(formData.compareAtPriceUae, code)
+                  : formData.originalPrice.trim()
+                    ? convertFromAed(formData.originalPrice, code)
+                    : 0;
 
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">KSA Price (SAR)</label>
-                <input
-                  name="priceKsa"
-                  type="number"
-                  value={formData.priceKsa}
-                  onChange={handleInputChange}
-                  placeholder="610"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
+                return (
+                  <React.Fragment key={code}>
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-700">
+                        {countryConfig.shortName} Price ({countryConfig.currency})
+                      </label>
+                      <input
+                        name={priceKey}
+                        type="number"
+                        value={formData[priceKey]}
+                        onChange={handleInputChange}
+                        placeholder={fallbackPrice ? String(fallbackPrice) : countryConfig.currency}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                      />
+                      <p className="mt-2 text-xs text-slate-500">
+                        Leave blank to auto-convert from the AED base price.
+                      </p>
+                    </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">UAE Compare Price</label>
-                <input
-                  name="compareAtPriceUae"
-                  type="number"
-                  value={formData.compareAtPriceUae}
-                  onChange={handleInputChange}
-                  placeholder="699"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">KSA Compare Price</label>
-                <input
-                  name="compareAtPriceKsa"
-                  type="number"
-                  value={formData.compareAtPriceKsa}
-                  onChange={handleInputChange}
-                  placeholder="710"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-700">
+                        {countryConfig.shortName} Compare Price ({countryConfig.currency})
+                      </label>
+                      <input
+                        name={compareKey}
+                        type="number"
+                        value={formData[compareKey]}
+                        onChange={handleInputChange}
+                        placeholder={fallbackCompare ? String(fallbackCompare) : countryConfig.currency}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                      />
+                      <p className="mt-2 text-xs text-slate-500">
+                        Optional manual strike-through price for {countryConfig.shortName}.
+                      </p>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
 
               <div>
                 <label className="mb-2 block text-sm font-bold text-slate-700">Stock *</label>

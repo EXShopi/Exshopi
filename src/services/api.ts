@@ -535,6 +535,22 @@ function normalizeProductPayload(input: any) {
       data.priceKsa != null && String(data.priceKsa).trim() !== ''
         ? Number(data.priceKsa)
         : null,
+    priceQatar:
+      data.priceQatar != null && String(data.priceQatar).trim() !== ''
+        ? Number(data.priceQatar)
+        : null,
+    priceKuwait:
+      data.priceKuwait != null && String(data.priceKuwait).trim() !== ''
+        ? Number(data.priceKuwait)
+        : null,
+    priceBahrain:
+      data.priceBahrain != null && String(data.priceBahrain).trim() !== ''
+        ? Number(data.priceBahrain)
+        : null,
+    priceOman:
+      data.priceOman != null && String(data.priceOman).trim() !== ''
+        ? Number(data.priceOman)
+        : null,
     compareAtPriceUae:
       data.compareAtPriceUae != null && String(data.compareAtPriceUae).trim() !== ''
         ? Number(data.compareAtPriceUae)
@@ -543,7 +559,24 @@ function normalizeProductPayload(input: any) {
       data.compareAtPriceKsa != null && String(data.compareAtPriceKsa).trim() !== ''
         ? Number(data.compareAtPriceKsa)
         : null,
+    compareAtPriceQatar:
+      data.compareAtPriceQatar != null && String(data.compareAtPriceQatar).trim() !== ''
+        ? Number(data.compareAtPriceQatar)
+        : null,
+    compareAtPriceKuwait:
+      data.compareAtPriceKuwait != null && String(data.compareAtPriceKuwait).trim() !== ''
+        ? Number(data.compareAtPriceKuwait)
+        : null,
+    compareAtPriceBahrain:
+      data.compareAtPriceBahrain != null && String(data.compareAtPriceBahrain).trim() !== ''
+        ? Number(data.compareAtPriceBahrain)
+        : null,
+    compareAtPriceOman:
+      data.compareAtPriceOman != null && String(data.compareAtPriceOman).trim() !== ''
+        ? Number(data.compareAtPriceOman)
+        : null,
     images: Array.isArray(data.images) ? data.images : [],
+    specs: data.specs || {},
     status: productStatus,
     approval_status: approvalStatus,
     visibility_status: visibilityStatus,

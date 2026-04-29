@@ -150,6 +150,10 @@ export interface MarketplaceSettings {
     vatPercent: number;
     deliveryBaseAed: number;
     codEnabled: boolean;
+    exchangeRate?: number;
+    phoneCode?: string;
+    enabled?: boolean;
+    cities?: string[];
   }[];
 }
 
@@ -171,9 +175,17 @@ export interface Product {
   price: number;
   priceUae?: number;
   priceKsa?: number;
+  priceQatar?: number;
+  priceKuwait?: number;
+  priceBahrain?: number;
+  priceOman?: number;
   originalPrice: number;
   compareAtPriceUae?: number;
   compareAtPriceKsa?: number;
+  compareAtPriceQatar?: number;
+  compareAtPriceKuwait?: number;
+  compareAtPriceBahrain?: number;
+  compareAtPriceOman?: number;
   salePrice?: number;
   image: string;
   images: string[];
@@ -704,12 +716,12 @@ function defaultMarketplaceSettings(): MarketplaceSettings {
     lowStockThreshold: 5,
     maintenanceMode: false,
     countries: [
-      { code: 'AE', name: 'United Arab Emirates', currency: 'AED', vatPercent: 5, deliveryBaseAed: 10, codEnabled: true },
-      { code: 'SA', name: 'Saudi Arabia', currency: 'SAR', vatPercent: 15, deliveryBaseAed: 85, codEnabled: true },
-      { code: 'KW', name: 'Kuwait', currency: 'KWD', vatPercent: 0, deliveryBaseAed: 100, codEnabled: true },
-      { code: 'QA', name: 'Qatar', currency: 'QAR', vatPercent: 0, deliveryBaseAed: 100, codEnabled: true },
-      { code: 'BH', name: 'Bahrain', currency: 'BHD', vatPercent: 10, deliveryBaseAed: 100, codEnabled: true },
-      { code: 'OM', name: 'Oman', currency: 'OMR', vatPercent: 5, deliveryBaseAed: 100, codEnabled: true },
+      { code: 'AE', name: 'United Arab Emirates', currency: 'AED', vatPercent: 5, deliveryBaseAed: 10, codEnabled: true, exchangeRate: 1, phoneCode: '+971', enabled: true, cities: ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain', 'Al Ain'] },
+      { code: 'SA', name: 'Saudi Arabia', currency: 'SAR', vatPercent: 15, deliveryBaseAed: 100, codEnabled: true, exchangeRate: 1.02, phoneCode: '+966', enabled: true, cities: ['Riyadh', 'Jeddah', 'Makkah', 'Madinah', 'Dammam', 'Khobar', 'Dhahran', 'Taif', 'Tabuk', 'Abha', 'Khamis Mushait', 'Jizan', 'Hail', 'Al Qassim', 'Najran', 'Al Ahsa', 'Jubail', 'Yanbu'] },
+      { code: 'QA', name: 'Qatar', currency: 'QAR', vatPercent: 0, deliveryBaseAed: 100, codEnabled: true, exchangeRate: 0.99, phoneCode: '+974', enabled: true, cities: ['Doha', 'Al Rayyan', 'Al Wakrah', 'Al Khor', 'Lusail', 'Umm Salal', 'Mesaieed', 'Dukhan'] },
+      { code: 'KW', name: 'Kuwait', currency: 'KWD', vatPercent: 0, deliveryBaseAed: 8, codEnabled: true, exchangeRate: 0.083, phoneCode: '+965', enabled: true, cities: ['Kuwait City', 'Hawalli', 'Salmiya', 'Farwaniya', 'Ahmadi', 'Jahra', 'Fahaheel', 'Mangaf', 'Mahboula'] },
+      { code: 'BH', name: 'Bahrain', currency: 'BHD', vatPercent: 10, deliveryBaseAed: 10, codEnabled: true, exchangeRate: 0.102, phoneCode: '+973', enabled: true, cities: ['Manama', 'Riffa', 'Muharraq', 'Hamad Town', 'Isa Town', 'Sitra', 'Budaiya', 'Juffair'] },
+      { code: 'OM', name: 'Oman', currency: 'OMR', vatPercent: 5, deliveryBaseAed: 10, codEnabled: true, exchangeRate: 0.105, phoneCode: '+968', enabled: true, cities: ['Muscat', 'Salalah', 'Sohar', 'Nizwa', 'Sur', 'Seeb', 'Barka', 'Ibri', 'Rustaq'] },
     ],
   };
 }
@@ -975,11 +987,43 @@ private data!: DatabaseSchema;
           product.priceKsa != null && String(product.priceKsa).trim() !== ''
             ? Number(product.priceKsa)
             : undefined,
+        priceQatar:
+          product.priceQatar != null && String(product.priceQatar).trim() !== ''
+            ? Number(product.priceQatar)
+            : undefined,
+        priceKuwait:
+          product.priceKuwait != null && String(product.priceKuwait).trim() !== ''
+            ? Number(product.priceKuwait)
+            : undefined,
+        priceBahrain:
+          product.priceBahrain != null && String(product.priceBahrain).trim() !== ''
+            ? Number(product.priceBahrain)
+            : undefined,
+        priceOman:
+          product.priceOman != null && String(product.priceOman).trim() !== ''
+            ? Number(product.priceOman)
+            : undefined,
         originalPrice: Number(product.originalPrice || product.price || 0),
         compareAtPriceUae: Number(product.compareAtPriceUae || product.originalPrice || product.price || 0),
         compareAtPriceKsa:
           product.compareAtPriceKsa != null && String(product.compareAtPriceKsa).trim() !== ''
             ? Number(product.compareAtPriceKsa)
+            : undefined,
+        compareAtPriceQatar:
+          product.compareAtPriceQatar != null && String(product.compareAtPriceQatar).trim() !== ''
+            ? Number(product.compareAtPriceQatar)
+            : undefined,
+        compareAtPriceKuwait:
+          product.compareAtPriceKuwait != null && String(product.compareAtPriceKuwait).trim() !== ''
+            ? Number(product.compareAtPriceKuwait)
+            : undefined,
+        compareAtPriceBahrain:
+          product.compareAtPriceBahrain != null && String(product.compareAtPriceBahrain).trim() !== ''
+            ? Number(product.compareAtPriceBahrain)
+            : undefined,
+        compareAtPriceOman:
+          product.compareAtPriceOman != null && String(product.compareAtPriceOman).trim() !== ''
+            ? Number(product.compareAtPriceOman)
             : undefined,
         stock: Number(product.stock || 0),
         slug: product.slug || '',

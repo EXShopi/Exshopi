@@ -8,7 +8,7 @@ export function getExShopiWhatsAppNumber() {
 
 export function buildCountryAwareWhatsAppMessage(countryCode?: string | null, productTitle?: string | null) {
   const country = getCountryConfig(countryCode);
-  const countryLabel = country.code === 'SA' ? 'Saudi Arabia' : 'UAE';
+  const countryLabel = country.name;
   if (productTitle) {
     return `Hi, I am from ${countryLabel} and I want to order this product from Exshopi: ${productTitle}`;
   }

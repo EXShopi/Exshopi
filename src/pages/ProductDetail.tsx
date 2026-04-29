@@ -990,7 +990,7 @@ export default function ProductDetail() {
     String(product?.description || "").replace(/\s+/g, " ").trim() ||
     productSeo.metaDescription;
   const resolvedProductMetaTitle = productTitle
-    ? `Buy ${productTitle} in ${country.code === "SA" ? "Saudi Arabia" : "UAE"} | Best Price | ExShopi`
+    ? `Buy ${productTitle} in ${country.name} | Best Price | ExShopi`
     : productSeo.metaTitle;
   const productReviewCount = reviews.length || Number(product?.reviews || 0);
   const productRatingValue =

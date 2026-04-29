@@ -87,13 +87,25 @@ function randomOtp() {
 
 export function normalizePhone(phone: string) {
   const raw = String(phone || '').replace(/[^\d+]/g, '');
-  if (raw.startsWith('+971')) return raw;
-  if (raw.startsWith('971')) return `+${raw}`;
-  if (raw.startsWith('05')) return `+971${raw.slice(1)}`;
-  if (raw.startsWith('5')) return `+971${raw}`;
-  if (raw.startsWith('+966')) return raw;
-  if (raw.startsWith('966')) return `+${raw}`;
-  return raw;
+  const configs = [
+    { prefix: '+971', code: '971', localMobile: /^0?5\d{8}$/ },
+    { prefix: '+966', code: '966', localMobile: /^0?5\d{8}$/ },
+    { prefix: '+974', code: '974', localMobile: /^\d{8}$/ },
+    { prefix: '+965', code: '965', localMobile: /^\d{8}$/ },
+    { prefix: '+973', code: '973', localMobile: /^\d{8}$/ },
+    { prefix: '+968', code: '968', localMobile: /^\d{8}$/ },
+  ];
+
+  for (const config of configs) {
+    if (raw.startsWith(config.prefix)) return raw;
+    if (raw.startsWith(config.code)) return `+${raw}`;
+    const digits = raw.replace(/[^\d]/g, '');
+    if (config.localMobile.test(digits)) {
+      return `${config.prefix}${digits.startsWith('0') ? digits.slice(1) : digits}`;
+    }
+  }
+
+  return raw.startsWith('+') ? raw : `+${raw}`;
 }
 
 export function isValidUaePhone(phone: string) {
@@ -116,10 +128,20 @@ export function isValidSaudiPhone(phone: string) {
 }
 
 export function isValidPhoneForCountry(phone: string, countryCode = 'AE') {
-  if (String(countryCode || 'AE').toUpperCase() === 'SA') {
-    return isValidSaudiPhone(phone);
+  switch (String(countryCode || 'AE').toUpperCase()) {
+    case 'SA':
+      return isValidSaudiPhone(phone);
+    case 'QA':
+      return /^\+974\d{8}$/.test(normalizePhone(phone));
+    case 'KW':
+      return /^\+965\d{8}$/.test(normalizePhone(phone));
+    case 'BH':
+      return /^\+973\d{8}$/.test(normalizePhone(phone));
+    case 'OM':
+      return /^\+968\d{8}$/.test(normalizePhone(phone));
+    default:
+      return isValidUaePhone(phone);
   }
-  return isValidUaePhone(phone);
 }
 
 export function createCodOtpSession(input: {

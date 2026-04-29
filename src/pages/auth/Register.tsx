@@ -33,7 +33,7 @@ import {
   sendFirebasePhoneCode,
   verifyFirebasePhoneCode,
 } from '../../lib/firebasePhoneVerification';
-import { getInvalidPhoneMessage, isValidPhoneForCountry, normalizePhoneByCountry } from '../../utils/phone';
+import { getInvalidPhoneMessage, getPhonePlaceholder, isValidPhoneForCountry, normalizePhoneByCountry } from '../../utils/phone';
 
 const REGISTER_FLOW_STORAGE_KEY = 'exshopi:register-flow:v1';
 const REGISTER_RECAPTCHA_CONTAINER_ID = 'register-recaptcha-container';
@@ -587,7 +587,7 @@ const Register = () => {
                         required
                         value={formData.phone}
                         onChange={handleChange}
-                        placeholder={selectedCountry === 'AE' ? '+971 50 123 4567' : '+966 5X XXX XXXX'}
+                        placeholder={getPhonePlaceholder(selectedCountry)}
                         className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all font-bold text-slate-900 placeholder:text-slate-300"
                       />
                     </div>

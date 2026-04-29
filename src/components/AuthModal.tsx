@@ -27,7 +27,7 @@ import { userAPI } from '../services/api';
 import { useAuthStore } from '../store/auth';
 import { useCountryStore } from '../store/country';
 import { auth } from '../supabaseClient';
-import { normalizePhoneByCountry } from '../utils/phone';
+import { getPhonePlaceholder, normalizePhoneByCountry } from '../utils/phone';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -49,7 +49,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     gender: '',
     address: '',
     city: '',
-    country: 'UAE',
+    country: 'AE',
     location: null as { lat: number; lng: number } | null,
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -57,8 +57,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const { user, setUser, setRole, setAccessToken, setSellerApplication } = useAuthStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const modalRef = useRef<HTMLDivElement>(null);
-  const phonePlaceholder = selectedCountry === 'AE' ? '+971 50 000 0000' : '+966 5X XXX XXXX';
+  const phonePlaceholder = getPhonePlaceholder(selectedCountry);
   const phoneOtpPreview = normalizePhoneByCountry(phone, selectedCountry) || phonePlaceholder;
+
+  useEffect(() => {
+    setProfileData((current) => (current.country === selectedCountry ? current : { ...current, country: selectedCountry }));
+  }, [selectedCountry]);
 
   useEffect(() => {
     const checkProfile = async () => {

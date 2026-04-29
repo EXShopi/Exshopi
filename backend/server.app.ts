@@ -97,6 +97,41 @@ const seoSlugify = (value: string) =>
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
 
+const GCC_COUNTRY_META: Record<string, { name: string; currency: string; priceKey?: string; compareKey?: string }> = {
+  AE: { name: 'United Arab Emirates', currency: 'AED', priceKey: 'priceUae', compareKey: 'compareAtPriceUae' },
+  SA: { name: 'Saudi Arabia', currency: 'SAR', priceKey: 'priceKsa', compareKey: 'compareAtPriceKsa' },
+  QA: { name: 'Qatar', currency: 'QAR', priceKey: 'priceQatar', compareKey: 'compareAtPriceQatar' },
+  KW: { name: 'Kuwait', currency: 'KWD', priceKey: 'priceKuwait', compareKey: 'compareAtPriceKuwait' },
+  BH: { name: 'Bahrain', currency: 'BHD', priceKey: 'priceBahrain', compareKey: 'compareAtPriceBahrain' },
+  OM: { name: 'Oman', currency: 'OMR', priceKey: 'priceOman', compareKey: 'compareAtPriceOman' },
+};
+
+function getCountryMeta(countryCode?: string | null) {
+  return GCC_COUNTRY_META[String(countryCode || 'AE').toUpperCase()] || GCC_COUNTRY_META.AE;
+}
+
+function readProductCountryPrice(product: any, countryCode?: string | null) {
+  const meta = getCountryMeta(countryCode);
+  const pricesByCountry = product?.pricesByCountry || product?.specs?.pricesByCountry || {};
+  const mapped = pricesByCountry?.[String(countryCode || 'AE').toUpperCase()]?.price;
+  if (mapped != null && String(mapped).trim() !== '') return Number(mapped);
+  if (meta.priceKey && product?.[meta.priceKey] != null && String(product[meta.priceKey]).trim() !== '') {
+    return Number(product[meta.priceKey]);
+  }
+  return Number(product?.priceUae ?? product?.price ?? product?.salePrice ?? 0);
+}
+
+function readProductCountryComparePrice(product: any, countryCode?: string | null) {
+  const meta = getCountryMeta(countryCode);
+  const pricesByCountry = product?.pricesByCountry || product?.specs?.pricesByCountry || {};
+  const mapped = pricesByCountry?.[String(countryCode || 'AE').toUpperCase()]?.compareAtPrice;
+  if (mapped != null && String(mapped).trim() !== '') return Number(mapped);
+  if (meta.compareKey && product?.[meta.compareKey] != null && String(product[meta.compareKey]).trim() !== '') {
+    return Number(product[meta.compareKey]);
+  }
+  return Number(product?.compareAtPriceUae ?? product?.originalPrice ?? product?.price ?? 0);
+}
+
 // ==================== CORS CONFIGURATION ====================
 const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '');
 const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
@@ -1281,6 +1316,10 @@ const createAdminProductRecord = async (payload: any) => {
     price: Number(payload.price || 0),
     priceUae: Number(payload.priceUae ?? payload.price ?? 0),
     priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
+    priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
+    priceKuwait: payload.priceKuwait != null ? Number(payload.priceKuwait) : undefined,
+    priceBahrain: payload.priceBahrain != null ? Number(payload.priceBahrain) : undefined,
+    priceOman: payload.priceOman != null ? Number(payload.priceOman) : undefined,
     originalPrice:
       payload.originalPrice != null ? Number(payload.originalPrice) : Number(payload.salePrice ?? payload.price ?? 0),
     compareAtPriceUae:
@@ -1288,6 +1327,10 @@ const createAdminProductRecord = async (payload: any) => {
         ? Number(payload.compareAtPriceUae)
         : Number(payload.originalPrice ?? payload.salePrice ?? payload.price ?? 0),
     compareAtPriceKsa: payload.compareAtPriceKsa != null ? Number(payload.compareAtPriceKsa) : undefined,
+    compareAtPriceQatar: payload.compareAtPriceQatar != null ? Number(payload.compareAtPriceQatar) : undefined,
+    compareAtPriceKuwait: payload.compareAtPriceKuwait != null ? Number(payload.compareAtPriceKuwait) : undefined,
+    compareAtPriceBahrain: payload.compareAtPriceBahrain != null ? Number(payload.compareAtPriceBahrain) : undefined,
+    compareAtPriceOman: payload.compareAtPriceOman != null ? Number(payload.compareAtPriceOman) : undefined,
     salePrice: payload.salePrice != null ? Number(payload.salePrice) : Number(payload.price || 0),
     image: payload.image || payload.images?.[0] || '',
     images: Array.isArray(payload.images) ? payload.images : [],
@@ -1681,9 +1724,17 @@ const productPayloadSchema = z.object({
   price: z.coerce.number().nonnegative(),
   priceUae: z.coerce.number().nonnegative().optional(),
   priceKsa: z.coerce.number().nonnegative().optional(),
+  priceQatar: z.coerce.number().nonnegative().optional(),
+  priceKuwait: z.coerce.number().nonnegative().optional(),
+  priceBahrain: z.coerce.number().nonnegative().optional(),
+  priceOman: z.coerce.number().nonnegative().optional(),
   originalPrice: z.coerce.number().nonnegative().optional(),
   compareAtPriceUae: z.coerce.number().nonnegative().optional(),
   compareAtPriceKsa: z.coerce.number().nonnegative().optional(),
+  compareAtPriceQatar: z.coerce.number().nonnegative().optional(),
+  compareAtPriceKuwait: z.coerce.number().nonnegative().optional(),
+  compareAtPriceBahrain: z.coerce.number().nonnegative().optional(),
+  compareAtPriceOman: z.coerce.number().nonnegative().optional(),
   salePrice: z.coerce.number().nonnegative().optional(),
   image: z.string().min(1),
   images: z.array(z.string().min(1)).optional().default([]),
@@ -1721,9 +1772,17 @@ const adminProductPayloadSchema = z.object({
   price: z.coerce.number().nonnegative().optional(),
   priceUae: z.coerce.number().nonnegative().optional(),
   priceKsa: z.coerce.number().nonnegative().optional(),
+  priceQatar: z.coerce.number().nonnegative().optional(),
+  priceKuwait: z.coerce.number().nonnegative().optional(),
+  priceBahrain: z.coerce.number().nonnegative().optional(),
+  priceOman: z.coerce.number().nonnegative().optional(),
   originalPrice: z.coerce.number().nonnegative().optional(),
   compareAtPriceUae: z.coerce.number().nonnegative().optional(),
   compareAtPriceKsa: z.coerce.number().nonnegative().optional(),
+  compareAtPriceQatar: z.coerce.number().nonnegative().optional(),
+  compareAtPriceKuwait: z.coerce.number().nonnegative().optional(),
+  compareAtPriceBahrain: z.coerce.number().nonnegative().optional(),
+  compareAtPriceOman: z.coerce.number().nonnegative().optional(),
   salePrice: z.coerce.number().nonnegative().optional(),
   image: z.string().optional().default(''),
   images: z.array(z.string().min(1)).optional().default([]),
@@ -2270,10 +2329,12 @@ const buildOrderPayloadFromItems = async ({
   const customer = prismaRuntime.enabled ? await prismaRuntime.getUser(customerId) : db.getUser(customerId);
 
   const settings = db.getMarketplaceSettings();
-  const matchedCountry = settings.countries.find((country) => country.code === deliveryCountry) || settings.countries[0];
+  const normalizedDeliveryCountry = String(deliveryCountry || 'AE').toUpperCase();
+  const matchedCountry = settings.countries.find((country) => country.code === normalizedDeliveryCountry) || settings.countries[0];
   const normalizedShippingCost = Number(shippingCost) || matchedCountry?.deliveryBaseAed || 10;
   const vatRate = (matchedCountry?.vatPercent || 0) / 100;
-  const orderCurrency = deliveryCountry === 'SA' ? 'SAR' : 'AED';
+  const orderMeta = getCountryMeta(normalizedDeliveryCountry);
+  const orderCurrency = matchedCountry?.currency || orderMeta.currency || 'AED';
 
   const items = await Promise.all(
     normalizedItems.map(async (item, index) => {
@@ -2303,9 +2364,7 @@ const buildOrderPayloadFromItems = async ({
       const effectiveUnitPrice = Number(
         item.unitPrice ??
           variant?.price ??
-          (deliveryCountry === 'SA'
-            ? ((product as any).priceKsa ?? (product as any).priceUae ?? product.salePrice ?? product.price)
-            : ((product as any).priceUae ?? product.salePrice ?? product.price)) ??
+          readProductCountryPrice(product, normalizedDeliveryCountry) ??
           0
       );
       const lineSubtotal = effectiveUnitPrice * quantity;
@@ -2326,11 +2385,9 @@ const buildOrderPayloadFromItems = async ({
         quantity,
         unitPrice: effectiveUnitPrice,
         compareAtPrice: Number(
-          deliveryCountry === 'SA'
-            ? ((product as any).compareAtPriceKsa ?? (product as any).compareAtPriceUae ?? product.originalPrice ?? 0)
-            : ((product as any).compareAtPriceUae ?? product.originalPrice ?? 0)
+          readProductCountryComparePrice(product, normalizedDeliveryCountry)
         ) || undefined,
-        priceSnapshotCountry: deliveryCountry,
+        priceSnapshotCountry: normalizedDeliveryCountry,
         priceSnapshotCurrency: orderCurrency,
         subtotal: lineSubtotal,
         vatAmount: lineVat,
@@ -2359,9 +2416,9 @@ const buildOrderPayloadFromItems = async ({
     addressLine: shippingAddress?.addressLine || shippingAddress?.street || '',
     street: shippingAddress?.street || shippingAddress?.addressLine || '',
     postalCode: shippingAddress?.postalCode || '',
-    country: shippingAddress?.country || deliveryCountry,
-    countryCode: shippingAddress?.countryCode || deliveryCountry,
-    countryName: shippingAddress?.countryName || (deliveryCountry === 'SA' ? 'Saudi Arabia' : 'United Arab Emirates'),
+    country: shippingAddress?.country || normalizedDeliveryCountry,
+    countryCode: shippingAddress?.countryCode || normalizedDeliveryCountry,
+    countryName: shippingAddress?.countryName || matchedCountry?.name || orderMeta.name,
     phone: shippingAddress?.phone || customerPhone || customer?.phone || '',
   };
 
@@ -3492,9 +3549,17 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         price: Number(payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
         priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
+        priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
+        priceKuwait: payload.priceKuwait != null ? Number(payload.priceKuwait) : undefined,
+        priceBahrain: payload.priceBahrain != null ? Number(payload.priceBahrain) : undefined,
+        priceOman: payload.priceOman != null ? Number(payload.priceOman) : undefined,
         originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
         compareAtPriceUae: Number(payload.compareAtPriceUae ?? payload.originalPrice ?? payload.price) || Number(payload.price) || 0,
         compareAtPriceKsa: payload.compareAtPriceKsa != null ? Number(payload.compareAtPriceKsa) : undefined,
+        compareAtPriceQatar: payload.compareAtPriceQatar != null ? Number(payload.compareAtPriceQatar) : undefined,
+        compareAtPriceKuwait: payload.compareAtPriceKuwait != null ? Number(payload.compareAtPriceKuwait) : undefined,
+        compareAtPriceBahrain: payload.compareAtPriceBahrain != null ? Number(payload.compareAtPriceBahrain) : undefined,
+        compareAtPriceOman: payload.compareAtPriceOman != null ? Number(payload.compareAtPriceOman) : undefined,
         salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
         image: payload.image,
         images: payload.images,
@@ -3537,9 +3602,17 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         price: Number(payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
         priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
+        priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
+        priceKuwait: payload.priceKuwait != null ? Number(payload.priceKuwait) : undefined,
+        priceBahrain: payload.priceBahrain != null ? Number(payload.priceBahrain) : undefined,
+        priceOman: payload.priceOman != null ? Number(payload.priceOman) : undefined,
         originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
         compareAtPriceUae: Number(payload.compareAtPriceUae ?? payload.originalPrice ?? payload.price) || Number(payload.price) || 0,
         compareAtPriceKsa: payload.compareAtPriceKsa != null ? Number(payload.compareAtPriceKsa) : undefined,
+        compareAtPriceQatar: payload.compareAtPriceQatar != null ? Number(payload.compareAtPriceQatar) : undefined,
+        compareAtPriceKuwait: payload.compareAtPriceKuwait != null ? Number(payload.compareAtPriceKuwait) : undefined,
+        compareAtPriceBahrain: payload.compareAtPriceBahrain != null ? Number(payload.compareAtPriceBahrain) : undefined,
+        compareAtPriceOman: payload.compareAtPriceOman != null ? Number(payload.compareAtPriceOman) : undefined,
         salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
         image: payload.image,
         images: payload.images,
@@ -3584,9 +3657,17 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         price: Number(payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
         priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
+        priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
+        priceKuwait: payload.priceKuwait != null ? Number(payload.priceKuwait) : undefined,
+        priceBahrain: payload.priceBahrain != null ? Number(payload.priceBahrain) : undefined,
+        priceOman: payload.priceOman != null ? Number(payload.priceOman) : undefined,
         originalPrice: Number(payload.originalPrice) || Number(payload.price) || 0,
         compareAtPriceUae: Number(payload.compareAtPriceUae ?? payload.originalPrice ?? payload.price) || Number(payload.price) || 0,
         compareAtPriceKsa: payload.compareAtPriceKsa != null ? Number(payload.compareAtPriceKsa) : undefined,
+        compareAtPriceQatar: payload.compareAtPriceQatar != null ? Number(payload.compareAtPriceQatar) : undefined,
+        compareAtPriceKuwait: payload.compareAtPriceKuwait != null ? Number(payload.compareAtPriceKuwait) : undefined,
+        compareAtPriceBahrain: payload.compareAtPriceBahrain != null ? Number(payload.compareAtPriceBahrain) : undefined,
+        compareAtPriceOman: payload.compareAtPriceOman != null ? Number(payload.compareAtPriceOman) : undefined,
         salePrice: Number(payload.salePrice) || Number(payload.price) || 0,
         image: payload.image,
         images: payload.images,

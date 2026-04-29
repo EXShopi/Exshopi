@@ -14,7 +14,6 @@ import { useCountryStore } from '../../store/country';
 import AuthService from '../../lib/authService';
 import { getCountryConfig } from '../../lib/countryConfig';
 import { sellerApplicationAPI } from '../../services/api';
-import { UAE_EMIRATES } from '../../lib/marketplaceTemplates';
 import { uploadDocumentFile, uploadImageFile } from '../../lib/uploadClient';
 import {
   getReadableFirebasePhoneVerificationError,
@@ -23,7 +22,7 @@ import {
   sendFirebasePhoneCode,
   verifyFirebasePhoneCode,
 } from '../../lib/firebasePhoneVerification';
-import { getInvalidPhoneMessage, isValidPhoneForCountry, normalizePhoneByCountry } from '../../utils/phone';
+import { getInvalidPhoneMessage, getPhonePlaceholder, isValidPhoneForCountry, normalizePhoneByCountry } from '../../utils/phone';
 
 type SellerType = 'individual' | 'company' | 'distributor';
 
@@ -201,7 +200,7 @@ export function SellerRegister() {
     if (!formData.password) return 'Password is required.';
     if (formData.password.length < 6) return 'Password must be at least 6 characters.';
     if (formData.password !== formData.confirmPassword) return 'Passwords do not match.';
-    if (!formData.emirate) return 'Please select an emirate.';
+    if (!formData.emirate) return `Please select your ${getCountryConfig(selectedCountry).addressLabels.city.toLowerCase()}.`;
     if (!formData.city.trim()) return 'City is required.';
     if (!formData.warehouseAddress.trim()) return 'Warehouse or pickup address is required.';
     return '';
@@ -587,7 +586,7 @@ export function SellerRegister() {
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    placeholder={selectedCountry === 'AE' ? '+971 5X XXX XXXX' : '+966 5X XXX XXXX'}
+                    placeholder={getPhonePlaceholder(selectedCountry)}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
                   />
                   <p className="mt-2 text-xs font-semibold text-slate-500">
@@ -628,8 +627,8 @@ export function SellerRegister() {
                     onChange={(e) => handleEmirateChange(e.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
                   >
-                    <option value="">Select emirate</option>
-                    {UAE_EMIRATES.map((emirate) => (
+                    <option value="">{`Select ${getCountryConfig(selectedCountry).addressLabels.city.toLowerCase()}`}</option>
+                    {getCountryConfig(selectedCountry).cities.map((emirate) => (
                       <option key={emirate} value={emirate}>
                         {emirate}
                       </option>

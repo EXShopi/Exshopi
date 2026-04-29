@@ -4,8 +4,25 @@ import { getSiteSettings, updateSiteSettings, SiteSettings, defaultSettings } fr
 import { adminOpsAPI } from '../../services/api';
 import { uploadImageFile } from '../../lib/uploadClient';
 import { getSeoLengthStatus, normalizeSeoText, trimSeoKeywords } from '../../lib/seo';
+import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES } from '../../lib/countryConfig';
 
 export function AdminSettings() {
+  const defaultMarketplaceCountries = SUPPORTED_COUNTRY_CODES.map((countryCode) => {
+    const config = COUNTRY_CONFIG[countryCode];
+    return {
+      code: config.code,
+      name: config.name,
+      currency: config.currency,
+      vatPercent: config.vatRate * 100,
+      deliveryBaseAed: config.shippingOptions[0]?.baseFeeAed ?? 10,
+      codEnabled: true,
+      exchangeRate: config.exchangeRateFromAed,
+      phoneCode: config.phonePrefix,
+      enabled: true,
+      cities: config.cities,
+    };
+  });
+
   const [settings, setSettings] = useState<SiteSettings>(defaultSettings);
   const [activeTab, setActiveTab] = useState('general');
   const [isLoading, setIsLoading] = useState(true);
@@ -18,7 +35,7 @@ export function AdminSettings() {
     defaultCountry: 'AE',
     lowStockThreshold: 5,
     maintenanceMode: false,
-    countries: [] as Array<{ code: string; name: string; currency: string; vatPercent: number; deliveryBaseAed: number; codEnabled: boolean }>,
+    countries: defaultMarketplaceCountries as Array<{ code: string; name: string; currency: string; vatPercent: number; deliveryBaseAed: number; codEnabled: boolean; exchangeRate?: number; phoneCode?: string; enabled?: boolean; cities?: string[] }>,
   });
 
   useEffect(() => {
@@ -39,12 +56,16 @@ export function AdminSettings() {
         }
 
         if (marketplaceResult.status === 'fulfilled' && marketplaceResult.value) {
+          const incomingByCode = new Map(
+            (Array.isArray(marketplaceResult.value?.countries) ? marketplaceResult.value.countries : []).map((country: any) => [country.code, country])
+          );
           setMarketplaceSettings((prev) => ({
             ...prev,
             ...marketplaceResult.value,
-            countries: Array.isArray(marketplaceResult.value?.countries)
-              ? marketplaceResult.value.countries
-              : prev.countries,
+            countries: defaultMarketplaceCountries.map((defaultCountry) => ({
+              ...defaultCountry,
+              ...(incomingByCode.get(defaultCountry.code) || {}),
+            })),
           }));
         } else if (marketplaceResult.status === 'rejected') {
           console.error('Error loading marketplace settings:', marketplaceResult.reason);
@@ -311,7 +332,13 @@ export function AdminSettings() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Default Country</label>
-                    <input type="text" value={marketplaceSettings.defaultCountry} onChange={e => setMarketplaceSettings(prev => ({ ...prev, defaultCountry: e.target.value }))} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20" />
+                    <select value={marketplaceSettings.defaultCountry} onChange={e => setMarketplaceSettings(prev => ({ ...prev, defaultCountry: e.target.value }))} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-bold outline-none focus:ring-2 focus:ring-violet-500/20">
+                      {SUPPORTED_COUNTRY_CODES.map((countryCode) => (
+                        <option key={countryCode} value={countryCode}>
+                          {COUNTRY_CONFIG[countryCode].name} ({countryCode})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Low Stock Threshold</label>
@@ -325,7 +352,7 @@ export function AdminSettings() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-black text-slate-900">Country Rules</h3>
                   {marketplaceSettings.countries.map((country, index) => (
-                    <div key={country.code} className="grid grid-cols-1 md:grid-cols-5 gap-4 rounded-3xl border border-slate-100 bg-slate-50 p-5">
+                    <div key={country.code} className="grid grid-cols-1 md:grid-cols-6 gap-4 rounded-3xl border border-slate-100 bg-slate-50 p-5">
                       <div>
                         <p className="text-xs font-black uppercase tracking-widest text-slate-400">Country</p>
                         <p className="mt-2 font-bold text-slate-900">{country.name} ({country.code})</p>
@@ -339,12 +366,28 @@ export function AdminSettings() {
                         <input type="number" value={country.vatPercent} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, vatPercent: parseFloat(e.target.value) || 0 } : item) }))} className="w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
                       </label>
                       <label className="space-y-2">
-                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Delivery Base AED</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Default Shipping Fee</span>
                         <input type="number" value={country.deliveryBaseAed} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, deliveryBaseAed: parseFloat(e.target.value) || 0 } : item) }))} className="w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Exchange Rate from AED</span>
+                        <input type="number" step="0.001" value={country.exchangeRate ?? 1} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, exchangeRate: parseFloat(e.target.value) || 0 } : item) }))} className="w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Phone Code</span>
+                        <input value={country.phoneCode ?? ''} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, phoneCode: e.target.value } : item) }))} className="w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
                       </label>
                       <label className="flex items-center gap-3 pt-8 font-bold text-slate-700">
                         <input type="checkbox" checked={country.codEnabled} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, codEnabled: e.target.checked } : item) }))} />
                         COD enabled
+                      </label>
+                      <label className="flex items-center gap-3 pt-8 font-bold text-slate-700">
+                        <input type="checkbox" checked={country.enabled ?? true} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: e.target.checked } : item) }))} />
+                        Country enabled
+                      </label>
+                      <label className="space-y-2 md:col-span-6">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Available Cities</span>
+                        <textarea value={(country.cities || []).join(', ')} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, cities: e.target.value.split(',').map((city) => city.trim()).filter(Boolean) } : item) }))} className="w-full min-h-[92px] rounded-2xl border border-slate-100 bg-white px-4 py-3 font-medium outline-none" />
                       </label>
                     </div>
                   ))}

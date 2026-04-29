@@ -336,6 +336,10 @@ function mapProduct(product: any): Product {
     price: toNumber(product.price),
     priceUae: toNumber((product as any).priceUae ?? product.price),
     priceKsa: (product as any).priceKsa != null ? toNumber((product as any).priceKsa) : undefined,
+    priceQatar: (product as any).priceQatar != null ? toNumber((product as any).priceQatar) : undefined,
+    priceKuwait: (product as any).priceKuwait != null ? toNumber((product as any).priceKuwait) : undefined,
+    priceBahrain: (product as any).priceBahrain != null ? toNumber((product as any).priceBahrain) : undefined,
+    priceOman: (product as any).priceOman != null ? toNumber((product as any).priceOman) : undefined,
     originalPrice: toNumber(product.originalPrice || product.salePrice || product.price),
     compareAtPriceUae:
       (product as any).compareAtPriceUae != null
@@ -344,6 +348,22 @@ function mapProduct(product: any): Product {
     compareAtPriceKsa:
       (product as any).compareAtPriceKsa != null
         ? toNumber((product as any).compareAtPriceKsa)
+        : undefined,
+    compareAtPriceQatar:
+      (product as any).compareAtPriceQatar != null
+        ? toNumber((product as any).compareAtPriceQatar)
+        : undefined,
+    compareAtPriceKuwait:
+      (product as any).compareAtPriceKuwait != null
+        ? toNumber((product as any).compareAtPriceKuwait)
+        : undefined,
+    compareAtPriceBahrain:
+      (product as any).compareAtPriceBahrain != null
+        ? toNumber((product as any).compareAtPriceBahrain)
+        : undefined,
+    compareAtPriceOman:
+      (product as any).compareAtPriceOman != null
+        ? toNumber((product as any).compareAtPriceOman)
         : undefined,
     salePrice: product.salePrice ? toNumber(product.salePrice) : undefined,
     image: primaryImage,
@@ -1351,9 +1371,17 @@ export const prismaRuntime = {
     price: input.price,
     priceUae: input.priceUae ?? input.price,
     priceKsa: input.priceKsa,
+    priceQatar: input.priceQatar,
+    priceKuwait: input.priceKuwait,
+    priceBahrain: input.priceBahrain,
+    priceOman: input.priceOman,
     originalPrice: input.originalPrice,
     compareAtPriceUae: input.compareAtPriceUae ?? input.originalPrice ?? input.price,
     compareAtPriceKsa: input.compareAtPriceKsa,
+    compareAtPriceQatar: input.compareAtPriceQatar,
+    compareAtPriceKuwait: input.compareAtPriceKuwait,
+    compareAtPriceBahrain: input.compareAtPriceBahrain,
+    compareAtPriceOman: input.compareAtPriceOman,
     salePrice: input.salePrice,
     currency: "AED",
     stock: input.stock,
@@ -1575,9 +1603,17 @@ export const prismaRuntime = {
         price: updates.price,
         priceUae: updates.priceUae,
         priceKsa: updates.priceKsa,
+        priceQatar: updates.priceQatar,
+        priceKuwait: updates.priceKuwait,
+        priceBahrain: updates.priceBahrain,
+        priceOman: updates.priceOman,
         originalPrice: updates.originalPrice,
         compareAtPriceUae: updates.compareAtPriceUae,
         compareAtPriceKsa: updates.compareAtPriceKsa,
+        compareAtPriceQatar: updates.compareAtPriceQatar,
+        compareAtPriceKuwait: updates.compareAtPriceKuwait,
+        compareAtPriceBahrain: updates.compareAtPriceBahrain,
+        compareAtPriceOman: updates.compareAtPriceOman,
         salePrice: updates.salePrice,
         stock: updates.stock,
           // keep explicit canonical slug columns in sync with specs

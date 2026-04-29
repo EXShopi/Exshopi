@@ -39,7 +39,7 @@ import {
   isSupportedCountryCode,
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
-import { getInvalidPhoneMessage, isValidPhoneForCountry, normalizePhoneByCountry } from "../utils/phone";
+import { getInvalidPhoneMessage, getPhonePlaceholder, isValidPhoneForCountry, normalizePhoneByCountry } from "../utils/phone";
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -466,9 +466,7 @@ export default function Checkout() {
         return "Please enter your email address.";
       }
       if (!isValidPhoneForCountry(form.phone, selectedCountry)) {
-        return selectedCountry === "AE"
-          ? "Please enter a valid UAE mobile number."
-          : "Please enter a valid Saudi mobile number.";
+        return getInvalidPhoneMessage(selectedCountry);
       }
       return "";
     }
@@ -478,7 +476,7 @@ export default function Checkout() {
         return `Please enter your ${country.addressLabels.address.toLowerCase()}.`;
       }
       if (!form.city.trim() || !country.cities.includes(form.city)) {
-        return selectedCountry === "AE" ? "Please select your Emirate." : "Please select your Region / City.";
+        return `Please select your ${country.addressLabels.city}.`;
       }
       if (!form.area.trim()) {
         return `Please enter your ${country.addressLabels.area.toLowerCase()}.`;
@@ -900,7 +898,7 @@ export default function Checkout() {
                         name="phone"
                         value={form.phone}
                         onChange={handleChange}
-                        placeholder={selectedCountry === 'AE' ? '+971 50 123 4567' : '+966 5X XXX XXXX'}
+                        placeholder={getPhonePlaceholder(selectedCountry)}
                         className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       />
                       <p className="mt-2 text-xs font-semibold text-slate-500">{country.shortName} mobile verification is required before COD order confirmation.</p>

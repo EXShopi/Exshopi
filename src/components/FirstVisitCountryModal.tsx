@@ -102,8 +102,7 @@ export default function FirstVisitCountryModal() {
         return {
           code: countryCode,
           title: config.name,
-          shortTitle:
-            countryCode === 'SA' ? t(language, 'saudi_arabia') : t(language, 'uae'),
+          shortTitle: config.shortName,
           subtitle: `${config.currency} • ${config.deliveryMessage}`,
           flag: getCountryFlag(countryCode),
         };
