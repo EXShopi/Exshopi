@@ -423,44 +423,56 @@ export function printOrderDocuments(orders: AdminOrderLike[], template: OrderLab
             )
             .join('')}
         </div>
+        <script>
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              try {
+                window.focus();
+                window.print();
+              } catch (error) {
+                console.error('Print failed', error);
+              }
+            }, 180);
+          });
+        </script>
       </body>
     </html>
   `;
 
-  const printWindow = window.open('', '_blank', 'noopener,width=1100,height=900');
+  const blob = new Blob([html], { type: 'text/html' });
+  const blobUrl = URL.createObjectURL(blob);
+  const printWindow = window.open(blobUrl, '_blank', 'width=1100,height=900');
   if (!printWindow) {
+    URL.revokeObjectURL(blobUrl);
     emitPrintErrorToast();
     return;
   }
 
   try {
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-
-    const runPrint = () => {
-      try {
-        printWindow.focus();
-        printWindow.print();
-      } catch {
-        emitPrintErrorToast();
-      }
+    const cleanup = () => {
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     };
-
-    if (printWindow.document.readyState === 'complete') {
-      window.setTimeout(runPrint, 150);
-      return;
-    }
-
-    printWindow.onload = () => {
-      window.setTimeout(runPrint, 150);
-    };
+    printWindow.addEventListener('afterprint', cleanup, { once: true });
+    printWindow.addEventListener(
+      'load',
+      () => {
+        window.setTimeout(() => {
+          try {
+            printWindow.focus();
+          } catch {
+            //
+          }
+        }, 80);
+      },
+      { once: true }
+    );
   } catch {
     try {
       printWindow.close();
     } catch {
       //
     }
+    URL.revokeObjectURL(blobUrl);
     emitPrintErrorToast();
   }
 }
