@@ -165,14 +165,14 @@ export function downloadBlob(filename: string, blob: Blob) {
 function buildLabelStyles(template: OrderLabelTemplate) {
   const pageSize =
     template === 'compact'
-      ? '@page { size: 4in 6in; margin: 8mm; }'
+      ? '@page { size: 4in 6in; margin: 6mm; }'
       : '@page { size: A4; margin: 12mm; }';
 
   return `
     ${pageSize}
     * { box-sizing: border-box; }
     body { margin: 0; background: #eef2ff; font-family: Inter, Arial, sans-serif; color: #0f172a; }
-    .sheet { width: 100%; max-width: ${template === 'compact' ? '380px' : '840px'}; margin: 0 auto; background: #fff; border: 1px solid #cbd5e1; border-radius: ${template === 'compact' ? '18px' : '28px'}; overflow: hidden; }
+    .sheet { width: 100%; max-width: ${template === 'compact' ? '100%' : '840px'}; margin: 0 auto; background: #fff; border: 1px solid #cbd5e1; border-radius: ${template === 'compact' ? '18px' : '28px'}; overflow: hidden; }
     .header { padding: ${template === 'compact' ? '18px' : '26px'}; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: white; }
     .eyebrow { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; opacity: .75; font-weight: 800; }
     .title { margin: 10px 0 0; font-size: ${template === 'compact' ? '24px' : '34px'}; font-weight: 900; }
@@ -195,11 +195,33 @@ function buildLabelStyles(template: OrderLabelTemplate) {
     .total-row strong { font-size: 15px; }
     .footer { padding: ${template === 'compact' ? '14px' : '18px 24px 24px'}; border-top: 1px solid #e2e8f0; background: #f8fafc; color: #475569; font-size: 11px; line-height: 1.6; }
     .print-actions { padding: 14px 0 0; text-align: center; }
+    .compact-summary { display: none; }
+    .compact-meta { display: none; }
+    .compact-grid { display: grid; gap: 12px; }
+    .compact-address { font-size: 13px; line-height: 1.55; font-weight: 700; color: #0f172a; }
     @media print {
       body { background: #fff; }
       .sheet { max-width: 100%; border-radius: 0; border: 0; box-shadow: none; }
       .print-actions { display: none !important; }
     }
+    ${template === 'compact' ? `
+      body { background: #fff; }
+      .sheet { width: 100%; max-width: 100%; min-height: calc(100vh - 12mm); border-radius: 0; border: 0; }
+      .header { padding: 16px 18px; }
+      .title { font-size: 28px; }
+      .subtitle { font-size: 12px; }
+      .section { padding: 10px 14px; }
+      .grid { gap: 10px; }
+      .panel { padding: 12px; border-radius: 16px; }
+      .tracking { padding: 10px; border-radius: 20px; }
+      .barcode { padding: 10px; margin-top: 10px; }
+      .barcode-code { font-size: 18px; letter-spacing: .16em; }
+      .qr { width: 82px; height: 82px; font-size: 9px; border-radius: 16px; }
+      .items, .compact-hide, .footer.compact-hide { display: none !important; }
+      .compact-summary { display: block; }
+      .compact-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; font-weight: 700; color: #334155; }
+      .compact-grid { grid-template-columns: 1fr; }
+    ` : ''}
   `;
 }
 
@@ -246,6 +268,10 @@ function buildOrderLabelSheetHtml(order: AdminOrderLike, template: OrderLabelTem
       : template === 'compact'
       ? 'Courier Label'
       : 'Dispatch Label';
+  const compactItems = (order.items || [])
+    .slice(0, 3)
+    .map((item) => `${Number(item.quantity || 1)}x ${item.title || 'Order item'}`)
+    .join(' • ');
 
   return `
         <div class="sheet">
@@ -291,6 +317,34 @@ function buildOrderLabelSheetHtml(order: AdminOrderLike, template: OrderLabelTem
               </div>
             </div>
           </div>
+          ${
+            template === 'compact'
+              ? `
+                <div class="section compact-summary">
+                  <div class="compact-grid">
+                    <div class="panel">
+                      <p class="label">Recipient</p>
+                      <p class="value">${escapeHtml(order.customerName || 'Customer')}</p>
+                      <p class="compact-address">${escapeHtml(address.full || 'Address unavailable')}<br />${escapeHtml(
+                        order.customerPhone || 'No phone'
+                      )}</p>
+                    </div>
+                    <div class="panel">
+                      <div class="compact-meta">
+                        <span>${escapeHtml(String(order.paymentMethod || 'COD').toUpperCase())}</span>
+                        <span>${formatOrderMoney(order, Number(order.totalAmount || 0))}</span>
+                      </div>
+                      <p class="label" style="margin-top:10px;">Seller</p>
+                      <p class="value">${escapeHtml(order.sellerName || 'ExShopi Fulfillment')}</p>
+                      <p class="muted">${escapeHtml(order.courierPartner || 'ExShopi Logistics')}</p>
+                      <p class="label" style="margin-top:12px;">Items</p>
+                      <p class="muted">${escapeHtml(compactItems || `${itemCount} item(s)`)}</p>
+                    </div>
+                  </div>
+                </div>
+              `
+              : ''
+          }
           <div class="section">
             <div class="grid">
               <div class="panel">
@@ -307,7 +361,7 @@ function buildOrderLabelSheetHtml(order: AdminOrderLike, template: OrderLabelTem
               </div>
             </div>
           </div>
-          <div class="section">
+          <div class="section compact-hide">
             <div class="grid">
               <div class="panel">
                 <p class="label">Order Summary</p>
@@ -343,7 +397,7 @@ function buildOrderLabelSheetHtml(order: AdminOrderLike, template: OrderLabelTem
               </div>
             </div>
           </div>
-          <div class="section">
+          <div class="section compact-hide">
             <p class="label">Item Summary</p>
             <table class="items">
               <thead>
@@ -359,12 +413,12 @@ function buildOrderLabelSheetHtml(order: AdminOrderLike, template: OrderLabelTem
           </div>
           ${
             order.dispatchNotes
-              ? `<div class="section"><div class="panel"><p class="label">Handling Notes</p><p class="muted">${escapeHtml(
+              ? `<div class="section compact-hide"><div class="panel"><p class="label">Handling Notes</p><p class="muted">${escapeHtml(
                   order.dispatchNotes
                 )}</p></div></div>`
               : ''
           }
-          <div class="footer">
+          <div class="footer ${template === 'compact' ? 'compact-hide' : ''}">
             ExShopi trusted marketplace dispatch label. Keep this shipment dry, scan at each handoff, and contact support@exshopi.com for operations issues.
           </div>
         </div>
