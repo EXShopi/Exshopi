@@ -178,6 +178,17 @@ function dedupe(values: string[]) {
   });
 }
 
+function buildSafeDraftSku(inputSku: string, rowNumber: number) {
+  const base = text(inputSku)
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9\-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+
+  return `${base || 'EXSHOPI-DRAFT'}-DRAFT-${rowNumber}`;
+}
+
 const PRODUCT_PLACEHOLDER_IMAGE = '/assets/product-placeholder.png';
 const LAPTOP_CATEGORY_SLUG = 'laptops';
 const LAPTOP_SUBCATEGORY_OPTIONS = [
@@ -891,7 +902,7 @@ export async function buildBulkUploadPreviewRows(input: {
       } else if (fieldRow.category && !categoryMatch.category) {
         errors.push('Needs category mapping');
       } else if (fieldRow.subcategory && !categoryMatch.subcategory && !isLaptopCategory) {
-        errors.push('Needs subcategory mapping');
+        warnings.push('Needs subcategory mapping');
       } else if (!fieldRow.subcategory && isLaptopCategory && categoryMatch.subcategory) {
         warnings.push(`Auto-mapped laptop subcategory: ${categoryMatch.subcategory.name}`);
       } else if (fieldRow.subcategory && isLaptopCategory && categoryMatch.subcategory) {
@@ -904,10 +915,15 @@ export async function buildBulkUploadPreviewRows(input: {
       }
 
       const normalizedSku = lower(fieldRow.sku);
+      const resolvedSku = normalizedSku && existingSkuSet.has(normalizedSku)
+        ? buildSafeDraftSku(fieldRow.sku, fieldRow.rowNumber)
+        : fieldRow.sku;
       if (normalizedSku) {
-        if (existingSkuSet.has(normalizedSku)) errors.push('Duplicate SKU already exists');
         if (seenSkus.has(normalizedSku)) errors.push('Duplicate SKU found in upload file');
         seenSkus.add(normalizedSku);
+        if (existingSkuSet.has(normalizedSku)) {
+          warnings.push(`Duplicate SKU already exists. Draft SKU will be changed to ${resolvedSku}`);
+        }
       }
 
       const normalizedSlug = lower(currentSlug);
@@ -966,6 +982,7 @@ export async function buildBulkUploadPreviewRows(input: {
         rowNumber: fieldRow.rowNumber,
         fields: {
           ...fieldRow,
+          sku: resolvedSku,
           seoSlug: fieldRow.seoSlug || currentSlug,
           sellerId: sellerMatch?.id || fieldRow.sellerId,
           sellerName: sellerMatch?.storeName || fieldRow.sellerName,
@@ -1020,7 +1037,6 @@ export function buildBulkImportPayload(input: {
   if (!fieldRow.productTitle) throw new Error('Product title is required.');
   if (!categoryMatch.parent) throw new Error('Valid parent category is required.');
   if (fieldRow.category && !categoryMatch.category) throw new Error('Valid category is required.');
-  if (fieldRow.subcategory && !categoryMatch.subcategory) throw new Error('Valid subcategory is required.');
   if (!sellerMatch) throw new Error('Valid seller is required.');
 
   const allImages = dedupe([fieldRow.mainImageUrl || PRODUCT_PLACEHOLDER_IMAGE, ...fieldRow.galleryImageUrls].filter(Boolean)).slice(0, 8);
@@ -1121,7 +1137,7 @@ export function buildBulkImportPayload(input: {
     image: allImages[0],
     images: allImages,
     stock: intValue(fieldRow.stockQuantity, 0),
-    sku: fieldRow.sku,
+    sku: fieldRow.sku || buildSafeDraftSku(fieldRow.productTitle || fieldRow.model || 'EXSHOPI', fieldRow.rowNumber),
     brand: fieldRow.brand,
     status: lifecycle.status as any,
     approvalStatus: lifecycle.approvalStatus as any,

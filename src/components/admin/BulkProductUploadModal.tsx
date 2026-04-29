@@ -624,6 +624,17 @@ const filterManagedMessages = (messages: string[], prefixes: string[]) =>
 const buildSeoSlug = (fields: BulkUploadEditableRow) =>
   slugifyValue(fields.seoSlug || fields.productTitle);
 
+const buildSafeDraftSku = (inputSku: string, rowNumber: number) => {
+  const base = normalizeText(inputSku)
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9\-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+
+  return `${base || 'EXSHOPI-DRAFT'}-DRAFT-${rowNumber}`;
+};
+
 const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[]) => {
   const skuCounts = new Map<string, number>();
   const slugCounts = new Map<string, number>();
@@ -660,7 +671,7 @@ const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[
     } else if (normalizeText(row.fields.category) && !branch) {
       errors.push('Needs category mapping');
     } else if (normalizeText(row.fields.subcategory) && !leaf && !isLaptopCategory) {
-      errors.push('Needs subcategory mapping');
+      warnings.push('Needs subcategory mapping');
     }
     if (sku && (skuCounts.get(sku) || 0) > 1) errors.push('Duplicate SKU found in upload file');
     if (slug && (slugCounts.get(slug) || 0) > 1) errors.push('Duplicate slug found in upload file');
@@ -672,11 +683,14 @@ const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[
     if (isLaptopCategory && leaf) {
       warnings.push(`Auto-mapped laptop subcategory: ${leaf.name}`);
     }
+    const duplicateExistingSkuWarning = row.warnings.find((issue) => issue.startsWith('Duplicate SKU already exists.'));
+    const nextSku = duplicateExistingSkuWarning ? buildSafeDraftSku(row.fields.sku, row.fields.rowNumber) : row.fields.sku;
 
     return {
       ...row,
       fields: {
         ...row.fields,
+        sku: nextSku,
         seoSlug: row.fields.seoSlug || buildSeoSlug(row.fields),
         subcategory: row.fields.subcategory || leaf?.name || '',
       },
