@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
-import { AlertCircle, CheckCircle2, Copy, Eye, Package2, Pencil, Search, Store, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Copy, Download, Eye, Package2, Pencil, Search, Store, Trash2, XCircle } from 'lucide-react';
 import { formatCurrencyForCountry } from '../../lib/currency';
 import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
@@ -23,6 +23,26 @@ const getEffectiveStatus = (product: any) => {
 
 const isSoftDeletedAdminProduct = (product: any) => {
   return isSoftDeletedProduct(product);
+};
+
+const escapeCsvValue = (value: unknown) => {
+  const stringValue = value == null ? '' : String(value);
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
+const downloadCsvFile = (filename: string, content: string) => {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 export function AdminProducts() {
@@ -167,6 +187,87 @@ export function AdminProducts() {
     }
   };
 
+  const exportProducts = (mode: 'all' | 'draft' | 'live') => {
+    const exportSet = products.filter((product) => {
+      const status = getEffectiveStatus(product);
+      if (mode === 'draft') return status === 'draft';
+      if (mode === 'live') return ['approved', 'live'].includes(status);
+      return true;
+    });
+
+    const columns = [
+      'id',
+      'sku',
+      'title',
+      'brand',
+      'model',
+      'sellerName',
+      'status',
+      'approvalStatus',
+      'visibilityStatus',
+      'priceUae',
+      'priceKsa',
+      'stock',
+      'slug',
+      'parentCategory',
+      'category',
+      'subcategory',
+      'metaTitle',
+      'metaDescription',
+      'description',
+      'shortDescription',
+      'longDescription',
+      'keyFeatures',
+      'sellerNotes',
+      'buyerNotes',
+      'image',
+      'createdAt',
+      'updatedAt',
+    ];
+
+    const rows = exportSet.map((product) => {
+      const specs = product.specs || {};
+      return {
+        id: product.id,
+        sku: product.sku || '',
+        title: product.title || '',
+        brand: product.brand || specs.brand || '',
+        model: specs.model || product.model || '',
+        sellerName: product.sellerName || product.soldByLabel || 'ExShopi Official',
+        status: getEffectiveStatus(product),
+        approvalStatus: product.approvalStatus || '',
+        visibilityStatus: product.visibilityStatus || '',
+        priceUae: product.priceUae ?? product.price ?? '',
+        priceKsa: product.priceKsa ?? '',
+        stock: product.stock ?? '',
+        slug: product.slug || '',
+        parentCategory: product.parentCategory || specs.parentCategoryName || specs.parentCategorySlug || '',
+        category: product.category || specs.categoryName || specs.categorySlug || '',
+        subcategory: product.subcategory || specs.subcategoryName || specs.subcategorySlug || '',
+        metaTitle: product.metaTitle || '',
+        metaDescription: product.metaDescription || '',
+        description: product.description || '',
+        shortDescription: specs.shortDescription || '',
+        longDescription: specs.longDescription || '',
+        keyFeatures: Array.isArray(specs.keyFeatures) ? specs.keyFeatures.join(' | ') : specs.keyFeatures || '',
+        sellerNotes: specs.sellerNotes || product.sellerNotes || '',
+        buyerNotes: specs.buyerNotes || product.buyerNotes || '',
+        image: product.image || (Array.isArray(product.images) ? product.images[0] || '' : ''),
+        createdAt: product.createdAt || '',
+        updatedAt: product.updatedAt || '',
+      };
+    });
+
+    const csvLines = [
+      columns.join(','),
+      ...rows.map((row) => columns.map((column) => escapeCsvValue((row as Record<string, unknown>)[column])).join(',')),
+    ];
+
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const fileLabel = mode === 'all' ? 'all-products' : mode === 'draft' ? 'draft-products' : 'live-products';
+    downloadCsvFile(`exshopi-${fileLabel}-${dateStamp}.csv`, csvLines.join('\n'));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -178,6 +279,29 @@ export function AdminProducts() {
         </div>
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
           <BulkProductUploadModal onImported={reloadProducts} />
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => exportProducts('draft')}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            >
+              <Download size={14} />
+              Download Drafts
+            </button>
+            <button
+              onClick={() => exportProducts('live')}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            >
+              <Download size={14} />
+              Download Live
+            </button>
+            <button
+              onClick={() => exportProducts('all')}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            >
+              <Download size={14} />
+              Download All
+            </button>
+          </div>
           <button
             onClick={() => navigate('/admin/products/add')}
             className="rounded-2xl bg-slate-900 px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-white transition hover:bg-blue-600"
