@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { buildApiUrl } from './services/api';
+import { tryRecoverDynamicImport } from "./utils/lazyWithRetry";
 
 function sanitizeBrowserAuthState() {
   if (typeof window === 'undefined') return;
@@ -81,6 +82,13 @@ function sanitizeBrowserAuthState() {
 // instead of HTML (which causes `Unexpected token '<'` when code calls `res.json()`).
 if (typeof window !== 'undefined') {
   sanitizeBrowserAuthState();
+
+  window.addEventListener("vite:preloadError", (event) => {
+    const preloadError = (event as unknown as { payload?: unknown }).payload ?? event;
+    if (tryRecoverDynamicImport(preloadError, "vite-preload")) {
+      event.preventDefault?.();
+    }
+  });
 
   try {
     const originalFetch = window.fetch.bind(window);

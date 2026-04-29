@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import HeroSection from "../components/HeroSection";
 import CategorySection from "../components/CategorySection";
@@ -10,14 +10,15 @@ import { generateHomepageSeo, buildHomepageSchemas } from "../lib/seo";
 import { LazyComponent } from "../components/LazyComponent";
 import { UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
 import { getDualCountryTrustText } from "../lib/countryConfig";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
-const FeaturedProducts = lazy(() => import("../components/FeaturedProducts"));
-const ShopByBrandSection = lazy(() => import("../components/ShopByBrandSection"));
-const AccessoriesSection = lazy(() => import("../components/AccessoriesSection"));
-const MostPopularSection = lazy(() => import("../components/MostPopularSection"));
-const BlackFridaySection = lazy(() => import("../components/BlackFridaySection"));
-const PromoSection = lazy(() => import("../components/PromoSection"));
-const AllProductsSection = lazy(() => import("../components/AllProductsSection"));
+const FeaturedProducts = lazyWithRetry(() => import("../components/FeaturedProducts"), "section-featured-products");
+const ShopByBrandSection = lazyWithRetry(() => import("../components/ShopByBrandSection"), "section-shop-by-brand");
+const AccessoriesSection = lazyWithRetry(() => import("../components/AccessoriesSection"), "section-accessories");
+const MostPopularSection = lazyWithRetry(() => import("../components/MostPopularSection"), "section-most-popular");
+const BlackFridaySection = lazyWithRetry(() => import("../components/BlackFridaySection"), "section-black-friday");
+const PromoSection = lazyWithRetry(() => import("../components/PromoSection"), "section-promo");
+const AllProductsSection = lazyWithRetry(() => import("../components/AllProductsSection"), "section-all-products");
 
 function DeferredSection({
   children,

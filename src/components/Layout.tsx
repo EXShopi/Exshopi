@@ -1,14 +1,15 @@
 import { Outlet } from "react-router-dom";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import TopBar from "./TopBar";
 import Navbar from "./Navbar";
 import PremiumCategoryNav from "./PremiumCategoryNav";
 import Footer from "./Footer";
 import { useLanguageStore } from "../store/language";
 import LazyComponent from "./LazyComponent";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
-const FloatingChatbot = lazy(() => import("./FloatingChatbot"));
-const FirstVisitCountryModal = lazy(() => import("./FirstVisitCountryModal"));
+const FloatingChatbot = lazyWithRetry(() => import("./FloatingChatbot"), "floating-chatbot");
+const FirstVisitCountryModal = lazyWithRetry(() => import("./FirstVisitCountryModal"), "first-visit-country-modal");
 
 export default function Layout() {
   const { direction, lang } = useLanguageStore();

@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw, Home } from 'lucide-react';
+import { isDynamicImportLikeError, tryRecoverDynamicImport } from "../utils/lazyWithRetry";
 
 interface Props {
   children: ReactNode;
@@ -27,6 +28,19 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+
+    if (isDynamicImportLikeError(error)) {
+      const recovered = tryRecoverDynamicImport(error, "error-boundary");
+      if (recovered) {
+        (this as any).setState({
+          hasError: true,
+          error,
+          errorInfo: "Refreshing the page to load the latest app version...",
+        });
+        return;
+      }
+    }
+
     try {
       const parsedError = JSON.parse(error.message);
       (this as any).setState({ errorInfo: JSON.stringify(parsedError, null, 2) });
