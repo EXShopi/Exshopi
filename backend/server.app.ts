@@ -4336,7 +4336,8 @@ app.get('/api/admin/products/pending', authMiddleware, async (req: Request, res:
       moderationSignals: computeProductModerationSignals(product, serialized),
     })));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    console.error('[api/admin/products/pending] product list failed', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Products could not load. Please refresh or contact admin.' });
   }
 });
 
@@ -4390,7 +4391,8 @@ app.get('/api/admin/products', authMiddleware, async (req: Request, res: Respons
       ].filter(Boolean),
     })));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    console.error('[api/admin/products] product list failed', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Products could not load. Please refresh or contact admin.' });
   }
 });
 

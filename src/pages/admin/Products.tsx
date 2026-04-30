@@ -89,14 +89,14 @@ export function AdminProducts() {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.message || data?.error || 'Failed to load admin products');
+        throw new Error('Products could not load. Please refresh or contact admin.');
       }
 
       const items = Array.isArray(data) ? data : data?.products || data?.items || [];
       setProducts((Array.isArray(items) ? items : []).filter((item) => !isSoftDeletedAdminProduct(item)));
     } catch (err: any) {
       console.error('Failed to load admin products:', err);
-      setError(err?.message || 'Failed to load admin products');
+      setError('Products could not load. Please refresh or contact admin.');
       setProducts([]);
     } finally {
       setLoading(false);

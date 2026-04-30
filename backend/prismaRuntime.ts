@@ -30,6 +30,62 @@ const enabled =
   process.env.EXSHOPI_DB_MODE === 'prisma';
 const SHOULD_IMPORT_BUNDLED_DRAFTS = process.env.ENABLE_BUNDLED_DRAFT_IMPORT === 'true';
 
+const productReadSelect = {
+  id: true,
+  storeId: true,
+  sellerUserId: true,
+  categoryId: true,
+  title: true,
+  slug: true,
+  metaTitle: true,
+  metaDescription: true,
+  metaKeywords: true,
+  canonicalUrl: true,
+  ogTitle: true,
+  ogDescription: true,
+  ogImage: true,
+  shortDescription: true,
+  description: true,
+  sku: true,
+  brand: true,
+  price: true,
+  originalPrice: true,
+  salePrice: true,
+  currency: true,
+  stock: true,
+  rating: true,
+  reviewsCount: true,
+  specsJson: true,
+  parentCategorySlug: true,
+  categorySlug: true,
+  subcategorySlug: true,
+  childCategorySlug: true,
+  categoryPathJson: true,
+  badgesJson: true,
+  views: true,
+  wishlistCount: true,
+  ownership: true,
+  createdByRole: true,
+  approvalRequestedAt: true,
+  approvalStatus: true,
+  status: true,
+  visibilityStatus: true,
+  rejectionReason: true,
+  approvalNotes: true,
+  approvedBy: true,
+  approvedAt: true,
+  rejectedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  images: {
+    select: {
+      imageUrl: true,
+      isPrimary: true,
+      sortOrder: true,
+    },
+  },
+} as const;
+
 const toNumber = (value: any) => {
   if (value == null) return 0;
   const raw = typeof value === 'object' && typeof value.toNumber === 'function' ? value.toNumber() : Number(value);
@@ -317,6 +373,24 @@ function mapProduct(product: any): Product {
   if (!specs.subcategorySlug && product.subcategorySlug) specs.subcategorySlug = product.subcategorySlug;
   if (!specs.childCategorySlug && product.childCategorySlug) specs.childCategorySlug = product.childCategorySlug;
   if (!specs.categoryPath && product.categoryPathJson) specs.categoryPath = product.categoryPathJson;
+  const basePrice = toNumber(product.price);
+  const fallbackComparePrice = toNumber(product.originalPrice || product.salePrice || product.price);
+  const priceUae = toNumber((product as any).priceUae ?? product.price);
+  const priceKsa = (product as any).priceKsa != null ? toNumber((product as any).priceKsa) : priceUae;
+  const priceQatar = (product as any).priceQatar != null ? toNumber((product as any).priceQatar) : priceUae;
+  const priceKuwait = (product as any).priceKuwait != null ? toNumber((product as any).priceKuwait) : priceUae;
+  const priceBahrain = (product as any).priceBahrain != null ? toNumber((product as any).priceBahrain) : priceUae;
+  const priceOman = (product as any).priceOman != null ? toNumber((product as any).priceOman) : priceUae;
+  const pricesByCountry =
+    ((product as any).pricesByCountry as any) ||
+    specs.pricesByCountry || {
+      AE: priceUae,
+      SA: priceKsa,
+      QA: priceQatar,
+      KW: priceKuwait,
+      BH: priceBahrain,
+      OM: priceOman,
+    };
 
   return {
     id: product.id,
@@ -333,15 +407,15 @@ function mapProduct(product: any): Product {
     categoryId: product.categoryId,
     title: product.title,
     description: product.description || '',
-    price: toNumber(product.price),
-    comparePrice: (product as any).comparePrice != null ? toNumber((product as any).comparePrice) : undefined,
-    priceUae: toNumber((product as any).priceUae ?? product.price),
-    priceKsa: (product as any).priceKsa != null ? toNumber((product as any).priceKsa) : undefined,
-    priceQatar: (product as any).priceQatar != null ? toNumber((product as any).priceQatar) : undefined,
-    priceKuwait: (product as any).priceKuwait != null ? toNumber((product as any).priceKuwait) : undefined,
-    priceBahrain: (product as any).priceBahrain != null ? toNumber((product as any).priceBahrain) : undefined,
-    priceOman: (product as any).priceOman != null ? toNumber((product as any).priceOman) : undefined,
-    originalPrice: toNumber(product.originalPrice || product.salePrice || product.price),
+    price: basePrice,
+    comparePrice: (product as any).comparePrice != null ? toNumber((product as any).comparePrice) : fallbackComparePrice,
+    priceUae,
+    priceKsa,
+    priceQatar,
+    priceKuwait,
+    priceBahrain,
+    priceOman,
+    originalPrice: fallbackComparePrice,
     compareAtPriceUae:
       (product as any).compareAtPriceUae != null
         ? toNumber((product as any).compareAtPriceUae)
@@ -349,23 +423,23 @@ function mapProduct(product: any): Product {
     compareAtPriceKsa:
       (product as any).compareAtPriceKsa != null
         ? toNumber((product as any).compareAtPriceKsa)
-        : undefined,
+        : fallbackComparePrice,
     compareAtPriceQatar:
       (product as any).compareAtPriceQatar != null
         ? toNumber((product as any).compareAtPriceQatar)
-        : undefined,
+        : fallbackComparePrice,
     compareAtPriceKuwait:
       (product as any).compareAtPriceKuwait != null
         ? toNumber((product as any).compareAtPriceKuwait)
-        : undefined,
+        : fallbackComparePrice,
     compareAtPriceBahrain:
       (product as any).compareAtPriceBahrain != null
         ? toNumber((product as any).compareAtPriceBahrain)
-        : undefined,
+        : fallbackComparePrice,
     compareAtPriceOman:
       (product as any).compareAtPriceOman != null
         ? toNumber((product as any).compareAtPriceOman)
-        : undefined,
+        : fallbackComparePrice,
     salePrice: product.salePrice ? toNumber(product.salePrice) : undefined,
     image: primaryImage,
     images: orderedImages.slice(primaryImage ? 1 : 0),
@@ -375,7 +449,7 @@ function mapProduct(product: any): Product {
     sku: product.sku || '',
     brand: product.brand || '',
     specifications: ((product as any).specifications as any) || undefined,
-    pricesByCountry: ((product as any).pricesByCountry as any) || specs.pricesByCountry || undefined,
+    pricesByCountry,
     specs,
     status:
       product.status === 'pending_approval'
@@ -1282,7 +1356,7 @@ export const prismaRuntime = {
   let nextSlug = input.slug || baseSlug;
   let suffix = 1;
 
-  while (await prisma.product.findUnique({ where: { slug: nextSlug } })) {
+  while (await prisma.product.findUnique({ where: { slug: nextSlug }, select: { id: true } })) {
     nextSlug = `${baseSlug}-${suffix++}`;
   }
 
@@ -1426,9 +1500,7 @@ export const prismaRuntime = {
         })),
     },
   }) as any,
-  include: {
-    images: true,
-  },
+  select: productReadSelect,
 });
 
   return mapProduct(product);
@@ -1438,7 +1510,7 @@ export const prismaRuntime = {
     if (!enabled) return null;
     const product = await prisma.product.findUnique({
       where: { id },
-      include: { images: true },
+      select: productReadSelect,
     });
     return product ? mapProduct(product) : null;
   },
@@ -1454,13 +1526,13 @@ export const prismaRuntime = {
       where: {
         slug: last,
       },
-      include: { images: true },
+      select: productReadSelect,
     });
 
     // If not found, do a safer in-memory scan of recent products
     if (!product) {
       const candidates = await prisma.product.findMany({
-        include: { images: true },
+        select: productReadSelect,
         orderBy: { createdAt: 'desc' },
         take: 2000,
       });
@@ -1498,7 +1570,7 @@ export const prismaRuntime = {
     if (!enabled) return [];
 
     const products = await prisma.product.findMany({
-      include: { images: true },
+      select: productReadSelect,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -1529,7 +1601,7 @@ export const prismaRuntime = {
 
     const products = await prisma.product.findMany({
       where,
-      include: { images: true },
+      select: productReadSelect,
       orderBy: { createdAt: 'desc' },
     });
     return products.map(mapProduct).filter((product) => isCustomerVisibleProduct(product));
@@ -1544,7 +1616,7 @@ export const prismaRuntime = {
           { sellerUserId: sellerId },
         ],
       },
-      include: { images: true },
+      select: productReadSelect,
       orderBy: { createdAt: 'desc' },
     });
     return products.map(mapProduct).filter((product) => !isSoftDeletedProduct(product));
@@ -1553,7 +1625,7 @@ export const prismaRuntime = {
   async getAllProductsForAdmin() {
     if (!enabled) return [];
     const products = await prisma.product.findMany({
-      include: { images: true },
+      select: productReadSelect,
       orderBy: { createdAt: 'desc' },
     });
     return products.map(mapProduct);
@@ -1563,7 +1635,7 @@ export const prismaRuntime = {
     if (!enabled) return null;
     const current = await prisma.product.findUnique({
       where: { id },
-      include: { images: true },
+      select: productReadSelect,
     });
     if (!current) return null;
     if (updates.image || updates.images) {
@@ -1654,14 +1726,17 @@ export const prismaRuntime = {
               }
             : undefined,
       }) as any,
-      include: { images: true },
+      select: productReadSelect,
     });
     return mapProduct(product);
   },
 
   async deleteProduct(id: string) {
     if (!enabled) return false;
-    const current = await prisma.product.findUnique({ where: { id } });
+    const current = await prisma.product.findUnique({
+      where: { id },
+      select: { id: true, specsJson: true },
+    });
     if (!current) return false;
     const specs = withDeletionMeta((current.specsJson as Record<string, any>) || {}, {
       isDeleted: true,
