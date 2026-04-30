@@ -585,6 +585,99 @@ function normalizeProductPayload(input: any) {
   };
 }
 
+const GCC_COUNTRY_CODES = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'] as const;
+const PRODUCT_CREATE_ALLOWED_FIELDS = [
+  'title',
+  'slug',
+  'description',
+  'shortDescription',
+  'price',
+  'comparePrice',
+  'brand',
+  'categoryId',
+  'stock',
+  'sku',
+  'specifications',
+  'pricesByCountry',
+] as const;
+
+function toFiniteNumber(value: unknown, fallback = 0) {
+  if (value == null || value === '') return fallback;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
+function compactObject<T extends Record<string, any>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null)
+  ) as Partial<T>;
+}
+
+function readCountryAmount(data: any, countryCode: (typeof GCC_COUNTRY_CODES)[number], fallback: number) {
+  const nested = data?.pricesByCountry?.[countryCode];
+  if (typeof nested === 'number') return toFiniteNumber(nested, fallback);
+  if (nested && typeof nested === 'object') return toFiniteNumber(nested.price, fallback);
+
+  const legacyKeyByCountry: Record<(typeof GCC_COUNTRY_CODES)[number], string> = {
+    AE: 'priceUae',
+    SA: 'priceKsa',
+    QA: 'priceQatar',
+    KW: 'priceKuwait',
+    BH: 'priceBahrain',
+    OM: 'priceOman',
+  };
+
+  return toFiniteNumber(data?.[legacyKeyByCountry[countryCode]], fallback);
+}
+
+export function sanitizeProductCreatePayload(input: any) {
+  const data = input || {};
+  const price = toFiniteNumber(data.price ?? data.priceUae ?? data.salePrice, 0);
+  const comparePriceValue =
+    data.comparePrice ??
+    data.compareAtPriceUae ??
+    data.originalPrice ??
+    data.pricesByCountry?.AE?.compareAtPrice;
+  const comparePrice =
+    comparePriceValue == null || comparePriceValue === ''
+      ? undefined
+      : toFiniteNumber(comparePriceValue, price);
+
+  const specifications =
+    data.specifications ??
+    data.specs?.specifications ??
+    data.specs?.specificationValues ??
+    {};
+
+  const pricesByCountry = Object.fromEntries(
+    GCC_COUNTRY_CODES.map((countryCode) => [
+      countryCode,
+      readCountryAmount(data, countryCode, price),
+    ])
+  );
+
+  const payload = compactObject({
+    title: String(data.title || '').trim(),
+    slug: String(data.slug || '').trim(),
+    description: String(data.description || '').trim(),
+    shortDescription: String(data.shortDescription ?? data.specs?.shortDescription ?? '').trim(),
+    price,
+    comparePrice,
+    brand: String(data.brand || '').trim(),
+    categoryId: String(data.categoryId || data.category || '').trim(),
+    stock: Math.max(0, Math.trunc(toFiniteNumber(data.stock, 0))),
+    sku: String(data.sku || '').trim() || undefined,
+    specifications,
+    pricesByCountry,
+  });
+
+  return Object.fromEntries(
+    PRODUCT_CREATE_ALLOWED_FIELDS
+      .filter((field) => payload[field] !== undefined && payload[field] !== null)
+      .map((field) => [field, payload[field]])
+  );
+}
+
 async function createSupabaseProduct(data: any) {
   const payload = normalizeProductPayload(data);
 
@@ -924,6 +1017,7 @@ export const sellerAPI = {
 // ==================== PRODUCTS ====================
 export const productAPI = {
   async create(data: any) {
+    const cleanPayload = sanitizeProductCreatePayload(data);
     if (shouldPreferBackendProductApi()) {
       const res = await fetchWithAuthRetry('/products/create', {
         method: 'POST',
@@ -932,13 +1026,13 @@ export const productAPI = {
           ...getAuthHeaders(),
         },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleanPayload),
       });
       const payload = await parseApiResponse(res);
       invalidateProductCaches();
       return payload;
     }
-    const payload = await createSupabaseProduct(data);
+    const payload = await createSupabaseProduct(cleanPayload);
     invalidateProductCaches();
     return payload;
   },
@@ -1316,6 +1410,7 @@ export const adminProductAPI = {
   },
 
   async create(data: any) {
+    const cleanPayload = sanitizeProductCreatePayload(data);
     const res = await fetchWithAuthRetry('/admin/products', {
       method: 'POST',
       headers: {
@@ -1323,7 +1418,7 @@ export const adminProductAPI = {
         ...getAuthHeaders(),
       },
       credentials: 'include',
-      body: JSON.stringify(data),
+      body: JSON.stringify(cleanPayload),
     });
     const payload = await parseApiResponse(res);
     invalidateProductCaches();

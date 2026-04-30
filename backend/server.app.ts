@@ -1201,10 +1201,6 @@ const assertAdminProductRequirements = (payload: any, lifecycleStatus: string) =
   if (!Number.isFinite(Number(payload?.price)) || Number(payload?.price) < 0) {
     throw new Error('A valid product price is required.');
   }
-  const allImages = [payload?.image, ...(Array.isArray(payload?.images) ? payload.images : [])].filter(Boolean);
-  if (!allImages.length) {
-    throw new Error('At least one product image is required.');
-  }
 };
 
 const resolveAdminAssignedSeller = async (requestedSellerId?: string) => {
@@ -1292,7 +1288,7 @@ const createAdminProductRecord = async (payload: any) => {
     subcategoryName: payload.specs?.subcategoryName || payload.specs?.templateName || '',
     title: payload.title || 'Untitled',
   });
-  if (lifecycle.status !== 'draft') {
+  if (lifecycle.status !== 'draft' && normalizedSpecs.specs?.templateId) {
     validateSeoForPublish(seo);
     validateProductSpecificationsForTemplate(normalizedSpecs.specs, normalizedSpecs.template, {
       requireHighlights: true,
@@ -1314,6 +1310,10 @@ const createAdminProductRecord = async (payload: any) => {
     title: payload.title || 'Untitled',
     description: payload.description || '',
     price: Number(payload.price || 0),
+    comparePrice:
+      payload.comparePrice != null
+        ? Number(payload.comparePrice)
+        : Number(payload.originalPrice ?? payload.salePrice ?? payload.price ?? 0),
     priceUae: Number(payload.priceUae ?? payload.price ?? 0),
     priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
     priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
@@ -1339,6 +1339,8 @@ const createAdminProductRecord = async (payload: any) => {
     reviews: Number(payload.reviews || 0),
     sku: payload.sku || '',
     brand: payload.brand || payload.specs?.attributes?.brand || '',
+    specifications: payload.specifications || payload.specs?.specifications || payload.specs?.specificationValues || {},
+    pricesByCountry: payload.pricesByCountry,
     specs: {
       ...mergeProductSeoIntoSpecs(normalizedSpecs.specs || {}, seo),
       ownership: {
@@ -1745,6 +1747,85 @@ const productPayloadSchema = z.object({
   brand: z.string().optional().default(''),
   status: z.enum(['draft', 'pending', 'pending_approval']).optional(),
 });
+
+const gccPricesByCountrySchema = z
+  .object({
+    AE: z.coerce.number().nonnegative(),
+    SA: z.coerce.number().nonnegative(),
+    QA: z.coerce.number().nonnegative(),
+    KW: z.coerce.number().nonnegative(),
+    BH: z.coerce.number().nonnegative(),
+    OM: z.coerce.number().nonnegative(),
+  })
+  .strict();
+
+const finalProductCreatePayloadSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    slug: z.string().max(140).optional().default(''),
+    description: z.string().min(1).max(20000),
+    shortDescription: z.string().max(1000).optional().default(''),
+    price: z.coerce.number().nonnegative(),
+    comparePrice: z.coerce.number().nonnegative().optional(),
+    brand: z.string().max(120).optional().default(''),
+    categoryId: z.string().min(1),
+    stock: z.coerce.number().int().nonnegative(),
+    sku: z.string().max(120).optional().default(''),
+    specifications: z.any().optional().default({}),
+    pricesByCountry: gccPricesByCountrySchema,
+  })
+  .strict();
+
+const normalizeFinalProductCreatePayload = (body: unknown): any => {
+  const payload = finalProductCreatePayloadSchema.parse(body);
+  const comparePrice = payload.comparePrice ?? payload.price;
+
+  return {
+    ...payload,
+    priceUae: payload.pricesByCountry.AE,
+    priceKsa: payload.pricesByCountry.SA,
+    priceQatar: payload.pricesByCountry.QA,
+    priceKuwait: payload.pricesByCountry.KW,
+    priceBahrain: payload.pricesByCountry.BH,
+    priceOman: payload.pricesByCountry.OM,
+    originalPrice: comparePrice,
+    compareAtPriceUae: comparePrice,
+    compareAtPriceKsa: comparePrice,
+    compareAtPriceQatar: comparePrice,
+    compareAtPriceKuwait: comparePrice,
+    compareAtPriceBahrain: comparePrice,
+    compareAtPriceOman: comparePrice,
+    salePrice: payload.price,
+    image: '',
+    images: [],
+    specs: {
+      shortDescription: payload.shortDescription,
+      specifications: payload.specifications || {},
+      specificationValues: payload.specifications || {},
+      pricesByCountry: Object.fromEntries(
+        Object.entries(payload.pricesByCountry).map(([countryCode, price]) => [
+          countryCode,
+          { price, compareAtPrice: comparePrice },
+        ])
+      ),
+    },
+    badges: [],
+  };
+};
+
+const productCreateFailureMessage = 'Product creation failed. Please check pricing or required fields.';
+
+const logProductCreateError = (scope: string, error: unknown) => {
+  if (error instanceof z.ZodError) {
+    console.warn(`[${scope}] product create validation failed`, error.issues.map((issue) => ({
+      path: issue.path.join('.'),
+      message: issue.message,
+    })));
+    return;
+  }
+
+  console.error(`[${scope}] product create failed`, error instanceof Error ? error.message : String(error));
+};
 
 const adminProductLifecycleStatusSchema = z.enum([
   'draft',
@@ -3510,7 +3591,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
     if (!seller) {
       return res.status(400).json({ error: 'Seller profile not found' });
     }
-    const payload = productPayloadSchema.parse(req.body);
+    const payload = normalizeFinalProductCreatePayload(req.body);
     const isDraft = payload.status === 'draft';
     const seo = await buildPersistedProductSeo(payload);
     const normalizedSpecs = normalizeProductSpecifications(payload.specs || {}, {
@@ -3523,7 +3604,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
       title: payload.title,
     });
     const persistedSpecs = mergeProductSeoIntoSpecs(normalizedSpecs.specs || {}, seo);
-    if (!isDraft) {
+    if (!isDraft && payload.specs?.templateId) {
       validateSeoForPublish(seo);
       validateProductSpecificationsForTemplate(persistedSpecs, normalizedSpecs.template, {
         requireHighlights: true,
@@ -3547,6 +3628,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
+        comparePrice: Number(payload.comparePrice ?? payload.originalPrice ?? payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
         priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
         priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
@@ -3567,6 +3649,8 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         rating: 0,
         reviews: 0,
         sku: payload.sku || '',
+        specifications: payload.specifications || payload.specs?.specifications || payload.specs?.specificationValues || {},
+        pricesByCountry: payload.pricesByCountry,
         specs: persistedSpecs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -3600,6 +3684,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
+        comparePrice: Number(payload.comparePrice ?? payload.originalPrice ?? payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
         priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
         priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
@@ -3620,6 +3705,8 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         rating: 0,
         reviews: 0,
         sku: payload.sku || '',
+        specifications: payload.specifications || payload.specs?.specifications || payload.specs?.specificationValues || {},
+        pricesByCountry: payload.pricesByCountry,
         specs: persistedSpecs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -3655,6 +3742,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         title: payload.title,
         description: payload.description,
         price: Number(payload.price) || 0,
+        comparePrice: Number(payload.comparePrice ?? payload.originalPrice ?? payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
         priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
         priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
@@ -3675,6 +3763,8 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         rating: 0,
         reviews: 0,
         sku: payload.sku || '',
+        specifications: payload.specifications || payload.specs?.specifications || payload.specs?.specificationValues || {},
+        pricesByCountry: payload.pricesByCountry,
         specs: persistedSpecs,
         brand: payload.brand || payload.specs?.attributes?.brand || '',
         status: isDraft ? 'draft' : 'pending',
@@ -3716,7 +3806,8 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
 
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    logProductCreateError('api/products/create', error);
+    res.status(error instanceof z.ZodError ? 400 : 500).json({ error: productCreateFailureMessage });
   }
 });
 
@@ -4949,12 +5040,13 @@ app.post('/api/admin/products/bulk-upload/import', authMiddleware, async (req: R
 app.post('/api/admin/products', authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const payload = await adminProductPayloadSchema.parseAsync(req.body);
+    const payload = normalizeFinalProductCreatePayload(req.body);
     const product = await createAdminProductRecord(payload);
 
     res.json(await serializeMarketplaceProductAsync(product));
   } catch (error) {
-    res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+    logProductCreateError('api/admin/products', error);
+    res.status(400).json({ error: productCreateFailureMessage });
   }
 });
 

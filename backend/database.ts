@@ -173,6 +173,7 @@ export interface Product {
   title: string;
   description: string;
   price: number;
+  comparePrice?: number;
   priceUae?: number;
   priceKsa?: number;
   priceQatar?: number;
@@ -194,6 +195,8 @@ export interface Product {
   reviews: number;
   sku: string;
   brand?: string;
+  specifications?: Record<string, any>;
+  pricesByCountry?: Record<string, any>;
   specs: Record<string, any>;
   status: 'draft' | 'pending' | 'approved' | 'rejected' | 'live';
   approvalStatus?: 'pending' | 'approved' | 'rejected';

@@ -12,7 +12,7 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { authFetch, parseJsonSafe, categoryAPI, productAPI } from '../../services/api';
+import { adminProductAPI, categoryAPI, productAPI } from '../../services/api';
 import { sellerAPI } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import AuthService from '../../lib/authService';
@@ -202,6 +202,7 @@ type ProductRecord = {
     additionalSpecificationGroups?: DetailedSpecificationGroup[];
     variantAttributes?: VariantDimensionKey[];
     specifications?: Record<string, string>;
+    pricesByCountry?: Record<string, { price?: number; compareAtPrice?: number }>;
     attributes?: {
       brand?: string;
       subcategory?: string | null;
@@ -1767,27 +1768,9 @@ useEffect(() => {
 
     try {
       if (mode === 'admin') {
-        const endpoint = editingId
-          ? `/api/admin/products/${editingId}`
-          : '/api/admin/products';
-
-        const method = editingId ? 'PUT' : 'POST';
-
-        const response = await authFetch(endpoint, {
-          method,
-          body: JSON.stringify(payload),
-        });
-
-        const data = await parseJsonSafe(response);
-
-        if (!response.ok) {
-          throw new Error(
-            data?.message ||
-              data?.error ||
-              'Failed to save product. Please sign in again.'
-          );
-        }
-
+        await (editingId
+          ? adminProductAPI.update(editingId, payload)
+          : adminProductAPI.create(payload));
         try {
           localStorage.removeItem('admin_product_draft');
         } catch {}
@@ -1804,7 +1787,7 @@ useEffect(() => {
 
       navigate(mode === 'admin' ? '/admin/products' : '/seller/products');
     } catch (submitError: unknown) {
-      setError(getErrorMessage(submitError, 'Failed to save product'));
+      setError('Product creation failed. Please check pricing or required fields.');
     } finally {
       setLoading(false);
     }
