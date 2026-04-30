@@ -92,6 +92,22 @@ const toNumber = (value: any) => {
   return Number.isFinite(raw) ? raw : 0;
 };
 
+const toNullableString = (value: any) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed : null;
+};
+
+const toNullableNumber = (value: any) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const raw = Number(value);
+  return Number.isFinite(raw) ? raw : undefined;
+};
+
+const removeUndefinedValues = <T extends Record<string, any>>(input: T): Partial<T> =>
+  Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<T>;
+
 const orderSelectWithoutTaxRate = {
   id: true,
   orderNumber: true,
@@ -483,6 +499,111 @@ function withDeletionMeta(specs: Record<string, any> | undefined, nextMeta: Reco
       ...nextMeta,
     },
   };
+}
+
+function buildCreateProductData(input: any, context: {
+  baseSpecs: Record<string, any>;
+  categoryExtras: Record<string, any>;
+  finalApprovalStatus: any;
+  finalStatus: any;
+  finalVisibilityStatus: any;
+  nextSlug: string;
+  sellerUserId: string;
+}) {
+  const price = toNullableNumber(input.price) ?? 0;
+  const originalPrice = toNullableNumber(input.originalPrice ?? input.comparePrice) ?? price;
+  const salePrice = toNullableNumber(input.salePrice) ?? price;
+  const stock = Math.max(0, Math.trunc(toNullableNumber(input.stock) ?? 0));
+  const priceUae = toNullableNumber(input.priceUae) ?? price;
+  const priceKsa = toNullableNumber(input.priceKsa) ?? priceUae;
+  const priceQatar = toNullableNumber(input.priceQatar) ?? priceUae;
+  const priceKuwait = toNullableNumber(input.priceKuwait) ?? priceUae;
+  const priceBahrain = toNullableNumber(input.priceBahrain) ?? priceUae;
+  const priceOman = toNullableNumber(input.priceOman) ?? priceUae;
+  const compareAtPrice =
+    toNullableNumber(input.compareAtPrice ?? input.comparePrice ?? input.originalPrice) ??
+    originalPrice ??
+    price;
+  const pricesByCountry = input.pricesByCountry || input.specs?.pricesByCountry || {
+    AE: { price: priceUae, compareAtPrice },
+    SA: { price: priceKsa, compareAtPrice: toNullableNumber(input.compareAtPriceKsa) ?? compareAtPrice },
+    QA: { price: priceQatar, compareAtPrice: toNullableNumber(input.compareAtPriceQatar) ?? compareAtPrice },
+    KW: { price: priceKuwait, compareAtPrice: toNullableNumber(input.compareAtPriceKuwait) ?? compareAtPrice },
+    BH: { price: priceBahrain, compareAtPrice: toNullableNumber(input.compareAtPriceBahrain) ?? compareAtPrice },
+    OM: { price: priceOman, compareAtPrice: toNullableNumber(input.compareAtPriceOman) ?? compareAtPrice },
+  };
+
+  const specsJson = {
+    ...context.baseSpecs,
+    specifications: input.specifications || input.specs?.specifications || input.specs?.specificationValues || context.baseSpecs.specifications || {},
+    pricesByCountry,
+    pricingFallbacks: {
+      comparePrice: compareAtPrice,
+      compareAtPrice,
+      priceUae,
+      priceKsa,
+      priceQatar,
+      priceKuwait,
+      priceBahrain,
+      priceOman,
+      compareAtPriceUae: toNullableNumber(input.compareAtPriceUae) ?? compareAtPrice,
+      compareAtPriceKsa: toNullableNumber(input.compareAtPriceKsa) ?? compareAtPrice,
+      compareAtPriceQatar: toNullableNumber(input.compareAtPriceQatar) ?? compareAtPrice,
+      compareAtPriceKuwait: toNullableNumber(input.compareAtPriceKuwait) ?? compareAtPrice,
+      compareAtPriceBahrain: toNullableNumber(input.compareAtPriceBahrain) ?? compareAtPrice,
+      compareAtPriceOman: toNullableNumber(input.compareAtPriceOman) ?? compareAtPrice,
+    },
+  };
+
+  return removeUndefinedValues({
+    storeId: input.storeId || input.sellerId || '',
+    sellerUserId: context.sellerUserId,
+    categoryId: input.categoryId,
+    title: String(input.title || '').trim(),
+    slug: context.nextSlug,
+    metaTitle: toNullableString(input.metaTitle || input.specs?.metaTitle),
+    metaDescription: toNullableString(input.metaDescription || input.specs?.metaDescription),
+    metaKeywords: toNullableString(input.metaKeywords || input.specs?.metaKeywords),
+    canonicalUrl: toNullableString(input.canonicalUrl || input.specs?.canonicalUrl),
+    ogTitle: toNullableString(input.ogTitle || input.specs?.ogTitle),
+    ogDescription: toNullableString(input.ogDescription || input.specs?.ogDescription),
+    ogImage: toNullableString(input.ogImage || input.specs?.ogImage),
+    shortDescription: toNullableString(input.specs?.shortDescription),
+    description: toNullableString(input.description),
+    sku: toNullableString(input.sku),
+    brand: toNullableString(input.brand),
+    price,
+    originalPrice,
+    salePrice,
+    currency: 'AED',
+    stock,
+    rating: toNullableNumber(input.rating) ?? 0,
+    reviewsCount: Math.max(0, Math.trunc(toNullableNumber(input.reviews) ?? 0)),
+    specsJson: specsJson as any,
+    ...context.categoryExtras,
+    badgesJson: Array.isArray(input.badges) ? input.badges as any : [],
+    views: Math.max(0, Math.trunc(toNullableNumber(input.views) ?? 0)),
+    wishlistCount: Math.max(0, Math.trunc(toNullableNumber(input.wishlistCount) ?? 0)),
+    ownership: input.ownership || 'seller',
+    createdByRole: input.createdByRole || 'seller',
+    approvalStatus: context.finalApprovalStatus,
+    status: context.finalStatus,
+    visibilityStatus: context.finalVisibilityStatus,
+    approvalRequestedAt: input.approvalRequestedAt ? new Date(input.approvalRequestedAt) : new Date(),
+    rejectionReason: '',
+    approvalNotes: '',
+    approvedAt: context.finalApprovalStatus === 'approved' ? new Date() : undefined,
+    rejectedAt: undefined,
+    images: {
+      create: [input.image, ...(input.images || [])]
+        .filter(Boolean)
+        .map((url, index) => ({
+          imageUrl: String(url),
+          isPrimary: index === 0,
+          sortOrder: index,
+        })),
+    },
+  });
 }
 
 function mapOrderItem(item: any): OrderLineItem {
@@ -1405,105 +1526,58 @@ export const prismaRuntime = {
       : ((input.visibilityStatus || 'live') as any)
     : (input.visibilityStatus || 'hidden');
 
-  const imageList = [input.image, ...(input.images || [])].filter(Boolean);
-    const categoryExtras: any = {};
-    const baseSpecs: any = withDeletionMeta(input.specs || {}, {
-      isDeleted: Boolean(input.isDeleted),
-      deletedAt: input.deletedAt || '',
+  const categoryExtras: any = {};
+  const baseSpecs: any = withDeletionMeta(input.specs || {}, {
+    isDeleted: Boolean(input.isDeleted),
+    deletedAt: input.deletedAt || '',
+  });
+  if (baseSpecs) {
+    categoryExtras.parentCategorySlug = baseSpecs?.parentCategorySlug || baseSpecs?.categorySlug || undefined;
+    categoryExtras.categorySlug = baseSpecs?.categorySlug || undefined;
+    categoryExtras.subcategorySlug = baseSpecs?.subcategorySlug || undefined;
+    categoryExtras.childCategorySlug = baseSpecs?.childCategorySlug || undefined;
+    categoryExtras.categoryPathJson = baseSpecs?.categoryPath
+      ? (Array.isArray(baseSpecs.categoryPath) ? baseSpecs.categoryPath : String(baseSpecs.categoryPath).split('/').filter(Boolean))
+      : undefined;
+  }
+
+  const sellerUserId =
+    store?.sellerUserId ||
+    (
+      await prisma.store.findUnique({
+        where: { id: input.storeId || input.sellerId },
+        select: { sellerUserId: true },
+      })
+    )?.sellerUserId ||
+    '';
+
+  const createData = buildCreateProductData(input, {
+    baseSpecs,
+    categoryExtras,
+    finalApprovalStatus,
+    finalStatus,
+    finalVisibilityStatus,
+    nextSlug,
+    sellerUserId,
+  });
+
+  try {
+    const product = await prisma.product.create({
+      data: createData as any,
+      select: productReadSelect,
     });
-    if (baseSpecs) {
-      categoryExtras.parentCategorySlug = baseSpecs?.parentCategorySlug || baseSpecs?.categorySlug || undefined;
-      categoryExtras.categorySlug = baseSpecs?.categorySlug || undefined;
-      categoryExtras.subcategorySlug = baseSpecs?.subcategorySlug || undefined;
-      categoryExtras.childCategorySlug = baseSpecs?.childCategorySlug || undefined;
-      categoryExtras.categoryPathJson = baseSpecs?.categoryPath
-        ? (Array.isArray(baseSpecs.categoryPath) ? baseSpecs.categoryPath : String(baseSpecs.categoryPath).split('/').filter(Boolean))
-        : undefined;
-    }
 
-   const product = await prisma.product.create({
-  data: ({
-    storeId: input.storeId || input.sellerId || "",
-    sellerUserId:
-      (
-        await prisma.store.findUnique({
-          where: { id: input.storeId || input.sellerId },
-        })
-      )?.sellerUserId || "",
-
-    categoryId: input.categoryId,
-    title: input.title,
-    slug: nextSlug,
-    metaTitle: input.metaTitle || input.specs?.metaTitle || null,
-    metaDescription: input.metaDescription || input.specs?.metaDescription || null,
-    metaKeywords: input.metaKeywords || input.specs?.metaKeywords || null,
-    canonicalUrl: input.canonicalUrl || input.specs?.canonicalUrl || null,
-    ogTitle: input.ogTitle || input.specs?.ogTitle || null,
-    ogDescription: input.ogDescription || input.specs?.ogDescription || null,
-    ogImage: input.ogImage || input.specs?.ogImage || null,
-    shortDescription: input.specs?.shortDescription || "",
-    description: input.description,
-    sku: input.sku,
-    brand: input.brand || "",
-    price: input.price,
-    comparePrice: input.comparePrice,
-    priceUae: input.priceUae ?? input.price,
-    priceKsa: input.priceKsa,
-    priceQatar: input.priceQatar,
-    priceKuwait: input.priceKuwait,
-    priceBahrain: input.priceBahrain,
-    priceOman: input.priceOman,
-    originalPrice: input.originalPrice,
-    compareAtPriceUae: input.compareAtPriceUae ?? input.originalPrice ?? input.price,
-    compareAtPriceKsa: input.compareAtPriceKsa,
-    compareAtPriceQatar: input.compareAtPriceQatar,
-    compareAtPriceKuwait: input.compareAtPriceKuwait,
-    compareAtPriceBahrain: input.compareAtPriceBahrain,
-    compareAtPriceOman: input.compareAtPriceOman,
-    salePrice: input.salePrice,
-    currency: "AED",
-    stock: input.stock,
-    rating: input.rating || 0,
-    reviewsCount: input.reviews || 0,
-    specsJson: baseSpecs as any,
-    specifications: (input.specifications || input.specs?.specifications || input.specs?.specificationValues || {}) as any,
-    pricesByCountry: (input.pricesByCountry || input.specs?.pricesByCountry || {}) as any,
-    ...categoryExtras,
-    badgesJson: input.badges as any,
-    views: input.views || 0,
-    wishlistCount: input.wishlistCount || 0,
-    ownership: input.ownership || "seller",
-    createdByRole: input.createdByRole || "seller",
-
-    approvalStatus: finalApprovalStatus as any,
-
-    status: finalStatus as any,
-
-    visibilityStatus: finalVisibilityStatus as any,
-
-    approvalRequestedAt: input.approvalRequestedAt ? new Date(input.approvalRequestedAt) : new Date(),
-    rejectionReason: "",
-    approvalNotes: "",
-
-    approvedAt:
-      finalApprovalStatus === 'approved' ? new Date() : undefined,
-
-    rejectedAt: undefined,
-
-    images: {
-      create: [input.image, ...(input.images || [])]
-        .filter(Boolean)
-        .map((url, index) => ({
-          imageUrl: url,
-          isPrimary: index === 0,
-          sortOrder: index,
-        })),
-    },
-  }) as any,
-  select: productReadSelect,
-});
-
-  return mapProduct(product);
+    return mapProduct(product);
+  } catch (error: any) {
+    console.error('[prismaRuntime.createProduct] Prisma product.create failed', {
+      code: error?.code,
+      message: error?.message,
+      meta: error?.meta,
+      payloadKeys: Object.keys(createData),
+      specsKeys: Object.keys((createData as any).specsJson || {}),
+    });
+    throw error;
+  }
 },
 
   async getProduct(id: string) {

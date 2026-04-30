@@ -1815,6 +1815,15 @@ const normalizeFinalProductCreatePayload = (body: unknown): any => {
 
 const productCreateFailureMessage = 'Product creation failed. Please check pricing or required fields.';
 
+const summarizeProductCreatePayload = (payload: any) => ({
+  keys: Object.keys(payload || {}).sort(),
+  priceKeys: Object.keys(payload?.pricesByCountry || {}).sort(),
+  specificationKeys:
+    payload?.specifications && typeof payload.specifications === 'object'
+      ? Object.keys(payload.specifications).sort()
+      : [],
+});
+
 const logProductCreateError = (scope: string, error: unknown) => {
   if (error instanceof z.ZodError) {
     console.warn(`[${scope}] product create validation failed`, error.issues.map((issue) => ({
@@ -1824,7 +1833,12 @@ const logProductCreateError = (scope: string, error: unknown) => {
     return;
   }
 
-  console.error(`[${scope}] product create failed`, error instanceof Error ? error.message : String(error));
+  const prismaError = error as { code?: string; message?: string; meta?: unknown };
+  console.error(`[${scope}] product create failed`, {
+    code: prismaError?.code,
+    message: prismaError?.message || (error instanceof Error ? error.message : String(error)),
+    meta: prismaError?.meta,
+  });
 };
 
 const adminProductLifecycleStatusSchema = z.enum([
@@ -3592,6 +3606,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
       return res.status(400).json({ error: 'Seller profile not found' });
     }
     const payload = normalizeFinalProductCreatePayload(req.body);
+    console.info('[api/products/create] sanitized product create payload', summarizeProductCreatePayload(payload));
     const isDraft = payload.status === 'draft';
     const seo = await buildPersistedProductSeo(payload);
     const normalizedSpecs = normalizeProductSpecifications(payload.specs || {}, {
@@ -5043,6 +5058,7 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
     const payload = normalizeFinalProductCreatePayload(req.body);
+    console.info('[api/admin/products] sanitized product create payload', summarizeProductCreatePayload(payload));
     const product = await createAdminProductRecord(payload);
 
     res.json(await serializeMarketplaceProductAsync(product));
