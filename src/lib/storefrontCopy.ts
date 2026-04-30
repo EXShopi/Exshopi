@@ -79,7 +79,7 @@ const copy: Record<StorefrontLanguage, Record<CopyKey, string>> = {
     browse_all_categories: "Browse All Categories",
     fast_delivery: "Fast Delivery",
     trusted_sellers: "Trusted Sellers",
-    deliver_uae_only: "Now serving UAE & Saudi Arabia",
+    deliver_uae_only: "Now serving the GCC",
     need_help: "Need help?",
     chat_with_us: "Chat with us",
     call_us: "Call us",

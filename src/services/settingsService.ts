@@ -142,10 +142,10 @@ export interface SiteSettings {
 export const defaultSettings: SiteSettings = {
   general: {
     siteName: 'ExShopi',
-    tagline: "UAE & Saudi Arabia's trusted marketplace",
+    tagline: "GCC's trusted marketplace",
     supportEmail: 'exshopi@exshopi.com',
     supportPhone: '+971522608063',
-    address: 'Dubai, United Arab Emirates · Riyadh, Saudi Arabia',
+    address: 'Serving customers across the GCC',
     defaultLanguage: 'en',
     vatPercentage: 5,
   },
@@ -233,7 +233,7 @@ export const defaultSettings: SiteSettings = {
       show: true,
       badgeText: 'Featured',
       title: 'Discover the ExShopi Experience',
-        description: 'Fast delivery, premium products, and a modern shopping experience across UAE and Saudi Arabia.',
+      description: 'Fast delivery, premium products, and a modern shopping experience across the GCC.',
       ctaText: 'Watch Video',
       videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
       thumbnailUrl: '/Banners/banner1.jpg',
@@ -241,7 +241,7 @@ export const defaultSettings: SiteSettings = {
     trustBanner: {
       show: true,
       items: [
-        { icon: 'truck', title: 'Fast Delivery', desc: 'Across UAE & KSA' },
+        { icon: 'truck', title: 'Fast Delivery', desc: 'Across the GCC' },
         { icon: 'shield', title: 'Secure Shopping', desc: 'Protected checkout' },
         { icon: 'zap', title: 'Great Deals', desc: 'Best value' },
         { icon: 'check', title: 'Trusted Quality', desc: 'Verified products' },
@@ -251,15 +251,15 @@ export const defaultSettings: SiteSettings = {
   header: {
     announcementBar: {
       show: true,
-      text: 'Now serving UAE & Saudi Arabia',
+      text: 'Now serving the GCC',
       bgColor: '#0f172a',
       textColor: '#ffffff',
     },
-    deliveryMessage: 'Fast delivery across UAE and KSA',
+    deliveryMessage: 'Fast delivery across GCC',
     searchPlaceholder: 'Search for laptops, phones, accessories, sellers...',
   },
   footer: {
-    description: 'Premium UAE and Saudi Arabia marketplace for electronics, accessories, and daily use products.',
+    description: 'Premium GCC marketplace for electronics, accessories, and daily-use products.',
     email: 'exshopi@exshopi.com',
     phone: '+971 52 260 8063',
     socialLinks: {

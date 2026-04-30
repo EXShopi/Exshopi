@@ -2179,7 +2179,7 @@ const productSchema = product
                   </div>
                   <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Check className="h-4 w-4 text-emerald-600" />
-                    <span>Free Delivery UAE / Fast KSA Shipping</span>
+                    <span>Fast Delivery Across the GCC</span>
                   </div>
                   <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Check className="h-4 w-4 text-emerald-600" />

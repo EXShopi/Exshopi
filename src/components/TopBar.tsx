@@ -77,10 +77,10 @@ export default function TopBar() {
                 setCityOpen(false);
                 setLangOpen(false);
               }}
-              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:gap-2 md:px-3"
+              className="flex min-w-[108px] items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:min-w-[154px] md:gap-2 md:px-3"
             >
               <MapPin className="h-3.5 w-3.5 md:h-4 md:w-4" />
-              <span className="max-w-[72px] truncate text-[11px] font-semibold md:max-w-none md:text-[12px]">
+              <span className="max-w-[72px] truncate text-[11px] font-semibold md:max-w-[108px] md:text-[12px]">
                 {countryConfig.shortName}
               </span>
               <ChevronDown
@@ -89,7 +89,7 @@ export default function TopBar() {
             </button>
 
             {countryOpen && (
-              <div className="absolute right-0 top-full z-[99999] mt-3 w-56 overflow-hidden rounded-2xl border border-slate-300 bg-white text-slate-900 shadow-2xl backdrop-blur-xl">
+              <div className="absolute right-0 top-full z-[99999] mt-3 w-64 overflow-hidden rounded-2xl border border-slate-300 bg-white text-slate-900 shadow-2xl backdrop-blur-xl">
                 {SUPPORTED_COUNTRY_CODES.map((countryCode, idx) => {
                   const option = COUNTRY_CONFIG[countryCode];
                   const isActive = selectedCountry === countryCode;
@@ -125,17 +125,17 @@ export default function TopBar() {
                 setCountryOpen(false);
                 setLangOpen(false);
               }}
-              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:gap-2 md:px-3"
+              className="flex min-w-[102px] items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white/85 backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/15 hover:text-white md:min-w-[146px] md:gap-2 md:px-3"
             >
               <MapPin className="h-3.5 w-3.5 md:h-4 md:w-4" />
-              <span className="max-w-[54px] truncate text-[11px] font-semibold md:max-w-none md:text-[12px]">{selectedCity}</span>
+              <span className="max-w-[54px] truncate text-[11px] font-semibold md:max-w-[100px] md:text-[12px]">{selectedCity}</span>
               <ChevronDown
                 className={`h-4 w-4 transition-transform duration-200 ${cityOpen ? "rotate-180" : ""}`}
               />
             </button>
 
             {cityOpen && (
-              <div className="absolute right-0 top-full z-[99999] mt-3 w-48 overflow-hidden rounded-2xl border border-slate-300 bg-white text-slate-900 shadow-2xl backdrop-blur-xl">
+              <div className="absolute right-0 top-full z-[99999] mt-3 max-h-[22rem] w-60 overflow-y-auto rounded-2xl border border-slate-300 bg-white text-slate-900 shadow-2xl backdrop-blur-xl">
                 {cities.map((c, idx) => (
                   <button
                     key={c}

@@ -156,7 +156,7 @@ export default function Home() {
       <DeferredSection rootMargin="0px" delayMs={1100}>
         <section className="mx-auto mt-10 max-w-7xl px-4 pb-12 md:px-6">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">UAE & Saudi Arabia</p>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">GCC Marketplace</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {UAE_TRUST_SIGNALS.map((signal) => (
                 <span key={signal} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">

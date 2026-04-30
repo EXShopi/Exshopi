@@ -287,7 +287,7 @@ export default function Navbar() {
                       Exshopi
                     </div>
                     <div className="hidden pt-0.5 text-[9px] uppercase tracking-[0.24em] text-slate-500 md:block">
-                      UAE & KSA Premium Marketplace
+                      GCC Premium Marketplace
                     </div>
                   </div>
                 </Link>

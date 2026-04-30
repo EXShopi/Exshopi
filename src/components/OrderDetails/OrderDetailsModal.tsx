@@ -134,7 +134,14 @@ function getValidNextStatuses(currentStatus: string) {
 function getOrderCountryCode(order: OrderDetailsData) {
   const rawCountry = (order.shippingAddress as any)?.country || order.shippingAddressJson?.country;
   if (isSupportedCountryCode(rawCountry)) return rawCountry;
-  return order.currency === 'SAR' ? 'SA' : 'AE';
+
+  const currency = String(order.currency || '').toUpperCase();
+  if (currency === 'SAR') return 'SA';
+  if (currency === 'QAR') return 'QA';
+  if (currency === 'KWD') return 'KW';
+  if (currency === 'BHD') return 'BH';
+  if (currency === 'OMR') return 'OM';
+  return 'AE';
 }
 
 export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({

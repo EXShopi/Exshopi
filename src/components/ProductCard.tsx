@@ -256,11 +256,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <div className="mb-3 space-y-1.5 text-[10px] font-semibold text-slate-600">
             <p className="flex items-center gap-1.5">
               <Truck className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Free Delivery UAE</span>
+              <span>Fast GCC Delivery</span>
             </p>
             <p className="flex items-center gap-1.5">
-              <span className="text-[12px] leading-none">🇸🇦</span>
-              <span>KSA Delivery Available</span>
+              <span className="text-[12px] leading-none">🌍</span>
+              <span>Country pricing across GCC</span>
             </p>
             <p className="flex items-center gap-1.5">
               <WalletCards className="h-3.5 w-3.5 text-emerald-600" />
