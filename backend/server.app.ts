@@ -5630,7 +5630,15 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
       setIfColumnExists('specifications', 'specifications', nextPayload.specifications || nextPayload.specs?.specifications || nextPayload.specs?.specificationValues);
       setIfColumnExists('pricesByCountry', 'prices_by_country', nextPayload.pricesByCountry || nextPayload.specs?.pricesByCountry);
       setIfColumnExists('badgesJson', 'badges_json', nextPayload.badges || nextPayload.specs?.badges);
-      setIfColumnExists('ownership', 'ownership', nextPayload.ownership || nextPayload.specs?.ownership);
+      setIfColumnExists(
+        'ownership',
+        'ownership',
+        typeof nextPayload.ownership === 'string'
+          ? nextPayload.ownership
+          : typeof nextPayload.specs?.ownership === 'string'
+          ? nextPayload.specs.ownership
+          : undefined
+      );
       setIfColumnExists('createdByRole', 'created_by_role', nextPayload.createdByRole || nextPayload.specs?.createdByRole);
       setIfColumnExists('approvalRequestedAt', 'approval_requested_at', nextPayload.approvalRequestedAt ? new Date(nextPayload.approvalRequestedAt) : undefined);
       setIfColumnExists('approvalStatus', 'approval_status', nextPayload.approvalStatus);

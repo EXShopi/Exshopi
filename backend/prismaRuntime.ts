@@ -1740,6 +1740,7 @@ export const prismaRuntime = {
       where: { id },
       data: ({
         categoryId: updates.categoryId,
+        storeId: (updates as any).storeId || (updates as any).sellerId,
         title: updates.title,
         slug: updates.slug,
         metaTitle: updates.metaTitle || updates.specs?.metaTitle,
