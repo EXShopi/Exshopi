@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
-import { AlertCircle, CheckCircle2, Copy, Download, Eye, Package2, Pencil, Search, Store, Trash2, X, XCircle } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle2, Copy, Download, Eye, Package2, Pencil, Search, Store, Trash2, Upload, X, XCircle } from 'lucide-react';
 import { formatCurrencyForCountry } from '../../lib/currency';
 import { COUNTRY_CONFIG, convertFromAed, SupportedCountryCode } from '../../lib/countryConfig';
 import { buildProductPath } from "../../lib/seo";
@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
 import { getProductLifecycleState, isSoftDeletedProduct } from '../../lib/productLifecycle';
 import BulkProductUploadModal from '../../components/admin/BulkProductUploadModal';
+import { uploadImageFile } from '../../lib/uploadClient';
 
 const statusTone: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
@@ -96,6 +97,7 @@ const downloadCsvFile = (filename: string, content: string) => {
 
 export function AdminProducts() {
   const navigate = useNavigate();
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLoader, setShowLoader] = useState(false);
@@ -118,6 +120,11 @@ export function AdminProducts() {
   const [priceEditorRound, setPriceEditorRound] = useState(true);
   const [priceEditorError, setPriceEditorError] = useState('');
   const [savingQuickPrices, setSavingQuickPrices] = useState(false);
+  const [imageEditorProduct, setImageEditorProduct] = useState<any | null>(null);
+  const [imageEditorUrl, setImageEditorUrl] = useState('');
+  const [imageEditorError, setImageEditorError] = useState('');
+  const [uploadingMainImage, setUploadingMainImage] = useState(false);
+  const [savingMainImage, setSavingMainImage] = useState(false);
 
   useEffect(() => {
     reloadProducts();
@@ -359,6 +366,84 @@ export function AdminProducts() {
       emitAdminToast('error', 'Prices could not be updated. Please try again.');
     } finally {
       setSavingQuickPrices(false);
+    }
+  };
+
+  const openImageEditor = (product: any) => {
+    setImageEditorProduct(product);
+    setImageEditorUrl(product.image || (Array.isArray(product.images) ? product.images[0] || '' : ''));
+    setImageEditorError('');
+  };
+
+  const closeImageEditor = () => {
+    if (savingMainImage || uploadingMainImage) return;
+    setImageEditorProduct(null);
+    setImageEditorError('');
+    setImageEditorUrl('');
+  };
+
+  const handleMainImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !imageEditorProduct) return;
+
+    if (!file.type.startsWith('image/')) {
+      setImageEditorError('Please choose a valid image file.');
+      return;
+    }
+
+    try {
+      setUploadingMainImage(true);
+      setImageEditorError('');
+      const imageUrl = await uploadImageFile(file, {
+        folder: 'products/main-images',
+        fileName: `${imageEditorProduct.sku || imageEditorProduct.id || 'product'}-${file.name}`,
+      });
+      setImageEditorUrl(imageUrl);
+    } catch (error) {
+      console.error('Main image upload failed', error);
+      setImageEditorError('Image upload failed. Please try again.');
+      emitAdminToast('error', 'Image upload failed. Please try again.');
+    } finally {
+      setUploadingMainImage(false);
+    }
+  };
+
+  const handleSaveMainImage = async () => {
+    if (!imageEditorProduct) return;
+    const imageUrl = imageEditorUrl.trim();
+    if (!imageUrl) {
+      setImageEditorError('Add an image URL or upload an image file.');
+      return;
+    }
+
+    try {
+      setSavingMainImage(true);
+      setImageEditorError('');
+      const updated = await adminProductAPI.updateMainImage(imageEditorProduct.id, imageUrl);
+      setProducts((current) =>
+        current.map((product) => {
+          if (product.id !== imageEditorProduct.id) return product;
+          const existingImages = Array.isArray(product.images) ? product.images : [];
+          const nextImages = [imageUrl, ...existingImages.filter((entry: string) => entry && entry !== imageUrl)];
+          return {
+            ...product,
+            ...(updated && typeof updated === 'object' ? updated : {}),
+            image: imageUrl,
+            images: nextImages,
+          };
+        })
+      );
+      invalidateProductCaches(imageEditorProduct.id);
+      emitAdminToast('success', 'Main product image updated.');
+      setImageEditorProduct(null);
+      setImageEditorUrl('');
+    } catch (error) {
+      console.error('Failed to update main product image', error);
+      setImageEditorError('Product image could not be updated. Please try again.');
+      emitAdminToast('error', 'Product image could not be updated. Please try again.');
+    } finally {
+      setSavingMainImage(false);
     }
   };
 
@@ -643,7 +728,7 @@ export function AdminProducts() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-14 w-14 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                          <div className="group relative h-14 w-14 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
                             {product.image ? (
                               <img src={product.image} alt={product.title} className="h-full w-full object-cover" />
                             ) : (
@@ -651,6 +736,15 @@ export function AdminProducts() {
                                 <Package2 size={18} />
                               </div>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => openImageEditor(product)}
+                              className="absolute bottom-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-slate-950/80 text-white shadow-sm transition hover:bg-blue-600"
+                              title="Update main image"
+                              aria-label={`Update main image for ${product.title || 'product'}`}
+                            >
+                              <Camera size={12} />
+                            </button>
                           </div>
                           <div>
                             <p className="max-w-[240px] text-sm font-black text-slate-900">{product.title}</p>
@@ -794,6 +888,93 @@ export function AdminProducts() {
           </div>
         )}
       </div>
+      <input
+        ref={imageFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleMainImageFileChange}
+      />
+      {imageEditorProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Main Image</p>
+                <h3 className="mt-1 text-xl font-black text-slate-950">{imageEditorProduct.title || 'Product image'}</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">{imageEditorProduct.sku || imageEditorProduct.id}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeImageEditor}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                aria-label="Close main image editor"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-5 px-6 py-5">
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
+                {imageEditorUrl ? (
+                  <img src={imageEditorUrl} alt={imageEditorProduct.title || 'Product'} className="h-64 w-full object-contain" />
+                ) : (
+                  <div className="flex h-64 items-center justify-center text-slate-300">
+                    <Package2 size={34} />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => imageFileInputRef.current?.click()}
+                  disabled={uploadingMainImage || savingMainImage}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Upload size={14} />
+                  {uploadingMainImage ? 'Uploading...' : 'Upload Image'}
+                </button>
+              </div>
+
+              <label className="block">
+                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Image URL</span>
+                <input
+                  value={imageEditorUrl}
+                  onChange={(event) => setImageEditorUrl(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-950 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  placeholder="https://..."
+                />
+              </label>
+
+              {imageEditorError && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                  {imageEditorError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-6 py-5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeImageEditor}
+                disabled={savingMainImage || uploadingMainImage}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMainImage}
+                disabled={savingMainImage || uploadingMainImage}
+                className="rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingMainImage ? 'Saving...' : 'Save Image'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {priceEditorProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">

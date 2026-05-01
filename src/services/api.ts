@@ -1472,6 +1472,21 @@ export const adminProductAPI = {
     return payload;
   },
 
+  async updateMainImage(id: string, image: string) {
+    const res = await fetchWithAuthRetry(`/admin/products/${id}/image`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ image }),
+    });
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches(id);
+    return payload;
+  },
+
   async delete(id: string) {
     const res = await fetchWithAuthRetry(`/admin/products/${id}`, {
       method: 'DELETE',

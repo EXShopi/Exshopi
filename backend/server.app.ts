@@ -1823,6 +1823,12 @@ const adminProductPricesPayloadSchema = z
   })
   .strict();
 
+const adminProductImagePayloadSchema = z
+  .object({
+    image: z.string().min(1).max(4000),
+  })
+  .strict();
+
 const quickPriceCountryCodes = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'] as const;
 type QuickPriceCountryCode = (typeof quickPriceCountryCodes)[number];
 
@@ -5338,6 +5344,79 @@ app.patch('/api/admin/products/:id/prices', authMiddleware, async (req: Request,
       meta: prismaError?.meta,
     });
     res.status(500).json({ message: 'Failed to update prices' });
+  }
+});
+
+app.patch('/api/admin/products/:id/image', authMiddleware, async (req: Request, res: Response) => {
+  const scope = 'api/admin/products/:id/image';
+  try {
+    if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
+    const payload = adminProductImagePayloadSchema.parse(req.body);
+    const image = payload.image.trim();
+
+    const currentProduct = prismaRuntime.enabled
+      ? await prismaRuntime.getProduct(req.params.id)
+      : supabaseRuntime.enabled
+      ? await supabaseRuntime.getProduct(req.params.id)
+      : db.getProduct(req.params.id);
+
+    if (!currentProduct) return res.status(404).json({ error: 'Product not found' });
+
+    const existingImages = Array.isArray((currentProduct as any).images) ? (currentProduct as any).images : [];
+    const nextImages = [image, ...existingImages.filter((entry: string) => entry && entry !== image)];
+
+    let updated: any = null;
+    if (prismaRuntime.enabled) {
+      updated = await prismaRuntime.updateProduct(req.params.id, {
+        image,
+        images: nextImages,
+        specs: {
+          ...((currentProduct as any).specs || {}),
+          image,
+          images: nextImages,
+        },
+      } as any);
+    } else if (supabaseRuntime.enabled) {
+      updated = await supabaseRuntime.updateProduct(req.params.id, {
+        image,
+        images: nextImages,
+        specs: {
+          ...((currentProduct as any).specs || {}),
+          image,
+          images: nextImages,
+        },
+      } as any);
+    } else {
+      updated = db.updateProduct(req.params.id, {
+        image,
+        images: nextImages,
+        specs: {
+          ...((currentProduct as any).specs || {}),
+          image,
+          images: nextImages,
+        },
+      } as any);
+    }
+
+    if (!updated) return res.status(404).json({ error: 'Product not found' });
+    const responseProduct = { ...updated, image, images: nextImages };
+    try {
+      return res.json(await serializeMarketplaceProductAsync(responseProduct));
+    } catch (error) {
+      console.error(`[${scope}] serialize failed`, error);
+      return res.json(responseProduct);
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.warn(`[${scope}] validation failed`, error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })));
+      return res.status(400).json({ message: 'Failed to update product image' });
+    }
+
+    console.error('PRODUCT IMAGE UPDATE ERROR:', error);
+    res.status(500).json({ message: 'Failed to update product image' });
   }
 });
 
