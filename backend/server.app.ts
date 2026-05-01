@@ -1813,15 +1813,74 @@ const adminProductPricesPayloadSchema = z
     pricesByCountry: z
       .object({
         AE: adminPriceValueSchema,
-        SA: adminPriceValueSchema,
-        QA: adminPriceValueSchema,
-        KW: adminPriceValueSchema,
-        BH: adminPriceValueSchema,
-        OM: adminPriceValueSchema,
+        SA: adminPriceValueSchema.optional(),
+        QA: adminPriceValueSchema.optional(),
+        KW: adminPriceValueSchema.optional(),
+        BH: adminPriceValueSchema.optional(),
+        OM: adminPriceValueSchema.optional(),
       })
       .strict(),
   })
   .strict();
+
+const quickPriceCountryCodes = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'] as const;
+type QuickPriceCountryCode = (typeof quickPriceCountryCodes)[number];
+
+const quickPriceColumnByCountry: Record<QuickPriceCountryCode, string> = {
+  AE: 'priceUae',
+  SA: 'priceKsa',
+  QA: 'priceQatar',
+  KW: 'priceKuwait',
+  BH: 'priceBahrain',
+  OM: 'priceOman',
+};
+
+const quickPriceDbColumnByCountry: Record<QuickPriceCountryCode, string> = {
+  AE: 'price_uae',
+  SA: 'price_ksa',
+  QA: 'price_qatar',
+  KW: 'price_kuwait',
+  BH: 'price_bahrain',
+  OM: 'price_oman',
+};
+
+const sanitizePrices = (input: any) => {
+  const rawBase = input?.basePriceAED ?? input?.pricesByCountry?.AE;
+  const basePriceAED = Number(rawBase);
+  if (!Number.isFinite(basePriceAED) || basePriceAED < 0) {
+    throw new Error('AE price must be a valid non-negative number');
+  }
+
+  const pricesByCountry = quickPriceCountryCodes.reduce((acc, countryCode) => {
+    const rawValue = input?.pricesByCountry?.[countryCode] ?? basePriceAED;
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      throw new Error(`${countryCode} price must be a valid non-negative number`);
+    }
+    acc[countryCode] = countryCode === 'AE' ? Number(basePriceAED.toFixed(2)) : Number(numeric.toFixed(2));
+    return acc;
+  }, {} as Record<QuickPriceCountryCode, number>);
+
+  return {
+    basePriceAED: Number(basePriceAED.toFixed(2)),
+    pricesByCountry,
+  };
+};
+
+const getExistingProductColumns = async () => {
+  if (!prismaRuntime.enabled) return new Set<string>();
+  try {
+    const rows = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'products'
+    `;
+    return new Set(rows.map((row) => row.column_name));
+  } catch (error) {
+    console.warn('[api/admin/products/:id/prices] could not inspect product columns', error);
+    return new Set<string>();
+  }
+};
 
 const finalProductCreatePayloadSchema = z
   .object({
@@ -5136,8 +5195,9 @@ app.patch('/api/admin/products/:id/prices', authMiddleware, async (req: Request,
   const scope = 'api/admin/products/:id/prices';
   try {
     if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
-    const payload = adminProductPricesPayloadSchema.parse(req.body);
-    const countryPrices = payload.pricesByCountry as Record<keyof typeof GCC_COUNTRY_META, number>;
+    const schemaPayload = adminProductPricesPayloadSchema.parse(req.body);
+    const payload = sanitizePrices(schemaPayload);
+    const countryPrices = payload.pricesByCountry;
     const pricesByCountry = Object.fromEntries(
       Object.entries(countryPrices).map(([countryCode, price]) => [
         countryCode,
@@ -5178,46 +5238,98 @@ app.patch('/api/admin/products/:id/prices', authMiddleware, async (req: Request,
 
     let updated: any = null;
     if (prismaRuntime.enabled) {
-      await prisma.product.update({
-        where: { id: req.params.id },
-        data: {
-          price: payload.basePriceAED,
-          specsJson: nextSpecs as any,
-        },
+      const productColumns = await getExistingProductColumns();
+      const inspectedColumns = productColumns.size > 0;
+      const updateData: Record<string, any> = {
+        price: payload.basePriceAED,
+      };
+
+      if (!inspectedColumns || productColumns.has('prices_by_country')) {
+        updateData.pricesByCountry = pricesByCountry;
+      }
+
+      if (!inspectedColumns || productColumns.has('specs_json')) {
+        updateData.specsJson = nextSpecs;
+      }
+
+      quickPriceCountryCodes.forEach((countryCode) => {
+        const dbColumn = quickPriceDbColumnByCountry[countryCode];
+        if (productColumns.has(dbColumn)) {
+          updateData[quickPriceColumnByCountry[countryCode]] = countryPrices[countryCode];
+        }
       });
+
+      try {
+        await prisma.product.update({
+          where: { id: req.params.id },
+          data: updateData as any,
+        });
+      } catch (error) {
+        const prismaError = error as { code?: string };
+        if (prismaError?.code === 'P2022') {
+          const fallbackData = {
+            price: payload.basePriceAED,
+            ...(!inspectedColumns || productColumns.has('specs_json') ? { specsJson: nextSpecs as any } : {}),
+          };
+          try {
+            await prisma.product.update({
+              where: { id: req.params.id },
+              data: fallbackData,
+            });
+          } catch (fallbackError) {
+            if ((fallbackError as { code?: string })?.code !== 'P2022') throw fallbackError;
+            await prisma.product.update({
+              where: { id: req.params.id },
+              data: { price: payload.basePriceAED },
+            });
+          }
+        } else {
+          throw error;
+        }
+      }
+
       updated = await prismaRuntime.getProduct(req.params.id);
     } else if (supabaseRuntime.enabled) {
       updated = await supabaseRuntime.updateProduct(req.params.id, {
         price: payload.basePriceAED,
         salePrice: payload.basePriceAED,
+        pricesByCountry: pricesByCountry as any,
         specs: nextSpecs,
       } as any);
     } else {
       updated = db.updateProduct(req.params.id, {
         price: payload.basePriceAED,
         salePrice: payload.basePriceAED,
+        pricesByCountry: pricesByCountry as any,
         specs: nextSpecs,
       } as any);
     }
 
     if (!updated) return res.status(404).json({ error: 'Product not found' });
-    res.json(await serializeMarketplaceProductAsync({ ...updated, price: payload.basePriceAED, pricesByCountry, specs: nextSpecs }));
+    const responseProduct = { ...updated, price: payload.basePriceAED, pricesByCountry, specs: nextSpecs };
+    try {
+      return res.json(await serializeMarketplaceProductAsync(responseProduct));
+    } catch (error) {
+      console.error('PRICE UPDATE SERIALIZE ERROR:', error);
+      return res.json(responseProduct);
+    }
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.warn(`[${scope}] quick price validation failed`, error.issues.map((issue) => ({
         path: issue.path.join('.'),
         message: issue.message,
       })));
-      return res.status(400).json({ error: 'Prices could not be updated. Please try again.' });
+      return res.status(400).json({ message: 'Failed to update prices' });
     }
 
     const prismaError = error as { code?: string; message?: string; meta?: unknown };
+    console.error('PRICE UPDATE ERROR:', error);
     console.error(`[${scope}] quick price update failed`, {
       code: prismaError?.code,
       message: prismaError?.message || (error instanceof Error ? error.message : String(error)),
       meta: prismaError?.meta,
     });
-    res.status(500).json({ error: 'Prices could not be updated. Please try again.' });
+    res.status(500).json({ message: 'Failed to update prices' });
   }
 });
 

@@ -1447,6 +1447,14 @@ export const adminProductAPI = {
       pricesByCountry: Record<'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM', number | string>;
     }
   ) {
+    const countryCodes = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'] as const;
+    const basePriceAED = Number(data.basePriceAED ?? data.pricesByCountry?.AE);
+    const pricesByCountry = countryCodes.reduce((acc, countryCode) => {
+      const value = Number(data.pricesByCountry?.[countryCode] ?? basePriceAED);
+      if (Number.isFinite(value)) acc[countryCode] = value;
+      return acc;
+    }, {} as Record<'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM', number>);
+
     const res = await fetchWithAuthRetry(`/admin/products/${id}/prices`, {
       method: 'PATCH',
       headers: {
@@ -1454,7 +1462,10 @@ export const adminProductAPI = {
         ...getAuthHeaders(),
       },
       credentials: 'include',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        basePriceAED,
+        pricesByCountry,
+      }),
     });
     const payload = await parseApiResponse(res);
     invalidateProductCaches(id);
