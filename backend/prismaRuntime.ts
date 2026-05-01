@@ -501,7 +501,7 @@ function withDeletionMeta(specs: Record<string, any> | undefined, nextMeta: Reco
   };
 }
 
-function buildCreateProductData(input: any, context: {
+function sanitizeProductCreatePayload(input: any, context: {
   baseSpecs: Record<string, any>;
   categoryExtras: Record<string, any>;
   finalApprovalStatus: any;
@@ -1551,7 +1551,7 @@ export const prismaRuntime = {
     )?.sellerUserId ||
     '';
 
-  const createData = buildCreateProductData(input, {
+  const createData = sanitizeProductCreatePayload(input, {
     baseSpecs,
     categoryExtras,
     finalApprovalStatus,

@@ -1105,6 +1105,45 @@ const flattenCategoryIds = (categories: Array<any>) => {
   return ids;
 };
 
+const flattenCategoryEntries = (categories: Array<any>) => {
+  const entries: Array<{ id: string; slug: string; name: string }> = [];
+  for (const category of categories || []) {
+    if (category?.id) {
+      entries.push({
+        id: String(category.id),
+        slug: String(category.slug || ''),
+        name: String(category.name || ''),
+      });
+    }
+    for (const child of category?.subcategories || []) {
+      if (child?.id) {
+        entries.push({
+          id: String(child.id),
+          slug: String(child.slug || ''),
+          name: String(child.name || ''),
+        });
+      }
+    }
+  }
+  return entries;
+};
+
+const resolveCatalogCategoryId = (categories: Array<any>, requestedValue: string) => {
+  const raw = String(requestedValue || '').trim();
+  if (!raw) return '';
+
+  const entries = flattenCategoryEntries(categories);
+  const directId = entries.find((entry) => entry.id === raw);
+  if (directId) return directId.id;
+
+  const normalized = normalizeSlugInput(raw);
+  const slugMatch = entries.find((entry) => normalizeSlugInput(entry.slug) === normalized);
+  if (slugMatch) return slugMatch.id;
+
+  const nameMatch = entries.find((entry) => normalizeSlugInput(entry.name) === normalized);
+  return nameMatch?.id || '';
+};
+
 const resolveEffectiveProductStatus = (product: any) => getProductLifecycleState(product).effectiveStatus;
 
 const buildSoftDeleteProductPayload = (product: any) => {
@@ -1258,10 +1297,13 @@ const resolveUploaderSeller = async (userId?: string | null) => {
 
 const createAdminProductRecord = async (payload: any) => {
   const lifecycle = deriveAdminLifecycle(payload);
-  const categoryId = payload.categoryId || payload.category || '';
-  assertAdminProductRequirements({ ...payload, categoryId }, lifecycle.status);
+  const requestedCategory = payload.categoryId || payload.category || payload.categorySlug || payload.subcategorySlug || '';
+  const categories = await getAllCatalogCategories();
+  const categoryId = resolveCatalogCategoryId(categories, requestedCategory);
+  const productPayload = { ...payload, categoryId };
+  assertAdminProductRequirements(productPayload, lifecycle.status);
 
-  const categoryIds = flattenCategoryIds(await getAllCatalogCategories());
+  const categoryIds = flattenCategoryIds(categories);
   if (categoryId && !categoryIds.has(categoryId)) {
     throw new Error('Selected category no longer exists. Please choose a valid category.');
   }
@@ -1278,15 +1320,15 @@ const createAdminProductRecord = async (payload: any) => {
     );
   }
 
-  const seo = await buildPersistedProductSeo(payload);
-  const normalizedSpecs = normalizeProductSpecifications(payload.specs || {}, {
-    parentCategorySlug: payload.specs?.parentCategorySlug || payload.specs?.categorySlug || '',
-    parentCategoryName: payload.specs?.parentCategoryName || payload.specs?.categoryName || '',
-    categorySlug: payload.specs?.categorySlug || payload.specs?.parentCategorySlug || '',
-    categoryName: payload.specs?.categoryName || payload.specs?.parentCategoryName || '',
-    subcategorySlug: payload.specs?.subcategorySlug || payload.specs?.templateId || '',
-    subcategoryName: payload.specs?.subcategoryName || payload.specs?.templateName || '',
-    title: payload.title || 'Untitled',
+  const seo = await buildPersistedProductSeo(productPayload);
+  const normalizedSpecs = normalizeProductSpecifications(productPayload.specs || {}, {
+    parentCategorySlug: productPayload.specs?.parentCategorySlug || productPayload.specs?.categorySlug || '',
+    parentCategoryName: productPayload.specs?.parentCategoryName || productPayload.specs?.categoryName || '',
+    categorySlug: productPayload.specs?.categorySlug || productPayload.specs?.parentCategorySlug || '',
+    categoryName: productPayload.specs?.categoryName || productPayload.specs?.parentCategoryName || '',
+    subcategorySlug: productPayload.specs?.subcategorySlug || productPayload.specs?.templateId || '',
+    subcategoryName: productPayload.specs?.subcategoryName || productPayload.specs?.templateName || '',
+    title: productPayload.title || 'Untitled',
   });
   if (lifecycle.status !== 'draft' && normalizedSpecs.specs?.templateId) {
     validateSeoForPublish(seo);
@@ -1307,40 +1349,40 @@ const createAdminProductRecord = async (payload: any) => {
     ogTitle: seo.ogTitle,
     ogDescription: seo.ogDescription,
     ogImage: seo.ogImage,
-    title: payload.title || 'Untitled',
-    description: payload.description || '',
-    price: Number(payload.price || 0),
+    title: productPayload.title || 'Untitled',
+    description: productPayload.description || '',
+    price: Number(productPayload.price || 0),
     comparePrice:
-      payload.comparePrice != null
-        ? Number(payload.comparePrice)
-        : Number(payload.originalPrice ?? payload.salePrice ?? payload.price ?? 0),
-    priceUae: Number(payload.priceUae ?? payload.price ?? 0),
-    priceKsa: payload.priceKsa != null ? Number(payload.priceKsa) : undefined,
-    priceQatar: payload.priceQatar != null ? Number(payload.priceQatar) : undefined,
-    priceKuwait: payload.priceKuwait != null ? Number(payload.priceKuwait) : undefined,
-    priceBahrain: payload.priceBahrain != null ? Number(payload.priceBahrain) : undefined,
-    priceOman: payload.priceOman != null ? Number(payload.priceOman) : undefined,
+      productPayload.comparePrice != null
+        ? Number(productPayload.comparePrice)
+        : Number(productPayload.originalPrice ?? productPayload.salePrice ?? productPayload.price ?? 0),
+    priceUae: Number(productPayload.priceUae ?? productPayload.price ?? 0),
+    priceKsa: productPayload.priceKsa != null ? Number(productPayload.priceKsa) : undefined,
+    priceQatar: productPayload.priceQatar != null ? Number(productPayload.priceQatar) : undefined,
+    priceKuwait: productPayload.priceKuwait != null ? Number(productPayload.priceKuwait) : undefined,
+    priceBahrain: productPayload.priceBahrain != null ? Number(productPayload.priceBahrain) : undefined,
+    priceOman: productPayload.priceOman != null ? Number(productPayload.priceOman) : undefined,
     originalPrice:
-      payload.originalPrice != null ? Number(payload.originalPrice) : Number(payload.salePrice ?? payload.price ?? 0),
+      productPayload.originalPrice != null ? Number(productPayload.originalPrice) : Number(productPayload.salePrice ?? productPayload.price ?? 0),
     compareAtPriceUae:
-      payload.compareAtPriceUae != null
-        ? Number(payload.compareAtPriceUae)
-        : Number(payload.originalPrice ?? payload.salePrice ?? payload.price ?? 0),
-    compareAtPriceKsa: payload.compareAtPriceKsa != null ? Number(payload.compareAtPriceKsa) : undefined,
-    compareAtPriceQatar: payload.compareAtPriceQatar != null ? Number(payload.compareAtPriceQatar) : undefined,
-    compareAtPriceKuwait: payload.compareAtPriceKuwait != null ? Number(payload.compareAtPriceKuwait) : undefined,
-    compareAtPriceBahrain: payload.compareAtPriceBahrain != null ? Number(payload.compareAtPriceBahrain) : undefined,
-    compareAtPriceOman: payload.compareAtPriceOman != null ? Number(payload.compareAtPriceOman) : undefined,
-    salePrice: payload.salePrice != null ? Number(payload.salePrice) : Number(payload.price || 0),
-    image: payload.image || payload.images?.[0] || '',
-    images: Array.isArray(payload.images) ? payload.images : [],
-    stock: Number(payload.stock || 0),
-    rating: Number(payload.rating || 0),
-    reviews: Number(payload.reviews || 0),
-    sku: payload.sku || '',
-    brand: payload.brand || payload.specs?.attributes?.brand || '',
-    specifications: payload.specifications || payload.specs?.specifications || payload.specs?.specificationValues || {},
-    pricesByCountry: payload.pricesByCountry,
+      productPayload.compareAtPriceUae != null
+        ? Number(productPayload.compareAtPriceUae)
+        : Number(productPayload.originalPrice ?? productPayload.salePrice ?? productPayload.price ?? 0),
+    compareAtPriceKsa: productPayload.compareAtPriceKsa != null ? Number(productPayload.compareAtPriceKsa) : undefined,
+    compareAtPriceQatar: productPayload.compareAtPriceQatar != null ? Number(productPayload.compareAtPriceQatar) : undefined,
+    compareAtPriceKuwait: productPayload.compareAtPriceKuwait != null ? Number(productPayload.compareAtPriceKuwait) : undefined,
+    compareAtPriceBahrain: productPayload.compareAtPriceBahrain != null ? Number(productPayload.compareAtPriceBahrain) : undefined,
+    compareAtPriceOman: productPayload.compareAtPriceOman != null ? Number(productPayload.compareAtPriceOman) : undefined,
+    salePrice: productPayload.salePrice != null ? Number(productPayload.salePrice) : Number(productPayload.price || 0),
+    image: productPayload.image || productPayload.images?.[0] || '',
+    images: Array.isArray(productPayload.images) ? productPayload.images : [],
+    stock: Number(productPayload.stock || 0),
+    rating: Number(productPayload.rating || 0),
+    reviews: Number(productPayload.reviews || 0),
+    sku: productPayload.sku || '',
+    brand: productPayload.brand || productPayload.specs?.attributes?.brand || '',
+    specifications: productPayload.specifications || productPayload.specs?.specifications || productPayload.specs?.specificationValues || {},
+    pricesByCountry: productPayload.pricesByCountry,
     specs: {
       ...mergeProductSeoIntoSpecs(normalizedSpecs.specs || {}, seo),
       ownership: {
