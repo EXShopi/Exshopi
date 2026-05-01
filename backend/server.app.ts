@@ -5677,11 +5677,25 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
           if (updateData[fieldName] !== undefined) fallbackData[fieldName] = updateData[fieldName];
         });
         if (updateData.specsJson !== undefined) fallbackData.specsJson = updateData.specsJson;
-        await prisma.product.update({
-          where: { id: req.params.id },
-          data: fallbackData as any,
-          select: { id: true },
-        });
+        try {
+          await prisma.product.update({
+            where: { id: req.params.id },
+            data: fallbackData as any,
+            select: { id: true },
+          });
+        } catch (fallbackError) {
+          if ((fallbackError as { code?: string })?.code !== 'P2022') throw fallbackError;
+          console.error('[api/admin/products/:id] fallback update hit missing column, retrying minimum fields only', fallbackError);
+          const minimumData: Record<string, any> = {};
+          ['title', 'slug', 'description', 'sku', 'brand', 'price', 'stock'].forEach((fieldName) => {
+            if (updateData[fieldName] !== undefined) minimumData[fieldName] = updateData[fieldName];
+          });
+          await prisma.product.update({
+            where: { id: req.params.id },
+            data: minimumData as any,
+            select: { id: true },
+          });
+        }
       }
 
       if (nextPayload.image || nextPayload.images) {

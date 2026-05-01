@@ -1787,7 +1787,8 @@ useEffect(() => {
 
       navigate(mode === 'admin' ? '/admin/products' : '/seller/products');
     } catch (submitError: unknown) {
-      setError('Product creation failed. Please check pricing or required fields.');
+      const message = getErrorMessage(submitError, 'Product creation failed. Please check pricing or required fields.');
+      setError(message || 'Product creation failed. Please check pricing or required fields.');
     } finally {
       setLoading(false);
     }
