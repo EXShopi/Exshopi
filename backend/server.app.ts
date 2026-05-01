@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'path';
 import { z } from 'zod';
 import { db } from './database';
+import { prisma } from './prisma';
 import { prismaRuntime } from './prismaRuntime';
 import { supabaseRuntime } from './supabaseRuntime';
 import { ensureUploadDir, uploadDataUrl } from './uploadStorage';
@@ -1798,6 +1799,27 @@ const gccPricesByCountrySchema = z
     KW: z.coerce.number().nonnegative(),
     BH: z.coerce.number().nonnegative(),
     OM: z.coerce.number().nonnegative(),
+  })
+  .strict();
+
+const adminPriceValueSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? Number.NaN : value),
+  z.coerce.number().refine((value) => Number.isFinite(value) && value >= 0, 'Price must be a valid non-negative number')
+);
+
+const adminProductPricesPayloadSchema = z
+  .object({
+    basePriceAED: adminPriceValueSchema,
+    pricesByCountry: z
+      .object({
+        AE: adminPriceValueSchema,
+        SA: adminPriceValueSchema,
+        QA: adminPriceValueSchema,
+        KW: adminPriceValueSchema,
+        BH: adminPriceValueSchema,
+        OM: adminPriceValueSchema,
+      })
+      .strict(),
   })
   .strict();
 
@@ -5107,6 +5129,95 @@ app.post('/api/admin/products', authMiddleware, async (req: Request, res: Respon
   } catch (error) {
     logProductCreateError('api/admin/products', error);
     res.status(400).json({ error: productCreateFailureMessage });
+  }
+});
+
+app.patch('/api/admin/products/:id/prices', authMiddleware, async (req: Request, res: Response) => {
+  const scope = 'api/admin/products/:id/prices';
+  try {
+    if (!isAdminLike(req.user?.role)) return res.status(403).json({ error: 'Admin only' });
+    const payload = adminProductPricesPayloadSchema.parse(req.body);
+    const countryPrices = payload.pricesByCountry as Record<keyof typeof GCC_COUNTRY_META, number>;
+    const pricesByCountry = Object.fromEntries(
+      Object.entries(countryPrices).map(([countryCode, price]) => [
+        countryCode,
+        {
+          currency: getCountryMeta(countryCode).currency,
+          price: Number(price),
+        },
+      ])
+    );
+
+    console.info(`[${scope}] sanitized quick price payload`, {
+      productId: req.params.id,
+      bodyKeys: Object.keys(req.body || {}).sort(),
+      priceKeys: Object.keys(payload.pricesByCountry || {}).sort(),
+    });
+
+    const currentProduct = prismaRuntime.enabled
+      ? await prismaRuntime.getProduct(req.params.id)
+      : supabaseRuntime.enabled
+      ? await supabaseRuntime.getProduct(req.params.id)
+      : db.getProduct(req.params.id);
+
+    if (!currentProduct) return res.status(404).json({ error: 'Product not found' });
+
+    const nextSpecs = {
+      ...((currentProduct as any)?.specs || {}),
+      basePriceAED: payload.basePriceAED,
+      pricesByCountry,
+      pricingFallbacks: {
+        priceUae: countryPrices.AE,
+        priceKsa: countryPrices.SA,
+        priceQatar: countryPrices.QA,
+        priceKuwait: countryPrices.KW,
+        priceBahrain: countryPrices.BH,
+        priceOman: countryPrices.OM,
+      },
+    };
+
+    let updated: any = null;
+    if (prismaRuntime.enabled) {
+      await prisma.product.update({
+        where: { id: req.params.id },
+        data: {
+          price: payload.basePriceAED,
+          specsJson: nextSpecs as any,
+        },
+      });
+      updated = await prismaRuntime.getProduct(req.params.id);
+    } else if (supabaseRuntime.enabled) {
+      updated = await supabaseRuntime.updateProduct(req.params.id, {
+        price: payload.basePriceAED,
+        salePrice: payload.basePriceAED,
+        specs: nextSpecs,
+      } as any);
+    } else {
+      updated = db.updateProduct(req.params.id, {
+        price: payload.basePriceAED,
+        salePrice: payload.basePriceAED,
+        specs: nextSpecs,
+      } as any);
+    }
+
+    if (!updated) return res.status(404).json({ error: 'Product not found' });
+    res.json(await serializeMarketplaceProductAsync({ ...updated, price: payload.basePriceAED, pricesByCountry, specs: nextSpecs }));
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.warn(`[${scope}] quick price validation failed`, error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })));
+      return res.status(400).json({ error: 'Prices could not be updated. Please try again.' });
+    }
+
+    const prismaError = error as { code?: string; message?: string; meta?: unknown };
+    console.error(`[${scope}] quick price update failed`, {
+      code: prismaError?.code,
+      message: prismaError?.message || (error instanceof Error ? error.message : String(error)),
+      meta: prismaError?.meta,
+    });
+    res.status(500).json({ error: 'Prices could not be updated. Please try again.' });
   }
 });
 

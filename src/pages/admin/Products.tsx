@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
-import { AlertCircle, CheckCircle2, Copy, Download, Eye, Package2, Pencil, Search, Store, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Copy, Download, Eye, Package2, Pencil, Search, Store, Trash2, X, XCircle } from 'lucide-react';
 import { formatCurrencyForCountry } from '../../lib/currency';
+import { COUNTRY_CONFIG, convertFromAed, SupportedCountryCode } from '../../lib/countryConfig';
 import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
@@ -15,6 +16,54 @@ const statusTone: Record<string, string> = {
   live: 'bg-emerald-100 text-emerald-700',
   rejected: 'bg-rose-100 text-rose-700',
   archived: 'bg-slate-100 text-slate-700',
+};
+
+const GCC_PRICE_CODES: SupportedCountryCode[] = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'];
+
+const productCountryPriceFields: Record<SupportedCountryCode, string> = {
+  AE: 'priceUae',
+  SA: 'priceKsa',
+  QA: 'priceQatar',
+  KW: 'priceKuwait',
+  BH: 'priceBahrain',
+  OM: 'priceOman',
+};
+
+const toEditablePrice = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(numeric) : '';
+};
+
+const readCountryPrice = (product: any, countryCode: SupportedCountryCode) => {
+  const directValue = product?.[productCountryPriceFields[countryCode]];
+  const countryEntry = product?.pricesByCountry?.[countryCode] || product?.specs?.pricesByCountry?.[countryCode];
+  const jsonValue =
+    countryEntry && typeof countryEntry === 'object'
+      ? countryEntry.price
+      : countryEntry;
+  const value = directValue ?? jsonValue ?? (countryCode === 'AE' ? product?.price : undefined);
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+};
+
+const roundCountryPrice = (value: number, countryCode: SupportedCountryCode) => {
+  if (!Number.isFinite(value)) return 0;
+  if (['KW', 'BH', 'OM'].includes(countryCode)) {
+    return Number((Math.round(value * 10) / 10).toFixed(2));
+  }
+  return Math.round(value);
+};
+
+const buildCountryPricesFromAed = (basePriceAED: number, roundPrices: boolean) => {
+  return GCC_PRICE_CODES.reduce((acc, countryCode) => {
+    const converted = countryCode === 'AE' ? basePriceAED : convertFromAed(basePriceAED, countryCode);
+    acc[countryCode] = roundPrices ? roundCountryPrice(converted, countryCode) : Number(converted.toFixed(2));
+    return acc;
+  }, {} as Record<SupportedCountryCode, number>);
+};
+
+const emitAdminToast = (type: 'success' | 'error', message: string) => {
+  window.dispatchEvent(new CustomEvent('exshopi:toast', { detail: { type, message } }));
 };
 
 const getEffectiveStatus = (product: any) => {
@@ -57,6 +106,18 @@ export function AdminProducts() {
   const [error, setError] = useState('');
   const [importingBundledDrafts, setImportingBundledDrafts] = useState(false);
   const [importNotice, setImportNotice] = useState('');
+  const [priceEditorProduct, setPriceEditorProduct] = useState<any | null>(null);
+  const [priceEditorValues, setPriceEditorValues] = useState<Record<SupportedCountryCode, string>>({
+    AE: '',
+    SA: '',
+    QA: '',
+    KW: '',
+    BH: '',
+    OM: '',
+  });
+  const [priceEditorRound, setPriceEditorRound] = useState(true);
+  const [priceEditorError, setPriceEditorError] = useState('');
+  const [savingQuickPrices, setSavingQuickPrices] = useState(false);
 
   useEffect(() => {
     reloadProducts();
@@ -187,6 +248,117 @@ export function AdminProducts() {
       try { localStorage.setItem('exshopi:product-deleted', JSON.stringify({ id, ts: Date.now() })); } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Failed to delete product', error);
+    }
+  };
+
+  const openPriceEditor = (product: any) => {
+    const basePriceAED = readCountryPrice(product, 'AE') ?? 0;
+    const convertedPrices = buildCountryPricesFromAed(basePriceAED, true);
+    const nextValues = GCC_PRICE_CODES.reduce((acc, countryCode) => {
+      acc[countryCode] = toEditablePrice(readCountryPrice(product, countryCode) ?? convertedPrices[countryCode]);
+      return acc;
+    }, {} as Record<SupportedCountryCode, string>);
+
+    setPriceEditorProduct(product);
+    setPriceEditorValues(nextValues);
+    setPriceEditorRound(true);
+    setPriceEditorError('');
+  };
+
+  const closePriceEditor = () => {
+    if (savingQuickPrices) return;
+    setPriceEditorProduct(null);
+    setPriceEditorError('');
+  };
+
+  const handleBasePriceChange = (value: string) => {
+    const numeric = Number(value);
+    setPriceEditorValues((current) => {
+      if (!Number.isFinite(numeric)) {
+        return { ...current, AE: value };
+      }
+
+      const convertedPrices = buildCountryPricesFromAed(numeric, priceEditorRound);
+      return GCC_PRICE_CODES.reduce((acc, countryCode) => {
+        acc[countryCode] = countryCode === 'AE' ? value : toEditablePrice(convertedPrices[countryCode]);
+        return acc;
+      }, {} as Record<SupportedCountryCode, string>);
+    });
+  };
+
+  const handleRoundPricesChange = (checked: boolean) => {
+    setPriceEditorRound(checked);
+    const basePriceAED = Number(priceEditorValues.AE);
+    if (!Number.isFinite(basePriceAED)) return;
+
+    const convertedPrices = buildCountryPricesFromAed(basePriceAED, checked);
+    setPriceEditorValues(
+      GCC_PRICE_CODES.reduce((acc, countryCode) => {
+        acc[countryCode] = toEditablePrice(convertedPrices[countryCode]);
+        return acc;
+      }, {} as Record<SupportedCountryCode, string>)
+    );
+  };
+
+  const handleCountryPriceChange = (countryCode: SupportedCountryCode, value: string) => {
+    setPriceEditorValues((current) => ({ ...current, [countryCode]: value }));
+  };
+
+  const handleSaveQuickPrices = async () => {
+    if (!priceEditorProduct) return;
+
+    const parsedPrices = GCC_PRICE_CODES.reduce((acc, countryCode) => {
+      const numeric = Number(priceEditorValues[countryCode]);
+      acc[countryCode] = Number.isFinite(numeric) ? numeric : Number.NaN;
+      return acc;
+    }, {} as Record<SupportedCountryCode, number>);
+
+    const hasInvalidPrice = GCC_PRICE_CODES.some((countryCode) => !Number.isFinite(parsedPrices[countryCode]) || parsedPrices[countryCode] < 0);
+    if (hasInvalidPrice) {
+      setPriceEditorError('Enter valid non-negative prices for all GCC countries.');
+      return;
+    }
+
+    try {
+      setSavingQuickPrices(true);
+      setPriceEditorError('');
+      const updated = await adminProductAPI.updatePrices(priceEditorProduct.id, {
+        basePriceAED: parsedPrices.AE,
+        pricesByCountry: parsedPrices,
+      });
+
+      setProducts((current) =>
+        current.map((product) => {
+          if (product.id !== priceEditorProduct.id) return product;
+          const nextProduct = updated && typeof updated === 'object' ? { ...product, ...updated } : { ...product };
+          return {
+            ...nextProduct,
+            price: parsedPrices.AE,
+            priceUae: parsedPrices.AE,
+            priceKsa: parsedPrices.SA,
+            priceQatar: parsedPrices.QA,
+            priceKuwait: parsedPrices.KW,
+            priceBahrain: parsedPrices.BH,
+            priceOman: parsedPrices.OM,
+            pricesByCountry: GCC_PRICE_CODES.reduce((acc, countryCode) => {
+              acc[countryCode] = {
+                currency: COUNTRY_CONFIG[countryCode].currency,
+                price: parsedPrices[countryCode],
+              };
+              return acc;
+            }, {} as Record<SupportedCountryCode, { currency: string; price: number }>),
+          };
+        })
+      );
+      invalidateProductCaches(priceEditorProduct.id);
+      emitAdminToast('success', 'Prices updated for all GCC countries.');
+      setPriceEditorProduct(null);
+    } catch (error) {
+      console.error('Failed to update quick prices', error);
+      setPriceEditorError('Prices could not be updated. Please try again.');
+      emitAdminToast('error', 'Prices could not be updated. Please try again.');
+    } finally {
+      setSavingQuickPrices(false);
     }
   };
 
@@ -498,15 +670,28 @@ export function AdminProducts() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-sm font-medium text-slate-600">
-                        <p className="font-black text-slate-900">
-                          {formatCurrencyForCountry(Number(product.priceUae ?? product.price ?? 0), 'AE')}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">
-                          {product.priceKsa != null
-                            ? formatCurrencyForCountry(Number(product.priceKsa || 0), 'SA')
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-black text-slate-900">
+                              {formatCurrencyForCountry(Number(readCountryPrice(product, 'AE') ?? product.price ?? 0), 'AE')}
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              {readCountryPrice(product, 'SA') != null
+                            ? formatCurrencyForCountry(Number(readCountryPrice(product, 'SA') || 0), 'SA')
                             : 'KSA price falls back to UAE pricing'}
-                        </p>
-                        <p className="mt-1">{Number(product.stock || 0)} in stock</p>
+                            </p>
+                            <p className="mt-1">{Number(product.stock || 0)} in stock</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openPriceEditor(product)}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-blue-50 text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
+                            title="Quick Price"
+                            aria-label={`Quick price for ${product.title || 'product'}`}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-sm font-medium text-slate-600">
                         <p>{Number(product.views || 0).toLocaleString()} views</p>
@@ -609,6 +794,97 @@ export function AdminProducts() {
           </div>
         )}
       </div>
+      {priceEditorProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Quick Price</p>
+                <h3 className="mt-1 text-xl font-black text-slate-950">{priceEditorProduct.title || 'Product pricing'}</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">{priceEditorProduct.sku || priceEditorProduct.id}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closePriceEditor}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                aria-label="Close quick price editor"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-5 px-6 py-5">
+              <label className="block">
+                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">UAE Price (AED)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={priceEditorValues.AE}
+                  onChange={(event) => handleBasePriceChange(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-lg font-black text-slate-950 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <span>
+                  <span className="block text-sm font-black text-slate-900">Round prices</span>
+                  <span className="block text-xs font-semibold text-slate-500">AED, SAR, QAR to 1. KWD, BHD, OMR to 0.1.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={priceEditorRound}
+                  onChange={(event) => handleRoundPricesChange(event.target.checked)}
+                  className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {GCC_PRICE_CODES.map((countryCode) => (
+                  <label key={countryCode} className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                      {COUNTRY_CONFIG[countryCode].currency}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step={['KW', 'BH', 'OM'].includes(countryCode) ? '0.01' : '1'}
+                      value={priceEditorValues[countryCode]}
+                      onChange={(event) => handleCountryPriceChange(countryCode, event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-black text-slate-950 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              {priceEditorError && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                  {priceEditorError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-6 py-5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closePriceEditor}
+                disabled={savingQuickPrices}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickPrices}
+                disabled={savingQuickPrices}
+                className="rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingQuickPrices ? 'Saving...' : 'Save Prices'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

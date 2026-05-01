@@ -1440,6 +1440,27 @@ export const adminProductAPI = {
     return payload;
   },
 
+  async updatePrices(
+    id: string,
+    data: {
+      basePriceAED: number | string;
+      pricesByCountry: Record<'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM', number | string>;
+    }
+  ) {
+    const res = await fetchWithAuthRetry(`/admin/products/${id}/prices`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    const payload = await parseApiResponse(res);
+    invalidateProductCaches(id);
+    return payload;
+  },
+
   async delete(id: string) {
     const res = await fetchWithAuthRetry(`/admin/products/${id}`, {
       method: 'DELETE',
