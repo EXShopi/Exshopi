@@ -5263,6 +5263,7 @@ app.patch('/api/admin/products/:id/prices', authMiddleware, async (req: Request,
         await prisma.product.update({
           where: { id: req.params.id },
           data: updateData as any,
+          select: { id: true },
         });
       } catch (error) {
         const prismaError = error as { code?: string };
@@ -5275,12 +5276,14 @@ app.patch('/api/admin/products/:id/prices', authMiddleware, async (req: Request,
             await prisma.product.update({
               where: { id: req.params.id },
               data: fallbackData,
+              select: { id: true },
             });
           } catch (fallbackError) {
             if ((fallbackError as { code?: string })?.code !== 'P2022') throw fallbackError;
             await prisma.product.update({
               where: { id: req.params.id },
               data: { price: payload.basePriceAED },
+              select: { id: true },
             });
           }
         } else {
@@ -5288,7 +5291,12 @@ app.patch('/api/admin/products/:id/prices', authMiddleware, async (req: Request,
         }
       }
 
-      updated = await prismaRuntime.getProduct(req.params.id);
+      try {
+        updated = await prismaRuntime.getProduct(req.params.id);
+      } catch (error) {
+        console.error('PRICE UPDATE READBACK ERROR:', error);
+        updated = currentProduct;
+      }
     } else if (supabaseRuntime.enabled) {
       updated = await supabaseRuntime.updateProduct(req.params.id, {
         price: payload.basePriceAED,
