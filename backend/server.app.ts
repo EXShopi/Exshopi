@@ -5589,15 +5589,148 @@ app.put('/api/admin/products/:id', authMiddleware, async (req: Request, res: Res
 
     let updated: any = null;
     if (prismaRuntime.enabled) {
-      updated = await prismaRuntime.updateProduct(req.params.id, nextPayload as any);
+      const productColumns = await getExistingProductColumns();
+      const inspectedColumns = productColumns.size > 0;
+      const includeColumn = (columnName: string) => !inspectedColumns || productColumns.has(columnName);
+      const updateData: Record<string, any> = {};
+      const setIfColumnExists = (fieldName: string, columnName: string, value: any) => {
+        if (value !== undefined && includeColumn(columnName)) {
+          updateData[fieldName] = value;
+        }
+      };
+
+      setIfColumnExists('categoryId', 'category_id', nextPayload.categoryId);
+      setIfColumnExists('title', 'title', nextPayload.title);
+      setIfColumnExists('slug', 'slug', nextPayload.slug);
+      setIfColumnExists('metaTitle', 'meta_title', nextPayload.metaTitle || nextPayload.specs?.metaTitle);
+      setIfColumnExists('metaDescription', 'meta_description', nextPayload.metaDescription || nextPayload.specs?.metaDescription);
+      setIfColumnExists('metaKeywords', 'meta_keywords', nextPayload.metaKeywords || nextPayload.specs?.metaKeywords);
+      setIfColumnExists('canonicalUrl', 'canonical_url', nextPayload.canonicalUrl || nextPayload.specs?.canonicalUrl);
+      setIfColumnExists('ogTitle', 'og_title', nextPayload.ogTitle || nextPayload.specs?.ogTitle);
+      setIfColumnExists('ogDescription', 'og_description', nextPayload.ogDescription || nextPayload.specs?.ogDescription);
+      setIfColumnExists('ogImage', 'og_image', nextPayload.ogImage || nextPayload.specs?.ogImage);
+      setIfColumnExists('shortDescription', 'short_description', nextPayload.specs?.shortDescription);
+      setIfColumnExists('description', 'description', nextPayload.description);
+      setIfColumnExists('sku', 'sku', nextPayload.sku);
+      setIfColumnExists('brand', 'brand', nextPayload.brand);
+      setIfColumnExists('price', 'price', nextPayload.price);
+      setIfColumnExists('originalPrice', 'original_price', nextPayload.originalPrice);
+      setIfColumnExists('salePrice', 'sale_price', nextPayload.salePrice);
+      setIfColumnExists('stock', 'stock', nextPayload.stock);
+      setIfColumnExists('parentCategorySlug', 'parent_category_slug', nextPayload.specs?.parentCategorySlug || nextPayload.specs?.categorySlug);
+      setIfColumnExists('categorySlug', 'category_slug', nextPayload.specs?.categorySlug);
+      setIfColumnExists('subcategorySlug', 'subcategory_slug', nextPayload.specs?.subcategorySlug);
+      setIfColumnExists('childCategorySlug', 'child_category_slug', nextPayload.specs?.childCategorySlug);
+      if (nextPayload.specs?.categoryPath && includeColumn('category_path_json')) {
+        updateData.categoryPathJson = Array.isArray(nextPayload.specs.categoryPath)
+          ? nextPayload.specs.categoryPath
+          : String(nextPayload.specs.categoryPath).split('/').filter(Boolean);
+      }
+      setIfColumnExists('specsJson', 'specs_json', nextPayload.specs);
+      setIfColumnExists('specifications', 'specifications', nextPayload.specifications || nextPayload.specs?.specifications || nextPayload.specs?.specificationValues);
+      setIfColumnExists('pricesByCountry', 'prices_by_country', nextPayload.pricesByCountry || nextPayload.specs?.pricesByCountry);
+      setIfColumnExists('badgesJson', 'badges_json', nextPayload.badges || nextPayload.specs?.badges);
+      setIfColumnExists('ownership', 'ownership', nextPayload.ownership || nextPayload.specs?.ownership);
+      setIfColumnExists('createdByRole', 'created_by_role', nextPayload.createdByRole || nextPayload.specs?.createdByRole);
+      setIfColumnExists('approvalRequestedAt', 'approval_requested_at', nextPayload.approvalRequestedAt ? new Date(nextPayload.approvalRequestedAt) : undefined);
+      setIfColumnExists('approvalStatus', 'approval_status', nextPayload.approvalStatus);
+      setIfColumnExists('status', 'status', nextPayload.productStatus === 'pending' ? 'pending_approval' : (nextPayload.productStatus || nextPayload.status));
+      setIfColumnExists('visibilityStatus', 'visibility_status', nextPayload.visibilityStatus);
+      setIfColumnExists('rejectionReason', 'rejection_reason', nextPayload.rejectionReason);
+      setIfColumnExists('approvalNotes', 'approval_notes', nextPayload.approvalNotes);
+      setIfColumnExists('approvedAt', 'approved_at', nextPayload.approvedAt ? new Date(nextPayload.approvedAt) : undefined);
+      setIfColumnExists('rejectedAt', 'rejected_at', nextPayload.rejectedAt ? new Date(nextPayload.rejectedAt) : undefined);
+
+      const optionalPriceColumns: Array<[string, string]> = [
+        ['comparePrice', 'compare_price'],
+        ['compareAtPrice', 'compare_at_price'],
+        ['priceUae', 'price_uae'],
+        ['priceKsa', 'price_ksa'],
+        ['priceQatar', 'price_qatar'],
+        ['priceKuwait', 'price_kuwait'],
+        ['priceBahrain', 'price_bahrain'],
+        ['priceOman', 'price_oman'],
+        ['compareAtPriceUae', 'compare_at_price_uae'],
+        ['compareAtPriceKsa', 'compare_at_price_ksa'],
+        ['compareAtPriceQatar', 'compare_at_price_qatar'],
+        ['compareAtPriceKuwait', 'compare_at_price_kuwait'],
+        ['compareAtPriceBahrain', 'compare_at_price_bahrain'],
+        ['compareAtPriceOman', 'compare_at_price_oman'],
+      ];
+      optionalPriceColumns.forEach(([fieldName, columnName]) => {
+        if (nextPayload[fieldName] !== undefined && productColumns.has(columnName)) {
+          updateData[fieldName] = nextPayload[fieldName];
+        }
+      });
+
+      try {
+        await prisma.product.update({
+          where: { id: req.params.id },
+          data: updateData as any,
+          select: { id: true },
+        });
+      } catch (error) {
+        if ((error as { code?: string })?.code !== 'P2022') throw error;
+        console.error('[api/admin/products/:id] safe product update hit missing column, retrying core fields only', error);
+        const fallbackData: Record<string, any> = {};
+        ['title', 'slug', 'description', 'sku', 'brand', 'price', 'stock', 'status', 'visibilityStatus', 'approvalStatus'].forEach((fieldName) => {
+          if (updateData[fieldName] !== undefined) fallbackData[fieldName] = updateData[fieldName];
+        });
+        if (updateData.specsJson !== undefined) fallbackData.specsJson = updateData.specsJson;
+        await prisma.product.update({
+          where: { id: req.params.id },
+          data: fallbackData as any,
+          select: { id: true },
+        });
+      }
+
+      if (nextPayload.image || nextPayload.images) {
+        const imageUrls = [nextPayload.image, ...(nextPayload.images || [])].filter(Boolean);
+        try {
+          await prisma.productImage.deleteMany({ where: { productId: req.params.id } });
+          await Promise.all(
+            imageUrls.map((imageUrl: string, index: number) =>
+              prisma.productImage.create({
+                data: {
+                  productId: req.params.id,
+                  imageUrl,
+                  isPrimary: index === 0,
+                  sortOrder: index,
+                },
+                select: { id: true },
+              })
+            )
+          );
+        } catch (imageError) {
+          console.error('[api/admin/products/:id] image relation update failed; specs fallback retained', imageError);
+        }
+      }
+
+      updated = {
+        ...currentProduct,
+        ...nextPayload,
+        image: nextPayload.image || (currentProduct as any).image || '',
+        images: Array.isArray(nextPayload.images) ? nextPayload.images : (currentProduct as any).images || [],
+      };
     } else if (supabaseRuntime.enabled) {
       updated = await supabaseRuntime.updateProduct(req.params.id, nextPayload as any);
     } else {
       updated = db.updateProduct(req.params.id, nextPayload as any);
     }
     if (!updated) return res.status(404).json({ error: 'Product not found' });
-    res.json(await serializeMarketplaceProductAsync(updated));
+    try {
+      res.json(await serializeMarketplaceProductAsync(updated));
+    } catch (serializeError) {
+      console.error('[api/admin/products/:id] serialize after update failed', serializeError);
+      res.json(updated);
+    }
   } catch (error) {
+    const prismaError = error as { code?: string; message?: string; meta?: unknown };
+    console.error('[api/admin/products/:id] update failed', {
+      code: prismaError?.code,
+      message: prismaError?.message || (error instanceof Error ? error.message : String(error)),
+      meta: prismaError?.meta,
+    });
     res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
   }
 });
