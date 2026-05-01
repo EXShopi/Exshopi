@@ -1888,6 +1888,21 @@ const getExistingProductColumns = async () => {
   }
 };
 
+const getExistingTableColumns = async (tableName: string) => {
+  if (!prismaRuntime.enabled) return new Set<string>();
+  try {
+    const rows = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = ${tableName}
+    `;
+    return new Set(rows.map((row) => row.column_name));
+  } catch (error) {
+    console.warn(`[api/admin/products] could not inspect columns for ${tableName}`, error);
+    return new Set<string>();
+  }
+};
+
 const finalProductCreatePayloadSchema = z
   .object({
     title: z.string().min(1).max(200),
@@ -5355,46 +5370,87 @@ app.patch('/api/admin/products/:id/image', authMiddleware, async (req: Request, 
     const image = payload.image.trim();
 
     const currentProduct = prismaRuntime.enabled
-      ? await prismaRuntime.getProduct(req.params.id)
+      ? await prisma.product.findUnique({
+          where: { id: req.params.id },
+          select: { id: true, specsJson: true },
+        })
       : supabaseRuntime.enabled
       ? await supabaseRuntime.getProduct(req.params.id)
       : db.getProduct(req.params.id);
 
     if (!currentProduct) return res.status(404).json({ error: 'Product not found' });
 
-    const existingImages = Array.isArray((currentProduct as any).images) ? (currentProduct as any).images : [];
+    let existingImages = Array.isArray((currentProduct as any).images) ? (currentProduct as any).images : [];
+    if (prismaRuntime.enabled) {
+      try {
+        const imageRows = await prisma.productImage.findMany({
+          where: { productId: req.params.id },
+          select: { imageUrl: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        });
+        existingImages = imageRows.map((entry) => entry.imageUrl).filter(Boolean);
+      } catch (error) {
+        console.warn(`[${scope}] product image read failed; using JSON fallback`, error);
+      }
+    }
     const nextImages = [image, ...existingImages.filter((entry: string) => entry && entry !== image)];
+    const nextSpecs = {
+      ...(((currentProduct as any).specsJson || (currentProduct as any).specs || {}) as Record<string, any>),
+      image,
+      images: nextImages,
+    };
 
     let updated: any = null;
     if (prismaRuntime.enabled) {
-      updated = await prismaRuntime.updateProduct(req.params.id, {
-        image,
-        images: nextImages,
-        specs: {
-          ...((currentProduct as any).specs || {}),
-          image,
-          images: nextImages,
-        },
-      } as any);
+      const productColumns = await getExistingProductColumns();
+      const productImageColumns = await getExistingTableColumns('product_images');
+
+      if (!productColumns.size || productColumns.has('specs_json')) {
+        try {
+          await prisma.product.update({
+            where: { id: req.params.id },
+            data: { specsJson: nextSpecs as any },
+            select: { id: true },
+          });
+        } catch (error) {
+          if ((error as { code?: string })?.code !== 'P2022') throw error;
+          console.warn(`[${scope}] specs_json is not available; skipping JSON image fallback`);
+        }
+      }
+
+      if (productImageColumns.has('product_id') && productImageColumns.has('image_url')) {
+        try {
+          await prisma.productImage.deleteMany({ where: { productId: req.params.id } });
+          await Promise.all(
+            nextImages.map((imageUrl, index) =>
+              prisma.productImage.create({
+                data: {
+                  productId: req.params.id,
+                  imageUrl,
+                  isPrimary: index === 0,
+                  sortOrder: index,
+                },
+                select: { id: true },
+              })
+            )
+          );
+        } catch (error) {
+          console.error(`[${scope}] product image relation update failed; JSON fallback was saved`, error);
+        }
+      }
+
+      updated = { ...(currentProduct as any), image, images: nextImages, specs: nextSpecs };
     } else if (supabaseRuntime.enabled) {
       updated = await supabaseRuntime.updateProduct(req.params.id, {
         image,
         images: nextImages,
-        specs: {
-          ...((currentProduct as any).specs || {}),
-          image,
-          images: nextImages,
-        },
+        specs: nextSpecs,
       } as any);
     } else {
       updated = db.updateProduct(req.params.id, {
         image,
         images: nextImages,
-        specs: {
-          ...((currentProduct as any).specs || {}),
-          image,
-          images: nextImages,
-        },
+        specs: nextSpecs,
       } as any);
     }
 

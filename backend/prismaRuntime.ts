@@ -369,13 +369,14 @@ function mapProduct(product: any): Product {
   const orderedImages = images
     .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0))
     .map((image: any) => image.imageUrl);
+  // Merge explicit DB slug fields into the specs object for compatibility
+  const specs = (product.specsJson as Record<string, any>) || {};
   const primaryImage =
     images.find((image: any) => image.isPrimary)?.imageUrl ||
     orderedImages[0] ||
+    specs.image ||
     '';
 
-  // Merge explicit DB slug fields into the specs object for compatibility
-  const specs = (product.specsJson as Record<string, any>) || {};
   const deletionMeta = (specs.__deletion as Record<string, any>) || {};
   if (!specs.metaTitle && product.metaTitle) specs.metaTitle = product.metaTitle;
   if (!specs.metaDescription && product.metaDescription) specs.metaDescription = product.metaDescription;
