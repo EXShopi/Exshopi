@@ -29,6 +29,42 @@ const enabled =
   process.env.USE_PRISMA_RUNTIME === 'true' ||
   process.env.EXSHOPI_DB_MODE === 'prisma';
 const SHOULD_IMPORT_BUNDLED_DRAFTS = process.env.ENABLE_BUNDLED_DRAFT_IMPORT === 'true';
+const GCC_RATE_FROM_AED: Record<string, number> = {
+  AE: 1,
+  SA: 1.02,
+  QA: 0.99,
+  KW: 0.083,
+  BH: 0.102,
+  OM: 0.105,
+};
+
+function ceilToStep(value: number, step: number) {
+  return Math.ceil(value / step) * step;
+}
+
+function convertAedToSmartGccPrice(amountAed: unknown, countryCode?: string | null) {
+  const base = Number(amountAed ?? 0);
+  const code = String(countryCode || 'AE').toUpperCase();
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  const converted = Number((base * (GCC_RATE_FROM_AED[code] || 1)).toFixed(2));
+
+  switch (code) {
+    case 'SA':
+      return Math.max(1, ceilToStep(converted, 50) - 1);
+    case 'QA':
+      return Math.max(1, ceilToStep(converted, 100) - 1);
+    case 'KW':
+    case 'OM':
+      return converted < 10
+        ? Number((Math.ceil(converted * 10) / 10).toFixed(2))
+        : Math.max(0.1, ceilToStep(converted, 10) - 1);
+    case 'BH':
+      return ceilToStep(converted, 5);
+    case 'AE':
+    default:
+      return Math.round(converted);
+  }
+}
 
 const productReadSelect = {
   id: true,
@@ -393,11 +429,11 @@ function mapProduct(product: any): Product {
   const basePrice = toNumber(product.price);
   const fallbackComparePrice = toNumber(product.originalPrice || product.salePrice || product.price);
   const priceUae = toNumber((product as any).priceUae ?? product.price);
-  const priceKsa = (product as any).priceKsa != null ? toNumber((product as any).priceKsa) : priceUae;
-  const priceQatar = (product as any).priceQatar != null ? toNumber((product as any).priceQatar) : priceUae;
-  const priceKuwait = (product as any).priceKuwait != null ? toNumber((product as any).priceKuwait) : priceUae;
-  const priceBahrain = (product as any).priceBahrain != null ? toNumber((product as any).priceBahrain) : priceUae;
-  const priceOman = (product as any).priceOman != null ? toNumber((product as any).priceOman) : priceUae;
+  const priceKsa = (product as any).priceKsa != null ? toNumber((product as any).priceKsa) : convertAedToSmartGccPrice(priceUae, 'SA');
+  const priceQatar = (product as any).priceQatar != null ? toNumber((product as any).priceQatar) : convertAedToSmartGccPrice(priceUae, 'QA');
+  const priceKuwait = (product as any).priceKuwait != null ? toNumber((product as any).priceKuwait) : convertAedToSmartGccPrice(priceUae, 'KW');
+  const priceBahrain = (product as any).priceBahrain != null ? toNumber((product as any).priceBahrain) : convertAedToSmartGccPrice(priceUae, 'BH');
+  const priceOman = (product as any).priceOman != null ? toNumber((product as any).priceOman) : convertAedToSmartGccPrice(priceUae, 'OM');
   const pricesByCountry =
     ((product as any).pricesByCountry as any) ||
     specs.pricesByCountry || {
@@ -440,23 +476,23 @@ function mapProduct(product: any): Product {
     compareAtPriceKsa:
       (product as any).compareAtPriceKsa != null
         ? toNumber((product as any).compareAtPriceKsa)
-        : fallbackComparePrice,
+        : convertAedToSmartGccPrice(fallbackComparePrice, 'SA'),
     compareAtPriceQatar:
       (product as any).compareAtPriceQatar != null
         ? toNumber((product as any).compareAtPriceQatar)
-        : fallbackComparePrice,
+        : convertAedToSmartGccPrice(fallbackComparePrice, 'QA'),
     compareAtPriceKuwait:
       (product as any).compareAtPriceKuwait != null
         ? toNumber((product as any).compareAtPriceKuwait)
-        : fallbackComparePrice,
+        : convertAedToSmartGccPrice(fallbackComparePrice, 'KW'),
     compareAtPriceBahrain:
       (product as any).compareAtPriceBahrain != null
         ? toNumber((product as any).compareAtPriceBahrain)
-        : fallbackComparePrice,
+        : convertAedToSmartGccPrice(fallbackComparePrice, 'BH'),
     compareAtPriceOman:
       (product as any).compareAtPriceOman != null
         ? toNumber((product as any).compareAtPriceOman)
-        : fallbackComparePrice,
+        : convertAedToSmartGccPrice(fallbackComparePrice, 'OM'),
     salePrice: product.salePrice ? toNumber(product.salePrice) : undefined,
     image: primaryImage,
     images: orderedImages.slice(primaryImage ? 1 : 0),
@@ -516,22 +552,22 @@ function sanitizeProductCreatePayload(input: any, context: {
   const salePrice = toNullableNumber(input.salePrice) ?? price;
   const stock = Math.max(0, Math.trunc(toNullableNumber(input.stock) ?? 0));
   const priceUae = toNullableNumber(input.priceUae) ?? price;
-  const priceKsa = toNullableNumber(input.priceKsa) ?? priceUae;
-  const priceQatar = toNullableNumber(input.priceQatar) ?? priceUae;
-  const priceKuwait = toNullableNumber(input.priceKuwait) ?? priceUae;
-  const priceBahrain = toNullableNumber(input.priceBahrain) ?? priceUae;
-  const priceOman = toNullableNumber(input.priceOman) ?? priceUae;
+  const priceKsa = toNullableNumber(input.priceKsa) ?? convertAedToSmartGccPrice(priceUae, 'SA');
+  const priceQatar = toNullableNumber(input.priceQatar) ?? convertAedToSmartGccPrice(priceUae, 'QA');
+  const priceKuwait = toNullableNumber(input.priceKuwait) ?? convertAedToSmartGccPrice(priceUae, 'KW');
+  const priceBahrain = toNullableNumber(input.priceBahrain) ?? convertAedToSmartGccPrice(priceUae, 'BH');
+  const priceOman = toNullableNumber(input.priceOman) ?? convertAedToSmartGccPrice(priceUae, 'OM');
   const compareAtPrice =
     toNullableNumber(input.compareAtPrice ?? input.comparePrice ?? input.originalPrice) ??
     originalPrice ??
     price;
   const pricesByCountry = input.pricesByCountry || input.specs?.pricesByCountry || {
     AE: { price: priceUae, compareAtPrice },
-    SA: { price: priceKsa, compareAtPrice: toNullableNumber(input.compareAtPriceKsa) ?? compareAtPrice },
-    QA: { price: priceQatar, compareAtPrice: toNullableNumber(input.compareAtPriceQatar) ?? compareAtPrice },
-    KW: { price: priceKuwait, compareAtPrice: toNullableNumber(input.compareAtPriceKuwait) ?? compareAtPrice },
-    BH: { price: priceBahrain, compareAtPrice: toNullableNumber(input.compareAtPriceBahrain) ?? compareAtPrice },
-    OM: { price: priceOman, compareAtPrice: toNullableNumber(input.compareAtPriceOman) ?? compareAtPrice },
+    SA: { price: priceKsa, compareAtPrice: toNullableNumber(input.compareAtPriceKsa) ?? convertAedToSmartGccPrice(compareAtPrice, 'SA') },
+    QA: { price: priceQatar, compareAtPrice: toNullableNumber(input.compareAtPriceQatar) ?? convertAedToSmartGccPrice(compareAtPrice, 'QA') },
+    KW: { price: priceKuwait, compareAtPrice: toNullableNumber(input.compareAtPriceKuwait) ?? convertAedToSmartGccPrice(compareAtPrice, 'KW') },
+    BH: { price: priceBahrain, compareAtPrice: toNullableNumber(input.compareAtPriceBahrain) ?? convertAedToSmartGccPrice(compareAtPrice, 'BH') },
+    OM: { price: priceOman, compareAtPrice: toNullableNumber(input.compareAtPriceOman) ?? convertAedToSmartGccPrice(compareAtPrice, 'OM') },
   };
 
   const specsJson = {

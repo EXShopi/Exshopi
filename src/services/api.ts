@@ -2,6 +2,7 @@ import { useAuthStore } from '../store/auth';
 import { supabase } from '../supabaseClient';
 import { productMatchesCategoryAssignment, resolveCanonicalCategoryAssignment } from '../lib/masterCategories';
 import { getProductLifecycleState } from '../lib/productLifecycle';
+import { convertFromAedSmart } from '../lib/countryConfig';
 
 const DEFAULT_PROD_API_BASE = 'https://exshopi-api.onrender.com/api';
 const DEFAULT_DEV_API_BASE = 'http://localhost:3001/api';
@@ -614,9 +615,10 @@ function compactObject<T extends Record<string, any>>(value: T): Partial<T> {
 }
 
 function readCountryAmount(data: any, countryCode: (typeof GCC_COUNTRY_CODES)[number], fallback: number) {
+  const fallbackAmount = countryCode === 'AE' ? fallback : convertFromAedSmart(fallback, countryCode);
   const nested = data?.pricesByCountry?.[countryCode];
-  if (typeof nested === 'number') return toFiniteNumber(nested, fallback);
-  if (nested && typeof nested === 'object') return toFiniteNumber(nested.price, fallback);
+  if (typeof nested === 'number') return toFiniteNumber(nested, fallbackAmount);
+  if (nested && typeof nested === 'object') return toFiniteNumber(nested.price, fallbackAmount);
 
   const legacyKeyByCountry: Record<(typeof GCC_COUNTRY_CODES)[number], string> = {
     AE: 'priceUae',
@@ -627,7 +629,7 @@ function readCountryAmount(data: any, countryCode: (typeof GCC_COUNTRY_CODES)[nu
     OM: 'priceOman',
   };
 
-  return toFiniteNumber(data?.[legacyKeyByCountry[countryCode]], fallback);
+  return toFiniteNumber(data?.[legacyKeyByCountry[countryCode]], fallbackAmount);
 }
 
 export function sanitizeProductCreatePayload(input: any) {
@@ -1450,7 +1452,8 @@ export const adminProductAPI = {
     const countryCodes = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'] as const;
     const basePriceAED = Number(data.basePriceAED ?? data.pricesByCountry?.AE);
     const pricesByCountry = countryCodes.reduce((acc, countryCode) => {
-      const value = Number(data.pricesByCountry?.[countryCode] ?? basePriceAED);
+      const fallback = countryCode === 'AE' ? basePriceAED : convertFromAedSmart(basePriceAED, countryCode);
+      const value = Number(data.pricesByCountry?.[countryCode] ?? fallback);
       if (Number.isFinite(value)) acc[countryCode] = value;
       return acc;
     }, {} as Record<'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM', number>);

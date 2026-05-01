@@ -5,6 +5,62 @@ import path from 'node:path';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 
 type GenericRecord = Record<string, any>;
+type GccCountryCode = 'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM';
+
+const GCC_RATE_FROM_AED: Record<GccCountryCode, number> = {
+  AE: 1,
+  SA: 1.02,
+  QA: 0.99,
+  KW: 0.083,
+  BH: 0.102,
+  OM: 0.105,
+};
+
+const GCC_CURRENCY_BY_COUNTRY: Record<GccCountryCode, string> = {
+  AE: 'AED',
+  SA: 'SAR',
+  QA: 'QAR',
+  KW: 'KWD',
+  BH: 'BHD',
+  OM: 'OMR',
+};
+
+function ceilToStep(value: number, step: number) {
+  return Math.ceil(value / step) * step;
+}
+
+function convertAedToSmartGccPrice(amountAed: unknown, countryCode: GccCountryCode) {
+  const base = Number(amountAed ?? 0);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  const converted = Number((base * GCC_RATE_FROM_AED[countryCode]).toFixed(2));
+  switch (countryCode) {
+    case 'SA':
+      return Math.max(1, ceilToStep(converted, 50) - 1);
+    case 'QA':
+      return Math.max(1, ceilToStep(converted, 100) - 1);
+    case 'KW':
+    case 'OM':
+      return converted < 10
+        ? Number((Math.ceil(converted * 10) / 10).toFixed(2))
+        : Math.max(0.1, ceilToStep(converted, 10) - 1);
+    case 'BH':
+      return ceilToStep(converted, 5);
+    case 'AE':
+    default:
+      return Math.round(converted);
+  }
+}
+
+function buildSmartPricesByCountry(basePriceAed: number, compareAtPriceAed: number) {
+  return (Object.keys(GCC_RATE_FROM_AED) as GccCountryCode[]).reduce((acc, countryCode) => {
+    acc[countryCode] = {
+      currency: GCC_CURRENCY_BY_COUNTRY[countryCode],
+      price: convertAedToSmartGccPrice(basePriceAed, countryCode),
+      compareAtPrice: convertAedToSmartGccPrice(compareAtPriceAed, countryCode),
+    };
+    return acc;
+  }, {} as Record<GccCountryCode, { currency: string; price: number; compareAtPrice: number }>);
+}
 
 export type BulkUploadMode = 'admin' | 'seller';
 
@@ -1112,6 +1168,7 @@ export function buildBulkImportPayload(input: {
   const salePrice = numberValue(fieldRow.salePrice || fieldRow.flashSalePrice, regularPrice || 0);
   const finalPrice = salePrice > 0 ? salePrice : regularPrice;
   const compareAt = regularPrice > finalPrice ? regularPrice : finalPrice;
+  const smartPricesByCountry = buildSmartPricesByCountry(finalPrice, compareAt);
   const highlights = buildDefaultHighlights(fieldRow);
   const boxContents = dedupe(splitList(fieldRow.boxContents)).slice(0, 12);
   const badges = [
@@ -1205,9 +1262,19 @@ export function buildBulkImportPayload(input: {
     description: fieldRow.longDescription || fieldRow.shortDescription || fieldRow.productTitle,
     price: finalPrice,
     priceUae: numberValue(fieldRow.regularPrice, finalPrice) ? finalPrice : finalPrice,
-    priceKsa: numberValue(fieldRow.shippingPrice, 0) ? undefined : undefined,
+    priceKsa: smartPricesByCountry.SA.price,
+    priceQatar: smartPricesByCountry.QA.price,
+    priceKuwait: smartPricesByCountry.KW.price,
+    priceBahrain: smartPricesByCountry.BH.price,
+    priceOman: smartPricesByCountry.OM.price,
+    pricesByCountry: smartPricesByCountry,
     originalPrice: compareAt,
     compareAtPriceUae: compareAt,
+    compareAtPriceKsa: smartPricesByCountry.SA.compareAtPrice,
+    compareAtPriceQatar: smartPricesByCountry.QA.compareAtPrice,
+    compareAtPriceKuwait: smartPricesByCountry.KW.compareAtPrice,
+    compareAtPriceBahrain: smartPricesByCountry.BH.compareAtPrice,
+    compareAtPriceOman: smartPricesByCountry.OM.compareAtPrice,
     salePrice: finalPrice,
     image: allImages[0],
     images: allImages,
@@ -1222,6 +1289,7 @@ export function buildBulkImportPayload(input: {
     badges,
     specs: {
       shortDescription: fieldRow.shortDescription,
+      pricesByCountry: smartPricesByCountry,
       longDescription: fieldRow.longDescription || fieldRow.shortDescription,
       metaTitle: fieldRow.seoTitle || fieldRow.productTitle.slice(0, 60),
       metaDescription: fieldRow.seoDescription || fieldRow.shortDescription || fieldRow.longDescription.slice(0, 160),

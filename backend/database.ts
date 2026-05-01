@@ -5,6 +5,41 @@ import { isCustomerVisibleProduct } from '../shared/productLifecycle';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, 'db.json');
+const GCC_RATE_FROM_AED: Record<string, number> = {
+  AE: 1,
+  SA: 1.02,
+  QA: 0.99,
+  KW: 0.083,
+  BH: 0.102,
+  OM: 0.105,
+};
+
+function ceilToStep(value: number, step: number) {
+  return Math.ceil(value / step) * step;
+}
+
+function convertAedToSmartGccPrice(amountAed: unknown, countryCode?: string | null) {
+  const base = Number(amountAed ?? 0);
+  const code = String(countryCode || 'AE').toUpperCase();
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  const converted = Number((base * (GCC_RATE_FROM_AED[code] || 1)).toFixed(2));
+  switch (code) {
+    case 'SA':
+      return Math.max(1, ceilToStep(converted, 50) - 1);
+    case 'QA':
+      return Math.max(1, ceilToStep(converted, 100) - 1);
+    case 'KW':
+    case 'OM':
+      return converted < 10
+        ? Number((Math.ceil(converted * 10) / 10).toFixed(2))
+        : Math.max(0.1, ceilToStep(converted, 10) - 1);
+    case 'BH':
+      return ceilToStep(converted, 5);
+    case 'AE':
+    default:
+      return Math.round(converted);
+  }
+}
 
 // Database Schema Types
 export type UserRole = 'customer' | 'seller' | 'admin' | 'super_admin' | 'finance_manager' | 'support_agent';
@@ -989,23 +1024,23 @@ private data!: DatabaseSchema;
         priceKsa:
           product.priceKsa != null && String(product.priceKsa).trim() !== ''
             ? Number(product.priceKsa)
-            : undefined,
+            : convertAedToSmartGccPrice(product.priceUae || product.price, 'SA'),
         priceQatar:
           product.priceQatar != null && String(product.priceQatar).trim() !== ''
             ? Number(product.priceQatar)
-            : undefined,
+            : convertAedToSmartGccPrice(product.priceUae || product.price, 'QA'),
         priceKuwait:
           product.priceKuwait != null && String(product.priceKuwait).trim() !== ''
             ? Number(product.priceKuwait)
-            : undefined,
+            : convertAedToSmartGccPrice(product.priceUae || product.price, 'KW'),
         priceBahrain:
           product.priceBahrain != null && String(product.priceBahrain).trim() !== ''
             ? Number(product.priceBahrain)
-            : undefined,
+            : convertAedToSmartGccPrice(product.priceUae || product.price, 'BH'),
         priceOman:
           product.priceOman != null && String(product.priceOman).trim() !== ''
             ? Number(product.priceOman)
-            : undefined,
+            : convertAedToSmartGccPrice(product.priceUae || product.price, 'OM'),
         originalPrice: Number(product.originalPrice || product.price || 0),
         compareAtPriceUae: Number(product.compareAtPriceUae || product.originalPrice || product.price || 0),
         compareAtPriceKsa:

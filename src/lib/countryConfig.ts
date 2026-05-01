@@ -358,6 +358,10 @@ function toSafeAmount(value: number | string | null | undefined) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function ceilToStep(value: number, step: number) {
+  return Math.ceil(value / step) * step;
+}
+
 export function isSupportedCountryCode(value: string | null | undefined): value is SupportedCountryCode {
   return SUPPORTED_COUNTRY_CODES.includes(String(value || '').toUpperCase() as SupportedCountryCode);
 }
@@ -373,6 +377,33 @@ export function convertFromAed(amountAed: number | string | null | undefined, co
   const safeAmount = toSafeAmount(amountAed);
   const config = getCountryConfig(countryCode);
   return Number((safeAmount * config.fallbackExchangeRateFromAed).toFixed(2));
+}
+
+export function applySellingFriendlyPrice(amount: number | string | null | undefined, countryCode?: string | null) {
+  const safeAmount = toSafeAmount(amount);
+  const config = getCountryConfig(countryCode);
+  if (safeAmount <= 0) return 0;
+
+  switch (config.code) {
+    case 'SA':
+      return Math.max(1, ceilToStep(safeAmount, 50) - 1);
+    case 'QA':
+      return Math.max(1, ceilToStep(safeAmount, 100) - 1);
+    case 'KW':
+    case 'OM':
+      return safeAmount < 10
+        ? Number((Math.ceil(safeAmount * 10) / 10).toFixed(2))
+        : Math.max(0.1, ceilToStep(safeAmount, 10) - 1);
+    case 'BH':
+      return ceilToStep(safeAmount, 5);
+    case 'AE':
+    default:
+      return Math.round(safeAmount);
+  }
+}
+
+export function convertFromAedSmart(amountAed: number | string | null | undefined, countryCode?: string | null) {
+  return applySellingFriendlyPrice(convertFromAed(amountAed, countryCode), countryCode);
 }
 
 export function getDefaultShippingOption(countryCode?: string | null): ShippingOption {
@@ -472,7 +503,7 @@ export function getProductCountryPrice(product: CountryAwarePriced | null | unde
   const config = getCountryConfig(countryCode);
   const baseAed = toSafeAmount(product.basePriceAED ?? product.priceUae ?? product.price);
   const explicit = readCountryPrice(product, config.code);
-  return explicit != null ? explicit : convertFromAed(baseAed, config.code);
+  return explicit != null ? explicit : convertFromAedSmart(baseAed, config.code);
 }
 
 export function getProductCountryCompareAtPrice(product: CountryAwarePriced | null | undefined, countryCode?: string | null) {
@@ -482,7 +513,7 @@ export function getProductCountryCompareAtPrice(product: CountryAwarePriced | nu
     product.compareAtPriceUae ?? product.originalPrice ?? product.oldPrice ?? product.basePriceAED ?? product.priceUae ?? product.price
   );
   const explicit = readCountryCompareAtPrice(product, config.code);
-  return explicit != null ? explicit : convertFromAed(baseAed, config.code);
+  return explicit != null ? explicit : convertFromAedSmart(baseAed, config.code);
 }
 
 export function normalizeCountryAwarePricing<T extends Record<string, any>>(product: T) {
@@ -493,11 +524,11 @@ export function normalizeCountryAwarePricing<T extends Record<string, any>>(prod
 
   const pricesByCountry = {
     AE: { currency: 'AED' as const, price: priceUae, compareAtPrice: originalPriceUae > priceUae ? originalPriceUae : undefined },
-    SA: { currency: 'SAR' as const, price: readCountryPrice(product, 'SA') ?? convertFromAed(priceUae, 'SA'), compareAtPrice: readCountryCompareAtPrice(product, 'SA') ?? convertFromAed(originalPriceUae, 'SA') },
-    QA: { currency: 'QAR' as const, price: readCountryPrice(product, 'QA') ?? convertFromAed(priceUae, 'QA'), compareAtPrice: readCountryCompareAtPrice(product, 'QA') ?? convertFromAed(originalPriceUae, 'QA') },
-    KW: { currency: 'KWD' as const, price: readCountryPrice(product, 'KW') ?? convertFromAed(priceUae, 'KW'), compareAtPrice: readCountryCompareAtPrice(product, 'KW') ?? convertFromAed(originalPriceUae, 'KW') },
-    BH: { currency: 'BHD' as const, price: readCountryPrice(product, 'BH') ?? convertFromAed(priceUae, 'BH'), compareAtPrice: readCountryCompareAtPrice(product, 'BH') ?? convertFromAed(originalPriceUae, 'BH') },
-    OM: { currency: 'OMR' as const, price: readCountryPrice(product, 'OM') ?? convertFromAed(priceUae, 'OM'), compareAtPrice: readCountryCompareAtPrice(product, 'OM') ?? convertFromAed(originalPriceUae, 'OM') },
+    SA: { currency: 'SAR' as const, price: readCountryPrice(product, 'SA') ?? convertFromAedSmart(priceUae, 'SA'), compareAtPrice: readCountryCompareAtPrice(product, 'SA') ?? convertFromAedSmart(originalPriceUae, 'SA') },
+    QA: { currency: 'QAR' as const, price: readCountryPrice(product, 'QA') ?? convertFromAedSmart(priceUae, 'QA'), compareAtPrice: readCountryCompareAtPrice(product, 'QA') ?? convertFromAedSmart(originalPriceUae, 'QA') },
+    KW: { currency: 'KWD' as const, price: readCountryPrice(product, 'KW') ?? convertFromAedSmart(priceUae, 'KW'), compareAtPrice: readCountryCompareAtPrice(product, 'KW') ?? convertFromAedSmart(originalPriceUae, 'KW') },
+    BH: { currency: 'BHD' as const, price: readCountryPrice(product, 'BH') ?? convertFromAedSmart(priceUae, 'BH'), compareAtPrice: readCountryCompareAtPrice(product, 'BH') ?? convertFromAedSmart(originalPriceUae, 'BH') },
+    OM: { currency: 'OMR' as const, price: readCountryPrice(product, 'OM') ?? convertFromAedSmart(priceUae, 'OM'), compareAtPrice: readCountryCompareAtPrice(product, 'OM') ?? convertFromAedSmart(originalPriceUae, 'OM') },
   };
 
   return {

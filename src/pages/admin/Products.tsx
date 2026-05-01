@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
 import { AlertCircle, Camera, CheckCircle2, Copy, Download, Eye, Package2, Pencil, Search, Store, Trash2, Upload, X, XCircle } from 'lucide-react';
 import { formatCurrencyForCountry } from '../../lib/currency';
-import { COUNTRY_CONFIG, convertFromAed, SupportedCountryCode } from '../../lib/countryConfig';
+import { COUNTRY_CONFIG, convertFromAed, convertFromAedSmart, SupportedCountryCode } from '../../lib/countryConfig';
 import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
@@ -47,18 +47,14 @@ const readCountryPrice = (product: any, countryCode: SupportedCountryCode) => {
   return Number.isFinite(numeric) ? numeric : undefined;
 };
 
-const roundCountryPrice = (value: number, countryCode: SupportedCountryCode) => {
-  if (!Number.isFinite(value)) return 0;
-  if (['KW', 'BH', 'OM'].includes(countryCode)) {
-    return Number((Math.round(value * 10) / 10).toFixed(2));
-  }
-  return Math.round(value);
-};
-
 const buildCountryPricesFromAed = (basePriceAED: number, roundPrices: boolean) => {
   return GCC_PRICE_CODES.reduce((acc, countryCode) => {
-    const converted = countryCode === 'AE' ? basePriceAED : convertFromAed(basePriceAED, countryCode);
-    acc[countryCode] = roundPrices ? roundCountryPrice(converted, countryCode) : Number(converted.toFixed(2));
+    const converted = roundPrices
+      ? convertFromAedSmart(basePriceAED, countryCode)
+      : countryCode === 'AE'
+        ? basePriceAED
+        : convertFromAed(basePriceAED, countryCode);
+    acc[countryCode] = Number(converted.toFixed(2));
     return acc;
   }, {} as Record<SupportedCountryCode, number>);
 };

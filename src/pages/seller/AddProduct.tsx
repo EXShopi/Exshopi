@@ -41,7 +41,7 @@ import {
   slugifySeo,
   trimSeoKeywords,
 } from '../../utils/seo';
-import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, convertFromAed } from '../../lib/countryConfig';
+import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, convertFromAedSmart } from '../../lib/countryConfig';
 
 type FormState = {
   title: string;
@@ -1515,28 +1515,28 @@ useEffect(() => {
       },
       SA: {
         currency: 'SAR',
-        price: formData.priceKsa.trim() ? parseFloat(formData.priceKsa) : convertFromAed(basePriceAed, 'SA'),
-        compareAtPrice: formData.compareAtPriceKsa.trim() ? parseFloat(formData.compareAtPriceKsa) : convertFromAed(baseCompareAed, 'SA'),
+        price: formData.priceKsa.trim() ? parseFloat(formData.priceKsa) : convertFromAedSmart(basePriceAed, 'SA'),
+        compareAtPrice: formData.compareAtPriceKsa.trim() ? parseFloat(formData.compareAtPriceKsa) : convertFromAedSmart(baseCompareAed, 'SA'),
       },
       QA: {
         currency: 'QAR',
-        price: formData.priceQatar.trim() ? parseFloat(formData.priceQatar) : convertFromAed(basePriceAed, 'QA'),
-        compareAtPrice: formData.compareAtPriceQatar.trim() ? parseFloat(formData.compareAtPriceQatar) : convertFromAed(baseCompareAed, 'QA'),
+        price: formData.priceQatar.trim() ? parseFloat(formData.priceQatar) : convertFromAedSmart(basePriceAed, 'QA'),
+        compareAtPrice: formData.compareAtPriceQatar.trim() ? parseFloat(formData.compareAtPriceQatar) : convertFromAedSmart(baseCompareAed, 'QA'),
       },
       KW: {
         currency: 'KWD',
-        price: formData.priceKuwait.trim() ? parseFloat(formData.priceKuwait) : convertFromAed(basePriceAed, 'KW'),
-        compareAtPrice: formData.compareAtPriceKuwait.trim() ? parseFloat(formData.compareAtPriceKuwait) : convertFromAed(baseCompareAed, 'KW'),
+        price: formData.priceKuwait.trim() ? parseFloat(formData.priceKuwait) : convertFromAedSmart(basePriceAed, 'KW'),
+        compareAtPrice: formData.compareAtPriceKuwait.trim() ? parseFloat(formData.compareAtPriceKuwait) : convertFromAedSmart(baseCompareAed, 'KW'),
       },
       BH: {
         currency: 'BHD',
-        price: formData.priceBahrain.trim() ? parseFloat(formData.priceBahrain) : convertFromAed(basePriceAed, 'BH'),
-        compareAtPrice: formData.compareAtPriceBahrain.trim() ? parseFloat(formData.compareAtPriceBahrain) : convertFromAed(baseCompareAed, 'BH'),
+        price: formData.priceBahrain.trim() ? parseFloat(formData.priceBahrain) : convertFromAedSmart(basePriceAed, 'BH'),
+        compareAtPrice: formData.compareAtPriceBahrain.trim() ? parseFloat(formData.compareAtPriceBahrain) : convertFromAedSmart(baseCompareAed, 'BH'),
       },
       OM: {
         currency: 'OMR',
-        price: formData.priceOman.trim() ? parseFloat(formData.priceOman) : convertFromAed(basePriceAed, 'OM'),
-        compareAtPrice: formData.compareAtPriceOman.trim() ? parseFloat(formData.compareAtPriceOman) : convertFromAed(baseCompareAed, 'OM'),
+        price: formData.priceOman.trim() ? parseFloat(formData.priceOman) : convertFromAedSmart(basePriceAed, 'OM'),
+        compareAtPrice: formData.compareAtPriceOman.trim() ? parseFloat(formData.compareAtPriceOman) : convertFromAedSmart(baseCompareAed, 'OM'),
       },
     };
 
@@ -2069,14 +2069,14 @@ useEffect(() => {
               {GCC_PRICE_FIELDS.map(({ code, priceKey, compareKey }) => {
                 const countryConfig = COUNTRY_CONFIG[code];
                 const fallbackPrice = formData.priceUae.trim()
-                  ? convertFromAed(formData.priceUae, code)
+                  ? convertFromAedSmart(formData.priceUae, code)
                   : formData.price.trim()
-                    ? convertFromAed(formData.price, code)
+                    ? convertFromAedSmart(formData.price, code)
                     : 0;
                 const fallbackCompare = formData.compareAtPriceUae.trim()
-                  ? convertFromAed(formData.compareAtPriceUae, code)
+                  ? convertFromAedSmart(formData.compareAtPriceUae, code)
                   : formData.originalPrice.trim()
-                    ? convertFromAed(formData.originalPrice, code)
+                    ? convertFromAedSmart(formData.originalPrice, code)
                     : 0;
 
                 return (

@@ -107,8 +107,45 @@ const GCC_COUNTRY_META: Record<string, { name: string; currency: string; priceKe
   OM: { name: 'Oman', currency: 'OMR', priceKey: 'priceOman', compareKey: 'compareAtPriceOman' },
 };
 
+const GCC_RATE_FROM_AED: Record<string, number> = {
+  AE: 1,
+  SA: 1.02,
+  QA: 0.99,
+  KW: 0.083,
+  BH: 0.102,
+  OM: 0.105,
+};
+
 function getCountryMeta(countryCode?: string | null) {
   return GCC_COUNTRY_META[String(countryCode || 'AE').toUpperCase()] || GCC_COUNTRY_META.AE;
+}
+
+function ceilToStep(value: number, step: number) {
+  return Math.ceil(value / step) * step;
+}
+
+function convertAedToSmartGccPrice(amountAed: unknown, countryCode?: string | null) {
+  const base = Number(amountAed ?? 0);
+  const code = String(countryCode || 'AE').toUpperCase();
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  const converted = Number((base * (GCC_RATE_FROM_AED[code] || 1)).toFixed(2));
+
+  switch (code) {
+    case 'SA':
+      return Math.max(1, ceilToStep(converted, 50) - 1);
+    case 'QA':
+      return Math.max(1, ceilToStep(converted, 100) - 1);
+    case 'KW':
+    case 'OM':
+      return converted < 10
+        ? Number((Math.ceil(converted * 10) / 10).toFixed(2))
+        : Math.max(0.1, ceilToStep(converted, 10) - 1);
+    case 'BH':
+      return ceilToStep(converted, 5);
+    case 'AE':
+    default:
+      return Math.round(converted);
+  }
 }
 
 function readProductCountryPrice(product: any, countryCode?: string | null) {
@@ -119,7 +156,7 @@ function readProductCountryPrice(product: any, countryCode?: string | null) {
   if (meta.priceKey && product?.[meta.priceKey] != null && String(product[meta.priceKey]).trim() !== '') {
     return Number(product[meta.priceKey]);
   }
-  return Number(product?.priceUae ?? product?.price ?? product?.salePrice ?? 0);
+  return convertAedToSmartGccPrice(product?.priceUae ?? product?.price ?? product?.salePrice ?? 0, countryCode);
 }
 
 function readProductCountryComparePrice(product: any, countryCode?: string | null) {
@@ -130,7 +167,7 @@ function readProductCountryComparePrice(product: any, countryCode?: string | nul
   if (meta.compareKey && product?.[meta.compareKey] != null && String(product[meta.compareKey]).trim() !== '') {
     return Number(product[meta.compareKey]);
   }
-  return Number(product?.compareAtPriceUae ?? product?.originalPrice ?? product?.price ?? 0);
+  return convertAedToSmartGccPrice(product?.compareAtPriceUae ?? product?.originalPrice ?? product?.price ?? 0, countryCode);
 }
 
 // ==================== CORS CONFIGURATION ====================
@@ -1358,11 +1395,11 @@ const createAdminProductRecord = async (payload: any) => {
         ? Number(productPayload.comparePrice)
         : Number(productPayload.originalPrice ?? productPayload.salePrice ?? productPayload.price ?? 0),
     priceUae: Number(productPayload.priceUae ?? productPayload.price ?? 0),
-    priceKsa: productPayload.priceKsa != null ? Number(productPayload.priceKsa) : undefined,
-    priceQatar: productPayload.priceQatar != null ? Number(productPayload.priceQatar) : undefined,
-    priceKuwait: productPayload.priceKuwait != null ? Number(productPayload.priceKuwait) : undefined,
-    priceBahrain: productPayload.priceBahrain != null ? Number(productPayload.priceBahrain) : undefined,
-    priceOman: productPayload.priceOman != null ? Number(productPayload.priceOman) : undefined,
+    priceKsa: productPayload.priceKsa != null ? Number(productPayload.priceKsa) : convertAedToSmartGccPrice(productPayload.priceUae ?? productPayload.price, 'SA'),
+    priceQatar: productPayload.priceQatar != null ? Number(productPayload.priceQatar) : convertAedToSmartGccPrice(productPayload.priceUae ?? productPayload.price, 'QA'),
+    priceKuwait: productPayload.priceKuwait != null ? Number(productPayload.priceKuwait) : convertAedToSmartGccPrice(productPayload.priceUae ?? productPayload.price, 'KW'),
+    priceBahrain: productPayload.priceBahrain != null ? Number(productPayload.priceBahrain) : convertAedToSmartGccPrice(productPayload.priceUae ?? productPayload.price, 'BH'),
+    priceOman: productPayload.priceOman != null ? Number(productPayload.priceOman) : convertAedToSmartGccPrice(productPayload.priceUae ?? productPayload.price, 'OM'),
     originalPrice:
       productPayload.originalPrice != null ? Number(productPayload.originalPrice) : Number(productPayload.salePrice ?? productPayload.price ?? 0),
     compareAtPriceUae:
@@ -1858,7 +1895,8 @@ const sanitizePrices = (input: any) => {
   }
 
   const pricesByCountry = quickPriceCountryCodes.reduce((acc, countryCode) => {
-    const rawValue = input?.pricesByCountry?.[countryCode] ?? basePriceAED;
+    const fallbackPrice = countryCode === 'AE' ? basePriceAED : convertAedToSmartGccPrice(basePriceAED, countryCode);
+    const rawValue = input?.pricesByCountry?.[countryCode] ?? fallbackPrice;
     const numeric = Number(rawValue);
     if (!Number.isFinite(numeric) || numeric < 0) {
       throw new Error(`${countryCode} price must be a valid non-negative number`);
@@ -1934,11 +1972,11 @@ const normalizeFinalProductCreatePayload = (body: unknown): any => {
     priceOman: payload.pricesByCountry.OM,
     originalPrice: comparePrice,
     compareAtPriceUae: comparePrice,
-    compareAtPriceKsa: comparePrice,
-    compareAtPriceQatar: comparePrice,
-    compareAtPriceKuwait: comparePrice,
-    compareAtPriceBahrain: comparePrice,
-    compareAtPriceOman: comparePrice,
+    compareAtPriceKsa: convertAedToSmartGccPrice(comparePrice, 'SA'),
+    compareAtPriceQatar: convertAedToSmartGccPrice(comparePrice, 'QA'),
+    compareAtPriceKuwait: convertAedToSmartGccPrice(comparePrice, 'KW'),
+    compareAtPriceBahrain: convertAedToSmartGccPrice(comparePrice, 'BH'),
+    compareAtPriceOman: convertAedToSmartGccPrice(comparePrice, 'OM'),
     salePrice: payload.price,
     image: '',
     images: [],
@@ -1949,7 +1987,13 @@ const normalizeFinalProductCreatePayload = (body: unknown): any => {
       pricesByCountry: Object.fromEntries(
         Object.entries(payload.pricesByCountry).map(([countryCode, price]) => [
           countryCode,
-          { price, compareAtPrice: comparePrice },
+          {
+            price,
+            compareAtPrice:
+              countryCode === 'AE'
+                ? comparePrice
+                : convertAedToSmartGccPrice(comparePrice, countryCode),
+          },
         ])
       ),
     },
