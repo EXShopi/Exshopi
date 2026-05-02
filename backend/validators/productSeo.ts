@@ -7,7 +7,7 @@ export const productSeoSchema = z.object({
     .max(140)
     .optional()
     .transform((value) => (value ? normalizeSlugInput(value) : undefined)),
-  metaTitle: z.string().max(60).optional(),
+  metaTitle: z.string().max(90).optional(),
   metaDescription: z.string().max(160).optional(),
   metaKeywords: z.string().max(500).optional(),
   canonicalUrl: z.string().url().optional().or(z.literal("")),

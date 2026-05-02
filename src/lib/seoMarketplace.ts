@@ -18,12 +18,23 @@ function normalizeText(value: string) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function clampWords(value: string, limit: number) {
+  const normalized = normalizeText(value);
+  if (normalized.length <= limit) return normalized;
+  const trimmed = normalized.slice(0, Math.max(0, limit)).replace(/\s+\S*$/, "").trim();
+  return trimmed || normalized.slice(0, Math.max(0, limit)).trim();
+}
+
 function titleCase(value: string) {
   return normalizeText(value)
     .split(/[-_\s]+/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function cleanSeoSlug(value: string) {
@@ -63,21 +74,51 @@ export function extractProductSeoFacts(product: any) {
     attributes?.model ||
       specs?.model ||
       title
-        .replace(new RegExp(`^${brand}`, "i"), "")
+        .replace(new RegExp(`^${escapeRegExp(brand)}`, "i"), "")
         .replace(/\b(renewed|refurbished|used)\b/gi, "")
         .trim()
   );
 
+  const processor = normalizeText(
+    product?.processor ||
+      attributes?.processor ||
+      attributes?.Processor ||
+      attributes?.chipset ||
+      specs?.processor ||
+      specs?.specificationValues?.processor ||
+      ""
+  );
+  const ram = normalizeText(
+    product?.ram ||
+      attributes?.ram ||
+      attributes?.RAM ||
+      specs?.ram ||
+      specs?.specificationValues?.ram ||
+      ""
+  );
+  const storage = normalizeText(
+    product?.storage ||
+      attributes?.storage ||
+      attributes?.Storage ||
+      specs?.storage ||
+      specs?.specificationValues?.storage ||
+      ""
+  );
+  const condition = normalizeText(
+    product?.condition ||
+      attributes?.condition ||
+      attributes?.Condition ||
+      specs?.condition ||
+      specs?.productCondition ||
+      ""
+  );
+
   const prioritizedSpecs = [
-    attributes?.processor,
-    attributes?.chipset,
-    attributes?.ram,
-    attributes?.storage,
+    processor,
+    ram,
+    storage,
     attributes?.screenSize,
     attributes?.screen_size,
-    specs?.processor,
-    specs?.ram,
-    specs?.storage,
   ]
     .map((value) => normalizeText(String(value || "")))
     .filter(Boolean)
@@ -88,8 +129,28 @@ export function extractProductSeoFacts(product: any) {
     brand,
     model,
     year,
+    processor,
+    ram,
+    storage,
+    condition,
     prioritizedSpecs,
   };
+}
+
+export function buildOptimizedProductTitle(product: any, maxLength = 90) {
+  const facts = extractProductSeoFacts(product);
+  const suffix = " - Buy in UAE with Cash on Delivery - Exshopi";
+  const baseParts = [
+    facts.brand,
+    facts.model,
+    facts.year && !facts.model.includes(facts.year) ? facts.year : "",
+    facts.ram ? `${facts.ram} RAM`.replace(/\bRAM RAM\b/i, "RAM") : "",
+    facts.storage,
+    facts.processor,
+  ].filter(Boolean);
+
+  const base = normalizeText(baseParts.join(" ")) || facts.title;
+  return `${clampWords(base, Math.max(24, maxLength - suffix.length))}${suffix}`.slice(0, maxLength).trim();
 }
 
 export function buildRichProductTitle(product: any) {
@@ -105,6 +166,65 @@ export function buildRichProductTitle(product: any) {
   return parts.join(" ").replace(/\s+\|/g, " |").trim();
 }
 
+export function buildProductShortDescription(product: any) {
+  const facts = extractProductSeoFacts(product);
+  const productName = facts.brand || facts.model || facts.title;
+  const condition = facts.condition || (/refurb|renewed|used/i.test(facts.title) ? "refurbished" : "new or verified");
+
+  return `High-performance ${productName} in ${condition} condition, perfect for work and daily use. Available in UAE with fast delivery and Cash on Delivery. Fully tested and ready to use.`;
+}
+
+export const PRODUCT_CONVERSION_BOOST_LINES = [
+  "✔ Cash on Delivery Available in UAE & GCC",
+  "✔ Fast Delivery in Dubai, Sharjah, Abu Dhabi",
+  "✔ Tested & Verified Product",
+  "✔ Warranty Available",
+];
+
+export function buildProductSearchTags(product: any) {
+  const facts = extractProductSeoFacts(product);
+  const category = normalizeText(
+    product?.specs?.subcategoryName ||
+      product?.specs?.categoryName ||
+      product?.subcategory ||
+      product?.category ||
+      "electronics"
+  ).toLowerCase();
+  const title = facts.title.toLowerCase();
+  const productKeyword = [facts.brand, facts.model].filter(Boolean).join(" ").trim() || facts.title;
+
+  return Array.from(
+    new Set(
+      [
+        `${productKeyword} UAE`,
+        `${productKeyword} Dubai price`,
+        `buy ${productKeyword}`,
+        `shop ${productKeyword} UAE`,
+        `best ${productKeyword} UAE`,
+        `${category} UAE`,
+        `${category} Dubai`,
+        `buy ${category} UAE`,
+        `cheap ${category} UAE`,
+        "cash on delivery UAE",
+        "electronics UAE",
+        "Dubai online shopping",
+        /laptop|macbook|notebook/i.test(title) ? "buy laptop UAE" : "",
+        /iphone|phone|mobile/i.test(title) ? "buy iphone UAE" : "",
+        /used|refurb|renewed/i.test(`${title} ${facts.condition}`) ? `used ${category} UAE` : "",
+      ].filter(Boolean)
+    )
+  ).slice(0, 15);
+}
+
+export function buildProductMetaDescription(product: any, maxLength = 160) {
+  const facts = extractProductSeoFacts(product);
+  const productName = [facts.brand, facts.model].filter(Boolean).join(" ").trim() || facts.title;
+  return clampWords(
+    `Buy ${productName} in UAE with Cash on Delivery. Best Dubai price, fast UAE and GCC shipping, verified product, and warranty support from Exshopi.`,
+    maxLength
+  );
+}
+
 export function buildProductSeoNarrative(product: any) {
   const facts = extractProductSeoFacts(product);
   const category = normalizeText(
@@ -115,12 +235,33 @@ export function buildProductSeoNarrative(product: any) {
   );
   const seller = normalizeText(product?.sellerName || product?.seller || "ExShopi Official");
   const stock = Number(product?.stock || 0) > 0 ? "in stock" : "currently limited in stock";
+  const productKeyword = [facts.brand, facts.model].filter(Boolean).join(" ").trim() || facts.title;
+  const specText = [
+    facts.processor ? `processor: ${facts.processor}` : "",
+    facts.ram ? `RAM: ${facts.ram}` : "",
+    facts.storage ? `storage: ${facts.storage}` : "",
+  ].filter(Boolean).join(", ") || "balanced specifications for everyday performance";
+  const condition = facts.condition || (/refurb|renewed|used/i.test(facts.title) ? "refurbished" : "new or verified");
+  const boost = PRODUCT_CONVERSION_BOOST_LINES.join(" ");
 
   return [
-    `${facts.title} is built for shoppers in the UAE who want a clearer way to compare ${category.toLowerCase()} listings before ordering online. ExShopi surfaces structured specifications, condition notes, and seller details so buyers in Dubai, Abu Dhabi, Sharjah, and across the Emirates can understand exactly what they are getting before checkout.`,
-    `${facts.brand || "This model"}${facts.year ? ` from ${facts.year}` : ""} stands out with ${facts.prioritizedSpecs.length ? facts.prioritizedSpecs.join(", ") : "practical everyday performance"}, making it a strong fit for work, study, home use, and value-focused upgrades. The listing is supported by product metadata, keyword-rich descriptions, and clean marketplace signals that help both shoppers and search engines interpret the offer more accurately.`,
-    `This item is sold by ${seller} and is ${stock}, with UAE-focused trust cues such as cash on delivery support, delivery visibility, and verified marketplace handling. Buyers searching for ${facts.brand || category} in UAE, refurbished ${category.toLowerCase()} deals, or competitive electronics pricing can use this page to review the main specifications, compare related products, and move from research to purchase with more confidence.`,
+    `${facts.title} is a ${condition} ${category.toLowerCase()} listing for shoppers who want to buy ${productKeyword} UAE with clear specifications, trusted seller context, and a practical path to checkout. It is available for UAE delivery with Cash on Delivery, and ExShopi also supports GCC delivery messaging plus converted pricing signals in SAR, QAR, OMR, KWD, and BHD for Saudi Arabia, Qatar, Oman, Kuwait, and Bahrain.`,
+    `The key specifications include ${specText}. These details help business users, students, home buyers, creators, and light gaming users compare real performance instead of relying on vague product names. Shoppers checking ${productKeyword} Dubai price can review the product condition, seller details, stock signals, and warranty support before placing an order.`,
+    `This item is sold by ${seller} and is ${stock}. ExShopi adds trust signals such as verified marketplace handling, clear category links, product breadcrumbs, secure checkout support, and cash on delivery UAE availability. Explore more ${category.toLowerCase()} deals through the related category pages and compare similar products before you buy. ${boost}`,
   ].join(" ");
+}
+
+export function buildCategorySeoTitle(categoryName: string) {
+  const normalizedName = titleCase(categoryName || "Products");
+  return `Buy ${normalizedName} in UAE | Best Prices Dubai | COD - Exshopi`;
+}
+
+export function buildCategoryMetaDescription(categoryName: string) {
+  const normalizedName = titleCase(categoryName || "products").toLowerCase();
+  return clampWords(
+    `Shop ${normalizedName} in UAE with Cash on Delivery. Best prices in Dubai with fast delivery across GCC from Exshopi.`,
+    160
+  );
 }
 
 export function buildCategorySeoBody(input: {
@@ -136,11 +277,20 @@ export function buildCategorySeoBody(input: {
   const countText = input.productCount ? `${input.productCount}+ live listings` : "live marketplace listings";
 
   return [
-    `${categoryName} shoppers in the UAE usually want three things at once: trusted pricing, clearer product information, and faster ways to compare offers without opening ten different tabs. This category page is designed to solve exactly that problem by grouping ${countText}, surfacing cleaner product titles, and helping search engines understand what ExShopi offers for Dubai, Abu Dhabi, Sharjah, and wider GCC demand. If you are searching for ${keyword.toLowerCase()}, this page gives you a stronger starting point than generic listing pages with thin metadata or vague specifications.`,
-    `Every category section on ExShopi is built to support both discoverability and conversion. Product cards connect directly to structured detail pages, related items, and seller context so buyers can move from category browsing to product evaluation with less friction. That internal linking pattern also helps search engines understand how products, subcategories, and homepage collections connect to one another, which supports better crawling and more consistent indexing over time.`,
-    `For UAE shoppers, trust signals matter as much as price. ExShopi highlights marketplace-ready details such as cash on delivery support, UAE delivery expectations, verified sellers, and product-level specifications where available. Whether you are researching ${categoryName.toLowerCase()} for business, study, gifting, or home use, this collection is meant to give you better context, more navigational depth, and a clearer path toward ordering electronics online in the UAE.`,
+    `Buy ${categoryName} UAE on ExShopi when you want clear product data, trusted sellers, and fast ways to compare ${countText}. This ${categoryName} Dubai category is built for high-intent shoppers looking for price, condition, specifications, delivery options, and Cash on Delivery before they order. It keeps UAE buyers first while also supporting GCC demand with converted pricing signals in SAR, QAR, OMR, KWD, and BHD for Saudi Arabia, Qatar, Oman, Kuwait, and Bahrain.`,
+    `Every ${categoryName.toLowerCase()} product links into a structured detail page with canonical URLs, breadcrumbs, seller context, and related category navigation. That internal linking helps shoppers move from broad discovery to specific products, and it gives search engines stronger crawl paths between categories, subcategories, and product pages. If you are searching for ${keyword.toLowerCase()}, best ${categoryName.toLowerCase()} price Dubai, or cheap ${categoryName.toLowerCase()} UAE, this page gives you a cleaner buying route than thin listing pages.`,
+    `ExShopi highlights practical trust signals including cash on delivery UAE support, fast delivery in Dubai, Sharjah, and Abu Dhabi, verified products, and warranty availability where offered. Explore more related categories, compare live products, and shop ${categoryName.toLowerCase()} with UAE-first pricing plus GCC delivery messaging for Saudi Arabia, Qatar, Oman, Kuwait, and Bahrain.`,
   ];
 }
+
+export const UAE_TRUST_SIGNALS = [
+  "Cash on Delivery",
+  "UAE Delivery",
+  "Dubai, Sharjah & Abu Dhabi",
+  "GCC Delivery",
+  "Tested & Verified",
+  "Warranty Available",
+];
 
 export const LANDING_PAGES: LandingPageDefinition[] = [
   {
@@ -321,10 +471,3 @@ export const LANDING_PAGES: LandingPageDefinition[] = [
 export function getLandingPageBySlug(slug?: string) {
   return LANDING_PAGES.find((page) => page.slug === slug) || null;
 }
-
-export const UAE_TRUST_SIGNALS = [
-  "UAE Trusted Marketplace",
-  "Cash on Delivery available",
-  "Fast UAE delivery support",
-  "Verified sellers and structured listings",
-];

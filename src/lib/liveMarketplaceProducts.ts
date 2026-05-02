@@ -1,6 +1,7 @@
 import type { ProductCardProps } from "../components/ProductCard";
 import { getProductLifecycleState } from "./productLifecycle";
 import { normalizeMerchandisingSelectionValue } from "./homepageMerchandising";
+import { buildOptimizedProductTitle } from "./seoMarketplace";
 
 export type LiveMarketplaceProduct = ProductCardProps & {
   raw: any;
@@ -126,7 +127,7 @@ export function mapLiveMarketplaceProduct(product: any): LiveMarketplaceProduct 
   return {
     id: String(product.id),
     slug: product.slug || String(product.id),
-    title: product.title || "Marketplace Product",
+    title: buildOptimizedProductTitle(product),
     price,
     priceUae,
     priceKsa,

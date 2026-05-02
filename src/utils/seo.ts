@@ -8,7 +8,12 @@ import {
   DEFAULT_SITE_URL,
 } from "../constants/defaultSeo";
 import type { ProductSeoFields, ProductSeoInput, SeoFieldStatus, SeoPreviewData } from "../types/seo";
-import { buildRichProductTitle, cleanSeoSlug } from "../lib/seoMarketplace";
+import {
+  buildOptimizedProductTitle,
+  buildProductMetaDescription,
+  buildProductSearchTags,
+  cleanSeoSlug,
+} from "../lib/seoMarketplace";
 import {
   getCountryConfig,
   getCountrySeoMarketLabel,
@@ -83,14 +88,13 @@ export function buildProductPreviewUrl(slug: string) {
 }
 
 export function generateProductSeo(input: ProductSeoInput): ProductSeoFields {
-  const country = getCountryConfig(input.countryCode);
   const marketLabel = getCountrySeoMarketLabel(input.countryCode);
   const title = normalizeSeoText(input.title || "Marketplace Product");
   const shortDescription = normalizeSeoText(input.shortDescription || input.description || "");
   const category = normalizeSeoText(input.category || "");
   const subcategory = normalizeSeoText(input.subcategory || "");
   const nextSlug = slugifySeo(input.slug || title);
-  const richTitle = buildRichProductTitle({
+  const seoProduct = {
     title,
     brand: input.brand,
     year: (input as any)?.year,
@@ -101,23 +105,27 @@ export function generateProductSeo(input: ProductSeoInput): ProductSeoFields {
         storage: (input as any)?.storage,
       },
     },
-  });
+    category,
+    subcategory,
+    condition: input.condition,
+  };
+  const optimizedTitle = buildOptimizedProductTitle(seoProduct, DEFAULT_PRODUCT_TITLE_RANGE.max);
 
   const generatedTitle = clampSeoText(
-    input.metaTitle ||
-      `Buy ${richTitle || title} in ${marketLabel} | Best Price | ${DEFAULT_SITE_NAME}`.replace(/\s+/g, " ").trim(),
+    input.metaTitle || optimizedTitle || `Buy ${title} in ${marketLabel} | Best Price | ${DEFAULT_SITE_NAME}`,
     DEFAULT_PRODUCT_TITLE_RANGE.max
   );
 
   const generatedDescription = clampSeoText(
-    input.metaDescription ||
-      `Shop ${title} in ${marketLabel}. Cash on Delivery, Fast Delivery, Warranty Available. Order now on ${DEFAULT_SITE_NAME}.`,
+    input.metaDescription || buildProductMetaDescription(seoProduct, DEFAULT_PRODUCT_DESCRIPTION_RANGE.max),
     DEFAULT_PRODUCT_DESCRIPTION_RANGE.max
   );
 
   const generatedKeywords = trimSeoKeywords(
     input.metaKeywords ||
-      [title, category, subcategory, ...DEFAULT_PRODUCT_KEYWORD_SEEDS].filter(Boolean).join(", ")
+      [...buildProductSearchTags(seoProduct), title, category, subcategory, ...DEFAULT_PRODUCT_KEYWORD_SEEDS]
+        .filter(Boolean)
+        .join(", ")
   );
 
   const canonicalUrl = normalizeSeoText(input.canonicalUrl || buildProductPreviewUrl(nextSlug));

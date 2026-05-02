@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
+import { generateProductSeoPayload } from './utils/seo';
 
 type GenericRecord = Record<string, any>;
 type GccCountryCode = 'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM';
@@ -1246,20 +1247,40 @@ export function buildBulkImportPayload(input: {
     homepage_section_visibility: fieldRow.homepageSectionVisibility,
     deal_timer: fieldRow.dealTimer,
   } as Record<string, any>;
+  const seo = generateProductSeoPayload({
+    title: fieldRow.productTitle,
+    slug: fieldRow.seoSlug || fieldRow.productTitle,
+    metaTitle: fieldRow.seoTitle,
+    metaDescription: fieldRow.seoDescription,
+    metaKeywords: fieldRow.metaKeywords,
+    ogTitle: fieldRow.seoTitle,
+    ogDescription: fieldRow.seoDescription,
+    ogImage: fieldRow.mainImageUrl,
+    shortDescription: fieldRow.shortDescription,
+    description: fieldRow.longDescription,
+    category: categoryMatch.parent.name,
+    subcategory: categoryMatch.subcategory?.name || categoryMatch.category?.name,
+    image: fieldRow.mainImageUrl,
+    brand: fieldRow.brand,
+    processor: inferredProcessor,
+    ram: inferredRam,
+    storage: inferredStorage,
+    condition: fieldRow.condition || 'Refurbished',
+  } as any);
 
   return {
     sellerId: sellerMatch.id,
     categoryId: categoryMatch.parent.id,
     title: fieldRow.productTitle,
-    slug: fieldRow.seoSlug || slugify(fieldRow.productTitle),
-    metaTitle: fieldRow.seoTitle || fieldRow.productTitle.slice(0, 60),
-    metaDescription: fieldRow.seoDescription || fieldRow.shortDescription || fieldRow.longDescription.slice(0, 160),
-    metaKeywords: fieldRow.metaKeywords || '',
+    slug: seo.slug || fieldRow.seoSlug || slugify(fieldRow.productTitle),
+    metaTitle: seo.metaTitle,
+    metaDescription: seo.metaDescription,
+    metaKeywords: seo.metaKeywords,
     canonicalUrl: '',
-    ogTitle: fieldRow.seoTitle || fieldRow.productTitle,
-    ogDescription: fieldRow.seoDescription || fieldRow.shortDescription || fieldRow.longDescription.slice(0, 220),
+    ogTitle: seo.ogTitle,
+    ogDescription: seo.ogDescription,
     ogImage: fieldRow.mainImageUrl,
-    description: fieldRow.longDescription || fieldRow.shortDescription || fieldRow.productTitle,
+    description: seo.description || fieldRow.longDescription || fieldRow.shortDescription || fieldRow.productTitle,
     price: finalPrice,
     priceUae: numberValue(fieldRow.regularPrice, finalPrice) ? finalPrice : finalPrice,
     priceKsa: smartPricesByCountry.SA.price,
@@ -1288,15 +1309,15 @@ export function buildBulkImportPayload(input: {
     createdByRole: input.mode === 'admin' ? 'admin' : 'seller',
     badges,
     specs: {
-      shortDescription: fieldRow.shortDescription,
+      shortDescription: seo.shortDescription || fieldRow.shortDescription,
       pricesByCountry: smartPricesByCountry,
-      longDescription: fieldRow.longDescription || fieldRow.shortDescription,
-      metaTitle: fieldRow.seoTitle || fieldRow.productTitle.slice(0, 60),
-      metaDescription: fieldRow.seoDescription || fieldRow.shortDescription || fieldRow.longDescription.slice(0, 160),
-      metaKeywords: fieldRow.metaKeywords || '',
+      longDescription: seo.description || fieldRow.longDescription || fieldRow.shortDescription,
+      metaTitle: seo.metaTitle,
+      metaDescription: seo.metaDescription,
+      metaKeywords: seo.metaKeywords,
       canonicalUrl: '',
-      ogTitle: fieldRow.seoTitle || fieldRow.productTitle,
-      ogDescription: fieldRow.seoDescription || fieldRow.shortDescription || fieldRow.longDescription.slice(0, 220),
+      ogTitle: seo.ogTitle,
+      ogDescription: seo.ogDescription,
       ogImage: fieldRow.mainImageUrl,
       briefHighlights: highlights.length >= 3 ? highlights : buildDefaultHighlights(fieldRow),
       keyFeatures: highlights.length >= 3 ? highlights : buildDefaultHighlights(fieldRow),
@@ -1307,7 +1328,7 @@ export function buildBulkImportPayload(input: {
       packageSize: fieldRow.dimensions,
       returnPolicy: fieldRow.returnPolicy,
       warrantyPolicy: fieldRow.warrantyPolicy || fieldRow.warranty,
-      searchTags: dedupe(splitList(fieldRow.metaKeywords)).slice(0, 12),
+      searchTags: dedupe(splitList(seo.metaKeywords)).slice(0, 15),
       parentCategorySlug: categoryMatch.parent.slug,
       parentCategoryName: categoryMatch.parent.name,
       categorySlug: categoryMatch.category?.slug || categoryMatch.parent.slug,

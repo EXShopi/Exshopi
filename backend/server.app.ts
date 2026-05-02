@@ -717,6 +717,7 @@ const buildPersistedProductSeo = async (input: any, currentId?: string) => {
     category: input?.specs?.parentCategoryName || input?.category,
     subcategory: input?.specs?.subcategoryName || input?.subcategory,
     image: input?.image,
+    brand: input?.brand || input?.specs?.attributes?.brand,
   });
 
   const slug = await ensureUniqueProductSlug(generated.slug || input?.title || 'product', currentId);
@@ -739,6 +740,7 @@ const getProductSeoMeta = (product: any) => {
     category: product?.specs?.parentCategoryName || product?.category,
     subcategory: product?.specs?.subcategoryName || product?.subcategory,
     image: product?.image,
+    brand: product?.brand || product?.specs?.attributes?.brand,
   });
 };
 
@@ -1388,7 +1390,7 @@ const createAdminProductRecord = async (payload: any) => {
     ogDescription: seo.ogDescription,
     ogImage: seo.ogImage,
     title: productPayload.title || 'Untitled',
-    description: productPayload.description || '',
+    description: seo.description || productPayload.description || '',
     price: Number(productPayload.price || 0),
     comparePrice:
       productPayload.comparePrice != null
@@ -3829,7 +3831,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         ogDescription: seo.ogDescription,
         ogImage: seo.ogImage,
         title: payload.title,
-        description: payload.description,
+        description: seo.description || payload.description,
         price: Number(payload.price) || 0,
         comparePrice: Number(payload.comparePrice ?? payload.originalPrice ?? payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
@@ -3885,7 +3887,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         ogDescription: seo.ogDescription,
         ogImage: seo.ogImage,
         title: payload.title,
-        description: payload.description,
+        description: seo.description || payload.description,
         price: Number(payload.price) || 0,
         comparePrice: Number(payload.comparePrice ?? payload.originalPrice ?? payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,
@@ -3943,7 +3945,7 @@ app.post('/api/products/create', authMiddleware, async (req: Request, res: Respo
         ogDescription: seo.ogDescription,
         ogImage: seo.ogImage,
         title: payload.title,
-        description: payload.description,
+        description: seo.description || payload.description,
         price: Number(payload.price) || 0,
         comparePrice: Number(payload.comparePrice ?? payload.originalPrice ?? payload.price) || 0,
         priceUae: Number(payload.priceUae ?? payload.price) || 0,

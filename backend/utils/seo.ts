@@ -1,4 +1,11 @@
 import { slugifyProduct } from "./slug";
+import {
+  buildOptimizedProductTitle,
+  buildProductMetaDescription,
+  buildProductSearchTags,
+  buildProductShortDescription,
+  buildProductSeoNarrative,
+} from "../../src/lib/seoMarketplace";
 
 const DEFAULT_SITE_URL = process.env.SITE_URL || process.env.VITE_SITE_URL || "https://exshopi.com";
 
@@ -28,28 +35,43 @@ export function generateProductSeoPayload(input: {
   category?: string;
   subcategory?: string;
   image?: string;
+  brand?: string;
 }) {
   const title = normalizeSeoText(input.title || "Marketplace Product");
   const slug = slugifyProduct(input.slug || title);
-  const shortDescription = normalizeSeoText(input.shortDescription || input.description || "");
+  const seoProduct = {
+    ...input,
+    title,
+    specs: {
+      attributes: {
+        ...(input as any)?.specs?.attributes,
+        brand: (input as any).brand,
+        processor: (input as any).processor,
+        ram: (input as any).ram,
+        storage: (input as any).storage,
+      },
+      categoryName: input.category,
+      subcategoryName: input.subcategory,
+      shortDescription: input.shortDescription,
+    },
+  };
+  const shortDescription = normalizeSeoText(input.shortDescription || buildProductShortDescription(seoProduct));
   const category = normalizeSeoText(input.category || "");
   const subcategory = normalizeSeoText(input.subcategory || "");
-  const brand = normalizeSeoText((input as any).brand || "");
-  const yearMatch = title.match(/\b(19\d{2}|20\d{2})\b/);
-  const titleBits = [brand, title.replace(new RegExp(`^${brand}`, "i"), "").trim(), yearMatch?.[0], "UAE"].filter(Boolean);
+  const optimizedTitle = buildOptimizedProductTitle(seoProduct);
   const metaTitle = clampSeoText(
-    input.metaTitle || `${titleBits.join(" ")} | ExShopi`,
-    60
+    input.metaTitle || optimizedTitle,
+    90
   );
   const metaDescription = clampSeoText(
-    input.metaDescription ||
-      `${shortDescription || title} Shop now on ExShopi with UAE delivery, COD-ready checkout, verified seller support, and premium marketplace product details.`,
+    input.metaDescription || buildProductMetaDescription(seoProduct),
     160
   );
   const metaKeywords = uniqueSeoKeywords([
     ...String(input.metaKeywords || "")
       .split(",")
       .map((keyword) => keyword.trim()),
+    ...buildProductSearchTags(seoProduct),
     title,
     category,
     subcategory,
@@ -72,6 +94,8 @@ export function generateProductSeoPayload(input: {
     ogTitle: normalizeSeoText(input.ogTitle || metaTitle),
     ogDescription: normalizeSeoText(input.ogDescription || metaDescription),
     ogImage: normalizeSeoText(input.ogImage || input.image || ""),
+    shortDescription,
+    description: normalizeSeoText(input.description || buildProductSeoNarrative(seoProduct)),
   };
 }
 
@@ -89,5 +113,7 @@ export function mergeProductSeoIntoSpecs(
     ogTitle: seo.ogTitle,
     ogDescription: seo.ogDescription,
     ogImage: seo.ogImage,
+    shortDescription: (seo as any).shortDescription || specs?.shortDescription,
+    longDescription: (seo as any).description || specs?.longDescription,
   };
 }

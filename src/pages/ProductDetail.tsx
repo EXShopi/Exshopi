@@ -37,7 +37,13 @@ import { buildProductPath, buildAbsoluteUrl, buildProductBreadcrumbSchema, build
 import { findProductRouteMatch } from "../lib/productRouteResolution";
 import SEO from "../components/SEO";
 import { buildProductJsonLd, getProductSeoPayload } from "../utils/seo";
-import { buildProductSeoNarrative, cleanSeoSlug, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
+import {
+  buildOptimizedProductTitle,
+  buildProductShortDescription,
+  buildProductSeoNarrative,
+  cleanSeoSlug,
+  UAE_TRUST_SIGNALS,
+} from "../lib/seoMarketplace";
 import { readRouteSnapshot, resolveProductSnapshot } from "../lib/routeSnapshot";
 import { getCountryConfig, getProductCountryCompareAtPrice, getProductCountryPrice } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
@@ -983,15 +989,14 @@ export default function ProductDetail() {
     (productResolution === "retryable-error" && !product) ||
     (!hasAttemptedLoad && !product);
   const isMissingProduct = productResolution === "missing" && !product;
-  const productTitle = String(product?.title || product?.name || "").trim();
+  const productTitle = product ? buildOptimizedProductTitle(product) : String(product?.title || product?.name || "").trim();
   const safeProductDescription =
     String(productSpecs?.shortDescription || "").trim() ||
     String(product?.shortDescription || "").trim() ||
+    (product ? buildProductShortDescription(product) : "") ||
     String(product?.description || "").replace(/\s+/g, " ").trim() ||
     productSeo.metaDescription;
-  const resolvedProductMetaTitle = productTitle
-    ? `Buy ${productTitle} in ${country.name} | Best Price | ExShopi`
-    : productSeo.metaTitle;
+  const resolvedProductMetaTitle = productSeo.metaTitle || productTitle;
   const productReviewCount = reviews.length || Number(product?.reviews || 0);
   const productRatingValue =
     reviews.length > 0
@@ -1698,7 +1703,7 @@ const productSchema = product
             <ChevronRight className="h-4 w-4 shrink-0" />
             <Link to={`/vendor/${sellerLinkSlug}`} className="whitespace-nowrap hover:text-blue-600">{product.sellerName || sellerProfile.name}</Link>
             <ChevronRight className="h-4 w-4 shrink-0" />
-            <span className="truncate font-semibold text-slate-900">{product.title}</span>
+            <span className="truncate font-semibold text-slate-900">{productTitle}</span>
           </div>
         </div>
       </div>
@@ -1786,7 +1791,7 @@ const productSchema = product
 
                 <div className="max-w-[28ch]">
                   <h1 className="text-[1.14rem] font-semibold leading-[1.32] tracking-[-0.02em] text-slate-950 md:text-[1.45rem] lg:text-[1.62rem]">
-                    {product.title}
+                    {productTitle}
                   </h1>
                   {selectedVariantLabel ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">

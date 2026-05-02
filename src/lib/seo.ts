@@ -1,4 +1,11 @@
-import { buildRichProductTitle, cleanSeoSlug } from "./seoMarketplace";
+import {
+  buildCategoryMetaDescription,
+  buildCategorySeoTitle,
+  buildOptimizedProductTitle,
+  buildProductMetaDescription,
+  buildProductSearchTags,
+  cleanSeoSlug,
+} from "./seoMarketplace";
 import { getCategoryRouteInfo, resolveCanonicalCategoryAssignment } from "./masterCategories";
 
 const DEFAULT_SITE_NAME = "ExShopi";
@@ -211,14 +218,12 @@ export function generateProductMeta(product: any) {
     "";
 
   const generatedTitle = clampText(
-    storedTitle ||
-      `Buy ${buildRichProductTitle(product) || title} in UAE | Best Price | ${DEFAULT_SITE_NAME}`,
-    60
+    storedTitle || buildOptimizedProductTitle(product),
+    90
   );
 
   const generatedDescription = clampText(
-    storedDescription ||
-      `Shop ${title} in UAE. Cash on Delivery, Fast Delivery, Warranty Available. Order now on ${DEFAULT_SITE_NAME}.`,
+    storedDescription || buildProductMetaDescription(product),
     160
   );
 
@@ -226,6 +231,7 @@ export function generateProductMeta(product: any) {
     ...String(storedKeywords || "")
       .split(",")
       .map((value) => value.trim()),
+    ...buildProductSearchTags(product),
     title,
     brand,
     ...UAE_KEYWORDS,
@@ -309,11 +315,8 @@ function buildMerchantReturnPolicy() {
 
 export function generateCategorySeo(categoryName: string, categorySlug?: string) {
   const normalizedName = String(categoryName || toTitleCase(categorySlug || "Category")).trim();
-  const title = clampText(`Buy ${normalizedName} in UAE | Best Prices | ${DEFAULT_SITE_NAME}`, 60);
-  const description = clampText(
-    `${normalizedName} on ExShopi for UAE and GCC shoppers. Compare trusted marketplace listings, secure COD checkout, and premium electronics deals with fast Dubai delivery.`,
-    160
-  );
+  const title = clampText(buildCategorySeoTitle(normalizedName), 90);
+  const description = clampText(buildCategoryMetaDescription(normalizedName), 160);
   const keywords = uniqueKeywords([
     normalizedName,
     `${normalizedName} UAE`,

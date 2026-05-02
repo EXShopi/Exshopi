@@ -4,7 +4,7 @@ export const DEFAULT_SITE_URL =
   "https://exshopi.com";
 
 export const DEFAULT_PRODUCT_SEO_TITLE_SUFFIX = `| Buy in UAE | ${DEFAULT_SITE_NAME}`;
-export const DEFAULT_PRODUCT_TITLE_RANGE = { min: 50, max: 60 };
+export const DEFAULT_PRODUCT_TITLE_RANGE = { min: 50, max: 90 };
 export const DEFAULT_PRODUCT_DESCRIPTION_RANGE = { min: 150, max: 160 };
 
 export const DEFAULT_SEO_PLACEHOLDERS = {

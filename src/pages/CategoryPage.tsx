@@ -9,8 +9,8 @@ import { debugCategoryAssignment, filterProductsByCategoryTree, getCategoryRoute
 import { isLiveMarketplaceProduct } from "../lib/liveMarketplaceProducts";
 import { categoryAPI, productAPI } from "../services/api";
 import SEOHead from "../components/seo/SEOHead";
-import { buildCategorySeoDescription, generateCategorySeo, getCategoryPath, buildAbsoluteUrl } from "../lib/seo";
-import { buildCategorySeoBody, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
+import { generateCategorySeo, getCategoryPath, buildAbsoluteUrl } from "../lib/seo";
+import { buildCategorySeoBody, buildOptimizedProductTitle, UAE_TRUST_SIGNALS } from "../lib/seoMarketplace";
 import { readRouteSnapshot } from "../lib/routeSnapshot";
 
 type CatalogProduct = {
@@ -134,12 +134,11 @@ export default function CategoryPage() {
   const categoryContent = CATEGORY_CONTENT[effectiveSubcategoryKey || effectiveCategoryKey];
   const displayTitle = categoryContent?.title || subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || titleFromSlug(effectiveSubcategoryKey || effectiveCategoryKey);
   const heroDescription = categoryContent?.hero || `Shop ${displayTitle.toLowerCase()} with curated marketplace offers, structured product specifications, and trusted UAE seller support.`;
-  const seoDescription = categoryContent?.seoDescription || buildCategorySeoDescription(displayTitle);
   const generatedSeo = generateCategorySeo(displayTitle, effectiveSubcategoryKey || effectiveCategoryKey);
   const seo = {
     ...generatedSeo,
-    metaTitle: categoryContent?.seoTitle || generatedSeo.metaTitle,
-    metaDescription: seoDescription,
+    metaTitle: generatedSeo.metaTitle,
+    metaDescription: generatedSeo.metaDescription,
     metaKeywords: Array.from(
       new Set([
         ...(categoryContent?.seoKeywords || []),
@@ -167,7 +166,7 @@ export default function CategoryPage() {
         slug: product.slug || String(product.id),
         parentCategorySlug: product.specs?.parentCategorySlug || product.specs?.categorySlug,
         subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
-        title: product.title,
+        title: buildOptimizedProductTitle(product),
         price: Number(product.price || 0),
         priceUae: Number(product.priceUae || product.price || 0),
         priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
@@ -222,7 +221,7 @@ export default function CategoryPage() {
             slug: product.slug || String(product.id),
             parentCategorySlug: product.specs?.parentCategorySlug || product.specs?.categorySlug,
             subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
-            title: product.title,
+            title: buildOptimizedProductTitle(product),
             price: Number(product.price || 0),
             priceUae: Number(product.priceUae || product.price || 0),
             priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
@@ -267,7 +266,7 @@ export default function CategoryPage() {
         slug: product.slug || String(product.id),
         parentCategorySlug: product.specs?.parentCategorySlug || product.specs?.categorySlug,
         subcategorySlug: product.specs?.subcategorySlug || product.specs?.templateId,
-        title: product.title,
+        title: buildOptimizedProductTitle(product),
         price: Number(product.price || 0),
         priceUae: Number(product.priceUae || product.price || 0),
         priceKsa: product.priceKsa != null ? Number(product.priceKsa) : undefined,
@@ -317,7 +316,7 @@ export default function CategoryPage() {
     <div className="min-h-screen bg-[#f6f7fb]">
       <SEOHead
         title={seo.metaTitle}
-        description={seoDescription}
+        description={seo.metaDescription}
         keywords={seo.metaKeywords}
         pathname={canonicalPath}
         type="website"
