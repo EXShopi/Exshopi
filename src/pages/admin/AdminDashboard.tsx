@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardAPI } from '../../services/api';
 import {
@@ -60,40 +60,64 @@ export default function AdminDashboard() {
   const [customTo, setCustomTo] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadDashboard = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
 
-    const loadDashboard = async () => {
-      setLoading(true);
+    try {
+      const data = await dashboardAPI.getAdminDashboard({
+        range,
+        from: range === 'custom' ? customFrom || undefined : undefined,
+        to: range === 'custom' ? customTo || undefined : undefined,
+      });
 
-      try {
-        const data = await dashboardAPI.getAdminDashboard({
-          range,
-          from: range === 'custom' ? customFrom || undefined : undefined,
-          to: range === 'custom' ? customTo || undefined : undefined,
-        });
-
-        if (!cancelled && data) {
-          setDashboard(data);
-        }
-      } catch (error) {
-        console.warn('[ADMIN_DASHBOARD] Backend unavailable, showing fallback dashboard:', error);
-        if (!cancelled) {
-          setDashboard(getEmptyAdminData());
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      if (data) {
+        setDashboard(data);
       }
-    };
+    } catch (error) {
+      console.warn('[ADMIN_DASHBOARD] Backend unavailable, showing fallback dashboard:', error);
+      setDashboard(getEmptyAdminData());
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, [customFrom, customTo, range]);
 
-    loadDashboard();
+  useEffect(() => {
+    void loadDashboard(true);
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    const refreshQuietly = () => {
+      void loadDashboard(false);
+    };
+    const interval = window.setInterval(refreshQuietly, 30000);
+    const handleFocus = () => refreshQuietly();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshQuietly();
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key?.startsWith('exshopi:')) refreshQuietly();
+    };
+    const liveEvents = [
+      'exshopi:product-deleted',
+      'exshopi:product-updated',
+      'exshopi:order-updated',
+      'exshopi:customer-updated',
+      'exshopi:vendor-updated',
+    ];
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('storage', handleStorage);
+    liveEvents.forEach((eventName) => window.addEventListener(eventName, refreshQuietly));
 
     return () => {
-      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('storage', handleStorage);
+      liveEvents.forEach((eventName) => window.removeEventListener(eventName, refreshQuietly));
     };
-  }, [range, customFrom, customTo]);
+  }, [loadDashboard]);
 
   const dashboardData = dashboard || getEmptyAdminData();
   const totalSellers = dashboardData.totalVendors ?? dashboardData.metrics?.totalSellers ?? 0;

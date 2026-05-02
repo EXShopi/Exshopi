@@ -295,6 +295,7 @@ export function AdminVendors() {
     try {
       await sellerAPI.delete(deleteTarget.id);
       await loadVendorOps();
+      window.dispatchEvent(new CustomEvent('exshopi:vendor-updated', { detail: { id: deleteTarget.id, action: 'deleted' } }));
       emitToast('success', 'Vendor deleted successfully.');
       setSelectedSeller(null);
       setDeleteTarget(null);

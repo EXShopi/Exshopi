@@ -439,6 +439,7 @@ export default function AdminOrderMonitoring() {
         setSelectedOrder(null);
         setShowModal(false);
       }
+      window.dispatchEvent(new CustomEvent('exshopi:order-updated', { detail: { id: deleteTarget.id, action: 'deleted' } }));
       setDeleteTarget(null);
       emitToast('success', 'Order deleted successfully.');
     } catch (error: any) {

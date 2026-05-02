@@ -237,6 +237,7 @@ export function AdminProducts() {
       setSelectedIds([]);
       try { invalidateProductCaches(deletedIds); } catch (e) { console.warn('Failed to invalidate product caches', e); }
       try { localStorage.setItem('exshopi:product-deleted', JSON.stringify({ ids: deletedIds, ts: Date.now() })); } catch (e) { /* ignore */ }
+      window.dispatchEvent(new CustomEvent('exshopi:product-deleted', { detail: { ids: deletedIds } }));
     } catch (error) {
       console.error('Failed to bulk delete products', error);
     }
@@ -249,6 +250,7 @@ export function AdminProducts() {
       setSelectedIds((current) => current.filter((entry) => entry !== id));
       try { invalidateProductCaches(id); } catch (e) { console.warn('Failed to invalidate product caches', e); }
       try { localStorage.setItem('exshopi:product-deleted', JSON.stringify({ id, ts: Date.now() })); } catch (e) { /* ignore */ }
+      window.dispatchEvent(new CustomEvent('exshopi:product-deleted', { detail: { id } }));
     } catch (error) {
       console.error('Failed to delete product', error);
     }

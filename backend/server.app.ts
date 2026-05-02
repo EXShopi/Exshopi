@@ -1329,6 +1329,28 @@ const getAllAdminProductsForValidation = async () => {
   return db.getAllProducts();
 };
 
+const getLiveAdminProducts = async () => {
+  const products = await getAllAdminProductsForValidation();
+  return (products || [])
+    .filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index)
+    .filter((product) => !isSoftDeletedProduct(product));
+};
+
+const getLiveAdminOrders = async () => {
+  const orders = prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders();
+  return (orders || []).filter((order) => !isSoftDeletedEntity('order', order.id));
+};
+
+const getLiveAdminCustomers = async () => {
+  const users = prismaRuntime.enabled ? await prismaRuntime.getAllUsers() : db.getAllUsers();
+  return (users || []).filter((user) => user.role === 'customer' && !isSoftDeletedEntity('customer', user.id));
+};
+
+const getLiveAdminSellers = async () => {
+  const sellers = await getAllCatalogSellers();
+  return (sellers || []).filter((seller) => !isSoftDeletedEntity('vendor', seller.id));
+};
+
 const resolveUploaderSeller = async (userId?: string | null) => {
   if (!userId) return null;
   const sellers = await getAllCatalogSellers();
@@ -3346,24 +3368,15 @@ app.put('/api/sellers/:id', authMiddleware, async (req: Request, res: Response) 
 
 app.get('/api/sellers', async (req: Request, res: Response) => {
   try {
-    const sellers = prismaRuntime.enabled
-      ? await prismaRuntime.getAllSellers()
-      : db.getAllSellers();
-    const orders = prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders();
-    const products = prismaRuntime.enabled ? await prismaRuntime.getAllProductsForAdmin() : [
-      ...db.getAllProducts(),
-      ...db.getProductsByStatus('pending'),
-      ...db.getProductsByStatus('approved'),
-      ...db.getProductsByStatus('rejected'),
-    ];
+    const sellers = await getLiveAdminSellers();
+    const orders = await getLiveAdminOrders();
+    const products = await getLiveAdminProducts();
     const users = prismaRuntime.enabled ? await prismaRuntime.getAllUsers() : db.getAllUsers();
     const supportTickets = prismaRuntime.enabled ? await prismaRuntime.getAllSupportTickets() : db.getSupportTickets();
     const payoutRequests = prismaRuntime.enabled ? await prismaRuntime.getAllPayoutRequests() : db.getAllPayoutRequests();
     const applications = prismaRuntime.enabled ? await prismaRuntime.getSellerApplications() : db.getSellerApplications();
 
-    const activeSellers = sellers.filter((seller) => !isSoftDeletedEntity('vendor', seller.id));
-
-    const enriched = activeSellers.map((seller) => {
+    const enriched = sellers.map((seller) => {
       const sellerOrders = orders.filter((order) => order.sellerId === seller.id);
       const sellerProducts = products.filter((product) => product.sellerId === seller.id || product.storeId === seller.id);
       const liveProductCount = sellerProducts.filter((product) => product.visibilityStatus === 'live' || product.status === 'live' || product.status === 'approved').length;
@@ -7459,10 +7472,8 @@ app.get('/api/admin/customers', authMiddleware, async (req: Request, res: Respon
     }
 
     if (prismaRuntime.enabled) {
-      const customers = (await prismaRuntime.getAllUsers()).filter(
-        (user) => user.role === 'customer' && !isSoftDeletedEntity('customer', user.id)
-      );
-      const orders = await prismaRuntime.getAllOrders();
+      const customers = await getLiveAdminCustomers();
+      const orders = await getLiveAdminOrders();
       const data = customers.map((customer) => {
         const customerOrders = orders.filter((order) => order.customerId === customer.id);
         return {
@@ -7485,10 +7496,8 @@ app.get('/api/admin/customers', authMiddleware, async (req: Request, res: Respon
       return res.json(data);
     }
 
-    const customers = db.getAllUsers().filter(
-      (user) => user.role === 'customer' && !isSoftDeletedEntity('customer', user.id)
-    );
-    const orders = db.getAllOrders();
+    const customers = await getLiveAdminCustomers();
+    const orders = await getLiveAdminOrders();
     const analyticsEvents = db.getAnalyticsEvents();
 
     const data = customers.map((customer) => {
@@ -7901,10 +7910,8 @@ app.get('/api/admin/notifications', authMiddleware, async (req: Request, res: Re
     if (!canAccessSupport(req.user?.role) && !canAccessFinance(req.user?.role)) {
       return res.status(403).json({ error: 'Backoffice only' });
     }
-    const orders = (prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders()).filter(
-      (order) => !isSoftDeletedEntity('order', order.id)
-    );
-    const products = prismaRuntime.enabled ? await prismaRuntime.getAllProductsForAdmin() : db.getAllProductsForAdmin();
+    const orders = await getLiveAdminOrders();
+    const products = await getLiveAdminProducts();
     const payoutRequests = prismaRuntime.enabled ? await prismaRuntime.getAllPayoutRequests() : db.getAllPayoutRequests();
     const supportTickets = prismaRuntime.enabled ? await prismaRuntime.getAllSupportTickets() : db.getSupportTickets();
     const sellerApplications = prismaRuntime.enabled ? await prismaRuntime.getSellerApplications() : db.getSellerApplications();
@@ -8710,31 +8717,16 @@ app.get('/api/admin/dashboard', authMiddleware, async (req: Request, res: Respon
       users,
       supportTickets,
       banners,
-    ] = prismaRuntime.enabled
-      ? await Promise.all([
-          prismaRuntime.getAllSellers(),
-          prismaRuntime.getAllProductsForAdmin(),
-          prismaRuntime.getAllOrders(),
-          prismaRuntime.getAllPayoutRequests(),
-          prismaRuntime.getAllPayouts(),
-          prismaRuntime.getAllUsers(),
-          prismaRuntime.getAllSupportTickets(),
-          prismaRuntime.getBanners(),
-        ])
-      : [
-          db.getAllSellers(),
-          [
-            ...db.getAllProducts(),
-            ...db.getProductsByStatus('pending'),
-            ...db.getProductsByStatus('rejected'),
-          ].filter((product, index, array) => array.findIndex((entry) => entry.id === product.id) === index),
-          db.getAllOrders(),
-          db.getAllPayoutRequests(),
-          db.getAllPayouts(),
-          db.getAllUsers(),
-          db.getSupportTickets(),
-          db.getBanners(),
-        ];
+    ] = await Promise.all([
+      getLiveAdminSellers(),
+      getLiveAdminProducts(),
+      getLiveAdminOrders(),
+      prismaRuntime.enabled ? prismaRuntime.getAllPayoutRequests() : db.getAllPayoutRequests(),
+      prismaRuntime.enabled ? prismaRuntime.getAllPayouts() : db.getAllPayouts(),
+      getLiveAdminCustomers(),
+      prismaRuntime.enabled ? prismaRuntime.getAllSupportTickets() : db.getSupportTickets(),
+      prismaRuntime.enabled ? prismaRuntime.getBanners() : db.getBanners(),
+    ]);
 
     const analyticsEvents = db.getAnalyticsEvents();
     const ordersInRange = orders.filter((order) => isBetweenDates(order.createdAt, dateRange.from, dateRange.to));
@@ -8747,13 +8739,13 @@ app.get('/api/admin/dashboard', authMiddleware, async (req: Request, res: Respon
       .filter((order) => order.payoutStatus !== 'paid')
       .reduce((sum, order) => sum + Number(order.sellerAmount || 0), 0);
 
-    const pendingProducts = allProducts.filter((product) => product.approvalStatus === 'pending' || product.status === 'pending');
+    const pendingProducts = allProducts.filter((product) => resolveEffectiveProductStatus(product) === 'pending');
     const pendingOrders = ordersInRange.filter((order) => ['placed', 'confirmed', 'packed'].includes(order.status));
     const deliveredOrders = ordersInRange.filter((order) => order.status === 'delivered');
     const returnedOrders = ordersInRange.filter((order) => order.status === 'returned');
     const returnRequestedOrders = ordersInRange.filter((order) => order.status === 'return_requested');
     const refundRequested = ordersInRange.filter((order) => order.refundStatus === 'requested');
-    const lowStockProducts = allProducts.filter((product) => Number(product.stock || 0) <= 5);
+    const lowStockProducts = allProducts.filter((product) => Number(product.stock || 0) > 0 && Number(product.stock || 0) <= 5);
     const missingMediaProducts = allProducts.filter((product) => !product.image && (!Array.isArray(product.images) || product.images.length === 0));
     const failedUploadProducts = allProducts.filter((product) => (product.approvalNotes || '').toLowerCase().includes('upload'));
     const paymentRiskOrders = ordersInRange.filter((order) => ['failed', 'requires_action'].includes(String(order.paymentStatus || '').toLowerCase()));
@@ -8762,7 +8754,7 @@ app.get('/api/admin/dashboard', authMiddleware, async (req: Request, res: Respon
       String((order as any).cancellationReason || '').toLowerCase().includes('fraud'),
     );
     const openSupportCases = supportInRange.filter((ticket) => !['resolved', 'closed'].includes(String(ticket.status)));
-    const totalCustomers = users.filter((user) => user.role === 'customer').length;
+    const totalCustomers = users.length;
     const customerOrderCounts = ordersInRange.reduce<Record<string, number>>((acc, order) => {
       if (!order.customerId) return acc;
       acc[order.customerId] = (acc[order.customerId] || 0) + 1;
@@ -8906,7 +8898,7 @@ app.get('/api/admin/dashboard', authMiddleware, async (req: Request, res: Respon
       quickActions,
       totalSellers: sellers.length,
       totalVendors: sellers.length,
-      activeVendors: sellers.filter((seller) => seller.status === 'active').length,
+      activeVendors: sellers.filter((seller) => ['active', 'approved'].includes(String(seller.status || '').toLowerCase())).length,
       totalProducts: allProducts.length,
       totalOrders: ordersInRange.length,
       totalSales,
@@ -8943,7 +8935,7 @@ app.get('/api/admin/dashboard', authMiddleware, async (req: Request, res: Respon
         .slice(0, 5),
       metrics: {
         totalSellers: sellers.length,
-        activeSellers: sellers.filter((seller) => seller.status === 'active').length,
+        activeSellers: sellers.filter((seller) => ['active', 'approved'].includes(String(seller.status || '').toLowerCase())).length,
         totalProducts: allProducts.length,
         pendingProducts: pendingProducts.length,
         totalOrders: ordersInRange.length,

@@ -93,6 +93,7 @@ export function AdminCustomers() {
       setDeleteLoading(true);
       await customerAPI.delete(deleteTarget.id);
       setCustomers((prev) => prev.filter((customer) => customer.id !== deleteTarget.id));
+      window.dispatchEvent(new CustomEvent('exshopi:customer-updated', { detail: { id: deleteTarget.id, action: 'deleted' } }));
       emitToast('success', 'Customer deleted successfully.');
       setDeleteTarget(null);
     } catch (error: any) {
