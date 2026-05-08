@@ -1,34 +1,212 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { MessageCircle, X, Send, Sparkles, Search, ShoppingBag, Truck, HelpCircle, Phone, Mail, ArrowUpRight } from "lucide-react";
+import {
+  ArrowUpRight,
+  Bot,
+  BriefcaseBusiness,
+  Headphones,
+  MessageCircle,
+  PackageSearch,
+  RotateCcw,
+  Search,
+  Send,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Truck,
+  WalletCards,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { productAPI } from "../services/api";
+import { useCartStore } from "../store/cart";
+import { useCountryStore } from "../store/country";
+import { useOrderStore } from "../store/orders";
+import {
+  getCountryConfig,
+  getProductCountryPrice,
+  getShippingOption,
+} from "../lib/countryConfig";
+import { formatCurrencyPlainForCountry } from "../lib/currency";
+import {
+  getLiveMarketplaceProducts,
+  type LiveMarketplaceProduct,
+} from "../lib/liveMarketplaceProducts";
+import { buildProductPath } from "../lib/seo";
+import {
+  getSearchCorrection,
+  getTrendingSearches,
+  smartSearchProducts,
+} from "../lib/smartSearch";
 
-/**
- * Premium ExShopi AI Assistant Chat Widget
- * Luxury ecommerce AI shopping assistant with modern, branded design
- */
+type AssistantMessage = {
+  id: string;
+  role: "bot" | "user";
+  text: string;
+  products?: LiveMarketplaceProduct[];
+  cta?: {
+    label: string;
+    href: string;
+  };
+};
+
+type QuickAction = {
+  label: string;
+  prompt: string;
+  icon: LucideIcon;
+};
+
+const WHATSAPP_NUMBER = "971522608063";
+const WHATSAPP_DISPLAY = "+971522608063";
+const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
+const FALLBACK_ANSWER =
+  "I can help you with products, orders, delivery, warranty, COD, returns, and support. For fast help, contact ExShopi WhatsApp: +971522608063";
+const WELCOME_MESSAGE =
+  "Hi 👋 I’m ExShopi AI. I can help you find products, compare laptops, track orders, check delivery, understand warranty, and contact support.";
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { label: "Find Products", prompt: "Find products for me", icon: PackageSearch },
+  { label: "Track Order", prompt: "Track my order", icon: Truck },
+  { label: "Laptop Help", prompt: "Help me choose a laptop", icon: Search },
+  { label: "Mobile Help", prompt: "Help me find a mobile phone", icon: ShoppingBag },
+  { label: "Delivery Info", prompt: "Delivery information", icon: Truck },
+  { label: "Cash on Delivery", prompt: "Cash on delivery", icon: WalletCards },
+  { label: "Warranty", prompt: "Warranty information", icon: ShieldCheck },
+  { label: "Return Policy", prompt: "Return policy", icon: RotateCcw },
+  { label: "Contact WhatsApp", prompt: "Contact WhatsApp support", icon: MessageCircle },
+  { label: "Bulk Order", prompt: "Bulk order support", icon: BriefcaseBusiness },
+  { label: "Seller Registration", prompt: "Seller registration", icon: ShoppingBag },
+  { label: "Talk to Support", prompt: "Talk to support", icon: Headphones },
+];
+
+const PRODUCT_TERMS = [
+  "laptop",
+  "macbook",
+  "imac",
+  "mobile",
+  "iphone",
+  "samsung",
+  "tablet",
+  "camera",
+  "dslr",
+  "accessory",
+  "accessories",
+  "refurbished",
+  "used",
+  "dell",
+  "hp",
+  "elitebook",
+  "lenovo",
+  "gaming",
+  "cheap",
+  "under",
+  "aed",
+  "i7",
+  "i5",
+];
+
+const messageId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+function normalizeText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function includesAny(query: string, terms: string[]) {
+  const normalized = normalizeText(query);
+  return terms.some((term) => normalized.includes(term));
+}
+
+function getProductSpecs(product: LiveMarketplaceProduct) {
+  const raw = product.raw || {};
+  const specs = raw.specs || {};
+  const attributes = specs.attributes || {};
+  const values = [
+    raw.brand || specs.brand || attributes.brand,
+    raw.model || specs.model || attributes.model,
+    attributes.processor || attributes.cpu || specs.processor,
+    attributes.ram || specs.ram,
+    attributes.storage || specs.storage,
+    attributes.condition || specs.condition || raw.condition,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(values)).slice(0, 4).join(" • ");
+}
+
+function needsWhatsAppHandoff(query: string) {
+  return includesAny(query, [
+    "whatsapp",
+    "contact",
+    "support",
+    "agent",
+    "human",
+    "call",
+    "phone",
+    "order",
+    "bulk",
+    "seller",
+    "vendor",
+    "damaged",
+    "wrong item",
+    "cancel",
+    "refund",
+  ]);
+}
+
+function isProductQuery(query: string) {
+  return includesAny(query, PRODUCT_TERMS);
+}
+
 export default function FloatingChatbot() {
   const navigate = useNavigate();
+  const selectedCountry = useCountryStore((state) => state.selectedCountry);
+  const selectedCity = useCountryStore((state) => state.selectedCity);
+  const selectedShippingOption = useCountryStore((state) => state.selectedShippingOption);
+  const cartItems = useCartStore((state) => state.items);
+  const orders = useOrderStore((state) => state.orders);
+  const currentOrder = useOrderStore((state) => state.currentOrder);
+
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: "Hi! 👋 I'm ExShopi AI Assistant. I'm here to help you find products, track orders, answer questions, and make your shopping experience amazing.",
-      type: "bot",
-      timestamp: new Date(),
-    },
-  ]);
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<AssistantMessage[]>([
+    { id: "welcome", role: "bot", text: WELCOME_MESSAGE },
+  ]);
+  const [catalog, setCatalog] = useState<LiveMarketplaceProduct[]>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to newest message
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const country = useMemo(() => getCountryConfig(selectedCountry), [selectedCountry]);
+  const shippingOption = useMemo(
+    () => getShippingOption(selectedCountry, selectedShippingOption),
+    [selectedCountry, selectedShippingOption]
+  );
+  const cartCount = useMemo(
+    () => cartItems.reduce((total, item) => total + item.quantity, 0),
+    [cartItems]
+  );
+
+  const ensureCatalogLoaded = useCallback(async () => {
+    if (catalogLoaded) return catalog;
+
+    try {
+      const products = await productAPI.getAll();
+      const liveProducts = getLiveMarketplaceProducts(Array.isArray(products) ? products : []);
+      setCatalog(liveProducts);
+      setCatalogLoaded(true);
+      return liveProducts;
+    } catch (error) {
+      console.warn("ExShopi AI product catalog failed to load:", error);
+      setCatalogLoaded(true);
+      return [];
+    }
+  }, [catalog, catalogLoaded]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, isTyping]);
 
   useEffect(() => {
     const openChat = () => setIsOpen(true);
@@ -36,362 +214,416 @@ export default function FloatingChatbot() {
     return () => window.removeEventListener("openExshopiChat", openChat);
   }, []);
 
-  // Quick action categories
-  const quickActions = [
-    {
-      icon: <Search className="w-5 h-5" />,
-      label: "Find Products",
-      description: "Search & discover items",
-      queries: [
-        "Find laptops under 2000 AED",
-        "Show me today's deals",
-        "Best gaming products",
-      ],
-    },
-    {
-      icon: <Truck className="w-5 h-5" />,
-      label: "Track Order",
-      description: "Check delivery status",
-      queries: [
-        "Track my order",
-        "What's the delivery time?",
-        "How do I track orders?",
-      ],
-    },
-    {
-      icon: <ShoppingBag className="w-5 h-5" />,
-      label: "Product Help",
-      description: "Questions about items",
-      queries: [
-        "What's the warranty?",
-        "Comparison: iPhone vs Samsung",
-        "Returns policy",
-      ],
-    },
-    {
-      icon: <HelpCircle className="w-5 h-5" />,
-      label: "Support",
-      description: "General assistance",
-      queries: [
-        "Contact customer support",
-        "Report an issue",
-        "How can I help?",
-      ],
-    },
-  ];
+  useEffect(() => {
+    if (isOpen) {
+      void ensureCatalogLoaded();
+    }
+  }, [ensureCatalogLoaded, isOpen]);
 
-  const handleSendMessage = (message?: string) => {
-    const messageText = message || input.trim();
-    if (!messageText) return;
+  const buildAnswer = useCallback(
+    (query: string, products: LiveMarketplaceProduct[]): AssistantMessage => {
+      const lowerQuery = normalizeText(query);
+      const correction = getSearchCorrection(query);
+      const productResults = smartSearchProducts(products, query, 4).map((result) => result.item);
+      const genericProductHelp =
+        lowerQuery.includes("find products") ||
+        lowerQuery.includes("show products") ||
+        lowerQuery.includes("product help");
+      const featuredProducts = genericProductHelp ? products.slice(0, 4) : [];
+      const showProducts = isProductQuery(query) || productResults.length > 0;
+      const withWhatsApp = needsWhatsAppHandoff(query);
+      const cta = withWhatsApp ? { label: "Chat on WhatsApp", href: WHATSAPP_URL } : undefined;
 
-    // Add user message
-    const userMessage = {
-      id: messages.length + 1,
-      text: messageText,
-      type: "user",
-      timestamp: new Date(),
-    };
+      if (genericProductHelp && featuredProducts.length > 0) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: `Here are live ExShopi products to start with. You can also ask for MacBook, Dell i7, HP EliteBook, gaming laptop, iPhone, Samsung, camera, or a budget such as laptop under 1000 AED.`,
+          products: featuredProducts,
+          cta,
+        };
+      }
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+      if (showProducts && productResults.length > 0) {
+        const correctionText = correction ? ` Did you mean ${correction}?` : "";
+        return {
+          id: messageId(),
+          role: "bot",
+          text: `I found ${productResults.length} live product match${
+            productResults.length === 1 ? "" : "es"
+          } for "${query}".${correctionText} You can open any item to check specs, price, stock, warranty, and delivery for ${country.shortName}.`,
+          products: productResults,
+          cta,
+        };
+      }
 
-    // Simulate AI response
-    setTimeout(() => {
-      const responses = [
-        "Great question! Let me help you with that. 🎯",
-        "I found some helpful information for you. 💡",
-        "That's a popular question! Here's what I found... ✨",
-        "Let me connect you with the right solution. 🚀",
-      ];
+      if (showProducts) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: `I could not find an exact live match for "${query}" right now. Try ${getTrendingSearches()
+            .slice(0, 4)
+            .join(", ")}, or contact ExShopi WhatsApp for fast stock checking.`,
+          cta: { label: "Chat on WhatsApp", href: WHATSAPP_URL },
+        };
+      }
 
-      const botMessage = {
-        id: messages.length + 2,
-        text: responses[Math.floor(Math.random() * responses.length)],
-        type: "bot",
-        timestamp: new Date(),
+      if (lowerQuery.includes("track") || lowerQuery.includes("status")) {
+        const latestOrder = currentOrder || orders[orders.length - 1];
+        return {
+          id: messageId(),
+          role: "bot",
+          text: latestOrder
+            ? `Your latest order ${latestOrder.id} is ${latestOrder.status.replace(/_/g, " ")}. Tracking code: ${
+                latestOrder.trackingCode || "will be shared after dispatch"
+              }. Estimated delivery: ${latestOrder.estimatedDelivery || shippingOption.eta}.`
+            : "You can track orders from your account order page using your order ID or tracking code. If you placed an order by WhatsApp or COD, send your phone number to ExShopi support.",
+          cta: { label: "Chat on WhatsApp", href: WHATSAPP_URL },
+        };
+      }
+
+      if (lowerQuery.includes("delivery") || lowerQuery.includes("shipping") || lowerQuery.includes("gcc")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: `${country.deliveryMessage}. Standard delivery to ${selectedCity || country.defaultCity} is ${
+            shippingOption.eta
+          }, with a delivery charge from ${formatCurrencyPlainForCountry(
+            shippingOption.fee,
+            selectedCountry
+          )}. ExShopi supports UAE, Saudi Arabia, Qatar, Oman, Kuwait, and Bahrain.`,
+          cta,
+        };
+      }
+
+      if (lowerQuery.includes("cod") || lowerQuery.includes("cash on delivery") || lowerQuery.includes("cash")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: "Cash on Delivery is available for eligible orders. You can check the item before payment when COD is offered, then pay at delivery according to the checkout confirmation.",
+          cta,
+        };
+      }
+
+      if (lowerQuery.includes("payment") || lowerQuery.includes("card") || lowerQuery.includes("bank") || lowerQuery.includes("paypal") || lowerQuery.includes("payoneer")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: "ExShopi supports secure checkout options including Cash on Delivery, card payment when available, and assisted payments such as bank transfer for approved orders. For PayPal or Payoneer availability, contact support before placing the order.",
+          cta,
+        };
+      }
+
+      if (lowerQuery.includes("warranty") || lowerQuery.includes("condition") || lowerQuery.includes("refurbished") || lowerQuery.includes("used")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: "Most refurbished and used electronics include a 30 days warranty unless the product page says otherwise. Product condition, specs, battery or accessory details should be checked on the product page before checkout.",
+          cta,
+        };
+      }
+
+      if (lowerQuery.includes("return") || lowerQuery.includes("replacement") || lowerQuery.includes("refund") || lowerQuery.includes("damaged") || lowerQuery.includes("wrong")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: "For returns, replacement, damaged items, wrong items, or refund requests, contact ExShopi support quickly with your order ID, photos, and delivery details. The team will review eligibility and guide the next step.",
+          cta: { label: "Chat on WhatsApp", href: WHATSAPP_URL },
+        };
+      }
+
+      if (lowerQuery.includes("cart") || lowerQuery.includes("checkout") || lowerQuery.includes("wishlist") || lowerQuery.includes("account") || lowerQuery.includes("verification") || lowerQuery.includes("currency") || lowerQuery.includes("country")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: `Your selected market is ${country.name} and currency is ${country.currency}. You have ${cartCount} item${
+            cartCount === 1 ? "" : "s"
+          } in cart. You can create an account, verify your phone, use wishlist, review cart, choose country, and complete checkout from the website flow.`,
+          cta,
+        };
+      }
+
+      if (lowerQuery.includes("bulk")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: "For bulk laptop, mobile, camera, or accessories orders, share product type, quantity, target budget, country, and delivery city with ExShopi support. The team can confirm stock and best available pricing.",
+          cta: { label: "Chat on WhatsApp", href: WHATSAPP_URL },
+        };
+      }
+
+      if (lowerQuery.includes("seller") || lowerQuery.includes("vendor")) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: "Seller registration is available for vendors who want to list products on ExShopi. Prepare your store details, contact information, product categories, and business documents if requested.",
+          cta: { label: "Chat on WhatsApp", href: WHATSAPP_URL },
+        };
+      }
+
+      if (withWhatsApp) {
+        return {
+          id: messageId(),
+          role: "bot",
+          text: `For fast help with products, orders, delivery, warranty, COD, returns, seller support, or bulk orders, contact ExShopi WhatsApp: ${WHATSAPP_DISPLAY}.`,
+          cta: { label: "Chat on WhatsApp", href: WHATSAPP_URL },
+        };
+      }
+
+      return {
+        id: messageId(),
+        role: "bot",
+        text: FALLBACK_ANSWER,
+        cta: { label: "Chat on WhatsApp", href: WHATSAPP_URL },
       };
+    },
+    [cartCount, country, currentOrder, orders, selectedCity, selectedCountry, shippingOption]
+  );
+
+  const handleSendMessage = useCallback(
+    async (message?: string) => {
+      const messageText = (message || input).trim();
+      if (!messageText) return;
+
+      setInput("");
+      setMessages((prev) => [
+        ...prev,
+        { id: messageId(), role: "user", text: messageText },
+      ]);
+      setIsTyping(true);
+
+      const products = await ensureCatalogLoaded();
+      const botMessage = buildAnswer(messageText, products);
 
       setMessages((prev) => [...prev, botMessage]);
-    }, 600);
+      setIsTyping(false);
+    },
+    [buildAnswer, ensureCatalogLoaded, input]
+  );
+
+  const openProduct = (product: LiveMarketplaceProduct) => {
+    setIsOpen(false);
+    navigate(buildProductPath(product));
   };
 
-  const handleQuickAction = (query: string) => {
-    handleSendMessage(query);
+  const openWhatsApp = () => {
+    window.open(WHATSAPP_URL, "_blank", "noopener,noreferrer");
   };
-
-  const supportShortcuts = [
-    {
-      icon: Phone,
-      label: "Call",
-      value: "+971 52 260 8063",
-      action: () => {
-        window.location.href = "tel:+971522608063";
-      },
-    },
-    {
-      icon: Mail,
-      label: "Email",
-      value: "exshopi@exshopi.com",
-      action: () => {
-        window.location.href = "mailto:exshopi@exshopi.com";
-      },
-    },
-    {
-      icon: HelpCircle,
-      label: "Help Center",
-      value: "Browse FAQs",
-      action: () => {
-        setIsOpen(false);
-        navigate("/faq");
-      },
-    },
-  ];
 
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-[99980] group"
+        className="group fixed bottom-5 right-5 z-[99980] sm:bottom-6 sm:right-6"
         aria-label="Open ExShopi AI Assistant"
       >
-        {/* Glow effect */}
-        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 group-hover:opacity-40 blur-xl transition-all duration-300 scale-125" />
-
-        {/* Main button */}
-        <div className="relative h-16 w-16 rounded-full bg-gradient-to-br from-blue-600 via-blue-600 to-blue-700 shadow-2xl hover:shadow-3xl transition-all duration-300 group-hover:scale-110 active:scale-95 flex items-center justify-center">
-          {/* Inner glow */}
-          <div className="absolute inset-0 rounded-full bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
-
-          {/* Border ring */}
-          <div className="absolute inset-1 rounded-full border border-blue-400 opacity-0 group-hover:opacity-30 transition-opacity duration-300" />
-
-          {/* Icon */}
-          <div className="relative z-10 flex items-center justify-center">
-            <MessageCircle className="w-7 h-7 text-white" />
-            <Sparkles className="w-4 h-4 text-blue-200 absolute -top-1 -right-1 animate-pulse" />
-          </div>
-        </div>
-
-        {/* Floating label */}
-        <div className="absolute -top-12 right-0 bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-y-2 group-hover:translate-y-0 pointer-events-none">
+        <span className="absolute inset-0 rounded-full bg-blue-500/30 blur-xl transition duration-300 group-hover:scale-125 group-hover:bg-blue-500/40" />
+        <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-blue-600 to-blue-800 text-white shadow-[0_18px_50px_rgba(37,99,235,0.35)] transition duration-300 group-hover:scale-105 sm:h-16 sm:w-16">
+          <MessageCircle className="h-6 w-6 sm:h-7 sm:w-7" />
+          <Sparkles className="absolute right-3 top-3 h-3.5 w-3.5 text-blue-100" />
+        </span>
+        <span className="pointer-events-none absolute -top-11 right-0 hidden rounded-full bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white opacity-0 shadow-xl transition duration-300 group-hover:opacity-100 sm:block">
           ExShopi AI
-          <div className="absolute top-full right-4 w-2 h-2 bg-slate-900 transform rotate-45 -translate-y-1" />
-        </div>
+        </span>
       </button>
     );
   }
 
   return createPortal(
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[99970] bg-black/20 backdrop-blur-sm transition-opacity duration-300"
-        onClick={() => setIsOpen(false)}
-        aria-hidden="true"
-      />
-
-      {/* Chat Panel */}
-      <div
-        className="fixed bottom-6 right-6 z-[99980] flex max-h-[620px] w-[400px] flex-col overflow-hidden rounded-[28px] border border-white/50 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,250,255,0.96))] shadow-[0_30px_80px_rgba(15,23,42,0.22)] backdrop-blur-2xl"
-        style={{
-          animation: "slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-        }}
+    <div className="pointer-events-none fixed inset-0 z-[99980]">
+      <section
+        className="pointer-events-auto fixed inset-x-3 bottom-3 top-3 flex min-h-0 flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.25)] sm:bottom-6 sm:left-auto sm:right-6 sm:top-auto sm:h-[75vh] sm:max-h-[680px] sm:w-[420px] sm:max-w-[calc(100vw-2rem)]"
+        style={{ animation: "exshopiChatIn 180ms ease-out" }}
+        role="dialog"
+        aria-label="ExShopi AI chat assistant"
       >
-        {/* ===== HEADER ===== */}
-        <div className="relative overflow-hidden bg-[linear-gradient(135deg,#2563eb,#3257ff,#1d4ed8)] px-6 py-5 text-white">
-          {/* Decorative gradient blob */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-1/2 -right-1/4 w-80 h-80 bg-white opacity-5 rounded-full" />
-          </div>
-
-          {/* Header content */}
-          <div className="relative z-10 flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
+        <header className="shrink-0 overflow-hidden bg-[linear-gradient(135deg,#1d4ed8,#2563eb,#102a6a)] px-4 py-4 text-white sm:px-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/30 bg-white/15">
+                <Bot className="h-5 w-5" />
               </div>
-              <div>
-                <h2 className="font-bold text-base tracking-tight leading-tight">ExShopi AI</h2>
-                <p className="text-xs text-blue-100 font-medium">Smart Shopping Assistant</p>
+              <div className="min-w-0">
+                <h2 className="text-base font-black leading-tight tracking-tight">ExShopi AI</h2>
+                <p className="text-xs font-semibold text-blue-100">Smart Shopping Assistant</p>
               </div>
             </div>
-
-            {/* Close button */}
             <button
               onClick={() => setIsOpen(false)}
-              className="p-1.5 hover:bg-white/10 rounded-lg transition-all duration-200 active:scale-90"
-              aria-label="Close chat"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+              aria-label="Close ExShopi AI"
             >
-              <X className="w-5 h-5 text-white" />
+              <X className="h-5 w-5" />
             </button>
           </div>
-
-          {/* Status */}
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
-            <span className="text-xs font-semibold text-blue-50">Always available • AI Powered</span>
+          <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-blue-50">
+            <span className="h-2 w-2 rounded-full bg-emerald-300" />
+            <span>
+              {country.shortName} • {country.currency} • WhatsApp {WHATSAPP_DISPLAY}
+            </span>
           </div>
-        </div>
+        </header>
 
-        {/* ===== MESSAGES AREA ===== */}
-        <div className="flex-1 overflow-y-auto space-y-4 bg-gradient-to-b from-slate-50 to-white p-4">
-          {messages.length === 1 ? (
-            <>
-              {/* Welcome Message */}
-              <div className="animate-fadeIn">
-                <div className="bg-gradient-to-br from-slate-100 to-slate-50 rounded-2xl rounded-bl-none p-4 border border-slate-200/50 shadow-sm max-w-xs">
-                  <p className="text-sm text-slate-900 font-medium leading-relaxed">
-                    {messages[0].text}
-                  </p>
-                </div>
-              </div>
-
-              {/* Quick Action Categories Grid */}
-              <div className="pt-2 space-y-2.5">
-                <p className="text-xs font-bold text-slate-600 uppercase tracking-wider px-1">How can I help?</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {quickActions.map((action, idx) => (
-                    <div key={idx}>
-                      <button
-                        onClick={() => handleQuickAction(action.queries[0])}
-                        className="w-full group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-blue-300 hover:shadow-md active:scale-95"
-                      >
-                        {/* Hover highlight */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                        <div className="relative z-10">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-blue-600 group-hover:text-blue-700 transition-colors">
-                              {action.icon}
-                            </div>
-                            <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                              →
+        <main className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-4 sm:px-4">
+          <div className="space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm font-medium leading-relaxed shadow-sm ${
+                    message.role === "user"
+                      ? "rounded-br-md bg-blue-600 text-white"
+                      : "rounded-bl-md border border-slate-200 bg-white text-slate-900"
+                  }`}
+                >
+                  <p>{message.text}</p>
+                  {message.products?.length ? (
+                    <div className="mt-3 space-y-2">
+                      {message.products.map((product) => {
+                        const price = getProductCountryPrice(product, selectedCountry);
+                        const specs = getProductSpecs(product);
+                        return (
+                          <button
+                            key={product.id}
+                            onClick={() => openProduct(product)}
+                            className="flex w-full gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+                          >
+                            <img
+                              src={product.image}
+                              alt={product.title}
+                              className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain"
+                              loading="lazy"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="line-clamp-2 block text-xs font-black text-slate-950">
+                                {product.title}
+                              </span>
+                              <span className="mt-1 block text-[11px] font-semibold text-slate-500">
+                                {product.category} • {product.stock || "In Stock"}
+                              </span>
+                              {specs ? (
+                                <span className="mt-1 line-clamp-1 block text-[11px] text-slate-500">
+                                  {specs}
+                                </span>
+                              ) : null}
+                              <span className="mt-1 block text-sm font-black text-blue-700">
+                                {formatCurrencyPlainForCountry(price, selectedCountry)}
+                              </span>
                             </span>
-                          </div>
-                          <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                            {action.label}
-                          </h3>
-                          <p className="text-xs text-slate-600 mt-1">
-                            {action.description}
-                          </p>
-                        </div>
-                      </button>
+                            <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+                          </button>
+                        );
+                      })}
                     </div>
-                  ))}
+                  ) : null}
+                  {message.cta ? (
+                    <a
+                      href={message.cta.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-2 text-xs font-black text-white transition hover:bg-emerald-700"
+                    >
+                      {message.cta.label}
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  ) : null}
                 </div>
               </div>
+            ))}
 
-              <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-3 shadow-sm">
-                <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                  Contact instantly
+            {messages.length === 1 ? (
+              <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+                <p className="px-1 pb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                  Quick help
                 </p>
-                <div className="grid gap-2">
-                  {supportShortcuts.map((item) => {
-                    const Icon = item.icon;
+                <div className="grid grid-cols-2 gap-2">
+                  {QUICK_ACTIONS.map((action) => {
+                    const Icon = action.icon;
                     return (
                       <button
-                        key={item.label}
-                        onClick={item.action}
-                        className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/70"
+                        key={action.label}
+                        onClick={() => void handleSendMessage(action.prompt)}
+                        className="flex min-h-[48px] items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-black text-slate-800 transition hover:border-blue-300 hover:bg-blue-50 active:scale-[0.98]"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-blue-600">
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-semibold text-slate-900">{item.label}</div>
-                            <div className="text-xs text-slate-500">{item.value}</div>
-                          </div>
-                        </div>
-                        <ArrowUpRight className="h-4 w-4 text-slate-400" />
+                        <Icon className="h-4 w-4 shrink-0 text-blue-600" />
+                        <span className="min-w-0 leading-tight">{action.label}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
-            </>
-          ) : (
-            <>
-              {messages.map((msg, idx) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"} animate-fadeIn`}
-                >
-                  <div
-                    className={`max-w-xs rounded-2xl px-4 py-3 font-medium transition-all ${
-                      msg.type === "user"
-                        ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-br-none shadow-md hover:shadow-lg"
-                        : "bg-gradient-to-br from-slate-100 to-slate-50 text-slate-900 rounded-bl-none border border-slate-200/50 shadow-sm"
-                    }`}
-                  >
-                    <p className="text-sm leading-relaxed">{msg.text}</p>
-                  </div>
+            ) : null}
+
+            {isTyping ? (
+              <div className="flex justify-start">
+                <div className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500 shadow-sm">
+                  Checking ExShopi data...
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </div>
+              </div>
+            ) : null}
+            <div ref={messagesEndRef} />
+          </div>
+        </main>
 
-        {/* ===== INPUT AREA ===== */}
-        <div className="border-t border-slate-200/50 bg-white p-4 space-y-3">
-          {/* Input field */}
-          <div className="relative flex items-center gap-2">
-            <div className="flex-1 relative group">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                placeholder="Ask about products, orders, deals…"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-200"
-              />
-            </div>
-
-            {/* Send button */}
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 sm:px-4">
+          <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+            {getTrendingSearches().slice(0, 5).map((term) => (
+              <button
+                key={term}
+                onClick={() => void handleSendMessage(term)}
+                className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+              >
+                {term}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleSendMessage();
+                }
+              }}
+              placeholder="Ask about products, orders, delivery, warranty…"
+              className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+            />
             <button
-              onClick={() => handleSendMessage()}
-              disabled={!input.trim()}
-              className="relative flex items-center justify-center h-11 w-11 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95 group"
+              onClick={() => void handleSendMessage()}
+              disabled={!input.trim() || isTyping}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Send message"
             >
-              <div className="absolute inset-0 rounded-xl bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
-              <Send className="w-5 h-5 relative z-10 group-active:scale-90 transition-transform" />
+              <Send className="h-5 w-5" />
             </button>
           </div>
-
-          {/* Confidence text */}
-          <p className="text-xs text-slate-500 font-medium text-center">
-            Powered by ExShopi AI • Instant Responses
-          </p>
-        </div>
-      </div>
+          <button
+            onClick={openWhatsApp}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+          >
+            Chat on WhatsApp
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </button>
+        </footer>
+      </section>
 
       <style>{`
-        @keyframes slideUp {
+        @keyframes exshopiChatIn {
           from {
             opacity: 0;
-            transform: translateY(20px) scale(0.95);
+            transform: translateY(14px) scale(0.98);
           }
           to {
             opacity: 1;
             transform: translateY(0) scale(1);
           }
         }
-
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
       `}</style>
-    </>,
+    </div>,
     document.body
   );
 }
