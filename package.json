@@ -11,6 +11,7 @@
     "build": "vite build && tsc -p backend/tsconfig.json",
     "build:frontend": "vite build && tsx scripts/generateStaticSeo.ts && tsx scripts/validatePrerenderSeo.ts",
     "build:seo": "tsx scripts/generateStaticSeo.ts && tsx scripts/validatePrerenderSeo.ts",
+    "seo:validate": "tsx scripts/validatePrerenderSeo.ts",
     "build:api": "tsc -p backend/tsconfig.json",
     "recover:catalog": "tsx scripts/recoverCatalogFromSnapshots.ts",
     "preview": "vite preview",

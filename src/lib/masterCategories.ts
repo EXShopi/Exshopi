@@ -16,7 +16,63 @@ export type CategoryRouteInfo = {
   aliases: string[];
 };
 
-const CANONICAL_ALIAS_CHILDREN = new Set(['computers', 'pc', 'laptops', 'desktop-pcs', 'all-in-one', 'workstations', 'mini-pc']);
+export const CATEGORY_RELATIONS: Record<string, string[]> = {
+  electronics: [
+    'computers',
+    'computer',
+    'pc',
+    'pcs',
+    'laptops',
+    'laptop',
+    'mobiles',
+    'mobile',
+    'mobiles-tablets',
+    'smartphones',
+    'phones',
+    'phone',
+    'tablets',
+    'ipads',
+    'cameras',
+    'camera',
+    'cameras-photo',
+    'dslr',
+    'mirrorless',
+    'gaming',
+    'accessories',
+  ],
+  computers: ['computer', 'pc', 'pcs', 'laptops', 'laptop', 'desktop-pcs', 'all-in-one', 'workstations', 'mini-pc'],
+  computer: ['computers', 'pc', 'pcs', 'laptops', 'laptop', 'desktop-pcs', 'all-in-one', 'workstations', 'mini-pc'],
+  pc: ['pcs', 'computers', 'computer', 'laptops', 'laptop', 'desktop-pcs', 'all-in-one', 'workstations', 'mini-pc'],
+  pcs: ['pc', 'computers', 'computer', 'laptops', 'laptop', 'desktop-pcs', 'all-in-one', 'workstations', 'mini-pc'],
+  laptops: ['laptop', 'computers', 'computer', 'pc', 'pcs', 'gaming', 'gaming-laptops', 'macbook', 'notebook', 'ultrabook'],
+  laptop: ['laptops', 'computers', 'computer', 'pc', 'pcs', 'gaming', 'gaming-laptops', 'macbook', 'notebook', 'ultrabook'],
+  'gaming-laptops': ['gaming', 'laptops', 'laptop', 'computers'],
+  mobiles: ['mobile', 'mobiles-tablets', 'phones', 'phone', 'smartphones', 'refurbished-phones', 'feature-phones'],
+  mobile: ['mobiles', 'mobiles-tablets', 'phones', 'phone', 'smartphones', 'refurbished-phones', 'feature-phones'],
+  phones: ['phone', 'mobiles', 'mobile', 'mobiles-tablets', 'smartphones', 'refurbished-phones', 'feature-phones'],
+  phone: ['phones', 'mobiles', 'mobile', 'mobiles-tablets', 'smartphones', 'refurbished-phones', 'feature-phones'],
+  'mobiles-tablets': ['mobiles', 'mobile', 'phones', 'phone', 'smartphones', 'refurbished-phones', 'feature-phones', 'tablets', 'ipads'],
+  smartphones: ['mobiles', 'mobile', 'phones', 'phone', 'mobiles-tablets', 'refurbished-phones', 'feature-phones'],
+  tablets: ['mobiles-tablets', 'ipads'],
+  ipads: ['mobiles-tablets', 'tablets'],
+  cameras: ['camera', 'cameras-photo', 'dslr', 'mirrorless', 'action-cameras', 'drones', 'security-cameras', 'lenses', 'tripods'],
+  camera: ['cameras', 'cameras-photo', 'dslr', 'mirrorless', 'action-cameras', 'drones', 'security-cameras', 'lenses', 'tripods'],
+  'cameras-photo': ['cameras', 'camera', 'dslr', 'mirrorless', 'action-cameras', 'drones', 'security-cameras', 'lenses', 'tripods'],
+  fashion: [
+    'clothing',
+    'apparel',
+    'mens-fashion',
+    'womens-fashion',
+    'kids-fashion',
+    'mens-clothing',
+    'womens-clothing',
+    'kids-clothing',
+    'shoes',
+    'bags',
+    'watches',
+    'fashion-accessories',
+  ],
+};
 
 export type CanonicalCategoryAssignment = {
   parentCategorySlug: string;
@@ -460,8 +516,8 @@ export function getCategoryRouteInfo(categorySlug?: string | null, subcategorySl
   const normalizedSubcategory = normalizeCategorySlug(subcategorySlug || '');
 
   if (normalizedSubcategory) {
-    const parentLookup = findCanonicalPathBySlug(normalizedCategory) || (CANONICAL_ALIAS_CHILDREN.has(normalizedCategory) ? findCanonicalPathByLegacyValue(normalizedCategory) : null);
-    const childLookup = findCanonicalPathBySlug(normalizedSubcategory) || (CANONICAL_ALIAS_CHILDREN.has(normalizedSubcategory) ? findCanonicalPathByLegacyValue(normalizedSubcategory) : null);
+    const parentLookup = findCanonicalPathBySlug(normalizedCategory) || findCanonicalPathByLegacyValue(normalizedCategory);
+    const childLookup = findCanonicalPathBySlug(normalizedSubcategory) || findCanonicalPathByLegacyValue(normalizedSubcategory);
     const canonicalCategorySlug = normalizeCategorySlug(
       parentLookup?.parentCategorySlug ||
         parentLookup?.categorySlug ||
@@ -497,7 +553,7 @@ export function getCategoryRouteInfo(categorySlug?: string | null, subcategorySl
 
   const resolved =
     findCanonicalPathBySlug(normalizedCategory) ||
-    (CANONICAL_ALIAS_CHILDREN.has(normalizedCategory) ? findCanonicalPathByLegacyValue(normalizedCategory) : null);
+    findCanonicalPathByLegacyValue(normalizedCategory);
   if (!resolved) return null;
 
   if (resolved.depth >= 2) {
@@ -640,6 +696,52 @@ export function debugCategoryAssignment(label: string, payload: Record<string, u
   } catch {
     // ignore logging errors
   }
+}
+
+function getDirectRelatedCategorySlugs(slug: string) {
+  const normalized = normalizeCategorySlug(slug);
+  const related = new Set<string>([normalized]);
+  for (const value of CATEGORY_RELATIONS[normalized] || []) {
+    related.add(normalizeCategorySlug(value));
+  }
+
+  for (const [source, values] of Object.entries(CATEGORY_RELATIONS)) {
+    const normalizedSource = normalizeCategorySlug(source);
+    const normalizedValues = values.map((value) => normalizeCategorySlug(value));
+    if (normalizedValues.includes(normalized)) {
+      related.add(normalizedSource);
+      for (const value of normalizedValues) related.add(value);
+    }
+  }
+
+  const mapped = mapLegacyCategory(normalized);
+  if (mapped?.category) related.add(normalizeCategorySlug(mapped.category));
+  if (mapped?.subcategory) related.add(normalizeCategorySlug(mapped.subcategory));
+
+  return related;
+}
+
+export function getExpandedCategoryMatchSlugs(slug?: string | null) {
+  const seed = normalizeCategorySlug(slug || "");
+  const expanded = new Set<string>();
+  if (!seed) return expanded;
+
+  const queue = [seed];
+  while (queue.length) {
+    const current = queue.shift() || "";
+    if (!current || expanded.has(current)) continue;
+    expanded.add(current);
+
+    for (const child of gatherSlugsUnder(current)) {
+      if (child && !expanded.has(child)) queue.push(child);
+    }
+
+    for (const related of getDirectRelatedCategorySlugs(current)) {
+      if (related && !expanded.has(related)) queue.push(related);
+    }
+  }
+
+  return expanded;
 }
 
 export function resolveCanonicalCategoryAssignment(input: Record<string, any> | null | undefined) {
@@ -791,8 +893,7 @@ export function productMatchesCategoryAssignment(
   const pivot = requestedSubcategory || requestedCategory || requestedParent;
   if (!pivot) return false;
 
-  const allowed = gatherSlugsUnder(pivot);
-  allowed.add(pivot);
+  const allowed = getExpandedCategoryMatchSlugs(pivot);
 
   const values = [
     assignment.parentCategorySlug,
@@ -800,7 +901,10 @@ export function productMatchesCategoryAssignment(
     assignment.subcategorySlug,
   ].filter(Boolean);
 
-  return values.some((value) => allowed.has(value));
+  return values.some((value) => {
+    if (allowed.has(value)) return true;
+    return Array.from(getExpandedCategoryMatchSlugs(value)).some((expandedValue) => allowed.has(expandedValue));
+  });
 }
 
 const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> = {
@@ -837,18 +941,18 @@ const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> 
   printers: [{ category: 'electronics', subcategory: 'pc' }],
 
   // Mobiles & tablets
-  phone: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
-  phones: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
-  mobile: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
-  mobiles: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
+  phone: [{ category: 'electronics', subcategory: 'mobiles-tablets' }],
+  phones: [{ category: 'electronics', subcategory: 'mobiles-tablets' }],
+  mobile: [{ category: 'electronics', subcategory: 'mobiles-tablets' }],
+  mobiles: [{ category: 'electronics', subcategory: 'mobiles-tablets' }],
   smartphone: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
   smartphones: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
   iphone: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
   android: [{ category: 'mobiles-tablets', subcategory: 'smartphones' }],
   tablet: [{ category: 'mobiles-tablets', subcategory: 'tablets' }],
-  tablets: [{ category: 'mobiles-tablets', subcategory: 'tablets' }],
+  tablets: [{ category: 'electronics', subcategory: 'mobiles-tablets' }],
   ipad: [{ category: 'mobiles-tablets', subcategory: 'ipads' }],
-  ipads: [{ category: 'mobiles-tablets', subcategory: 'ipads' }],
+  ipads: [{ category: 'electronics', subcategory: 'mobiles-tablets' }],
 
   // Mobile accessories
   charger: [{ category: 'mobiles-tablets', subcategory: 'chargers' }],
@@ -871,8 +975,8 @@ const LEGACY_MAP: Record<string, { category?: string; subcategory?: string }[]> 
   projectors: [{ category: 'tv-video', subcategory: 'projectors' }],
 
   // Cameras
-  camera: [{ category: 'cameras-photo', subcategory: 'dslr' }],
-  cameras: [{ category: 'cameras-photo', subcategory: 'dslr' }],
+  camera: [{ category: 'electronics', subcategory: 'cameras-photo' }],
+  cameras: [{ category: 'electronics', subcategory: 'cameras-photo' }],
   dslr: [{ category: 'cameras-photo', subcategory: 'dslr' }],
   mirrorless: [{ category: 'cameras-photo', subcategory: 'mirrorless' }],
   drone: [{ category: 'cameras-photo', subcategory: 'drones' }],
@@ -1018,11 +1122,7 @@ export function filterProductsByCategoryTree(
   const normCat = normalizeCategorySlug(categorySlug);
   const normSub = subcategorySlug ? normalizeCategorySlug(subcategorySlug) : null;
 
-  const allowed = new Set<string>();
-  const slugsUnder = gatherSlugsUnder(normSub || normCat);
-
-  for (const s of slugsUnder) allowed.add(s);
-  allowed.add(normSub || normCat);
+  const allowed = getExpandedCategoryMatchSlugs(normSub || normCat);
 
   let matchedCount = 0;
   let legacyMappedCount = 0;

@@ -93,9 +93,30 @@ const CATEGORY_CONTENT: Record<
   laptops: {
     title: "Laptops",
     hero: "Shop laptops with curated marketplace offers, structured product specifications, and trusted UAE seller support.",
-    seoTitle: "Laptops in UAE | ExShopi",
-    seoDescription: "Shop laptops in UAE on ExShopi with dedicated laptop category filtering, clean canonical routing, and trusted marketplace discovery.",
-    seoKeywords: ["laptops UAE", "buy laptops UAE", "refurbished laptops Dubai", "ExShopi laptops"],
+    seoTitle: "Buy Laptops in UAE | Refurbished & Gaming Laptops | ExShopi",
+    seoDescription: "Buy laptops in UAE on ExShopi, including refurbished laptops, gaming laptops, MacBook, Dell, HP, Lenovo and business laptop deals.",
+    seoKeywords: ["laptops UAE", "buy laptops UAE", "refurbished laptops Dubai", "gaming laptops UAE", "ExShopi laptops"],
+  },
+  "mobiles-tablets": {
+    title: "Mobiles",
+    hero: "Shop mobiles, iPhone, Samsung, tablets, and accessories with GCC-ready pricing and trusted marketplace support.",
+    seoTitle: "Buy Mobiles in UAE | iPhone Samsung Xiaomi | ExShopi",
+    seoDescription: "Buy mobiles in UAE on ExShopi with iPhone, Samsung, Android phones, tablets, refurbished phones, COD support and GCC delivery.",
+    seoKeywords: ["mobiles UAE", "buy mobiles UAE", "iPhone UAE", "Samsung phones UAE", "refurbished phones UAE"],
+  },
+  "cameras-photo": {
+    title: "Cameras",
+    hero: "Shop DSLR, mirrorless, action cameras, drones, lenses, and camera accessories for UAE and GCC buyers.",
+    seoTitle: "Buy Cameras in UAE | DSLR Mirrorless Action Cameras | ExShopi",
+    seoDescription: "Buy cameras in UAE on ExShopi with DSLR, mirrorless, action cameras, drones, security cameras, lenses and camera accessories.",
+    seoKeywords: ["cameras UAE", "buy cameras UAE", "DSLR UAE", "mirrorless camera UAE", "action cameras UAE"],
+  },
+  fashion: {
+    title: "Fashion",
+    hero: "Shop fashion, clothing, shoes, watches, bags, and accessories with live marketplace listings across the GCC.",
+    seoTitle: "Buy Fashion in UAE | Clothing Shoes Watches Bags | ExShopi",
+    seoDescription: "Buy fashion in UAE on ExShopi with men's fashion, women's fashion, kids clothing, shoes, watches, bags and accessories.",
+    seoKeywords: ["fashion UAE", "buy fashion UAE", "clothing UAE", "shoes UAE", "watches UAE", "bags UAE"],
   },
 };
 
@@ -130,7 +151,7 @@ export default function CategoryPage() {
   const categoryInfo = categoryData.find((entry) => entry.slug === effectiveCategoryKey);
   const subcategoryInfo = categoryInfo?.subcategories.find((entry) => entry.slug === effectiveSubcategoryKey);
   const liveCategory = categories.find((entry) => entry.slug === effectiveCategoryKey);
-  const isComingSoon = Boolean(category && liveCategory && liveCategory.active === false);
+  const isComingSoon = Boolean(category && liveCategory && liveCategory.active === false && effectiveCategoryKey !== "fashion");
   const categoryContent = CATEGORY_CONTENT[effectiveSubcategoryKey || effectiveCategoryKey];
   const displayTitle = categoryContent?.title || subcategoryInfo?.name || categoryInfo?.name || liveCategory?.name || titleFromSlug(effectiveSubcategoryKey || effectiveCategoryKey);
   const heroDescription = categoryContent?.hero || `Shop ${displayTitle.toLowerCase()} with curated marketplace offers, structured product specifications, and trusted UAE seller support.`;
@@ -204,11 +225,7 @@ export default function CategoryPage() {
         fetchedCategories = Array.isArray(categoryRows) ? categoryRows : [];
         setCategories(fetchedCategories);
 
-        const liveCat = fetchedCategories.find((entry) => entry.slug === effectiveCategoryKey);
-        if (liveCat && liveCat.id) {
-          return productAPI.getByCategory(liveCat.id);
-        }
-        // No backend category id found — query server by canonical slug to avoid full client-side scans
+        // Query by canonical slug so related groups such as Computers, PCs, and Laptops resolve together.
         return productAPI.getBySlug(effectiveCategoryKey, effectiveSubcategoryKey);
       })
       .then((productRows) => {
@@ -286,7 +303,7 @@ export default function CategoryPage() {
       console.warn('Category filtering failed for', effectiveCategoryKey, effectiveSubcategoryKey, err);
       return [];
     }
-  }, [catalog, effectiveCategoryKey, effectiveSubcategoryKey, categories]);
+  }, [catalog, rawProducts, effectiveCategoryKey, effectiveSubcategoryKey, categories]);
 
   const seoBody = buildCategorySeoBody({
     categoryName: displayTitle,
@@ -315,12 +332,13 @@ export default function CategoryPage() {
   return (
     <div className="min-h-screen bg-[#f6f7fb]">
       <SEOHead
-        title={seo.metaTitle}
-        description={seo.metaDescription}
+        title={categoryContent?.seoTitle || seo.metaTitle}
+        description={categoryContent?.seoDescription || seo.metaDescription}
         keywords={seo.metaKeywords}
         pathname={canonicalPath}
         type="website"
         canonicalUrl={buildAbsoluteUrl(canonicalPath)}
+        noindex={!loading && filteredProducts.length === 0}
       />
       <section className="border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_32%),linear-gradient(135deg,#ffffff,#eef4ff)]">
         <div className="mx-auto max-w-7xl px-4 py-10 md:px-6 lg:py-14">

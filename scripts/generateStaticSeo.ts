@@ -757,6 +757,7 @@ async function main() {
         keywords: categorySeo.metaKeywords,
         canonicalUrl: buildAbsoluteUrl(categoryPath),
         ogImage: "/logo.png",
+        robots: categoryProducts.length > 0 ? "index, follow" : "noindex, follow",
         routeData: {
           kind: "category",
           path: categoryPath,
@@ -772,7 +773,7 @@ async function main() {
             'Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.',
         }),
       }),
-      "category"
+      categoryProducts.length > 0 ? "category" : "category-empty"
     );
 
     if (category.slug === "electronics") {
@@ -784,6 +785,7 @@ async function main() {
           keywords: categorySeo.metaKeywords,
           canonicalUrl: buildAbsoluteUrl(categoryPath),
           ogImage: "/logo.png",
+          robots: categoryProducts.length > 0 ? "index, follow" : "noindex, follow",
           routeData: {
             kind: "category",
             path: "/electronics",
@@ -799,7 +801,7 @@ async function main() {
               'Continue to <a href="/">homepage</a>, <a href="/blog">buyer guides</a>, or <a href="/electronics-online-uae">UAE electronics landing pages</a>.',
           }),
         }),
-        "category-alias"
+        categoryProducts.length > 0 ? "category-alias" : "category-empty"
       );
     }
 
@@ -824,6 +826,7 @@ async function main() {
           keywords: subSeo.metaKeywords,
           canonicalUrl: buildAbsoluteUrl(routePath),
           ogImage: "/logo.png",
+          robots: subProducts.length > 0 ? "index, follow" : "noindex, follow",
           routeData: {
             kind: "category",
             path: routePath,
@@ -838,7 +841,7 @@ async function main() {
             continueText: `Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.`,
           }),
         }),
-        "category"
+        subProducts.length > 0 ? "category" : "category-empty"
       );
 
       if (category.slug === "electronics") {
@@ -851,6 +854,7 @@ async function main() {
             keywords: subSeo.metaKeywords,
             canonicalUrl: buildAbsoluteUrl(routePath),
             ogImage: "/logo.png",
+            robots: subProducts.length > 0 ? "index, follow" : "noindex, follow",
             routeData: {
               kind: "category",
               path: aliasPath,
@@ -865,7 +869,7 @@ async function main() {
               continueText: `Jump back to the <a href="${categoryPath}">${escapeHtml(category.name)} category</a>, read the <a href="/blog">blog</a>, or explore <a href="/refurbished-laptops-uae">laptop landing pages</a>.`,
             }),
           }),
-          "category-alias"
+          subProducts.length > 0 ? "category-alias" : "category-empty"
         );
       }
     }

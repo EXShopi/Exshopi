@@ -7,6 +7,7 @@ import ProductCardSkeleton from "../components/ui/ProductCardSkeleton";
 import { OrbitLoader } from "../components/ui/OrbitLoader";
 import { mapLegacyCategory, filterProductsByCategoryTree } from "../lib/masterCategories";
 import SEOHead from "../components/seo/SEOHead";
+import { getSearchCorrection, getTrendingSearches, smartSearchProducts } from "../lib/smartSearch";
 
 const isVisibleMarketplaceProduct = (product: any) => {
   const status = String(product?.status || '').toLowerCase();
@@ -99,28 +100,19 @@ export default function ProductListing() {
     setSearchQuery(searchParams.get("search") || "");
   }, [searchParams]);
 
+  useEffect(() => {
+    setVisibleCount(15);
+  }, [searchQuery]);
+
   const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim();
 
     if (!q) return products;
 
-    return products.filter((product) =>
-      [
-        product.title,
-        product.sku,
-        product.specs?.brand,
-        product.description,
-        product.specs?.searchTags,
-        product.specs?.attributes?.model,
-        product.specs?.specifications,
-      ]
-        .filter(Boolean)
-        .map((value) => (Array.isArray(value) ? value.join(" ") : typeof value === "object" ? Object.values(value).join(" ") : value))
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
+    return smartSearchProducts(products, q).map((result) => result.item);
   }, [searchQuery, products]);
+  const searchCorrection = useMemo(() => getSearchCorrection(searchQuery), [searchQuery]);
+  const trendingSearches = useMemo(() => getTrendingSearches(), []);
   const visibleProducts = filteredProducts.slice(0, visibleCount);
 
   return (
@@ -176,6 +168,15 @@ export default function ProductListing() {
             Filters
           </button>
         </div>
+        {!loading && searchQuery.trim() && searchCorrection && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery(searchCorrection)}
+            className="mt-4 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
+          >
+            Did you mean {searchCorrection}?
+          </button>
+        )}
       </div>
 
       <section className="mt-10">
@@ -228,6 +229,18 @@ export default function ProductListing() {
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[28px] bg-slate-50 text-3xl">📦</div>
               <p className="mt-5 text-lg font-black text-slate-900">No products found</p>
               <p className="mt-2 text-sm font-medium text-slate-500">Try another search or browse a different live category.</p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {trendingSearches.map((term) => (
+                  <button
+                    key={term}
+                    type="button"
+                    onClick={() => setSearchQuery(term)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:border-blue-200 hover:text-blue-600"
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

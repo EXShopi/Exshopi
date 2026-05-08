@@ -24,6 +24,7 @@ import { getLiveMarketplaceProducts, type LiveMarketplaceProduct } from "../lib/
 import { marketplaceCategories } from "./categories";
 import { useCountryStore } from "../store/country";
 import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, getCountryFlag } from "../lib/countryConfig";
+import { getSearchCorrection, getTrendingSearches, smartSearchProducts } from "../lib/smartSearch";
 
 type SubCategoryGroup = {
   title: string;
@@ -49,6 +50,7 @@ export default function Navbar() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [listening, setListening] = useState(false);
   const [searchCatalogLoaded, setSearchCatalogLoaded] = useState(false);
   const searchCatalogRequestRef = useRef<Promise<void> | null>(null);
@@ -58,6 +60,17 @@ export default function Navbar() {
   const { lang } = useLanguageStore();
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const setCountry = useCountryStore((state) => state.setCountry);
+  const searchCorrection = useMemo(() => getSearchCorrection(searchText), [searchText]);
+  const trendingSearches = useMemo(() => getTrendingSearches(), []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("exshopi-recent-searches");
+      setRecentSearches(raw ? JSON.parse(raw).slice(0, 6) : []);
+    } catch {
+      setRecentSearches([]);
+    }
+  }, []);
 
   // Listen for custom cart drawer event from ProductDetail
   useEffect(() => {
@@ -152,6 +165,13 @@ export default function Navbar() {
   const handleSearchSubmit = useCallback(() => {
     const query = searchText.trim();
     if (query) {
+      const nextRecent = Array.from(new Set([query, ...recentSearches])).slice(0, 6);
+      setRecentSearches(nextRecent);
+      try {
+        localStorage.setItem("exshopi-recent-searches", JSON.stringify(nextRecent));
+      } catch {
+        // ignore storage errors
+      }
       analyticsAPI
         .track({
           eventType: "search",
@@ -162,7 +182,7 @@ export default function Navbar() {
     }
     closeSearchSuggestions({ blur: true });
     navigate(query ? `/products?search=${encodeURIComponent(query)}` : "/products");
-  }, [closeSearchSuggestions, navigate, searchText]);
+  }, [closeSearchSuggestions, navigate, recentSearches, searchText]);
 
   const handleSuggestionClick = useCallback(
     (product: LiveMarketplaceProduct) => {
@@ -199,17 +219,11 @@ export default function Navbar() {
         await ensureSearchCatalogLoaded();
         if (cancelled || suggestionRequestRef.current !== requestId) return;
 
-        const nextSuggestions = searchCatalog
-          .filter((product) =>
-            `${product.title} ${product.seller} ${product.category}`
-              .toLowerCase()
-              .includes(query.toLowerCase())
-          )
-          .slice(0, 8);
+        const nextSuggestions = smartSearchProducts(searchCatalog, query, 8).map((result) => result.item);
 
         if (cancelled || suggestionRequestRef.current !== requestId) return;
         setSuggestions(nextSuggestions);
-        setShowSuggestions(nextSuggestions.length > 0);
+        setShowSuggestions(true);
         setActiveSuggestionIndex((current) =>
           nextSuggestions.length === 0 ? -1 : current >= nextSuggestions.length ? -1 : current
         );
@@ -549,8 +563,29 @@ export default function Navbar() {
                           </button>
                           ))
                         ) : (
-                          <div className="px-4 py-3 text-sm font-medium text-slate-500">
-                            No matching products found.
+                          <div className="px-4 py-3">
+                            {searchCorrection ? (
+                              <button
+                                type="button"
+                                onClick={() => setSearchText(searchCorrection)}
+                                className="mb-3 block text-left text-sm font-bold text-blue-700 hover:text-blue-800"
+                              >
+                                Did you mean {searchCorrection}?
+                              </button>
+                            ) : null}
+                            <div className="text-sm font-medium text-slate-500">No matching products found.</div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {(recentSearches.length ? recentSearches : trendingSearches).slice(0, 5).map((term) => (
+                                <button
+                                  key={term}
+                                  type="button"
+                                  onClick={() => setSearchText(term)}
+                                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 hover:border-blue-200 hover:text-blue-600"
+                                >
+                                  {term}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

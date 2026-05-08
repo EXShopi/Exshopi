@@ -174,7 +174,7 @@ export function buildProductJsonLd(input: ProductSeoInput) {
       ? "https://schema.org/UsedCondition"
       : "https://schema.org/NewCondition";
   const images = Array.from(
-    new Set([input.image, ...(Array.isArray(input.images) ? input.images : [])].filter(Boolean))
+    new Set([input.image, ...(Array.isArray(input.images) ? input.images : [])].filter(Boolean).map((value) => buildAbsoluteUrl(String(value))))
   ) as string[];
   const reviewCount = Number((input as any).reviewCount || (input as any).reviews || 0);
   const ratingValue = Number((input as any).ratingValue || (input as any).rating || 0);

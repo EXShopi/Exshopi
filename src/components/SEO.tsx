@@ -39,7 +39,7 @@ export default function SEO({
   });
 
   const canonicalUrl = seo.canonicalUrl || buildAbsoluteUrl(pathname);
-  const resolvedImage = seo.ogImage || image || "";
+  const resolvedImage = buildAbsoluteUrl(seo.ogImage || image || "/logo.png");
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -121,11 +121,28 @@ export default function SEO({
     setMetaProperty("og:url", canonicalUrl);
     setMetaProperty("og:site_name", "ExShopi");
     setMetaProperty("og:image", resolvedImage);
+    setMetaProperty("og:image:secure_url", resolvedImage);
 
     setMetaName("twitter:card", "summary_large_image");
     setMetaName("twitter:title", seo.ogTitle || seo.metaTitle || "");
     setMetaName("twitter:description", seo.ogDescription || seo.metaDescription || "");
     setMetaName("twitter:image", resolvedImage);
+
+    if (type === "product" && resolvedImage) {
+      upsertTag(
+        `link[rel="preload"][as="image"][data-exshopi-product-image="true"]`,
+        () => {
+          const link = document.createElement("link");
+          link.setAttribute("rel", "preload");
+          link.setAttribute("as", "image");
+          link.setAttribute("data-exshopi-product-image", "true");
+          return link;
+        },
+        (element) => {
+          element.setAttribute("href", resolvedImage);
+        }
+      );
+    }
 
     if (jsonLd) {
       upsertTag(

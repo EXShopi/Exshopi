@@ -400,7 +400,9 @@ export function buildProductSchema(product: any, pathname?: string) {
     "@type": "Product",
     name: product?.title || "Marketplace Product",
     description,
-    image: [product?.image, ...(Array.isArray(product?.images) ? product.images : [])].filter(Boolean),
+    image: [product?.featuredImage || product?.primaryImage || product?.image, ...(Array.isArray(product?.images) ? product.images : [])]
+      .filter(Boolean)
+      .map((value) => buildAbsoluteUrl(String(value))),
     sku: product?.sku || undefined,
     brand: product?.brand
       ? {

@@ -1012,6 +1012,9 @@ export default function ProductDetail() {
   const canonicalProductPath = product
     ? buildProductPath(product)
     : location.pathname || `/product/${identifier || ""}`;
+  const productMainImage = product
+    ? String(product?.featuredImage || product?.primaryImage || product?.image || product?.images?.[0] || "").trim()
+    : "";
 
   // Ensure canonical uses category-aware path unless overridden.
   const finalCanonical =
@@ -1028,7 +1031,7 @@ const productSchema = product
         description: product.description,
         slug: product.slug,
         canonicalUrl: finalCanonical,
-        image: product.image,
+        image: productMainImage,
         images: Array.isArray(product?.images) ? product.images : [],
         price: getProductCountryPrice(product, selectedCountry),
         stock: product.stock,
@@ -1687,8 +1690,8 @@ const productSchema = product
           canonicalUrl={finalCanonical}
           ogTitle={resolvedProductMetaTitle}
           ogDescription={safeProductDescription}
-          ogImage={productSeo.ogImage}
-          image={product?.image}
+          ogImage={productMainImage || productSeo.ogImage}
+          image={productMainImage}
           type="product"
           noindex={false}
           jsonLd={productSchema || undefined}

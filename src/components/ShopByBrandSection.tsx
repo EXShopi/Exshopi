@@ -6,42 +6,42 @@ import { getBrandLogoForName, getBrandSlugFromName } from "../data/brandLogos";
 export const brands = [
   {
     name: "Apple",
-    logo: "/Banners/apple",
+    logo: "/Banners/apple.png",
     link: "/brands/apple",
   },
   {
     name: "Samsung",
-    logo: "/Banners/samsung",
+    logo: "/Banners/samsung.png",
     link: "/brands/samsung",
   },
   {
     name: "Dell",
-    logo: "/Banners/dell",
+    logo: "/Banners/dell.png",
     link: "/brands/dell",
   },
   {
     name: "HP",
     logo: "/Banners/hp.png",
-    link: "/brands/hp.png",
+    link: "/brands/hp",
   },
   {
     name: "Lenovo",
-    logo: "/Banners/lenovo",
+    logo: "/Banners/lenovo.png",
     link: "/brands/lenovo",
   },
   {
     name: "Gaming",
-    logo: "/Banners/gaming",
+    logo: "/Banners/gaming.png",
     link: "/brands/gaming",
   },
   {
     name: "Acer",
-    logo: "/Banners/acer",
+    logo: "/Banners/acer.png",
     link: "/brands/acer",
   },
   {
     name: "Asus",
-    logo: "/Banners/asus",
+    logo: "/Banners/asus.png",
     link: "/brands/asus",
   },
 ];
@@ -92,7 +92,7 @@ export default function ShopByBrandSection() {
           <div className="flex w-max max-w-full items-center gap-4 sm:gap-6 md:gap-10">
             {[...brands, ...brands].map((brand, index) => {
               const slug = getBrandSlugFromName(brand.name) || brand.link.replace('/brands/', '');
-              const logoSrc = getBrandLogoForName(brand.name) || brand.logo || `/Banners/${slug}`;
+              const logoSrc = getBrandLogoForName(brand.name) || brand.logo || `/Banners/${slug}.png`;
 
               return (
               <button
@@ -106,7 +106,8 @@ export default function ShopByBrandSection() {
                       src={logoSrc}
                       alt={brand.name}
                       lazy={true}
-                      useWebP={true}
+                      useWebP={false}
+                      fallbackSrc="/logo.png"
                       className="max-h-full max-w-full object-contain"
                       width={160}
                       height={80}
