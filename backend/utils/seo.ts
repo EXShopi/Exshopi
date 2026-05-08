@@ -20,6 +20,16 @@ export const clampSeoText = (value: string, limit: number) => {
 export const uniqueSeoKeywords = (values: string[]) =>
   Array.from(new Set(values.map((value) => normalizeSeoText(value)).filter(Boolean)));
 
+export const clampSeoKeywords = (values: string[], limit = 500) => {
+  const keywords: string[] = [];
+  for (const keyword of uniqueSeoKeywords(values)) {
+    const candidate = [...keywords, keyword].join(", ");
+    if (candidate.length > limit) continue;
+    keywords.push(keyword);
+  }
+  return keywords.join(", ");
+};
+
 export function generateProductSeoPayload(input: {
   title?: string;
   slug?: string;
@@ -67,7 +77,7 @@ export function generateProductSeoPayload(input: {
     input.metaDescription || buildProductMetaDescription(seoProduct),
     160
   );
-  const metaKeywords = uniqueSeoKeywords([
+  const metaKeywords = clampSeoKeywords([
     ...String(input.metaKeywords || "")
       .split(",")
       .map((keyword) => keyword.trim()),
@@ -80,7 +90,7 @@ export function generateProductSeoPayload(input: {
     "GCC",
     "buy electronics UAE COD",
     "ExShopi",
-  ]).join(", ");
+  ]);
   const canonicalUrl = normalizeSeoText(
     input.canonicalUrl || `${DEFAULT_SITE_URL.replace(/\/$/, "")}/product/${slug}`
   );
