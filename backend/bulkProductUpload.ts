@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { normalizeProductSpecifications, validateProductSpecificationsForTemplate } from './validators/productSpecifications';
 import { generateProductSeoPayload } from './utils/seo';
+import { resolveBulkUploadCategoryFix } from '../shared/bulkUploadAutoFix';
 
 type GenericRecord = Record<string, any>;
 type GccCountryCode = 'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM';
@@ -235,6 +236,52 @@ function dedupe(values: string[]) {
   });
 }
 
+function cleanPlainText(value: unknown) {
+  return text(value)
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/[<>]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function clampText(value: unknown, limit: number) {
+  const cleaned = cleanPlainText(value);
+  return cleaned.length > limit ? cleaned.slice(0, limit).trim() : cleaned;
+}
+
+function sanitizeKeywordToken(value: unknown) {
+  return cleanPlainText(value)
+    .replace(/[^\p{L}\p{N}\s+\-./#&]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function sanitizeBulkMetaKeywords(value: unknown, limit = 450) {
+  const normalized = String(value ?? '')
+    .replace(/\r?\n/g, ',')
+    .replace(/[|;]+/g, ',')
+    .replace(/,+/g, ',');
+  const keywords: string[] = [];
+
+  for (const rawKeyword of normalized.split(',')) {
+    const words = sanitizeKeywordToken(rawKeyword)
+      .split(/\s+/)
+      .filter(Boolean);
+    const keyword = dedupe(words).join(' ').trim();
+    if (!keyword) continue;
+    const candidate = [...keywords, keyword].join(', ');
+    if (candidate.length > limit) continue;
+    keywords.push(keyword);
+  }
+
+  return dedupe(keywords).join(', ').slice(0, limit).replace(/,\s*$/g, '').trim();
+}
+
+function normalizeStatus(value: unknown, fallback: string) {
+  const normalized = lower(value).replace(/\s+/g, '_');
+  return normalized || fallback;
+}
+
 function buildSafeDraftSku(inputSku: string, rowNumber: number) {
   const base = text(inputSku)
     .replace(/\s+/g, '-')
@@ -249,13 +296,65 @@ function buildSafeDraftSku(inputSku: string, rowNumber: number) {
 const PRODUCT_PLACEHOLDER_IMAGE = '/assets/product-placeholder.png';
 const LAPTOP_CATEGORY_SLUG = 'laptops';
 const LAPTOP_SUBCATEGORY_OPTIONS = [
-  { id: 'macbooks', name: 'MacBooks', slug: 'macbooks' },
+  { id: 'apple-laptops', name: 'Apple Laptops', slug: 'apple-laptops' },
   { id: 'business-laptops', name: 'Business Laptops', slug: 'business-laptops' },
   { id: 'gaming-laptops', name: 'Gaming Laptops', slug: 'gaming-laptops' },
+  { id: 'workstations', name: 'Workstations', slug: 'workstations' },
   { id: 'used-windows-laptops', name: 'Used Windows Laptops', slug: 'used-windows-laptops' },
   { id: 'chromebooks', name: 'Chromebooks', slug: 'chromebooks' },
   { id: 'premium-ultrabooks', name: 'Premium Ultrabooks', slug: 'premium-ultrabooks' },
 ] as const;
+
+function sanitizeBulkUploadRow(row: BulkUploadEditableRow) {
+  const cleaned = { ...row };
+  (Object.keys(cleaned) as Array<keyof BulkUploadEditableRow>).forEach((key) => {
+    const value = cleaned[key];
+    if (Array.isArray(value)) {
+      (cleaned as any)[key] = dedupe(value.map((item) => cleanPlainText(item)).filter(Boolean));
+    } else {
+      (cleaned as any)[key] = cleanPlainText(value);
+    }
+  });
+
+  cleaned.productTitle = clampText(cleaned.productTitle, 200);
+  cleaned.shortDescription = clampText(cleaned.shortDescription, 1000);
+  cleaned.longDescription = clampText(cleaned.longDescription, 20000);
+  cleaned.sellerNotes = clampText(cleaned.sellerNotes, 2000);
+  cleaned.buyerNotes = clampText(cleaned.buyerNotes, 2000);
+  cleaned.seoTitle = clampText(cleaned.seoTitle, 90);
+  cleaned.seoDescription = clampText(cleaned.seoDescription, 160);
+  cleaned.metaKeywords = sanitizeBulkMetaKeywords(cleaned.metaKeywords);
+  cleaned.regularPrice = toNumberString(cleaned.regularPrice || '0') || '0';
+  cleaned.salePrice = toNumberString(cleaned.salePrice || cleaned.flashSalePrice || cleaned.regularPrice || '0') || '0';
+  cleaned.costPrice = toNumberString(cleaned.costPrice);
+  cleaned.stockQuantity = toNumberString(cleaned.stockQuantity || '1') || '1';
+  cleaned.lowStockAlert = toNumberString(cleaned.lowStockAlert || '1') || '1';
+  cleaned.shippingPrice = toNumberString(cleaned.shippingPrice);
+  cleaned.codFee = toNumberString(cleaned.codFee);
+  cleaned.productStatus = normalizeStatus(cleaned.productStatus, 'draft');
+  cleaned.visibilityStatus = normalizeStatus(cleaned.visibilityStatus, 'hidden');
+  cleaned.approvalStatus = normalizeStatus(cleaned.approvalStatus, 'pending');
+  cleaned.currency = cleaned.currency || 'AED';
+  cleaned.condition = cleaned.condition || 'Refurbished';
+
+  return cleaned;
+}
+
+function applyBulkCategoryAutoFix(row: BulkUploadEditableRow) {
+  const fix = resolveBulkUploadCategoryFix(row);
+  if (!fix) return { ...row };
+  return {
+    ...row,
+    parentCategory: fix.parentCategory,
+    category: fix.category,
+    subcategory: fix.subcategory,
+    productType: fix.productType,
+  };
+}
+
+function prepareBulkUploadRow(row: BulkUploadEditableRow) {
+  return applyBulkCategoryAutoFix(sanitizeBulkUploadRow(row));
+}
 
 function decodeXml(value: string) {
   return value
@@ -574,20 +673,31 @@ function normalizeCategories(categories: GenericRecord[]) {
       name: text(category.name),
       slug: text(category.slug),
       categories: Array.isArray(category.subcategories)
-        ? category.subcategories.map((entry: any) => ({
-            id: text(entry.id),
-            name: text(entry.name),
-            slug: text(entry.slug),
-          subcategories: Array.isArray(entry.childCategories)
+        ? category.subcategories.map((entry: any) => {
+            const childCategories = Array.isArray(entry.childCategories)
               ? entry.childCategories.map((child: any) => ({
                   id: text(child.id),
                   name: text(child.name),
                   slug: text(child.slug),
                 }))
-              : lower(entry.slug) === LAPTOP_CATEGORY_SLUG || lower(entry.name) === LAPTOP_CATEGORY_SLUG
-              ? [...LAPTOP_SUBCATEGORY_OPTIONS]
-              : [],
-          }))
+              : [];
+            const mergedChildCategories =
+              lower(entry.slug) === LAPTOP_CATEGORY_SLUG || lower(entry.name) === LAPTOP_CATEGORY_SLUG
+                ? dedupe([
+                    ...childCategories.map((child: any) => child.slug),
+                    ...LAPTOP_SUBCATEGORY_OPTIONS.map((child) => child.slug),
+                  ])
+                    .map((slug) => childCategories.find((child: any) => lower(child.slug) === lower(slug)) || LAPTOP_SUBCATEGORY_OPTIONS.find((child) => child.slug === slug))
+                    .filter(Boolean)
+                : childCategories;
+
+            return {
+              id: text(entry.id),
+              name: text(entry.name),
+              slug: text(entry.slug),
+              subcategories: mergedChildCategories,
+            };
+          })
         : [],
     }))
     .filter((entry) => entry.id && entry.slug);
@@ -613,7 +723,7 @@ function inferLaptopSubcategory(fieldRow: BulkUploadEditableRow) {
   const brand = lower(fieldRow.brand);
 
   if (!corpus) {
-    return { slug: 'used-windows-laptops', name: 'Used Windows Laptops', reason: 'fallback' as const };
+    return { slug: 'business-laptops', name: 'Business Laptops', reason: 'fallback' as const };
   }
 
   if (corpus.includes('chromebook') || corpus.includes('chrome os')) {
@@ -625,7 +735,7 @@ function inferLaptopSubcategory(fieldRow: BulkUploadEditableRow) {
     corpus.includes('mac book') ||
     (brand === 'apple' && corpus.includes('macos'))
   ) {
-    return { slug: 'macbooks', name: 'MacBooks', reason: 'keyword' as const };
+    return { slug: 'apple-laptops', name: 'Apple Laptops', reason: 'keyword' as const };
   }
 
   if (
@@ -635,7 +745,7 @@ function inferLaptopSubcategory(fieldRow: BulkUploadEditableRow) {
     corpus.includes('xps 13') ||
     corpus.includes('x1 carbon')
   ) {
-    return { slug: 'premium-ultrabooks', name: 'Premium Ultrabooks', reason: 'keyword' as const };
+    return { slug: 'business-laptops', name: 'Business Laptops', reason: 'keyword' as const };
   }
 
   if (
@@ -667,10 +777,10 @@ function inferLaptopSubcategory(fieldRow: BulkUploadEditableRow) {
     corpus.includes('intel') ||
     corpus.includes('amd')
   ) {
-    return { slug: 'used-windows-laptops', name: 'Used Windows Laptops', reason: 'fallback' as const };
+    return { slug: 'business-laptops', name: 'Business Laptops', reason: 'fallback' as const };
   }
 
-  return { slug: 'used-windows-laptops', name: 'Used Windows Laptops', reason: 'fallback' as const };
+  return { slug: 'business-laptops', name: 'Business Laptops', reason: 'fallback' as const };
 }
 
 function inferProcessorBrand(fieldRow: BulkUploadEditableRow) {
@@ -838,6 +948,15 @@ function resolveCategoryMatch(
   return { parent, category, subcategory };
 }
 
+function resolveBulkCategoryId(categoryMatch: ReturnType<typeof resolveCategoryMatch>) {
+  const syntheticLaptopSlugs = new Set(LAPTOP_SUBCATEGORY_OPTIONS.map((entry) => entry.slug));
+  const subcategorySlug = lower(categoryMatch.subcategory?.slug || '');
+  if (categoryMatch.subcategory?.id && !syntheticLaptopSlugs.has(subcategorySlug)) {
+    return categoryMatch.subcategory.id;
+  }
+  return categoryMatch.category?.id || categoryMatch.parent?.id || '';
+}
+
 function normalizeSellers(sellers: GenericRecord[]) {
   return (sellers || []).map((seller) => ({
     id: text(seller.id),
@@ -994,9 +1113,22 @@ export async function buildBulkUploadPreviewRows(input: {
   const rows = await Promise.all(
     input.parsedRows.map(async (rawRow, index) => {
       const normalizedRecord = toNormalizedMap(rawRow);
-      const fieldRow = resolveFieldRow(normalizedRecord, index + 2);
+      const rawFieldRow = resolveFieldRow(normalizedRecord, index + 2);
+      const fieldRow = prepareBulkUploadRow(rawFieldRow);
       const errors: string[] = [];
       const warnings: string[] = [];
+      if (fieldRow.metaKeywords !== rawFieldRow.metaKeywords) {
+        warnings.push('Meta keywords shortened automatically.');
+      }
+      if (
+        fieldRow.parentCategory !== rawFieldRow.parentCategory ||
+        fieldRow.category !== rawFieldRow.category ||
+        fieldRow.subcategory !== rawFieldRow.subcategory
+      ) {
+        warnings.push(
+          `Category was missing. We auto-assigned ${fieldRow.parentCategory} > ${fieldRow.category} > ${fieldRow.subcategory}.`
+        );
+      }
 
       if (!fieldRow.productTitle) {
         errors.push('Missing product title');
@@ -1007,9 +1139,7 @@ export async function buildBulkUploadPreviewRows(input: {
         errors.push('Missing or invalid SEO slug');
       }
 
-      if (!fieldRow.stockQuantity) {
-        errors.push('Missing stock quantity');
-      } else if (intValue(fieldRow.stockQuantity, -1) < 0) {
+      if (intValue(fieldRow.stockQuantity, -1) < 0) {
         errors.push('Invalid stock quantity');
       }
 
@@ -1023,9 +1153,9 @@ export async function buildBulkUploadPreviewRows(input: {
         lower(categoryMatch.category?.slug || categoryMatch.category?.name || '') === LAPTOP_CATEGORY_SLUG;
 
       if (!categoryMatch.parent) {
-        errors.push('Invalid parent/category mapping');
+        errors.push('Needs manual edit: category could not be matched to the ExShopi category tree.');
       } else if (fieldRow.category && !categoryMatch.category) {
-        errors.push('Needs category mapping');
+        errors.push('Needs manual edit: category could not be matched to the ExShopi category tree.');
       } else if (fieldRow.subcategory && !categoryMatch.subcategory && !isLaptopCategory) {
         warnings.push('Needs subcategory mapping');
       } else if (!fieldRow.subcategory && isLaptopCategory && categoryMatch.subcategory) {
@@ -1152,7 +1282,7 @@ export function buildBulkImportPayload(input: {
   sellers: GenericRecord[];
   uploaderSeller?: { id?: string; storeName?: string } | null;
 }) {
-  const fieldRow = input.row;
+  const fieldRow = prepareBulkUploadRow(input.row);
   const categories = normalizeCategories(input.categories);
   const sellers = normalizeSellers(input.sellers);
   const categoryMatch = resolveCategoryMatch(categories, fieldRow);
@@ -1160,8 +1290,9 @@ export function buildBulkImportPayload(input: {
   const lifecycle = resolveLifecycle(fieldRow, input.mode);
 
   if (!fieldRow.productTitle) throw new Error('Product title is required.');
-  if (!categoryMatch.parent) throw new Error('Valid parent category is required.');
-  if (fieldRow.category && !categoryMatch.category) throw new Error('Valid category is required.');
+  if (!categoryMatch.parent || (fieldRow.category && !categoryMatch.category)) {
+    throw new Error('Needs manual edit: category could not be matched to the ExShopi category tree.');
+  }
   if (!sellerMatch) throw new Error('Valid seller is required.');
 
   const allImages = dedupe([fieldRow.mainImageUrl || PRODUCT_PLACEHOLDER_IMAGE, ...fieldRow.galleryImageUrls].filter(Boolean)).slice(0, 8);
@@ -1270,7 +1401,7 @@ export function buildBulkImportPayload(input: {
 
   return {
     sellerId: sellerMatch.id,
-    categoryId: categoryMatch.parent.id,
+    categoryId: resolveBulkCategoryId(categoryMatch),
     title: fieldRow.productTitle,
     slug: seo.slug || fieldRow.seoSlug || slugify(fieldRow.productTitle),
     metaTitle: seo.metaTitle,

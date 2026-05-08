@@ -14,6 +14,7 @@ import {
 import { categoryAPI, adminProductBulkUploadAPI } from '../../services/api';
 import { MASTER_CATEGORIES } from '../../lib/masterCategories';
 import { uploadImageFile } from '../../lib/uploadClient';
+import { resolveBulkUploadCategoryFix } from '../../../shared/bulkUploadAutoFix';
 
 type BulkUploadEditableRow = {
   clientId: string;
@@ -408,9 +409,10 @@ const TEMPLATE_SAMPLE_ROWS: Array<Record<string, string>> = [
 const PRODUCT_PLACEHOLDER_IMAGE = '/assets/product-placeholder.png';
 const LAPTOP_CATEGORY_SLUG = 'laptops';
 const LAPTOP_SUBCATEGORY_OPTIONS: BulkCategoryLeaf[] = [
-  { id: 'macbooks', name: 'MacBooks', slug: 'macbooks' },
+  { id: 'apple-laptops', name: 'Apple Laptops', slug: 'apple-laptops' },
   { id: 'business-laptops', name: 'Business Laptops', slug: 'business-laptops' },
   { id: 'gaming-laptops', name: 'Gaming Laptops', slug: 'gaming-laptops' },
+  { id: 'workstations', name: 'Workstations', slug: 'workstations' },
   { id: 'used-windows-laptops', name: 'Used Windows Laptops', slug: 'used-windows-laptops' },
   { id: 'chromebooks', name: 'Chromebooks', slug: 'chromebooks' },
   { id: 'premium-ultrabooks', name: 'Premium Ultrabooks', slug: 'premium-ultrabooks' },
@@ -441,6 +443,69 @@ const dedupeList = (items: string[]) => {
   });
 };
 
+const cleanPlainText = (value: unknown) =>
+  normalizeText(value)
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/[<>]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const clampFieldText = (value: unknown, limit: number) => {
+  const cleaned = cleanPlainText(value);
+  return cleaned.length > limit ? cleaned.slice(0, limit).trim() : cleaned;
+};
+
+const sanitizeMetaKeywords = (value: unknown, limit = 450) => {
+  const keywords: string[] = [];
+  String(value || '')
+    .replace(/\r?\n/g, ',')
+    .replace(/[|;]+/g, ',')
+    .replace(/,+/g, ',')
+    .split(',')
+    .forEach((item) => {
+      const keyword = dedupeList(
+        cleanPlainText(item)
+          .replace(/[^\p{L}\p{N}\s+\-./#&]/gu, ' ')
+          .split(/\s+/)
+          .filter(Boolean)
+      ).join(' ');
+      if (!keyword) return;
+      const candidate = [...keywords, keyword].join(', ');
+      if (candidate.length <= limit) keywords.push(keyword);
+    });
+  return dedupeList(keywords).join(', ').slice(0, limit).replace(/,\s*$/g, '').trim();
+};
+
+const autoFixBulkRowFields = (fields: BulkUploadEditableRow) => {
+  const fixed = {
+    ...fields,
+    productTitle: clampFieldText(fields.productTitle, 200),
+    shortDescription: clampFieldText(fields.shortDescription, 1000),
+    longDescription: clampFieldText(fields.longDescription, 20000),
+    sellerNotes: clampFieldText(fields.sellerNotes, 2000),
+    seoTitle: clampFieldText(fields.seoTitle, 90),
+    seoDescription: clampFieldText(fields.seoDescription, 160),
+    metaKeywords: sanitizeMetaKeywords(fields.metaKeywords),
+    stockQuantity: normalizeText(fields.stockQuantity) || '1',
+    regularPrice: normalizeText(fields.regularPrice) || '0',
+    salePrice: normalizeText(fields.salePrice || fields.flashSalePrice || fields.regularPrice) || '0',
+    productStatus: normalizeMatchKey(fields.productStatus).replace(/\s+/g, '_') || 'draft',
+    visibilityStatus: normalizeMatchKey(fields.visibilityStatus).replace(/\s+/g, '_') || 'hidden',
+    approvalStatus: normalizeMatchKey(fields.approvalStatus).replace(/\s+/g, '_') || 'pending',
+    currency: fields.currency || 'AED',
+    condition: fields.condition || 'Refurbished',
+  };
+  const categoryFix = resolveBulkUploadCategoryFix(fixed);
+  if (!categoryFix) return fixed;
+  return {
+    ...fixed,
+    parentCategory: categoryFix.parentCategory,
+    category: categoryFix.category,
+    subcategory: categoryFix.subcategory,
+    productType: categoryFix.productType,
+  };
+};
+
 const categoryKeyForRow = (fields: BulkUploadEditableRow) =>
   [
     normalizeMatchKey(fields.parentCategory),
@@ -457,20 +522,27 @@ const buildCategoryTree = (items: any[]): BulkCategoryTree[] => {
       name: String(parent.name || ''),
       slug: String(parent.slug || ''),
       categories: Array.isArray(parent.subcategories)
-        ? parent.subcategories.map((category: any) => ({
-            id: String(category.id || category.slug || category.name || ''),
-            name: String(category.name || ''),
-            slug: String(category.slug || ''),
-            subcategories: Array.isArray(category.childCategories)
+        ? parent.subcategories.map((category: any) => {
+            const childCategories = Array.isArray(category.childCategories)
               ? category.childCategories.map((child: any) => ({
                   id: String(child.id || child.slug || child.name || ''),
                   name: String(child.name || ''),
                   slug: String(child.slug || ''),
                 }))
-              : normalizeMatchKey(category.slug || category.name) === LAPTOP_CATEGORY_SLUG
-              ? [...LAPTOP_SUBCATEGORY_OPTIONS]
-              : [],
-          }))
+              : [];
+            const subcategories =
+              normalizeMatchKey(category.slug || category.name) === LAPTOP_CATEGORY_SLUG
+                ? (dedupeList([...childCategories.map((child) => child.slug), ...LAPTOP_SUBCATEGORY_OPTIONS.map((child) => child.slug)])
+                    .map((slug) => childCategories.find((child) => normalizeMatchKey(child.slug) === normalizeMatchKey(slug)) || LAPTOP_SUBCATEGORY_OPTIONS.find((child) => child.slug === slug))
+                    .filter(Boolean) as BulkCategoryLeaf[])
+                : childCategories;
+            return {
+              id: String(category.id || category.slug || category.name || ''),
+              name: String(category.name || ''),
+              slug: String(category.slug || ''),
+              subcategories,
+            };
+          })
         : [],
     });
   });
@@ -484,15 +556,19 @@ const buildCategoryTree = (items: any[]): BulkCategoryTree[] => {
           id: String(category?.id || category?.slug || category?.name || ''),
           name: String(category?.name || ''),
           slug: String(category?.slug || slugifyValue(category?.name || '')),
-          subcategories: Array.isArray(category?.childCategories)
-            ? category.childCategories.map((child: any) => ({
-                id: String(child?.id || child?.slug || child?.name || ''),
-                name: String(child?.name || ''),
-                slug: String(child?.slug || slugifyValue(child?.name || '')),
-              }))
-            : normalizeMatchKey(category?.slug || category?.name) === LAPTOP_CATEGORY_SLUG
-            ? [...LAPTOP_SUBCATEGORY_OPTIONS]
-            : [],
+          subcategories: (() => {
+            const childCategories = Array.isArray(category?.childCategories)
+              ? category.childCategories.map((child: any) => ({
+                  id: String(child?.id || child?.slug || child?.name || ''),
+                  name: String(child?.name || ''),
+                  slug: String(child?.slug || slugifyValue(child?.name || '')),
+                }))
+              : [];
+            if (normalizeMatchKey(category?.slug || category?.name) !== LAPTOP_CATEGORY_SLUG) return childCategories;
+            return (dedupeList([...childCategories.map((child) => child.slug), ...LAPTOP_SUBCATEGORY_OPTIONS.map((child) => child.slug)])
+              .map((slug) => childCategories.find((child) => normalizeMatchKey(child.slug) === normalizeMatchKey(slug)) || LAPTOP_SUBCATEGORY_OPTIONS.find((child) => child.slug === slug))
+              .filter(Boolean) as BulkCategoryLeaf[]);
+          })(),
         }))
       : [];
 
@@ -544,7 +620,7 @@ const inferLaptopLeaf = (fields: BulkUploadEditableRow): BulkCategoryLeaf => {
     return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'chromebooks')!;
   }
   if (corpus.includes('macbook') || corpus.includes('mac book') || (brand === 'apple' && corpus.includes('macos'))) {
-    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'macbooks')!;
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'apple-laptops')!;
   }
   if (
     corpus.includes('surface') ||
@@ -553,7 +629,7 @@ const inferLaptopLeaf = (fields: BulkUploadEditableRow): BulkCategoryLeaf => {
     corpus.includes('xps 13') ||
     corpus.includes('x1 carbon')
   ) {
-    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'premium-ultrabooks')!;
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'business-laptops')!;
   }
   if (
     corpus.includes('rog') ||
@@ -576,7 +652,10 @@ const inferLaptopLeaf = (fields: BulkUploadEditableRow): BulkCategoryLeaf => {
   ) {
     return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'business-laptops')!;
   }
-  return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'used-windows-laptops')!;
+  if (corpus.includes('precision') || corpus.includes('zbook') || corpus.includes('workstation')) {
+    return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'workstations')!;
+  }
+  return LAPTOP_SUBCATEGORY_OPTIONS.find((entry) => entry.slug === 'business-laptops')!;
 };
 
 const resolveRowCategorySelection = (fields: BulkUploadEditableRow, categories: BulkCategoryTree[]) => {
@@ -605,6 +684,7 @@ const MANAGED_ERROR_PREFIXES = [
   'Invalid parent/category mapping',
   'Needs category mapping',
   'Needs subcategory mapping',
+  'Needs manual edit',
   'Invalid approval status',
   'Duplicate SKU found in upload file',
   'Duplicate slug found in upload file',
@@ -616,6 +696,8 @@ const MANAGED_WARNING_PREFIXES = [
   'Image URL is not a valid absolute URL',
   'Image URL could not be verified',
   'Auto-mapped laptop subcategory',
+  'Category was missing',
+  'Meta keywords shortened automatically',
 ];
 
 const filterManagedMessages = (messages: string[], prefixes: string[]) =>
@@ -635,6 +717,14 @@ const buildSafeDraftSku = (inputSku: string, rowNumber: number) => {
   return `${base || 'EXSHOPI-DRAFT'}-DRAFT-${rowNumber}`;
 };
 
+const getPreviewRowStatus = (row: PreviewRow) => {
+  if (row.errors.length) return { label: 'Needs manual edit', className: 'bg-rose-50 text-rose-700' };
+  if (row.warnings.some((warning) => /auto|shortened|placeholder|mapped/i.test(warning))) {
+    return { label: 'Fixed automatically', className: 'bg-blue-50 text-blue-700' };
+  }
+  return { label: 'Ready to import', className: 'bg-emerald-50 text-emerald-700' };
+};
+
 const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[]) => {
   const skuCounts = new Map<string, number>();
   const slugCounts = new Map<string, number>();
@@ -647,30 +737,39 @@ const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[
   });
 
   return rows.map((row) => {
+    const fixedFields = autoFixBulkRowFields(row.fields);
     const preservedErrors = filterManagedMessages(row.errors, MANAGED_ERROR_PREFIXES);
     const preservedWarnings = filterManagedMessages(row.warnings, MANAGED_WARNING_PREFIXES);
     const errors = [...preservedErrors];
     const warnings = [...preservedWarnings];
-    const { parent, branch, leaf } = resolveRowCategorySelection(row.fields, categories);
+    if (fixedFields.metaKeywords !== row.fields.metaKeywords) warnings.push('Meta keywords shortened automatically.');
+    if (
+      fixedFields.parentCategory !== row.fields.parentCategory ||
+      fixedFields.category !== row.fields.category ||
+      fixedFields.subcategory !== row.fields.subcategory
+    ) {
+      warnings.push(
+        `Category was missing. We auto-assigned ${fixedFields.parentCategory} > ${fixedFields.category} > ${fixedFields.subcategory}.`
+      );
+    }
+    const { parent, branch, leaf } = resolveRowCategorySelection(fixedFields, categories);
     const isLaptopCategory = normalizeMatchKey(branch?.slug || branch?.name) === LAPTOP_CATEGORY_SLUG;
-    const sku = normalizeMatchKey(row.fields.sku);
-    const slug = normalizeMatchKey(buildSeoSlug(row.fields));
-    const price = Number(String(row.fields.salePrice || row.fields.regularPrice || '').replace(/[^0-9.\-]/g, ''));
-    const stock = Number(String(row.fields.stockQuantity || '').replace(/[^0-9.\-]/g, ''));
-    const approval = normalizeMatchKey(row.fields.approvalStatus);
+    const sku = normalizeMatchKey(fixedFields.sku);
+    const slug = normalizeMatchKey(buildSeoSlug(fixedFields));
+    const price = Number(String(fixedFields.salePrice || fixedFields.regularPrice || '').replace(/[^0-9.\-]/g, ''));
+    const stock = Number(String(fixedFields.stockQuantity || '').replace(/[^0-9.\-]/g, ''));
+    const approval = normalizeMatchKey(fixedFields.approvalStatus);
 
-    if (!normalizeText(row.fields.productTitle)) errors.push('Missing product title');
-    if (!normalizeText(row.fields.stockQuantity)) {
-      errors.push('Missing stock quantity');
-    } else if (!Number.isFinite(stock) || stock < 0) {
+    if (!normalizeText(fixedFields.productTitle)) errors.push('Missing product title');
+    if (!Number.isFinite(stock) || stock < 0) {
       errors.push('Invalid stock quantity');
     }
     if (!Number.isFinite(price) || price < 0) errors.push('Invalid selling price');
     if (!parent) {
-      errors.push('Invalid parent/category mapping');
-    } else if (normalizeText(row.fields.category) && !branch) {
-      errors.push('Needs category mapping');
-    } else if (normalizeText(row.fields.subcategory) && !leaf && !isLaptopCategory) {
+      errors.push('Needs manual edit: category could not be matched to the ExShopi category tree.');
+    } else if (normalizeText(fixedFields.category) && !branch) {
+      errors.push('Needs manual edit: category could not be matched to the ExShopi category tree.');
+    } else if (normalizeText(fixedFields.subcategory) && !leaf && !isLaptopCategory) {
       warnings.push('Needs subcategory mapping');
     }
     if (sku && (skuCounts.get(sku) || 0) > 1) errors.push('Duplicate SKU found in upload file');
@@ -684,24 +783,24 @@ const revalidatePreviewRows = (rows: PreviewRow[], categories: BulkCategoryTree[
       warnings.push(`Auto-mapped laptop subcategory: ${leaf.name}`);
     }
     const duplicateExistingSkuWarning = row.warnings.find((issue) => issue.startsWith('Duplicate SKU already exists.'));
-    const nextSku = duplicateExistingSkuWarning ? buildSafeDraftSku(row.fields.sku, row.fields.rowNumber) : row.fields.sku;
+    const nextSku = duplicateExistingSkuWarning ? buildSafeDraftSku(fixedFields.sku, fixedFields.rowNumber) : fixedFields.sku;
 
     return {
       ...row,
       fields: {
-        ...row.fields,
+        ...fixedFields,
         sku: nextSku,
-        seoSlug: row.fields.seoSlug || buildSeoSlug(row.fields),
-        subcategory: row.fields.subcategory || leaf?.name || '',
+        seoSlug: fixedFields.seoSlug || buildSeoSlug(fixedFields),
+        subcategory: fixedFields.subcategory || leaf?.name || '',
       },
       resolved: {
         ...row.resolved,
         parentCategoryName: parent?.name || '',
         parentCategorySlug: parent?.slug || '',
-        categoryName: branch?.name || row.fields.category || '',
-        categorySlug: branch?.slug || slugifyValue(row.fields.category),
-        subcategoryName: leaf?.name || row.fields.subcategory || '',
-        subcategorySlug: leaf?.slug || slugifyValue(row.fields.subcategory),
+        categoryName: branch?.name || fixedFields.category || '',
+        categorySlug: branch?.slug || slugifyValue(fixedFields.category),
+        subcategoryName: leaf?.name || fixedFields.subcategory || '',
+        subcategorySlug: leaf?.slug || slugifyValue(fixedFields.subcategory),
       },
       warnings,
       errors,
@@ -875,6 +974,112 @@ function buildImportResultsCsv(rows: ImportResult[]) {
         csvEscape(row.error || ''),
       ].join(',')
     ),
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+function buildFixedRowsCsv(rows: PreviewRow[]) {
+  const lines = [
+    TEMPLATE_HEADERS.join(','),
+    ...rows.map((row) => {
+      const imageColumns = Array.from({ length: 7 }, (_, index) => row.fields.galleryImageUrls[index] || '');
+      const values: Record<string, unknown> = {
+        product_title: row.fields.productTitle,
+        sku: row.fields.sku,
+        brand: row.fields.brand,
+        model: row.fields.model,
+        parent_category: row.fields.parentCategory,
+        category: row.fields.category,
+        subcategory: row.fields.subcategory,
+        product_type: row.fields.productType,
+        condition: row.fields.condition,
+        short_description: row.fields.shortDescription,
+        long_description: row.fields.longDescription,
+        product_highlights: row.fields.productHighlights,
+        seller_notes: row.fields.sellerNotes,
+        buyer_notes: row.fields.buyerNotes,
+        regular_price: row.fields.regularPrice,
+        sale_price: row.fields.salePrice,
+        cost_price: row.fields.costPrice,
+        discount_percentage: row.fields.discountPercentage,
+        currency: row.fields.currency,
+        vat_status: row.fields.vatStatus,
+        shipping_price: row.fields.shippingPrice,
+        cod_available: row.fields.codAvailable,
+        tabby_eligible: row.fields.tabbyEligible,
+        tamara_eligible: row.fields.tamaraEligible,
+        stock_quantity: row.fields.stockQuantity,
+        low_stock_alert: row.fields.lowStockAlert,
+        availability: row.fields.availability,
+        warehouse_location: row.fields.warehouseLocation,
+        barcode: row.fields.barcode,
+        serial_number: row.fields.serialNumber,
+        product_status: row.fields.productStatus,
+        visibility_status: row.fields.visibilityStatus,
+        approval_status: row.fields.approvalStatus,
+        seller_name: row.fields.sellerName,
+        seller_id: row.fields.sellerId,
+        seller_type: row.fields.sellerType,
+        exshopi_official: row.fields.exshopiOfficial,
+        vendor_commission: row.fields.vendorCommission,
+        admin_approval_required: row.fields.adminApprovalRequired,
+        seller_store_visibility: row.fields.sellerStoreVisibility,
+        main_image_url: row.fields.mainImageUrl,
+        image_url_1: imageColumns[0],
+        image_url_2: imageColumns[1],
+        image_url_3: imageColumns[2],
+        image_url_4: imageColumns[3],
+        image_url_5: imageColumns[4],
+        image_url_6: imageColumns[5],
+        image_url_7: imageColumns[6],
+        thumbnail_image: row.fields.thumbnailUrl,
+        image_alt_text: row.fields.imageAltText,
+        color: row.fields.color,
+        storage: row.fields.storage,
+        ram: row.fields.ram,
+        size: row.fields.size,
+        capacity: row.fields.capacity,
+        material: row.fields.material,
+        connectivity: row.fields.connectivity,
+        compatibility: row.fields.compatibility,
+        processor: row.fields.processor,
+        screen_size: row.fields.screenSize,
+        graphics: row.fields.graphics,
+        operating_system: row.fields.operatingSystem,
+        battery_health: row.fields.batteryHealth,
+        camera: row.fields.camera,
+        refresh_rate: row.fields.refreshRate,
+        chipset: row.fields.chipset,
+        network: row.fields.network,
+        sim_type: row.fields.simType,
+        warranty: row.fields.warranty,
+        box_contents: row.fields.boxContents,
+        dimensions: row.fields.dimensions,
+        weight: row.fields.weight,
+        seo_slug: row.fields.seoSlug,
+        seo_title: row.fields.seoTitle,
+        seo_description: row.fields.seoDescription,
+        meta_keywords: row.fields.metaKeywords,
+        breadcrumb_category_data: row.fields.breadcrumbCategoryData,
+        delivery_country: row.fields.deliveryCountry,
+        uae_delivery_available: row.fields.uaeDeliveryAvailable,
+        saudi_delivery_available: row.fields.saudiDeliveryAvailable,
+        gcc_delivery_available: row.fields.gccDeliveryAvailable,
+        shipping_time: row.fields.shippingTime,
+        warranty_policy: row.fields.warrantyPolicy,
+        return_policy: row.fields.returnPolicy,
+        cod_fee: row.fields.codFee,
+        featured_product: row.fields.featuredProduct,
+        best_seller: row.fields.bestSeller,
+        most_popular: row.fields.mostPopular,
+        eid_offer: row.fields.eidOffer,
+        black_friday_section: row.fields.blackFridaySection,
+        deal_timer: row.fields.dealTimer,
+        flash_sale_price: row.fields.flashSalePrice,
+        homepage_section_visibility: row.fields.homepageSectionVisibility,
+      };
+      return TEMPLATE_HEADERS.map((header) => csvEscape(values[header] || '')).join(',');
+    }),
   ];
   return `${lines.join('\n')}\n`;
 }
@@ -1164,7 +1369,7 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
 
     setImporting(true);
     setError('');
-    const batchSize = 10;
+    const batchSize = 100;
     let activeSessionId = importSessionId;
     setLastBatchSize(batchSize);
 
@@ -1237,6 +1442,34 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
     downloadBlob(
       'exshopi-bulk-upload-errors.csv',
       buildErrorReportCsv(previewRows.filter((row) => row.errors.length || row.warnings.length)),
+      'text/csv;charset=utf-8;'
+    );
+  };
+
+  const handleAutoFixAllRows = () => {
+    updateRows((current) =>
+      current.map((row) => ({
+        ...row,
+        fields: autoFixBulkRowFields(row.fields),
+        skipped: false,
+      }))
+    );
+  };
+
+  const handleApproveFixedRows = () => {
+    setPreviewRows((current) =>
+      revalidatePreviewRows(current, categories).map((row) => ({
+        ...row,
+        approved: row.canImport,
+        skipped: !row.canImport,
+      }))
+    );
+  };
+
+  const downloadFixedCsv = () => {
+    downloadBlob(
+      'exshopi-bulk-upload-fixed.csv',
+      buildFixedRowsCsv(revalidatePreviewRows(previewRows, categories)),
       'text/csv;charset=utf-8;'
     );
   };
@@ -1414,12 +1647,24 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          setPreviewRows((current) => current.map((row) => ({ ...row, approved: row.canImport, skipped: false })))
-                        }
+                        onClick={handleAutoFixAllRows}
+                        className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-blue-700"
+                      >
+                        Auto Fix All Rows
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleApproveFixedRows}
                         className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-700"
                       >
-                        Approve Valid Rows
+                        Import Valid Rows
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadFixedCsv}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-700"
+                      >
+                        Download Fixed CSV
                       </button>
                       <button
                         type="button"
@@ -1434,7 +1679,7 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                         disabled={importing || previewStats.ready === 0}
                         className="rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        {importSessionId ? 'Resume Import' : 'Import All Valid Rows'}
+                        {importSessionId ? 'Resume Import' : 'Import All Fixed Rows'}
                       </button>
                     </div>
                   </div>
@@ -1558,7 +1803,9 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                          {previewRows.map((row) => (
+                          {previewRows.map((row) => {
+                            const rowStatus = getPreviewRowStatus(row);
+                            return (
                             <tr key={row.clientId} className="align-top hover:bg-slate-50/70">
                               <td className="px-4 py-4">
                                 <input
@@ -1581,6 +1828,9 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                               <td className="px-4 py-4">
                                 <p className="max-w-[260px] text-sm font-black text-slate-900">{row.fields.productTitle || 'Untitled row'}</p>
                                 <p className="mt-1 text-xs font-semibold text-slate-500">{row.fields.sku || 'No SKU'}</p>
+                                <div className={`mt-2 inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${rowStatus.className}`}>
+                                  {rowStatus.label}
+                                </div>
                               </td>
                               <td className="px-4 py-4 text-sm font-semibold text-slate-700">
                                 <p>{row.resolved.parentCategoryName || row.fields.parentCategory || 'Unknown'}</p>
@@ -1652,7 +1902,8 @@ export default function BulkProductUploadModal({ onImported, mode = 'admin' }: P
                                 </div>
                               </td>
                             </tr>
-                          ))}
+                          );
+                          })}
                         </tbody>
                       </table>
                     </div>

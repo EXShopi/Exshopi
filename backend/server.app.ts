@@ -1140,6 +1140,9 @@ const flattenCategoryIds = (categories: Array<any>) => {
     if (category?.id) ids.add(String(category.id));
     for (const child of category?.subcategories || []) {
       if (child?.id) ids.add(String(child.id));
+      for (const grandchild of child?.childCategories || []) {
+        if (grandchild?.id) ids.add(String(grandchild.id));
+      }
     }
   }
   return ids;
@@ -1163,6 +1166,15 @@ const flattenCategoryEntries = (categories: Array<any>) => {
           name: String(child.name || ''),
         });
       }
+      for (const grandchild of child?.childCategories || []) {
+        if (grandchild?.id) {
+          entries.push({
+            id: String(grandchild.id),
+            slug: String(grandchild.slug || ''),
+            name: String(grandchild.name || ''),
+          });
+        }
+      }
     }
   }
   return entries;
@@ -1182,6 +1194,33 @@ const resolveCatalogCategoryId = (categories: Array<any>, requestedValue: string
 
   const nameMatch = entries.find((entry) => normalizeSlugInput(entry.name) === normalized);
   return nameMatch?.id || '';
+};
+
+const resolveCatalogCategoryIdFromProductPayload = (categories: Array<any>, payload: any) => {
+  const direct = resolveCatalogCategoryId(
+    categories,
+    payload?.categoryId || payload?.category || payload?.categorySlug || payload?.subcategorySlug || ''
+  );
+  if (direct) return direct;
+
+  const specs = payload?.specs || {};
+  const candidates = [
+    specs.subcategorySlug,
+    specs.templateId,
+    specs.categorySlug,
+    specs.parentCategorySlug,
+    specs.subcategoryName,
+    specs.templateName,
+    specs.categoryName,
+    specs.parentCategoryName,
+  ];
+
+  for (const candidate of candidates) {
+    const resolved = resolveCatalogCategoryId(categories, String(candidate || ''));
+    if (resolved) return resolved;
+  }
+
+  return '';
 };
 
 const resolveEffectiveProductStatus = (product: any) => getProductLifecycleState(product).effectiveStatus;
@@ -1359,9 +1398,8 @@ const resolveUploaderSeller = async (userId?: string | null) => {
 
 const createAdminProductRecord = async (payload: any) => {
   const lifecycle = deriveAdminLifecycle(payload);
-  const requestedCategory = payload.categoryId || payload.category || payload.categorySlug || payload.subcategorySlug || '';
   const categories = await getAllCatalogCategories();
-  const categoryId = resolveCatalogCategoryId(categories, requestedCategory);
+  const categoryId = resolveCatalogCategoryIdFromProductPayload(categories, payload);
   const productPayload = { ...payload, categoryId };
   assertAdminProductRequirements(productPayload, lifecycle.status);
 
@@ -2153,17 +2191,17 @@ const bulkUploadPreviewSchema = z.object({
 
 const bulkUploadImportSchema = z.object({
   mode: z.enum(['admin', 'seller']).optional().default('admin'),
-  rows: z.array(z.any()).min(1).max(1000),
+  rows: z.array(z.any()).min(1).max(10000),
 });
 
 const bulkUploadImportSessionCreateSchema = z.object({
   mode: z.enum(['admin', 'seller']).optional().default('admin'),
-  rows: z.array(z.any()).min(1).max(1000),
+  rows: z.array(z.any()).min(1).max(10000),
 });
 
 const bulkUploadImportBatchSchema = z.object({
   sessionId: z.string().min(8).max(120),
-  batchSize: z.number().int().min(1).max(25).optional().default(10),
+  batchSize: z.number().int().min(1).max(250).optional().default(100),
 });
 
 type BulkUploadImportResult = {
