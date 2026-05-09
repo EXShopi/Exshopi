@@ -95,25 +95,81 @@
 
       #loading {
         display: flex;
+        flex-direction: column;
+        gap: 14px;
         align-items: center;
         justify-content: center;
         height: 100vh;
-        color: transparent;
+        min-height: 100svh;
+        background: radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.2), transparent 34%),
+          linear-gradient(145deg, #07111f 0%, #0f172a 46%, #0b1220 100%);
+        color: #fff;
+        text-align: center;
       }
 
-      #loading::after {
+      #loading .initial-loader-card {
+        width: min(88vw, 360px);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+        padding: 24px 20px;
+        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(16px);
+      }
+
+      #loading .initial-loader-logo {
+        width: 58px;
+        height: 58px;
+        margin: 0 auto 14px;
+        border-radius: 20px;
+        background: #fff;
+        object-fit: contain;
+        padding: 8px;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.24);
+      }
+
+      #loading .initial-loader-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      #loading .initial-loader-text {
+        margin: 6px 0 0;
+        color: rgba(219, 234, 254, 0.88);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      #loading .initial-loader-bar {
+        height: 6px;
+        margin-top: 18px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      #loading .initial-loader-bar::after {
         content: "";
-        width: 34px;
-        height: 34px;
-        border-radius: 9999px;
-        border: 3px solid rgba(37, 99, 235, 0.16);
-        border-top-color: #2563eb;
-        animation: exshopi-initial-spin 0.8s linear infinite;
+        display: block;
+        width: 52%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #67e8f9, #fff, #60a5fa);
+        animation: exshopi-initial-sweep 1.15s ease-in-out infinite;
       }
 
-      @keyframes exshopi-initial-spin {
+      @keyframes exshopi-initial-sweep {
+        0% {
+          transform: translateX(-120%);
+        }
+        50% {
+          transform: translateX(60%);
+        }
         to {
-          transform: rotate(360deg);
+          transform: translateX(220%);
         }
       }
 
@@ -160,7 +216,14 @@
 
   <body>
     <div id="root">
-      <div id="loading" aria-label="Loading ExShopi"></div>
+      <div id="loading" aria-label="Loading ExShopi">
+        <div class="initial-loader-card">
+          <img src="/logo.png" alt="ExShopi" class="initial-loader-logo" />
+          <p class="initial-loader-title">Loading ExShopi...</p>
+          <p class="initial-loader-text">Preparing your marketplace</p>
+          <div class="initial-loader-bar" aria-hidden="true"></div>
+        </div>
+      </div>
       <div id="error"></div>
     </div>
 

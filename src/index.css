@@ -562,6 +562,18 @@
   }
 }
 
+@keyframes exshopi-loader-sweep {
+  0% {
+    transform: translateX(-110%);
+  }
+  50% {
+    transform: translateX(60%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
 
 @media print {
   header, footer, nav, .no-print, button, .btn-premium {

@@ -304,7 +304,67 @@ function htmlDocument(template: string, input: {
   html = html.replace(
     "</head>",
     `  <style>
-    [data-prerender-human-shell="true"] { display: none !important; }
+    .seo-prerender-fallback,
+    [data-prerender-human-hidden="true"],
+    [data-prerender-human-shell="true"] {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      overflow: hidden !important;
+      clip: rect(0 0 0 0) !important;
+      clip-path: inset(50%) !important;
+      white-space: nowrap !important;
+    }
+    #exshopi-initial-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100svh;
+      padding: 20px;
+      color: #fff;
+      text-align: center;
+      background: radial-gradient(circle at 50% 0%, rgba(37,99,235,.2), transparent 34%), linear-gradient(145deg,#07111f 0%,#0f172a 46%,#0b1220 100%);
+    }
+    #exshopi-initial-loader .initial-loader-card {
+      width: min(88vw, 360px);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 28px;
+      background: rgba(255,255,255,.08);
+      box-shadow: 0 24px 70px rgba(0,0,0,.28);
+      padding: 24px 20px;
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+    }
+    #exshopi-initial-loader .initial-loader-logo {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 14px;
+      border-radius: 20px;
+      background: #fff;
+      object-fit: contain;
+      padding: 8px;
+      box-shadow: 0 14px 30px rgba(15,23,42,.24);
+    }
+    #exshopi-initial-loader .initial-loader-title { margin: 0; font-size: 18px; font-weight: 900; }
+    #exshopi-initial-loader .initial-loader-text { margin: 6px 0 0; color: rgba(219,234,254,.88); font-size: 12px; font-weight: 700; }
+    #exshopi-initial-loader .initial-loader-bar { height: 6px; margin-top: 18px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.14); }
+    #exshopi-initial-loader .initial-loader-bar::after {
+      content: "";
+      display: block;
+      width: 52%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg,#67e8f9,#fff,#60a5fa);
+      animation: exshopi-initial-sweep 1.15s ease-in-out infinite;
+    }
+    @keyframes exshopi-initial-sweep {
+      0% { transform: translateX(-120%); }
+      50% { transform: translateX(60%); }
+      100% { transform: translateX(220%); }
+    }
   </style>
 </head>`
   );
@@ -312,7 +372,32 @@ function htmlDocument(template: string, input: {
     /<body[^>]*>[\s\S]*<\/body>/i,
     `<body>
   <script>console.log("SEO PAGE SERVED", ${JSON.stringify(input.canonicalUrl)});</script>
-  <div id="root">${input.snapshotHtml}</div>
+  <div id="exshopi-initial-loader" aria-label="Loading ExShopi">
+    <div class="initial-loader-card">
+      <img src="/logo.png" alt="ExShopi" class="initial-loader-logo" />
+      <p class="initial-loader-title">Loading ExShopi...</p>
+      <p class="initial-loader-text">Preparing your marketplace</p>
+      <div class="initial-loader-bar" aria-hidden="true"></div>
+    </div>
+  </div>
+  <div id="root"><div class="seo-prerender-fallback">${input.snapshotHtml}</div></div>
+  <noscript>
+    <style>
+      .seo-prerender-fallback,
+      [data-prerender-human-hidden="true"],
+      [data-prerender-human-shell="true"] {
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+        clip: auto !important;
+        clip-path: none !important;
+        white-space: normal !important;
+      }
+      #exshopi-initial-loader { display: none !important; }
+    </style>
+    ${input.snapshotHtml}
+  </noscript>
   <script>window.__EXSHOPI_ROUTE_DATA__=${JSON.stringify(input.routeData || null)};</script>
   ${bodyScripts.join("\n  ")}
 </body>`

@@ -1,8 +1,7 @@
-import React, { Suspense, useEffect } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { RouteProgressBar } from "./components/ui/RouteProgressBar";
-import { OrbitLoader } from "./components/ui/OrbitLoader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import { SellerLayout } from "./layouts/SellerLayout";
@@ -12,8 +11,8 @@ import { useAuthBootstrap } from "./hooks";
 import SEOHead from "./components/seo/SEOHead";
 import { lazyWithRetry } from "./utils/lazyWithRetry";
 import ProductDetail from "./pages/ProductDetail";
+import Home from "./pages/Home";
 
-const Home = lazyWithRetry(() => import("./pages/Home"), "route-home");
 const ProductListing = lazyWithRetry(() => import("./pages/ProductListing"), "route-product-listing");
 const Cart = lazyWithRetry(() => import("./pages/Cart"), "route-cart");
 const Checkout = lazyWithRetry(() => import("./pages/Checkout"), "route-checkout");
@@ -83,21 +82,54 @@ const AdminForgotPassword = lazyWithRetry(() => import("./pages/admin/ForgotPass
 const AdminResetPassword = lazyWithRetry(() => import("./pages/admin/ResetPassword").then((m) => ({ default: m.AdminResetPassword })), "route-admin-reset-password");
 
 function PageLoader() {
+  const [showShell, setShowShell] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setShowShell(true), 2800);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   return (
-    <div className="flex min-h-[46vh] items-center justify-center px-4">
-      <div className="w-full max-w-3xl rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-4">
-            <OrbitLoader label="Loading page..." size={24} />
-            <div className="h-10 w-4/5 animate-pulse rounded-2xl bg-slate-200" />
-            <div className="h-5 w-full animate-pulse rounded-xl bg-slate-200" />
-            <div className="h-5 w-3/4 animate-pulse rounded-xl bg-slate-200" />
-            <div className="h-12 w-44 animate-pulse rounded-2xl bg-slate-200" />
+    <div className="flex min-h-[38vh] items-start justify-center px-4 py-5 sm:py-8">
+      <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+        <div className="bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-5 text-white">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-lg">
+              <img src="/logo.png" alt="ExShopi" className="h-8 w-8 object-contain" />
+            </div>
+            <div>
+              <p className="text-base font-black leading-tight">Loading ExShopi...</p>
+              <p className="text-xs font-semibold text-blue-100">Preparing your marketplace</p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-40 animate-pulse rounded-[28px] bg-slate-100" />
-            ))}
+          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/15">
+            <div className="h-full w-1/2 animate-[exshopi-loader-sweep_1.15s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-cyan-300 via-white to-blue-300" />
+          </div>
+        </div>
+        <div className="space-y-3 bg-slate-50 p-4">
+          {showShell ? (
+            <>
+              <div className="grid grid-cols-4 gap-2">
+                {["Mobiles", "Laptops", "Cameras", "Fashion"].map((label) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-white px-2 py-3 text-center text-[10px] font-black text-slate-600">
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                <div className="h-4 w-24 rounded-full bg-blue-100" />
+                <div className="mt-3 h-7 w-3/4 rounded-2xl bg-slate-200" />
+                <div className="mt-3 h-3 w-full rounded-full bg-slate-100" />
+                <div className="mt-2 h-3 w-2/3 rounded-full bg-slate-100" />
+              </div>
+            </>
+          ) : (
+            Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="h-12 overflow-hidden rounded-2xl bg-white">
+                <div className="h-full w-full animate-pulse bg-gradient-to-r from-slate-100 via-white to-slate-100" />
+              </div>
+            ))
+          )}
           </div>
         </div>
       </div>

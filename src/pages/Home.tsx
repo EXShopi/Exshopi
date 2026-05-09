@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, type ReactNode } from "react";
+import { Component, Suspense, useEffect, useMemo, type ErrorInfo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import HeroSection from "../components/HeroSection";
 import CategorySection from "../components/CategorySection";
@@ -31,9 +31,37 @@ function DeferredSection({
 }) {
   return (
     <LazyComponent deferUntilVisible={true} rootMargin={rootMargin} delayMs={delayMs}>
-      <Suspense fallback={null}>{children}</Suspense>
+      <SectionBoundary>
+        <Suspense fallback={null}>{children}</Suspense>
+      </SectionBoundary>
     </LazyComponent>
   );
+}
+
+class SectionBoundary extends Component<{ children: ReactNode; name?: string }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error(`[home-section] ${this.props.name || "section"} failed`, error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="mx-auto my-4 max-w-7xl px-4 md:px-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 text-sm font-semibold text-slate-500 shadow-sm">
+            This section is taking longer than expected.
+          </div>
+        </section>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 export default function Home() {
@@ -136,13 +164,19 @@ export default function Home() {
         image={settings.homepage.hero.productImageUrl}
         jsonLd={buildHomepageSchemas()}
       />
-      <UAEPrideStrip {...settings.homepage.uaeStrip} />
-      <HeroSection />
+      <SectionBoundary name="UAE pride strip">
+        <UAEPrideStrip {...settings.homepage.uaeStrip} />
+      </SectionBoundary>
+      <SectionBoundary name="Hero">
+        <HeroSection />
+      </SectionBoundary>
       {/* SEO-optimized headline */}
       <div className="sr-only">
         <h1>ExShopi UAE Online Shopping Marketplace</h1>
       </div>
-      <CategorySection />
+      <SectionBoundary name="Categories">
+        <CategorySection />
+      </SectionBoundary>
       <DeferredSection rootMargin="20px" delayMs={250}>
         <MegaCategoryCarousel />
       </DeferredSection>

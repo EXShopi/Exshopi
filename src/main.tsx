@@ -132,6 +132,10 @@ if (root) {
     document.documentElement.classList.remove('exshopi-prerender-loading');
     const loading = document.getElementById('loading');
     if (loading && loading.parentElement) loading.remove();
+    const prerenderLoader = document.getElementById('exshopi-initial-loader');
+    if (prerenderLoader && prerenderLoader.parentElement) {
+      window.requestAnimationFrame(() => prerenderLoader.remove());
+    }
   } catch (err) {
     // non-critical
   }
