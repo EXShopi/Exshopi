@@ -459,7 +459,7 @@ export interface Order {
   taxRate?: number;
   shippingAddress: any;
   paymentMethod?: 'cod' | 'card' | 'tabby' | 'tamara' | 'bank_transfer';
-  paymentProvider?: 'cod' | 'stripe' | 'tabby' | 'tamara' | 'bank_transfer';
+  paymentProvider?: 'cod' | 'stripe' | 'paypal' | 'tabby' | 'tamara' | 'bank_transfer';
   deliveryCountry?: string;
   deliveryEta?: string;
   refundStatus?: 'none' | 'requested' | 'approved' | 'rejected' | 'refunded';

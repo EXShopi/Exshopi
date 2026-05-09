@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import { Mail, MapPin, Phone, RotateCcw, ShieldCheck, Truck, WalletCards } from 'lucide-react';
 import { useLanguageStore } from '../store/language';
 import { storefrontT } from '../lib/storefrontCopy';
@@ -11,7 +11,7 @@ export default function Footer() {
   const selectedCountry = useCountryStore((state) => state.selectedCountry);
   const paymentOptions = getCheckoutPaymentOptions(selectedCountry).map((option) => ({
     ...option,
-    shortLabel: option.id === 'stripe_card' ? 'Cards' : option.label,
+    shortLabel: option.id === 'stripe_card' ? 'Visa / Mastercard' : option.id === 'paypal' ? 'PayPal' : option.label,
   }));
   return (
     <footer className="mt-8 bg-[#06101f] text-white md:mt-16">
@@ -133,7 +133,9 @@ export default function Footer() {
                 <div
                   key={payment.id}
                   className={`rounded-lg border px-3 py-2 text-[10px] font-bold shadow-lg transition-transform md:text-xs ${
-                    payment.enabled
+                    payment.id === 'paypal' && payment.enabled
+                      ? "border-[#0070ba]/40 bg-[#0070ba]/15 text-white hover:scale-105"
+                      : payment.enabled
                       ? "border-white/15 bg-white/10 text-white hover:scale-105"
                       : "border-white/10 bg-white/[0.04] text-slate-400"
                   }`}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import { useCartStore } from "../store/cart";
 import { useOrderStore } from "../store/orders";
-import { codAPI, orderAPI, paymentAPI, productAPI, userAPI } from "../services/api";
+import { codAPI, orderAPI, paypalAPI, paymentAPI, productAPI, userAPI } from "../services/api";
 import { formatCurrencyForCountry } from "../lib/currency";
 import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
@@ -36,6 +37,8 @@ import {
   getCheckoutPaymentOptions,
   getCountryConfig,
   getDefaultPaymentMethod,
+  getPaypalCurrencyForCountry,
+  getPaypalCurrencyNotice,
   getProductCountryPrice,
   getShippingOption,
   isCodEnabledCountry,
@@ -91,6 +94,11 @@ export default function Checkout() {
   const shippingOptions = country.shippingOptions.map((option) => getShippingOption(selectedCountry, option.id));
   const canUseCod = isCodEnabledCountry(selectedCountry);
   const paymentOptions = useMemo(() => getCheckoutPaymentOptions(selectedCountry), [selectedCountry]);
+  const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || "";
+  const paypalCurrency = getPaypalCurrencyForCountry(selectedCountry);
+  const paypalCurrencyNotice = getPaypalCurrencyNotice(selectedCountry);
+  const [paypalError, setPaypalError] = useState("");
+  const [paypalStatus, setPaypalStatus] = useState("");
 
   const [form, setForm] = useState({
     // Step 1: Customer Info
@@ -132,6 +140,26 @@ export default function Checkout() {
     setOtpProvider("firebase");
     resetFirebasePhoneVerification();
   };
+
+  const buildCheckoutShippingAddress = () => ({
+    emirate: form.city,
+    region: form.city,
+    area: form.area,
+    building: form.building,
+    flat: form.flat,
+    landmark: form.landmark,
+    addressLine: form.address,
+    method: form.deliveryType,
+    city: form.city,
+    district: form.area,
+    street: form.address,
+    buildingNumber: form.building,
+    postalCode: form.postalCode,
+    country: selectedCountry,
+    countryCode: selectedCountry,
+    countryName: country.name,
+    phone: normalizedPhone,
+  });
 
   useEffect(() => {
     console.info("[checkout] mounted", {
@@ -473,6 +501,8 @@ export default function Checkout() {
       postalCode: nextCountry === "AE" ? "" : prev.postalCode,
     }));
     resetOtpState();
+    setPaypalError("");
+    setPaypalStatus("");
     setPageError("");
   };
 
@@ -676,6 +706,91 @@ export default function Checkout() {
     return grouped;
   };
 
+  const buildPrepaidPaymentItems = (ordersBySellerMap: Map<string, any[]>) =>
+    Array.from(ordersBySellerMap.entries()).flatMap(([sellerId, sellerItems]) =>
+      sellerItems.map((item: any) => {
+        const parts = String(item.id).split("::");
+        const variant = item.variants && item.variants.length ? item.variants[0] : undefined;
+        return {
+          sellerId,
+          productId: parts[0],
+          variantId: parts[1] || undefined,
+          sku: item.sku || variant?.sku,
+          image: item.image || variant?.image,
+          title: item.title,
+          quantity: item.quantity,
+          unitPrice: getProductCountryPrice(item, selectedCountry),
+          basePriceAed: getItemBasePriceAed(item),
+        };
+      })
+    );
+
+  const handlePaypalCreateOrder = async () => {
+    const validationMessage =
+      getStepValidationMessage(1) ||
+      getStepValidationMessage(2) ||
+      getStepValidationMessage(3) ||
+      getStepValidationMessage(4);
+    if (validationMessage) {
+      setPageError(validationMessage);
+      throw new Error(validationMessage);
+    }
+    if (!paypalClientId) {
+      const message = "PayPal checkout is not configured for this storefront.";
+      setPaypalError(message);
+      throw new Error(message);
+    }
+
+    setPaypalError("");
+    setPaypalStatus("Starting protected PayPal checkout...");
+    const ordersBySellerMap = await resolveCanonicalSellerGroups();
+    const response = await paypalAPI.createOrder({
+      items: buildPrepaidPaymentItems(ordersBySellerMap),
+      shippingAddress: buildCheckoutShippingAddress(),
+      deliveryCountry: selectedCountry,
+      currency: country.currency,
+      shippingFee,
+      vatAmount,
+      expectedTotal: totalPayable,
+      customerName: `${form.firstName} ${form.lastName}`.trim(),
+      customerEmail: form.email,
+      customerPhone: normalizedPhone,
+    });
+
+    if (!response?.paypalOrderId) {
+      throw new Error("PayPal checkout could not be started.");
+    }
+
+    setPaypalStatus("PayPal window is ready. Complete payment to place your order.");
+    return response.paypalOrderId;
+  };
+
+  const handlePaypalApprove = async (paypalOrderId?: string) => {
+    if (!paypalOrderId) {
+      throw new Error("PayPal did not return an order id.");
+    }
+
+    setIsProcessing(true);
+    setPaypalError("");
+    setPaypalStatus("Verifying PayPal payment securely...");
+    const response = await paypalAPI.captureOrder({ paypalOrderId });
+    const primaryOrder = response?.order || response?.orders?.[0];
+    if (!response?.success || !primaryOrder) {
+      throw new Error(response?.error || "PayPal payment was not verified.");
+    }
+
+    hydrateOrderFromApi(primaryOrder);
+    clearCart();
+    setPaypalStatus("Payment verified. Opening your order confirmation...");
+    navigate(
+      primaryOrder?.trackingCode
+        ? `/order-success?tracking=${encodeURIComponent(primaryOrder.trackingCode)}`
+        : primaryOrder?.orderId || primaryOrder?.orderNumber || primaryOrder?.id
+        ? `/order-success?order=${encodeURIComponent(String(primaryOrder.orderId || primaryOrder.orderNumber || primaryOrder.id))}`
+        : "/order-success"
+    );
+  };
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -690,29 +805,23 @@ export default function Checkout() {
       setPageError("");
       const ordersBySellerMap = await resolveCanonicalSellerGroups();
 
+      if (form.paymentMethod === "paypal") {
+        setPageError("Complete the PayPal buttons in the payment step to place this order securely.");
+        setCurrentStep(4);
+        return;
+      }
+
       if (form.paymentMethod !== "cod") {
-        const paymentItems = Array.from(ordersBySellerMap.entries()).flatMap(([sellerId, sellerItems]) =>
-          sellerItems.map((item: any) => {
-            const parts = String(item.id).split("::");
-            return {
-              sellerId,
-              productId: parts[0],
-              quantity: item.quantity,
-              unitPrice: getItemBasePriceAed(item),
-            };
-          })
-        );
+        const paymentItems = buildPrepaidPaymentItems(ordersBySellerMap).map((item) => ({
+          sellerId: item.sellerId,
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.basePriceAed,
+        }));
 
         const session = await paymentAPI.createStripeCheckoutSession({
           items: paymentItems,
-          shippingAddress: {
-            emirate: form.city,
-            area: form.area,
-            building: form.building,
-            flat: form.flat,
-            addressLine: form.address,
-            method: form.deliveryType,
-          },
+          shippingAddress: buildCheckoutShippingAddress(),
           deliveryCountry: selectedCountry,
         });
 
@@ -751,25 +860,7 @@ export default function Checkout() {
           verificationToken: form.paymentMethod === "cod" ? otpSessionId : undefined,
           shippingCost: sellerShippingCost,
           deliveryType: activeShipping.label,
-          shippingAddress: {
-            emirate: form.city,
-            region: form.city,
-            area: form.area,
-            building: form.building,
-            flat: form.flat,
-            landmark: form.landmark,
-            addressLine: form.address,
-            method: form.deliveryType,
-            city: form.city,
-            district: form.area,
-            street: form.address,
-            buildingNumber: form.building,
-            postalCode: form.postalCode,
-            country: selectedCountry,
-            countryCode: selectedCountry,
-            countryName: country.name,
-            phone: normalizedPhone,
-          },
+          shippingAddress: buildCheckoutShippingAddress(),
           paymentMethod: form.paymentMethod,
           deliveryCountry: selectedCountry,
           countryCode: selectedCountry,
@@ -1163,6 +1254,8 @@ export default function Checkout() {
                               if (!option.enabled) return;
                               setForm((prev) => ({ ...prev, paymentMethod: option.id }));
                               if (option.id !== "cod") resetOtpState();
+                              setPaypalError("");
+                              setPaypalStatus("");
                               setPageError("");
                             }}
                             className={`rounded-2xl border p-4 text-left transition ${
@@ -1285,7 +1378,88 @@ export default function Checkout() {
                     </div>
                     {form.paymentMethod !== "cod" && (
                       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
-                        Secure prepaid payment is required for worldwide shipping. Customs or import duties may apply depending on the destination country and are normally collected by the courier or local customs authority. Card checkout is currently settled in AED while local prices remain visible on ExShopi.
+                        Secure prepaid payment is required for worldwide shipping. Customs or import duties may apply depending on the destination country and are normally collected by the courier or local customs authority. {form.paymentMethod === "paypal" ? paypalCurrencyNotice : "Card checkout is currently settled in AED while local prices remain visible on ExShopi."}
+                      </div>
+                    )}
+
+                    {form.paymentMethod === "paypal" && (
+                      <div className="rounded-2xl border border-[#0070ba]/20 bg-white p-4 shadow-sm">
+                        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-md bg-[#003087] px-3 py-1 text-sm font-black tracking-tight text-white">
+                                PayPal
+                              </span>
+                              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                                Buyer Protection
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm font-semibold text-slate-600">
+                              Secure worldwide payments protected by PayPal. Your ExShopi order is created only after backend payment verification succeeds.
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-4 py-3 text-right">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Protected Total</p>
+                            <p className="text-lg font-black text-slate-900">{formatCurrencyForCountry(totalPayable, selectedCountry)}</p>
+                          </div>
+                        </div>
+
+                        {!paypalClientId ? (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                            PayPal checkout needs VITE_PAYPAL_CLIENT_ID before customers can pay with PayPal.
+                          </div>
+                        ) : (
+                          <PayPalScriptProvider
+                            options={{
+                              clientId: paypalClientId,
+                              currency: paypalCurrency,
+                              intent: "capture",
+                              components: "buttons",
+                            }}
+                          >
+                            <PayPalButtons
+                              style={{
+                                layout: "vertical",
+                                color: "gold",
+                                shape: "rect",
+                                label: "paypal",
+                                height: 45,
+                              }}
+                              disabled={isProcessing || !authChecked || !authUser?.id || authRole !== "customer"}
+                              createOrder={async () => handlePaypalCreateOrder()}
+                              onApprove={async (data: any) => {
+                                try {
+                                  await handlePaypalApprove(data?.orderID);
+                                } catch (error: any) {
+                                  setPaypalError(error?.message || "PayPal payment could not be verified.");
+                                  setPaypalStatus("");
+                                } finally {
+                                  setIsProcessing(false);
+                                }
+                              }}
+                              onCancel={() => {
+                                setPaypalStatus("");
+                                setPaypalError("PayPal payment was cancelled. Your order was not created.");
+                              }}
+                              onError={(error: any) => {
+                                console.error("PayPal checkout failed:", error);
+                                setPaypalStatus("");
+                                setPaypalError("PayPal checkout failed. Please try again or choose another prepaid method.");
+                              }}
+                            />
+                          </PayPalScriptProvider>
+                        )}
+
+                        {paypalStatus && (
+                          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                            {paypalStatus}
+                          </div>
+                        )}
+                        {paypalError && (
+                          <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                            {paypalError}
+                          </div>
+                        )}
                       </div>
                     )}
                     <div id="checkout-firebase-recaptcha" />
@@ -1396,7 +1570,7 @@ export default function Checkout() {
                     Back
                   </button>
                 )}
-                {currentStep < 5 && (
+                {currentStep < 5 && !(currentStep === 4 && form.paymentMethod === "paypal") && (
                   <button
                     onClick={handleNextStep}
                     className="ml-auto flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-white transition-colors"
@@ -1404,6 +1578,11 @@ export default function Checkout() {
                     Next
                     <ArrowRight className="h-4 w-4" />
                   </button>
+                )}
+                {currentStep === 4 && form.paymentMethod === "paypal" && (
+                  <div className="ml-auto max-w-sm rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-900">
+                    Complete PayPal above to verify payment and create your order.
+                  </div>
                 )}
                 {currentStep === 5 && (
                   <button

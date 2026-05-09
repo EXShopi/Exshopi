@@ -78,8 +78,8 @@ export const PAYMENT_METHOD_CATALOG: Record<PaymentMethodCode, Omit<CheckoutPaym
   paypal: {
     id: 'paypal',
     label: 'PayPal',
-    description: 'PayPal-ready display. Connect the PayPal checkout endpoint before enabling.',
-    badge: 'UI-ready',
+    description: 'Secure worldwide PayPal checkout with backend payment verification.',
+    badge: 'Protected',
   },
   payoneer: {
     id: 'payoneer',
@@ -552,6 +552,18 @@ export const SUPPORTED_COUNTRY_CODES = Object.keys(COUNTRY_CONFIG) as SupportedC
 export const DEFAULT_COUNTRY_CODE: SupportedCountryCode = 'AE';
 export const GCC_COUNTRY_CODES: SupportedCountryCode[] = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'];
 export const INSTALLMENT_COUNTRY_CODES: SupportedCountryCode[] = ['AE', 'SA'];
+export const PAYPAL_SUPPORTED_CURRENCIES: SupportedCurrencyCode[] = [
+  'AUD',
+  'CAD',
+  'CNY',
+  'EUR',
+  'GBP',
+  'HKD',
+  'JPY',
+  'NZD',
+  'SGD',
+  'USD',
+];
 
 function toSafeAmount(value: number | string | null | undefined) {
   const amount = Number(value ?? 0);
@@ -585,10 +597,9 @@ export function getCheckoutPaymentOptions(countryCode?: string | null, options?:
   const country = getCountryConfig(countryCode);
   const includeUiReady = options?.includeUiReady ?? true;
   const enabled: PaymentMethodCode[] = isCodEnabledCountry(country.code)
-    ? ['cod', 'stripe_card']
-    : ['stripe_card'];
+    ? ['cod', 'paypal', 'stripe_card']
+    : ['paypal', 'stripe_card'];
   const uiReady: PaymentMethodCode[] = [
-    'paypal',
     'payoneer',
     'apple_pay',
     'google_pay',
@@ -615,6 +626,20 @@ export function convertFromAed(amountAed: number | string | null | undefined, co
   const safeAmount = toSafeAmount(amountAed);
   const config = getCountryConfig(countryCode);
   return Number((safeAmount * config.fallbackExchangeRateFromAed).toFixed(2));
+}
+
+export function getPaypalCurrencyForCountry(countryCode?: string | null): SupportedCurrencyCode {
+  const currency = getCountryConfig(countryCode).currency;
+  return PAYPAL_SUPPORTED_CURRENCIES.includes(currency) ? currency : 'USD';
+}
+
+export function getPaypalCurrencyNotice(countryCode?: string | null) {
+  const country = getCountryConfig(countryCode);
+  const paypalCurrency = getPaypalCurrencyForCountry(country.code);
+  if (paypalCurrency === country.currency) {
+    return `PayPal will charge in ${paypalCurrency}.`;
+  }
+  return `PayPal will charge in ${paypalCurrency}; ${country.currency} prices remain visible on ExShopi.`;
 }
 
 export function applySellingFriendlyPrice(amount: number | string | null | undefined, countryCode?: string | null) {

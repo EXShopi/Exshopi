@@ -309,7 +309,7 @@ export default function FloatingChatbot() {
         return {
           id: messageId(),
           role: "bot",
-          text: "ExShopi supports secure checkout options including Cash on Delivery, card payment when available, and assisted payments such as bank transfer for approved orders. For PayPal or Payoneer availability, contact support before placing the order.",
+          text: "ExShopi supports UAE Cash on Delivery with OTP, secure card checkout, and PayPal for eligible prepaid worldwide orders. Payoneer and assisted payment options remain available where shown in checkout.",
           cta,
         };
       }

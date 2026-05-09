@@ -1767,6 +1767,72 @@ export const paymentAPI = {
   },
 };
 
+export const paypalAPI = {
+  async createOrder(data: {
+    items: Array<{
+      sellerId: string;
+      productId: string;
+      variantId?: string;
+      sku?: string;
+      image?: string;
+      title?: string;
+      quantity: number;
+      unitPrice: number;
+    }>;
+    shippingAddress: {
+      emirate?: string;
+      region?: string;
+      area?: string;
+      building?: string;
+      flat?: string;
+      landmark?: string;
+      addressLine: string;
+      method?: string;
+      city?: string;
+      district?: string;
+      street?: string;
+      buildingNumber?: string;
+      postalCode?: string;
+      country?: string;
+      countryCode?: string;
+      countryName?: string;
+      phone?: string;
+    };
+    deliveryCountry: string;
+    currency: string;
+    shippingFee: number;
+    vatAmount: number;
+    expectedTotal: number;
+    customerName?: string;
+    customerEmail?: string;
+    customerPhone?: string;
+  }) {
+    const res = await fetchWithAuthRetry('/paypal/create-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
+
+  async captureOrder(data: { paypalOrderId: string }) {
+    const res = await fetchWithAuthRetry('/paypal/capture-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
+};
+
 // ==================== TRACKING ====================
 export const trackingAPI = {
   async get(trackingCode: string) {

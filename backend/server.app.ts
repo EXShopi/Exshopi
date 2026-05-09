@@ -12,6 +12,7 @@ import { prismaRuntime } from './prismaRuntime';
 import { supabaseRuntime } from './supabaseRuntime';
 import { ensureUploadDir, uploadDataUrl } from './uploadStorage';
 import { createStripeCheckoutSession, verifyStripeWebhookSignature } from './stripeService';
+import { createPaypalRouter, type CreatePaypalPaidOrdersInput } from './routes/paypal';
 import { sendTransactionalEmail } from './emailService';
 import { sendNewOrderNotificationToAdmin, sendSellerSignupConfirmationEmail, sendSellerApplicationNotificationToAdmin } from './emailService.helpers';
 import {
@@ -2725,7 +2726,7 @@ const buildOrderPayloadFromItems = async ({
   customerEmail?: string;
   customerPhone?: string;
   paymentMethod: 'cod' | 'card' | 'tabby' | 'tamara' | 'bank_transfer';
-  paymentProvider: 'cod' | 'stripe' | 'tabby' | 'tamara' | 'bank_transfer';
+  paymentProvider: 'cod' | 'stripe' | 'paypal' | 'tabby' | 'tamara' | 'bank_transfer';
   paymentStatus: 'pending' | 'awaiting_payment' | 'cod_pending' | 'completed' | 'paid' | 'failed';
   deliveryCountry: string;
   paymentReference?: string;
@@ -2876,6 +2877,139 @@ const buildOrderPayloadFromItems = async ({
     orderId: generateOrderId(),
   };
 };
+
+app.use(
+  '/api/paypal',
+  createPaypalRouter({
+    authMiddleware,
+    createPaidOrders: async ({
+      customerId,
+      items,
+      shippingAddress,
+      deliveryCountry,
+      shippingFee,
+      payment,
+      customerName,
+      customerEmail,
+      customerPhone,
+    }: CreatePaypalPaidOrdersInput) => {
+      const groupedItems = new Map<string, typeof items>();
+      items.forEach((item) => {
+        const sellerId = String(item.sellerId || '').trim();
+        if (!sellerId) {
+          throw new Error('PayPal order item is missing seller information.');
+        }
+        if (!groupedItems.has(sellerId)) {
+          groupedItems.set(sellerId, []);
+        }
+        groupedItems.get(sellerId)!.push(item);
+      });
+
+      const createdOrders: any[] = [];
+      let sellerIndex = 0;
+      for (const [sellerId, sellerItems] of groupedItems.entries()) {
+        const orderPayload: any = await buildOrderPayloadFromItems({
+          customerId,
+          sellerId,
+          normalizedItems: sellerItems.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            sku: item.sku,
+            image: item.image,
+            quantity: item.quantity,
+            unitPrice: Number(item.unitPrice || 0),
+          })),
+          shippingCost: sellerIndex === 0 ? shippingFee : 0,
+          shippingAddress: {
+            ...shippingAddress,
+            source: 'paypal',
+            paypal: {
+              orderId: payment.paypalOrderId,
+              captureId: payment.captureId,
+              payerEmail: payment.payerEmail,
+              capturedAmount: payment.capturedAmount,
+              currency: payment.currency,
+              capturedAt: payment.capturedAt,
+            },
+          },
+          customerName,
+          customerEmail,
+          customerPhone,
+          paymentMethod: 'card',
+          paymentProvider: 'paypal',
+          paymentStatus: 'completed',
+          deliveryCountry,
+          paymentReference: payment.captureId,
+          paymentSessionId: payment.paypalOrderId,
+          paidAt: payment.capturedAt,
+        });
+        orderPayload.status = 'confirmed';
+
+        const order = prismaRuntime.enabled
+          ? await prismaRuntime.createOrder(orderPayload)
+          : db.createOrder(orderPayload);
+        if (!order) {
+          throw new Error('Failed to create PayPal paid order.');
+        }
+
+        const timestamp = new Date().toISOString();
+        if (prismaRuntime.enabled) {
+          await prismaRuntime.addTrackingEvent(order.id, 'confirmed', timestamp, 'PayPal payment verified');
+        } else {
+          db.addTrackingEvent(order.id, 'confirmed', timestamp, 'PayPal payment verified');
+        }
+
+        const enriched = prismaRuntime.enabled
+          ? await serializeMarketplaceOrderAsync(order)
+          : serializeMarketplaceOrder(order);
+
+        createdOrders.push(enriched);
+        sellerIndex += 1;
+
+        try {
+          sendSseEvent('order-created', {
+            id: enriched.id,
+            orderId: enriched.orderId,
+            status: enriched.status,
+            subtotal: enriched.subtotal,
+            sellerId: enriched.sellerId,
+            createdAt: enriched.createdAt,
+          });
+          pushNotification({
+            audience: 'customer',
+            audienceId: customerId,
+            title: 'Payment confirmed',
+            message: `Your PayPal order ${enriched.orderId || orderPayload.orderId} is confirmed.`,
+            type: 'order_created',
+            entityType: 'order',
+            entityId: enriched.id || order.id,
+          });
+          pushNotification({
+            audience: 'seller',
+            audienceId: enriched.seller?.userId || enriched.sellerId,
+            title: 'Paid order received',
+            message: `A PayPal paid order ${enriched.orderId || orderPayload.orderId} is ready to process.`,
+            type: 'order_created',
+            entityType: 'order',
+            entityId: enriched.id || order.id,
+          });
+          recordMarketplaceActivity({
+            actorId: customerId,
+            actorRole: 'customer',
+            entityType: 'order',
+            entityId: enriched.id || order.id,
+            action: 'paypal_order_created',
+            summary: `PayPal payment verified for order ${enriched.orderId || orderPayload.orderId}`,
+          });
+        } catch (sideEffectError) {
+          console.error('[paypal] post-order side effects failed', sideEffectError);
+        }
+      }
+
+      return createdOrders;
+    },
+  })
+);
 
 const buildSessionPayload = (userId: string) => {
   const user = db.getUser(userId);
