@@ -574,6 +574,10 @@
   }
 }
 
+.exshopi-loader-bar-fill {
+  animation: exshopi-loader-sweep 1.15s ease-in-out infinite;
+}
+
 
 @media print {
   header, footer, nav, .no-print, button, .btn-premium {

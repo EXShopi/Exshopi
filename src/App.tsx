@@ -103,7 +103,7 @@ function PageLoader() {
             </div>
           </div>
           <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/15">
-            <div className="h-full w-1/2 animate-[exshopi-loader-sweep_1.15s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-cyan-300 via-white to-blue-300" />
+            <div className="exshopi-loader-bar-fill h-full w-1/2 rounded-full bg-gradient-to-r from-cyan-300 via-white to-blue-300" />
           </div>
         </div>
         <div className="space-y-3 bg-slate-50 p-4">
@@ -133,7 +133,6 @@ function PageLoader() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
 
