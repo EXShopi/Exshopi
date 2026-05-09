@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useCartStore } from "../store/cart";
 import { useOrderStore } from "../store/orders";
-import { codAPI, orderAPI, productAPI, userAPI } from "../services/api";
+import { codAPI, orderAPI, paymentAPI, productAPI, userAPI } from "../services/api";
 import { formatCurrencyForCountry } from "../lib/currency";
 import { useAuthStore } from "../store/auth";
 import AuthService from "../lib/authService";
@@ -33,18 +33,28 @@ import {
   COUNTRY_CONFIG,
   SUPPORTED_COUNTRY_CODES,
   calculateVat,
+  getCheckoutPaymentOptions,
   getCountryConfig,
+  getDefaultPaymentMethod,
   getProductCountryPrice,
   getShippingOption,
+  isCodEnabledCountry,
+  isPaymentMethodAllowed,
   isSupportedCountryCode,
+  type PaymentMethodCode,
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 import { getInvalidPhoneMessage, getPhonePlaceholder, isValidPhoneForCountry, normalizePhoneByCountry } from "../utils/phone";
 
+function getItemBasePriceAed(item: any) {
+  const amount = Number(item?.basePriceAED ?? item?.priceUae ?? item?.price ?? 0);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
 export default function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items, getCartTotal, clearCart } = useCartStore();
+  const { items, clearCart } = useCartStore();
   const removeCartItem = useCartStore((state) => state.removeItem);
   const hydrateOrderFromApi = useOrderStore((state) => state.hydrateOrderFromApi);
   const authUser = useAuthStore((state) => state.user);
@@ -79,6 +89,8 @@ export default function Checkout() {
   const country = getCountryConfig(selectedCountry);
   const activeShipping = getShippingOption(selectedCountry, selectedShippingOption);
   const shippingOptions = country.shippingOptions.map((option) => getShippingOption(selectedCountry, option.id));
+  const canUseCod = isCodEnabledCountry(selectedCountry);
+  const paymentOptions = useMemo(() => getCheckoutPaymentOptions(selectedCountry), [selectedCountry]);
 
   const [form, setForm] = useState({
     // Step 1: Customer Info
@@ -97,7 +109,7 @@ export default function Checkout() {
     // Step 3: Delivery Method
     deliveryType: activeShipping.id,
     // Step 4: Payment
-    paymentMethod: "cod",
+    paymentMethod: getDefaultPaymentMethod(selectedCountry),
   });
 
   const total = useMemo(
@@ -135,8 +147,11 @@ export default function Checkout() {
       ...prev,
       city: selectedCity,
       deliveryType: activeShipping.id,
+      paymentMethod: isPaymentMethodAllowed(selectedCountry, prev.paymentMethod)
+        ? (prev.paymentMethod as PaymentMethodCode)
+        : getDefaultPaymentMethod(selectedCountry),
     }));
-  }, [activeShipping.id, selectedCity]);
+  }, [activeShipping.id, selectedCity, selectedCountry]);
 
   useEffect(() => {
     let active = true;
@@ -179,6 +194,7 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
+    if (form.paymentMethod !== "cod") return;
     const persistedSession = getActiveFirebasePhoneOtpSession();
     if (!persistedSession?.phone || !normalizedPhone) return;
     if (persistedSession.phone !== normalizedPhone || otpVerified) return;
@@ -193,7 +209,7 @@ export default function Checkout() {
       current ||
       `Verification code already sent to ${persistedSession.phone}. Enter the 6-digit code to continue your COD order.`
     );
-  }, [normalizedPhone, otpVerified]);
+  }, [form.paymentMethod, normalizedPhone, otpVerified]);
 
   useEffect(() => {
     let mounted = true;
@@ -451,6 +467,9 @@ export default function Checkout() {
       ...prev,
       city: COUNTRY_CONFIG[nextCountry].defaultCity,
       deliveryType: COUNTRY_CONFIG[nextCountry].shippingOptions[0].id,
+      paymentMethod: isPaymentMethodAllowed(nextCountry, prev.paymentMethod)
+        ? (prev.paymentMethod as PaymentMethodCode)
+        : getDefaultPaymentMethod(nextCountry),
       postalCode: nextCountry === "AE" ? "" : prev.postalCode,
     }));
     resetOtpState();
@@ -491,7 +510,19 @@ export default function Checkout() {
       return "Please select your delivery method.";
     }
 
-    if (step === 4 && !(form.paymentMethod === "cod" && otpVerified)) {
+    if (step === 4 && !form.paymentMethod) {
+      return "Please select a secure payment method.";
+    }
+
+    if (step === 4 && !isPaymentMethodAllowed(selectedCountry, form.paymentMethod)) {
+      return "This payment method is not available for the selected country yet.";
+    }
+
+    if (step === 4 && form.paymentMethod === "cod" && !canUseCod) {
+      return "Cash on Delivery is available only in the UAE. Please select a prepaid method for international delivery.";
+    }
+
+    if (step === 4 && form.paymentMethod === "cod" && !otpVerified) {
       return "Please complete the COD verification step.";
     }
 
@@ -648,8 +679,9 @@ export default function Checkout() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateStep(4)) {
-      setPageError("Please complete the COD verification step.");
+    const finalValidationMessage = getStepValidationMessage(4);
+    if (finalValidationMessage) {
+      setPageError(finalValidationMessage);
       return;
     }
 
@@ -657,6 +689,40 @@ export default function Checkout() {
       setIsProcessing(true);
       setPageError("");
       const ordersBySellerMap = await resolveCanonicalSellerGroups();
+
+      if (form.paymentMethod !== "cod") {
+        const paymentItems = Array.from(ordersBySellerMap.entries()).flatMap(([sellerId, sellerItems]) =>
+          sellerItems.map((item: any) => {
+            const parts = String(item.id).split("::");
+            return {
+              sellerId,
+              productId: parts[0],
+              quantity: item.quantity,
+              unitPrice: getItemBasePriceAed(item),
+            };
+          })
+        );
+
+        const session = await paymentAPI.createStripeCheckoutSession({
+          items: paymentItems,
+          shippingAddress: {
+            emirate: form.city,
+            area: form.area,
+            building: form.building,
+            flat: form.flat,
+            addressLine: form.address,
+            method: form.deliveryType,
+          },
+          deliveryCountry: selectedCountry,
+        });
+
+        if (!session?.checkoutUrl) {
+          throw new Error("Secure prepaid checkout could not be started.");
+        }
+
+        window.location.href = session.checkoutUrl;
+        return;
+      }
 
       const createdOrders: any[] = [];
 
@@ -682,7 +748,7 @@ export default function Checkout() {
           customerName: `${form.firstName} ${form.lastName}`.trim(),
           customerEmail: form.email,
           customerPhone: normalizedPhone,
-          verificationToken: otpSessionId,
+          verificationToken: form.paymentMethod === "cod" ? otpSessionId : undefined,
           shippingCost: sellerShippingCost,
           deliveryType: activeShipping.label,
           shippingAddress: {
@@ -704,7 +770,7 @@ export default function Checkout() {
             countryName: country.name,
             phone: normalizedPhone,
           },
-          paymentMethod: "cod",
+          paymentMethod: form.paymentMethod,
           deliveryCountry: selectedCountry,
           countryCode: selectedCountry,
           countryName: country.name,
@@ -901,7 +967,11 @@ export default function Checkout() {
                         placeholder={getPhonePlaceholder(selectedCountry)}
                         className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       />
-                      <p className="mt-2 text-xs font-semibold text-slate-500">{country.shortName} mobile verification is required before COD order confirmation.</p>
+                      <p className="mt-2 text-xs font-semibold text-slate-500">
+                        {canUseCod
+                          ? "UAE mobile verification is required before COD order confirmation."
+                          : `${country.shortName} phone number is used for courier delivery updates.`}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1077,10 +1147,46 @@ export default function Checkout() {
                 <div>
                   <h2 className="mb-8 text-3xl font-black text-slate-900 flex items-center gap-3">
                     <Smartphone className="h-8 w-8 text-blue-600" />
-                    COD Verification
+                    Secure Payment
                   </h2>
 
                   <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {paymentOptions.map((option) => {
+                        const active = form.paymentMethod === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            disabled={!option.enabled}
+                            onClick={() => {
+                              if (!option.enabled) return;
+                              setForm((prev) => ({ ...prev, paymentMethod: option.id }));
+                              if (option.id !== "cod") resetOtpState();
+                              setPageError("");
+                            }}
+                            className={`rounded-2xl border p-4 text-left transition ${
+                              active
+                                ? "border-blue-500 bg-white shadow-[0_14px_34px_rgba(37,99,235,0.14)]"
+                                : option.enabled
+                                  ? "border-slate-200 bg-white hover:border-blue-300"
+                                  : "cursor-not-allowed border-slate-200 bg-slate-100 opacity-60"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-black text-slate-900">{option.label}</p>
+                                <p className="mt-1 text-sm font-medium text-slate-600">{option.description}</p>
+                              </div>
+                              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">
+                                {option.badge}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
                     {!authChecked && (
                       <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
                         Restoring your checkout session...
@@ -1088,20 +1194,29 @@ export default function Checkout() {
                     )}
                     {authChecked && (!authUser?.id || authRole !== "customer") && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                        Sign in first. COD verification and order placement require a customer account.
+                        Sign in first. Secure checkout and order placement require a customer account.
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-6">
                       <div>
-                        <p className="text-lg font-black text-slate-900">Cash on Delivery</p>
-                        <p className="mt-1 text-sm font-medium text-slate-600">Pay on delivery in {country.currency}. ExShopi requires {country.shortName} phone verification before the order is sent to sellers.</p>
+                        <p className="text-lg font-black text-slate-900">
+                          {form.paymentMethod === "cod" ? "Cash on Delivery" : "Prepaid International Order"}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-slate-600">
+                          {form.paymentMethod === "cod"
+                            ? `Pay on delivery in ${country.currency}. ExShopi requires UAE phone verification before the order is sent to sellers.`
+                            : `International orders to ${country.name} are prepaid only. ExShopi prepares the order with customs-ready invoice, courier tracking, and secure payment confirmation.`}
+                        </p>
                       </div>
                       <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-right">
-                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Total Payable</p>
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">
+                          {form.paymentMethod === "cod" ? "Total Payable" : "Total Due"}
+                        </p>
                         <p className="mt-1 text-2xl font-black text-emerald-900">{formatCurrencyForCountry(totalPayable, selectedCountry)}</p>
                       </div>
                     </div>
 
+                    {form.paymentMethod === "cod" && (
                     <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                       <div>
                         <label className="mb-2 block text-sm font-bold text-slate-900">Phone Verification</label>
@@ -1133,14 +1248,15 @@ export default function Checkout() {
                         {sendingOtp ? "Sending..." : otpCooldownSeconds > 0 ? `Resend in ${otpCooldownSeconds}s` : "Send Code"}
                       </button>
                     </div>
+                    )}
 
-                    {otpMessage && (
+                    {form.paymentMethod === "cod" && otpMessage && (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                         {otpMessage}
                       </div>
                     )}
 
-                    {otpError && (
+                    {form.paymentMethod === "cod" && otpError && (
                       <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
                         {otpError}
                       </div>
@@ -1157,8 +1273,8 @@ export default function Checkout() {
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Verification</p>
-                        <p className={`mt-2 text-xl font-black ${otpVerified ? "text-emerald-600" : "text-slate-900"}`}>
-                          {otpVerified ? "Verified" : "Required"}
+                        <p className={`mt-2 text-xl font-black ${otpVerified || form.paymentMethod !== "cod" ? "text-emerald-600" : "text-slate-900"}`}>
+                          {form.paymentMethod !== "cod" ? "Prepaid" : otpVerified ? "Verified" : "Required"}
                         </p>
                         {!otpVerified && otpSessionId && (
                           <p className="mt-2 text-xs font-semibold text-slate-500">
@@ -1167,6 +1283,11 @@ export default function Checkout() {
                         )}
                       </div>
                     </div>
+                    {form.paymentMethod !== "cod" && (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
+                        Secure prepaid payment is required for worldwide shipping. Customs or import duties may apply depending on the destination country and are normally collected by the courier or local customs authority. Card checkout is currently settled in AED while local prices remain visible on ExShopi.
+                      </div>
+                    )}
                     <div id="checkout-firebase-recaptcha" />
                   </div>
                 </div>
@@ -1236,11 +1357,13 @@ export default function Checkout() {
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-6">
-                      <h3 className="mb-4 font-bold text-slate-900">COD Summary</h3>
+                      <h3 className="mb-4 font-bold text-slate-900">Payment Summary</h3>
                       <div className="space-y-2 text-sm text-slate-600">
                         <div className="flex justify-between">
                           <span>Payment Method</span>
-                          <span className="font-bold text-slate-900">Cash on Delivery</span>
+                          <span className="font-bold text-slate-900">
+                            {paymentOptions.find((option) => option.id === form.paymentMethod)?.label || "Secure Payment"}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span>Delivery Charges</span>
@@ -1251,7 +1374,9 @@ export default function Checkout() {
                           <span className="font-bold text-slate-900">{formatCurrencyForCountry(vatAmount, selectedCountry)}</span>
                         </div>
                         <div className="flex justify-between border-t border-slate-200 pt-3">
-                          <span className="font-bold text-slate-900">Total Payable on Delivery</span>
+                          <span className="font-bold text-slate-900">
+                            {form.paymentMethod === "cod" ? "Total Payable on Delivery" : "Total Prepaid Amount"}
+                          </span>
                           <span className="font-black text-slate-900">{formatCurrencyForCountry(totalPayable, selectedCountry)}</span>
                         </div>
                       </div>
@@ -1345,18 +1470,27 @@ export default function Checkout() {
               </div>
 
               <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-emerald-200">
-                You will pay cash when your order is delivered
+                {currentStep < 4
+                  ? `${country.name} delivery: ${activeShipping.eta}`
+                  : form.paymentMethod === "cod"
+                  ? "You will pay cash when your order is delivered"
+                  : "International delivery requires prepaid confirmation before dispatch"}
               </div>
 
               <div className="mt-6 space-y-2">
                 <div className="flex items-center gap-2 text-xs text-white/70">
                   <ShieldCheck className="h-4 w-4" />
-                  COD protected by {country.shortName} phone OTP
+                  {form.paymentMethod === "cod" ? "COD protected by UAE phone OTP" : "Secure prepaid checkout and buyer protection"}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-white/70">
                   <Truck className="h-4 w-4" />
                   {activeShipping.eta}
                 </div>
+                {selectedCountry !== "AE" && (
+                  <div className="text-xs leading-5 text-white/60">
+                    Customs or import duties may apply in {country.name}.
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -23,6 +23,7 @@ export default function FirstVisitCountryModal() {
   const setCountry = useCountryStore((state) => state.setCountry);
   const hasExplicitSelection = useCountryStore((state) => state.hasExplicitSelection);
   const markCountryConfirmed = useCountryStore((state) => state.markCountryConfirmed);
+  const autoDetectCountry = useCountryStore((state) => state.autoDetectCountry);
   const language = useLanguageStore((state) => state.lang);
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -31,6 +32,7 @@ export default function FirstVisitCountryModal() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    autoDetectCountry();
 
     let cancelled = false;
     let timeoutId: number | null = null;
@@ -81,7 +83,7 @@ export default function FirstVisitCountryModal() {
         window.clearTimeout(effectTimeoutId);
       }
     };
-  }, [hasExplicitSelection]);
+  }, [autoDetectCountry, hasExplicitSelection]);
 
   useEffect(() => {
     if (!visible) return;
@@ -103,7 +105,7 @@ export default function FirstVisitCountryModal() {
           code: countryCode,
           title: config.name,
           shortTitle: config.shortName,
-          subtitle: `${config.currency} • ${config.deliveryMessage}`,
+          subtitle: `${config.currency} - ${config.deliveryMessage}`,
           flag: getCountryFlag(countryCode),
         };
       }),

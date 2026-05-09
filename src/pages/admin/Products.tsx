@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { adminProductAPI, authFetch, invalidateProductCaches } from '../../services/api';
 import { AlertCircle, Camera, CheckCircle2, Copy, Download, Eye, Package2, Pencil, Search, Store, Trash2, Upload, X, XCircle } from 'lucide-react';
 import { formatCurrencyForCountry } from '../../lib/currency';
-import { COUNTRY_CONFIG, convertFromAed, convertFromAedSmart, SupportedCountryCode } from '../../lib/countryConfig';
+import { COUNTRY_CONFIG, convertFromAed, convertFromAedSmart } from '../../lib/countryConfig';
 import { buildProductPath } from "../../lib/seo";
 import { useNavigate } from 'react-router-dom';
 import { OrbitLoader } from '../../components/ui/OrbitLoader';
@@ -19,9 +19,10 @@ const statusTone: Record<string, string> = {
   archived: 'bg-slate-100 text-slate-700',
 };
 
-const GCC_PRICE_CODES: SupportedCountryCode[] = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'];
+type GccCountryCode = 'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM';
+const GCC_PRICE_CODES: GccCountryCode[] = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'];
 
-const productCountryPriceFields: Record<SupportedCountryCode, string> = {
+const productCountryPriceFields: Record<GccCountryCode, string> = {
   AE: 'priceUae',
   SA: 'priceKsa',
   QA: 'priceQatar',
@@ -35,7 +36,7 @@ const toEditablePrice = (value: unknown) => {
   return Number.isFinite(numeric) ? String(numeric) : '';
 };
 
-const readCountryPrice = (product: any, countryCode: SupportedCountryCode) => {
+const readCountryPrice = (product: any, countryCode: GccCountryCode) => {
   const directValue = product?.[productCountryPriceFields[countryCode]];
   const countryEntry = product?.pricesByCountry?.[countryCode] || product?.specs?.pricesByCountry?.[countryCode];
   const jsonValue =
@@ -56,7 +57,7 @@ const buildCountryPricesFromAed = (basePriceAED: number, roundPrices: boolean) =
         : convertFromAed(basePriceAED, countryCode);
     acc[countryCode] = Number(converted.toFixed(2));
     return acc;
-  }, {} as Record<SupportedCountryCode, number>);
+  }, {} as Record<GccCountryCode, number>);
 };
 
 const emitAdminToast = (type: 'success' | 'error', message: string) => {
@@ -105,7 +106,7 @@ export function AdminProducts() {
   const [importingBundledDrafts, setImportingBundledDrafts] = useState(false);
   const [importNotice, setImportNotice] = useState('');
   const [priceEditorProduct, setPriceEditorProduct] = useState<any | null>(null);
-  const [priceEditorValues, setPriceEditorValues] = useState<Record<SupportedCountryCode, string>>({
+  const [priceEditorValues, setPriceEditorValues] = useState<Record<GccCountryCode, string>>({
     AE: '',
     SA: '',
     QA: '',
@@ -262,7 +263,7 @@ export function AdminProducts() {
     const nextValues = GCC_PRICE_CODES.reduce((acc, countryCode) => {
       acc[countryCode] = toEditablePrice(readCountryPrice(product, countryCode) ?? convertedPrices[countryCode]);
       return acc;
-    }, {} as Record<SupportedCountryCode, string>);
+    }, {} as Record<GccCountryCode, string>);
 
     setPriceEditorProduct(product);
     setPriceEditorValues(nextValues);
@@ -287,7 +288,7 @@ export function AdminProducts() {
       return GCC_PRICE_CODES.reduce((acc, countryCode) => {
         acc[countryCode] = countryCode === 'AE' ? value : toEditablePrice(convertedPrices[countryCode]);
         return acc;
-      }, {} as Record<SupportedCountryCode, string>);
+      }, {} as Record<GccCountryCode, string>);
     });
   };
 
@@ -301,11 +302,11 @@ export function AdminProducts() {
       GCC_PRICE_CODES.reduce((acc, countryCode) => {
         acc[countryCode] = toEditablePrice(convertedPrices[countryCode]);
         return acc;
-      }, {} as Record<SupportedCountryCode, string>)
+      }, {} as Record<GccCountryCode, string>)
     );
   };
 
-  const handleCountryPriceChange = (countryCode: SupportedCountryCode, value: string) => {
+  const handleCountryPriceChange = (countryCode: GccCountryCode, value: string) => {
     setPriceEditorValues((current) => ({ ...current, [countryCode]: value }));
   };
 
@@ -316,7 +317,7 @@ export function AdminProducts() {
       const numeric = Number(priceEditorValues[countryCode]);
       acc[countryCode] = Number.isFinite(numeric) ? numeric : Number.NaN;
       return acc;
-    }, {} as Record<SupportedCountryCode, number>);
+    }, {} as Record<GccCountryCode, number>);
 
     const hasInvalidPrice = GCC_PRICE_CODES.some((countryCode) => !Number.isFinite(parsedPrices[countryCode]) || parsedPrices[countryCode] < 0);
     if (hasInvalidPrice) {
@@ -351,7 +352,7 @@ export function AdminProducts() {
                 price: parsedPrices[countryCode],
               };
               return acc;
-            }, {} as Record<SupportedCountryCode, { currency: string; price: number }>),
+            }, {} as Record<GccCountryCode, { currency: string; price: number }>),
           };
         })
       );
@@ -1008,7 +1009,7 @@ export function AdminProducts() {
               <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <span>
                   <span className="block text-sm font-black text-slate-900">Round prices</span>
-                  <span className="block text-xs font-semibold text-slate-500">AED, SAR, QAR to 1. KWD, BHD, OMR to 0.1.</span>
+                <span className="block text-xs font-semibold text-slate-500">GCC prices can be overridden here. Worldwide markets auto-convert from the AED base price.</span>
                 </span>
                 <input
                   type="checkbox"
@@ -1019,7 +1020,7 @@ export function AdminProducts() {
               </label>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {GCC_PRICE_CODES.map((countryCode) => (
+                {GCC_PRICE_CODES.filter((countryCode) => countryCode !== 'AE').map((countryCode) => (
                   <label key={countryCode} className="rounded-2xl border border-slate-200 bg-white p-3">
                     <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
                       {COUNTRY_CONFIG[countryCode].currency}

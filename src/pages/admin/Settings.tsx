@@ -6,6 +6,32 @@ import { uploadImageFile } from '../../lib/uploadClient';
 import { getSeoLengthStatus, normalizeSeoText, trimSeoKeywords } from '../../lib/seo';
 import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES } from '../../lib/countryConfig';
 
+type MarketplaceCountrySetting = {
+  code: string;
+  name: string;
+  currency: string;
+  vatPercent: number;
+  deliveryBaseAed: number;
+  codEnabled: boolean;
+  exchangeRate?: number;
+  phoneCode?: string;
+  enabled?: boolean;
+  cities?: string[];
+};
+
+type MarketplaceSettingsState = {
+  sellerCommissionPercent: number;
+  monthlySellerFeeAed: number;
+  defaultCountry: string;
+  lowStockThreshold: number;
+  maintenanceMode: boolean;
+  liveRateCarriers: string[];
+  globalSeoEnabled: boolean;
+  fraudMonitoringEnabled: boolean;
+  prepaidOnlyOutsideUae: boolean;
+  countries: MarketplaceCountrySetting[];
+};
+
 export function AdminSettings() {
   const defaultMarketplaceCountries = SUPPORTED_COUNTRY_CODES.map((countryCode) => {
     const config = COUNTRY_CONFIG[countryCode];
@@ -15,8 +41,8 @@ export function AdminSettings() {
       currency: config.currency,
       vatPercent: config.vatRate * 100,
       deliveryBaseAed: config.shippingOptions[0]?.baseFeeAed ?? 10,
-      codEnabled: true,
-      exchangeRate: config.exchangeRateFromAed,
+      codEnabled: config.code === 'AE',
+      exchangeRate: config.fallbackExchangeRateFromAed,
       phoneCode: config.phonePrefix,
       enabled: true,
       cities: config.cities,
@@ -29,13 +55,17 @@ export function AdminSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [marketplaceSettings, setMarketplaceSettings] = useState({
+  const [marketplaceSettings, setMarketplaceSettings] = useState<MarketplaceSettingsState>({
     sellerCommissionPercent: 6,
     monthlySellerFeeAed: 99,
     defaultCountry: 'AE',
     lowStockThreshold: 5,
     maintenanceMode: false,
-    countries: defaultMarketplaceCountries as Array<{ code: string; name: string; currency: string; vatPercent: number; deliveryBaseAed: number; codEnabled: boolean; exchangeRate?: number; phoneCode?: string; enabled?: boolean; cities?: string[] }>,
+    liveRateCarriers: ['DHL', 'FedEx', 'UPS', 'Aramex', 'Emirates Post'],
+    globalSeoEnabled: true,
+    fraudMonitoringEnabled: true,
+    prepaidOnlyOutsideUae: true,
+    countries: defaultMarketplaceCountries,
   });
 
   useEffect(() => {
@@ -62,9 +92,19 @@ export function AdminSettings() {
           setMarketplaceSettings((prev) => ({
             ...prev,
             ...marketplaceResult.value,
+            liveRateCarriers: Array.isArray(marketplaceResult.value?.liveRateCarriers)
+              ? marketplaceResult.value.liveRateCarriers
+              : prev.liveRateCarriers,
+            globalSeoEnabled: Boolean(marketplaceResult.value?.globalSeoEnabled ?? prev.globalSeoEnabled),
+            fraudMonitoringEnabled: Boolean(marketplaceResult.value?.fraudMonitoringEnabled ?? prev.fraudMonitoringEnabled),
+            prepaidOnlyOutsideUae: Boolean(marketplaceResult.value?.prepaidOnlyOutsideUae ?? prev.prepaidOnlyOutsideUae),
             countries: defaultMarketplaceCountries.map((defaultCountry) => ({
               ...defaultCountry,
               ...(incomingByCode.get(defaultCountry.code) || {}),
+              codEnabled:
+                defaultCountry.code === 'AE'
+                  ? Boolean((incomingByCode.get(defaultCountry.code) as any)?.codEnabled ?? true)
+                  : false,
             })),
           }));
         } else if (marketplaceResult.status === 'rejected') {
@@ -349,6 +389,31 @@ export function AdminSettings() {
                   <input type="checkbox" checked={marketplaceSettings.maintenanceMode} onChange={e => setMarketplaceSettings(prev => ({ ...prev, maintenanceMode: e.target.checked }))} />
                   Enable maintenance mode
                 </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <label className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 font-bold text-slate-700">
+                    <input type="checkbox" checked={marketplaceSettings.globalSeoEnabled} onChange={e => setMarketplaceSettings(prev => ({ ...prev, globalSeoEnabled: e.target.checked }))} />
+                    Global SEO and hreflang
+                  </label>
+                  <label className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 font-bold text-slate-700">
+                    <input type="checkbox" checked={marketplaceSettings.fraudMonitoringEnabled} onChange={e => setMarketplaceSettings(prev => ({ ...prev, fraudMonitoringEnabled: e.target.checked }))} />
+                    Fraud monitoring
+                  </label>
+                  <label className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 font-bold text-slate-700">
+                    <input type="checkbox" checked={marketplaceSettings.prepaidOnlyOutsideUae} onChange={e => setMarketplaceSettings(prev => ({ ...prev, prepaidOnlyOutsideUae: e.target.checked }))} />
+                    Prepaid outside UAE
+                  </label>
+                </div>
+                <label className="space-y-2 block">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Live Courier Rate Providers</span>
+                  <textarea
+                    value={(marketplaceSettings.liveRateCarriers || []).join(', ')}
+                    onChange={e => setMarketplaceSettings(prev => ({ ...prev, liveRateCarriers: e.target.value.split(',').map((carrier) => carrier.trim()).filter(Boolean) }))}
+                    className="w-full min-h-[88px] rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 font-bold outline-none focus:ring-2 focus:ring-violet-500/20"
+                  />
+                  <span className="block text-xs font-semibold text-slate-500">
+                    UI-ready list. Connect carrier API credentials before treating these as live calculated rates.
+                  </span>
+                </label>
                 <div className="space-y-4">
                   <h3 className="text-lg font-black text-slate-900">Country Rules</h3>
                   {marketplaceSettings.countries.map((country, index) => (
@@ -377,9 +442,14 @@ export function AdminSettings() {
                         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Phone Code</span>
                         <input value={country.phoneCode ?? ''} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, phoneCode: e.target.value } : item) }))} className="w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 font-bold outline-none" />
                       </label>
-                      <label className="flex items-center gap-3 pt-8 font-bold text-slate-700">
-                        <input type="checkbox" checked={country.codEnabled} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, codEnabled: e.target.checked } : item) }))} />
-                        COD enabled
+                      <label className={`flex items-center gap-3 pt-8 font-bold ${country.code === 'AE' ? 'text-slate-700' : 'text-slate-400'}`}>
+                        <input
+                          type="checkbox"
+                          checked={country.code === 'AE' ? country.codEnabled : false}
+                          disabled={country.code !== 'AE'}
+                          onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, codEnabled: item.code === 'AE' ? e.target.checked : false } : item) }))}
+                        />
+                        COD enabled {country.code !== 'AE' ? '(UAE only)' : ''}
                       </label>
                       <label className="flex items-center gap-3 pt-8 font-bold text-slate-700">
                         <input type="checkbox" checked={country.enabled ?? true} onChange={e => setMarketplaceSettings(prev => ({ ...prev, countries: prev.countries.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: e.target.checked } : item) }))} />

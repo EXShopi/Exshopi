@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, MapPin, Globe } from "lucide-react";
 import { useLanguageStore } from "../store/language";
 import { storefrontT } from "../lib/storefrontCopy";
-import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, getCountryDeliveryMessage, getCountryFlag, getCountryTrustMessage, getDualCountryTrustText } from "../lib/countryConfig";
+import { COUNTRY_CONFIG, SUPPORTED_COUNTRY_CODES, getCountryConfig, getCountryDeliveryMessage, getCountryFlag, getCountryTrustMessage, getDualCountryTrustText } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 
 export default function TopBar() {
@@ -14,13 +14,13 @@ export default function TopBar() {
   const selectedCity = useCountryStore((state) => state.selectedCity);
   const setCountry = useCountryStore((state) => state.setCountry);
   const setCity = useCountryStore((state) => state.setCity);
-  const countryConfig = COUNTRY_CONFIG[selectedCountry];
+  const countryConfig = getCountryConfig(selectedCountry);
   const cities = countryConfig.cities;
   const [trustIndex, setTrustIndex] = useState(0);
   const [countryToast, setCountryToast] = useState("");
   const previousCountryRef = useRef(selectedCountry);
   const trustMessages = [
-    "Cash on Delivery Available",
+    selectedCountry === "AE" ? "Cash on Delivery Available in UAE" : "Worldwide prepaid checkout",
     getCountryDeliveryMessage(selectedCountry),
     getCountryTrustMessage(selectedCountry),
     "Verified Sellers",
@@ -61,11 +61,11 @@ export default function TopBar() {
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 px-3 py-1.5 md:gap-3 md:px-6 md:py-2">
         <div className="hidden min-w-0 items-center gap-3 text-white/80 font-medium sm:flex">
           <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 backdrop-blur-sm">
-            ✓ {trustMessages[trustIndex]}
+            {trustMessages[trustIndex]}
           </span>
-          <span className="hidden text-white/25 md:inline">•</span>
+          <span className="hidden text-white/25 md:inline">-</span>
           <span className="hidden text-white/70 md:inline">
-            {getDualCountryTrustText()} • {storefrontT(language, "trusted_sellers")}
+            {getDualCountryTrustText()} - {storefrontT(language, "trusted_sellers")}
           </span>
         </div>
 
@@ -89,7 +89,7 @@ export default function TopBar() {
             </button>
 
             {countryOpen && (
-              <div className="absolute right-0 top-full z-[99999] mt-3 w-64 overflow-hidden rounded-2xl border border-slate-300 bg-white text-slate-900 shadow-2xl backdrop-blur-xl">
+              <div className="absolute right-0 top-full z-[99999] mt-3 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-slate-300 bg-white text-slate-900 shadow-2xl backdrop-blur-xl">
                 {SUPPORTED_COUNTRY_CODES.map((countryCode, idx) => {
                   const option = COUNTRY_CONFIG[countryCode];
                   const isActive = selectedCountry === countryCode;

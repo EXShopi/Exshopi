@@ -5,8 +5,119 @@ import {
   normalizePhoneByCountry,
 } from '../utils/phone';
 
-export type SupportedCountryCode = 'AE' | 'SA' | 'QA' | 'KW' | 'BH' | 'OM';
-export type SupportedCurrencyCode = 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR';
+export type SupportedCountryCode =
+  | 'AE'
+  | 'SA'
+  | 'QA'
+  | 'KW'
+  | 'BH'
+  | 'OM'
+  | 'US'
+  | 'GB'
+  | 'EU'
+  | 'CA'
+  | 'AU'
+  | 'NZ'
+  | 'JP'
+  | 'CN'
+  | 'HK'
+  | 'IN'
+  | 'SG'
+  | 'ZA'
+  | 'NG'
+  | 'KE'
+  | 'WORLD';
+export type SupportedCurrencyCode =
+  | 'AED'
+  | 'SAR'
+  | 'QAR'
+  | 'KWD'
+  | 'BHD'
+  | 'OMR'
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'CAD'
+  | 'AUD'
+  | 'NZD'
+  | 'JPY'
+  | 'CNY'
+  | 'HKD'
+  | 'INR'
+  | 'SGD'
+  | 'ZAR'
+  | 'NGN'
+  | 'KES';
+
+export type PaymentMethodCode =
+  | 'cod'
+  | 'paypal'
+  | 'payoneer'
+  | 'stripe_card'
+  | 'apple_pay'
+  | 'google_pay'
+  | 'tabby'
+  | 'tamara';
+
+export type CheckoutPaymentOption = {
+  id: PaymentMethodCode;
+  label: string;
+  description: string;
+  badge: string;
+  enabled: boolean;
+  uiReady: boolean;
+};
+
+export const PAYMENT_METHOD_CATALOG: Record<PaymentMethodCode, Omit<CheckoutPaymentOption, 'enabled' | 'uiReady'>> = {
+  cod: {
+    id: 'cod',
+    label: 'Cash on Delivery',
+    description: 'Pay at delivery after UAE phone OTP verification.',
+    badge: 'UAE only',
+  },
+  paypal: {
+    id: 'paypal',
+    label: 'PayPal',
+    description: 'PayPal-ready display. Connect the PayPal checkout endpoint before enabling.',
+    badge: 'UI-ready',
+  },
+  payoneer: {
+    id: 'payoneer',
+    label: 'Payoneer',
+    description: 'Payoneer-ready display. Connect the payout/payment workflow before enabling.',
+    badge: 'UI-ready',
+  },
+  stripe_card: {
+    id: 'stripe_card',
+    label: 'Card / Stripe',
+    description: 'Secure prepaid card checkout for UAE and international orders.',
+    badge: 'Secure',
+  },
+  apple_pay: {
+    id: 'apple_pay',
+    label: 'Apple Pay',
+    description: 'Express wallet checkout prepared through Stripe.',
+    badge: 'UI-ready',
+  },
+  google_pay: {
+    id: 'google_pay',
+    label: 'Google Pay',
+    description: 'Express wallet checkout prepared through Stripe.',
+    badge: 'UI-ready',
+  },
+  tabby: {
+    id: 'tabby',
+    label: 'Tabby',
+    description: 'Installments prepared for eligible UAE and Saudi orders.',
+    badge: 'UI-ready',
+  },
+  tamara: {
+    id: 'tamara',
+    label: 'Tamara',
+    description: 'Installments prepared for eligible UAE and Saudi orders.',
+    badge: 'UI-ready',
+  },
+};
 
 export type CountryAwarePriced = {
   price?: number | string | null;
@@ -92,6 +203,78 @@ export type CountryConfig = {
     postalCode: string;
   };
 };
+
+function createInternationalCountry(
+  code: SupportedCountryCode,
+  displayCode: string,
+  name: string,
+  shortName: string,
+  currency: SupportedCurrencyCode,
+  locale: string,
+  vatRate: number,
+  fallbackExchangeRateFromAed: number,
+  defaultShippingChargeAed: number,
+  cities: string[],
+  defaultCity: string
+): CountryConfig {
+  const shippingOptions: ShippingOptionConfig[] = [
+    {
+      id: `standard_${code.toLowerCase()}`,
+      label: `${shortName} International Delivery`,
+      baseFeeAed: defaultShippingChargeAed,
+      eta: '5-10 business days',
+      description: 'Customs-ready international shipping from the UAE with tracking.',
+    },
+    {
+      id: `priority_${code.toLowerCase()}`,
+      label: `${shortName} Priority Courier`,
+      baseFeeAed: Math.round(defaultShippingChargeAed * 1.35),
+      eta: '3-6 business days',
+      description: 'Faster prepaid courier delivery with export documentation support.',
+    },
+  ];
+
+  return {
+    code,
+    displayCode,
+    name,
+    shortName,
+    currency,
+    currencySymbol: currency,
+    locale,
+    vatRate,
+    phonePrefix: getPhonePrefix(code),
+    phonePlaceholder: getPhonePlaceholder(code),
+    fallbackExchangeRateFromAed,
+    defaultShippingChargeAed,
+    announcement: 'Worldwide shipping from the UAE',
+    trustLabel: `Available in ${shortName}`,
+    trustMessage: `Secure prepaid delivery from UAE sellers to ${name}`,
+    deliveryMessage: `International delivery to ${name}`,
+    availabilityLabel: `Ships to ${name}`,
+    shippingOptions,
+    cities,
+    defaultCity,
+    addressLabels: {
+      country: 'Country / Region',
+      city: 'City / Region',
+      area: 'State / Province / Area',
+      flat: 'Apartment / Unit',
+      building: 'Building / House',
+      address: 'Street Address',
+      landmark: 'Landmark',
+      postalCode: 'Postal / ZIP Code',
+    },
+    addressPlaceholders: {
+      address: 'Street name, building number, and delivery details',
+      area: 'State, province, district, or area',
+      building: 'Building, house, tower, or company name',
+      flat: 'Apartment, suite, floor, or unit',
+      landmark: 'Nearby landmark or delivery note',
+      postalCode: 'Postal or ZIP code',
+    },
+  };
+}
 
 export const COUNTRY_CONFIG: Record<SupportedCountryCode, CountryConfig> = {
   AE: {
@@ -348,10 +531,27 @@ export const COUNTRY_CONFIG: Record<SupportedCountryCode, CountryConfig> = {
       postalCode: 'Optional postal code',
     },
   },
+  US: createInternationalCountry('US', 'USA', 'United States', 'United States', 'USD', 'en-US', 0, 0.272, 165, ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Miami', 'San Francisco', 'Seattle', 'Dallas'], 'New York'),
+  GB: createInternationalCountry('GB', 'UK', 'United Kingdom', 'United Kingdom', 'GBP', 'en-GB', 0.2, 0.214, 155, ['London', 'Manchester', 'Birmingham', 'Leeds', 'Glasgow', 'Edinburgh'], 'London'),
+  EU: createInternationalCountry('EU', 'EU', 'Europe', 'Europe', 'EUR', 'en-IE', 0.2, 0.251, 160, ['Paris', 'Berlin', 'Madrid', 'Rome', 'Amsterdam', 'Dublin', 'Brussels', 'Vienna'], 'Paris'),
+  CA: createInternationalCountry('CA', 'CANADA', 'Canada', 'Canada', 'CAD', 'en-CA', 0.05, 0.372, 175, ['Toronto', 'Vancouver', 'Montreal', 'Calgary', 'Ottawa', 'Edmonton'], 'Toronto'),
+  AU: createInternationalCountry('AU', 'AUSTRALIA', 'Australia', 'Australia', 'AUD', 'en-AU', 0.1, 0.421, 185, ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Canberra'], 'Sydney'),
+  NZ: createInternationalCountry('NZ', 'NEW ZEALAND', 'New Zealand', 'New Zealand', 'NZD', 'en-NZ', 0.15, 0.457, 195, ['Auckland', 'Wellington', 'Christchurch', 'Hamilton', 'Dunedin'], 'Auckland'),
+  JP: createInternationalCountry('JP', 'JAPAN', 'Japan', 'Japan', 'JPY', 'en-JP', 0.1, 41.9, 170, ['Tokyo', 'Osaka', 'Kyoto', 'Yokohama', 'Nagoya', 'Fukuoka'], 'Tokyo'),
+  CN: createInternationalCountry('CN', 'CHINA', 'China', 'China', 'CNY', 'en-CN', 0.13, 1.97, 150, ['Shanghai', 'Beijing', 'Shenzhen', 'Guangzhou', 'Hangzhou', 'Chengdu'], 'Shanghai'),
+  HK: createInternationalCountry('HK', 'HONG KONG', 'Hong Kong', 'Hong Kong', 'HKD', 'en-HK', 0, 2.12, 145, ['Hong Kong Island', 'Kowloon', 'New Territories', 'Tung Chung', 'Sha Tin'], 'Hong Kong Island'),
+  IN: createInternationalCountry('IN', 'INDIA', 'India', 'India', 'INR', 'en-IN', 0.18, 22.7, 135, ['Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Kochi'], 'Mumbai'),
+  SG: createInternationalCountry('SG', 'SINGAPORE', 'Singapore', 'Singapore', 'SGD', 'en-SG', 0.09, 0.354, 135, ['Singapore', 'Jurong', 'Tampines', 'Woodlands', 'Sentosa'], 'Singapore'),
+  ZA: createInternationalCountry('ZA', 'SOUTH AFRICA', 'South Africa', 'South Africa', 'ZAR', 'en-ZA', 0.15, 4.95, 185, ['Johannesburg', 'Cape Town', 'Durban', 'Pretoria', 'Port Elizabeth'], 'Johannesburg'),
+  NG: createInternationalCountry('NG', 'NIGERIA', 'Nigeria', 'Nigeria', 'NGN', 'en-NG', 0.075, 398, 210, ['Lagos', 'Abuja', 'Kano', 'Port Harcourt', 'Ibadan'], 'Lagos'),
+  KE: createInternationalCountry('KE', 'KENYA', 'Kenya', 'Kenya', 'KES', 'en-KE', 0.16, 35.2, 185, ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret'], 'Nairobi'),
+  WORLD: createInternationalCountry('WORLD', 'WORLDWIDE', 'Worldwide', 'Worldwide', 'USD', 'en-US', 0, 0.272, 220, ['International Address'], 'International Address'),
 };
 
 export const SUPPORTED_COUNTRY_CODES = Object.keys(COUNTRY_CONFIG) as SupportedCountryCode[];
 export const DEFAULT_COUNTRY_CODE: SupportedCountryCode = 'AE';
+export const GCC_COUNTRY_CODES: SupportedCountryCode[] = ['AE', 'SA', 'QA', 'KW', 'BH', 'OM'];
+export const INSTALLMENT_COUNTRY_CODES: SupportedCountryCode[] = ['AE', 'SA'];
 
 function toSafeAmount(value: number | string | null | undefined) {
   const amount = Number(value ?? 0);
@@ -371,6 +571,44 @@ export function getCountryConfig(countryCode?: string | null): CountryConfig {
     return COUNTRY_CONFIG[countryCode];
   }
   return COUNTRY_CONFIG[DEFAULT_COUNTRY_CODE];
+}
+
+export function isCodEnabledCountry(countryCode?: string | null) {
+  return getCountryConfig(countryCode).code === 'AE';
+}
+
+export function isPrepaidOnlyCountry(countryCode?: string | null) {
+  return !isCodEnabledCountry(countryCode);
+}
+
+export function getCheckoutPaymentOptions(countryCode?: string | null, options?: { includeUiReady?: boolean }) {
+  const country = getCountryConfig(countryCode);
+  const includeUiReady = options?.includeUiReady ?? true;
+  const enabled: PaymentMethodCode[] = isCodEnabledCountry(country.code)
+    ? ['cod', 'stripe_card']
+    : ['stripe_card'];
+  const uiReady: PaymentMethodCode[] = [
+    'paypal',
+    'payoneer',
+    'apple_pay',
+    'google_pay',
+    ...(INSTALLMENT_COUNTRY_CODES.includes(country.code) ? (['tabby', 'tamara'] as PaymentMethodCode[]) : []),
+  ];
+  const methods = includeUiReady ? [...enabled, ...uiReady] : enabled;
+
+  return methods.map((id) => ({
+    ...PAYMENT_METHOD_CATALOG[id],
+    enabled: enabled.includes(id),
+    uiReady: uiReady.includes(id),
+  }));
+}
+
+export function getDefaultPaymentMethod(countryCode?: string | null): PaymentMethodCode {
+  return isCodEnabledCountry(countryCode) ? 'cod' : 'stripe_card';
+}
+
+export function isPaymentMethodAllowed(countryCode: string | null | undefined, paymentMethod: string | null | undefined) {
+  return getCheckoutPaymentOptions(countryCode, { includeUiReady: false }).some((option) => option.id === paymentMethod);
 }
 
 export function convertFromAed(amountAed: number | string | null | undefined, countryCode?: string | null) {
@@ -464,6 +702,8 @@ function readCountryPrice(product: CountryAwarePriced, countryCode: SupportedCou
       return product.priceOman != null && String(product.priceOman).trim() !== ''
         ? toSafeAmount(product.priceOman)
         : undefined;
+    default:
+      return undefined;
   }
 }
 
@@ -495,6 +735,8 @@ function readCountryCompareAtPrice(product: CountryAwarePriced, countryCode: Sup
       return product.compareAtPriceOman != null && String(product.compareAtPriceOman).trim() !== ''
         ? toSafeAmount(product.compareAtPriceOman)
         : undefined;
+    default:
+      return undefined;
   }
 }
 
@@ -548,7 +790,15 @@ export function normalizeCountryAwarePricing<T extends Record<string, any>>(prod
     compareAtPriceKuwait: readCountryCompareAtPrice(product, 'KW'),
     compareAtPriceBahrain: readCountryCompareAtPrice(product, 'BH'),
     compareAtPriceOman: readCountryCompareAtPrice(product, 'OM'),
-    pricesByCountry: pricesByCountry,
+    pricesByCountry: SUPPORTED_COUNTRY_CODES.reduce((acc, countryCode) => {
+      acc[countryCode] =
+        pricesByCountry[countryCode as keyof typeof pricesByCountry] || {
+          currency: COUNTRY_CONFIG[countryCode].currency,
+          price: convertFromAedSmart(priceUae, countryCode),
+          compareAtPrice: convertFromAedSmart(originalPriceUae, countryCode),
+        };
+      return acc;
+    }, {} as Partial<Record<SupportedCountryCode, { currency: SupportedCurrencyCode; price: number; compareAtPrice?: number }>>),
   };
 }
 
@@ -565,7 +815,7 @@ export function getAvailabilityText(countryCode?: string | null) {
 }
 
 export function getDualCountryTrustText() {
-  return 'Fast delivery across the GCC';
+  return 'UAE-based worldwide delivery';
 }
 
 export function getCountryTrustMessage(countryCode?: string | null) {
@@ -581,18 +831,6 @@ export function getCountrySeoMarketLabel(countryCode?: string | null) {
 }
 
 export function getCountryFlag(countryCode?: string | null) {
-  switch (getCountryConfig(countryCode).code) {
-    case 'SA':
-      return '🇸🇦';
-    case 'QA':
-      return '🇶🇦';
-    case 'KW':
-      return '🇰🇼';
-    case 'BH':
-      return '🇧🇭';
-    case 'OM':
-      return '🇴🇲';
-    default:
-      return '🇦🇪';
-  }
+  const code = getCountryConfig(countryCode).code;
+  return code === 'GB' ? 'UK' : code === 'WORLD' ? 'WW' : code;
 }
