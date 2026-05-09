@@ -1,13 +1,13 @@
 // Centralized brand logo mapping and helpers
 export const BRAND_LOGOS: Record<string, string> = {
-  apple: '/Banners/apple.png',
-  samsung: '/Banners/samsung.png',
-  dell: '/Banners/dell.png',
-  hp: '/Banners/hp.png',
-  lenovo: '/Banners/lenovo.png',
-  gaming: '/Banners/gaming.png',
-  acer: '/Banners/acer.png',
-  asus: '/Banners/asus.png',
+  apple: '/brands/apple.png',
+  samsung: '/brands/samsung.png',
+  dell: '/brands/dell.png',
+  hp: '/brands/hp.png',
+  lenovo: '/brands/lenovo.png',
+  gaming: '/brands/gaming.png',
+  acer: '/brands/acer.png',
+  asus: '/brands/asus.png',
 };
 
 export function normalizeBrandKey(input?: string) {

@@ -1640,6 +1640,70 @@ void ensureUploadDir().catch((error) => {
   console.error('[boot] upload dir initialization failed', error);
 });
 app.use('/uploads', express.static(path.join(process.cwd(), 'backend', 'uploads')));
+// Serve crawl-critical files before static assets so stale public files cannot
+// override dynamic sitemap shards or robots rules on the API service.
+app.get('/robots.txt', (_req: Request, res: Response) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+${PRIVATE_ROBOTS_PATHS.map((pathname) => `Disallow: ${pathname}`).join('\n')}
+Sitemap: https://exshopi.com/sitemap.xml
+`);
+});
+app.get('/sitemap.xml', async (_req: Request, res: Response) => {
+  try {
+    const { siteUrl, lastmod, productChunks } = await getPublicSitemapData();
+    res.type('application/xml');
+    res.send(
+      xmlSitemapIndex([
+        { loc: `${siteUrl}/sitemaps/static.xml`, lastmod },
+        { loc: `${siteUrl}/sitemaps/categories.xml`, lastmod },
+        { loc: `${siteUrl}/sitemaps/brands.xml`, lastmod },
+        ...productChunks.map((_, index) => ({
+          loc: `${siteUrl}/sitemaps/products-${index + 1}.xml`,
+          lastmod,
+        })),
+      ])
+    );
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+app.get('/sitemaps/static.xml', async (_req: Request, res: Response) => {
+  try {
+    const { staticEntries } = await getPublicSitemapData();
+    res.type('application/xml').send(xmlUrlSet(staticEntries));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+app.get('/sitemaps/categories.xml', async (_req: Request, res: Response) => {
+  try {
+    const { categoryEntries } = await getPublicSitemapData();
+    res.type('application/xml').send(xmlUrlSet(categoryEntries));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+app.get('/sitemaps/brands.xml', async (_req: Request, res: Response) => {
+  try {
+    const { brandEntries } = await getPublicSitemapData();
+    res.type('application/xml').send(xmlUrlSet(brandEntries));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
+app.get('/sitemaps/products-:page.xml', async (req: Request, res: Response) => {
+  try {
+    const page = Math.max(1, Number(req.params.page || 1));
+    const { productChunks } = await getPublicSitemapData();
+    const chunk = productChunks[page - 1] || [];
+    if (!chunk.length) return res.status(404).type('application/xml').send('<!-- product sitemap page not found -->');
+    res.type('application/xml').send(xmlUrlSet(chunk));
+  } catch (error) {
+    res.status(500).type('application/xml').send(`<!-- sitemap generation failed: ${escapeXml(String(error))} -->`);
+  }
+});
 // Serve public static assets (images, favicons, site.webmanifest, etc.)
 // Must be before any SPA/catch-all handlers so assets are served correctly
 app.use(express.static(path.join(process.cwd(), 'public'), {

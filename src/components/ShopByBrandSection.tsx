@@ -1,47 +1,46 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import OptimizedImage from "./OptimizedImage";
 import { getBrandLogoForName, getBrandSlugFromName } from "../data/brandLogos";
 
 export const brands = [
   {
     name: "Apple",
-    logo: "/Banners/apple.png",
+    logo: "/brands/apple.png",
     link: "/brands/apple",
   },
   {
     name: "Samsung",
-    logo: "/Banners/samsung.png",
+    logo: "/brands/samsung.png",
     link: "/brands/samsung",
   },
   {
     name: "Dell",
-    logo: "/Banners/dell.png",
+    logo: "/brands/dell.png",
     link: "/brands/dell",
   },
   {
     name: "HP",
-    logo: "/Banners/hp.png",
+    logo: "/brands/hp.png",
     link: "/brands/hp",
   },
   {
     name: "Lenovo",
-    logo: "/Banners/lenovo.png",
+    logo: "/brands/lenovo.png",
     link: "/brands/lenovo",
   },
   {
     name: "Gaming",
-    logo: "/Banners/gaming.png",
+    logo: "/brands/gaming.png",
     link: "/brands/gaming",
   },
   {
     name: "Acer",
-    logo: "/Banners/acer.png",
+    logo: "/brands/acer.png",
     link: "/brands/acer",
   },
   {
     name: "Asus",
-    logo: "/Banners/asus.png",
+    logo: "/brands/asus.png",
     link: "/brands/asus",
   },
 ];
@@ -92,7 +91,7 @@ export default function ShopByBrandSection() {
           <div className="flex w-max max-w-full items-center gap-4 sm:gap-6 md:gap-10">
             {[...brands, ...brands].map((brand, index) => {
               const slug = getBrandSlugFromName(brand.name) || brand.link.replace('/brands/', '');
-              const logoSrc = getBrandLogoForName(brand.name) || brand.logo || `/Banners/${slug}.png`;
+              const logoSrc = getBrandLogoForName(brand.name) || brand.logo || `/brands/${slug}.png`;
 
               return (
               <button
@@ -102,15 +101,20 @@ export default function ShopByBrandSection() {
               >
                 <div className="flex h-[52px] w-[72px] items-center justify-center sm:h-[58px] sm:w-[80px] md:h-[64px] md:w-[88px]">
                   <div className="flex h-full w-full items-center justify-center rounded-md bg-white/90 p-1">
-                    <OptimizedImage
+                    <img
                       src={logoSrc}
-                      alt={brand.name}
-                      lazy={true}
-                      useWebP={false}
-                      fallbackSrc="/logo.png"
-                      className="max-h-full max-w-full object-contain"
+                      alt={`${brand.name} logo`}
+                      className="h-12 w-12 object-contain sm:h-14 sm:w-14 md:h-16 md:w-16"
                       width={160}
                       height={80}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        if (!event.currentTarget.dataset.fallbackApplied) {
+                          event.currentTarget.dataset.fallbackApplied = "true";
+                          event.currentTarget.src = "/logo.png";
+                        }
+                      }}
                     />
                   </div>
                 </div>

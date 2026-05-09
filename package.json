@@ -8,7 +8,7 @@
     "backend": "tsx backend/server.ts",
     "render:start": "npm run render:start:api",
     "frontend": "vite",
-    "build": "vite build && tsc -p backend/tsconfig.json",
+    "build": "vite build && tsx scripts/generateStaticSeo.ts && tsx scripts/validatePrerenderSeo.ts && tsc -p backend/tsconfig.json",
     "build:frontend": "vite build && tsx scripts/generateStaticSeo.ts && tsx scripts/validatePrerenderSeo.ts",
     "build:seo": "tsx scripts/generateStaticSeo.ts && tsx scripts/validatePrerenderSeo.ts",
     "seo:validate": "tsx scripts/validatePrerenderSeo.ts",

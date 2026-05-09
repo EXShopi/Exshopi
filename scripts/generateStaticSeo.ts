@@ -314,6 +314,7 @@ function htmlDocument(template: string, input: {
     /<body[^>]*>[\s\S]*<\/body>/i,
     `<body>
   <script>document.documentElement.classList.add('exshopi-prerender-loading');</script>
+  <script>console.log("SEO PAGE SERVED", ${JSON.stringify(input.canonicalUrl)});</script>
   <div id="root">${input.snapshotHtml}</div>
   <script>window.__EXSHOPI_ROUTE_DATA__=${JSON.stringify(input.routeData || null)};</script>
   ${bodyScripts.join("\n  ")}
