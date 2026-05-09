@@ -304,16 +304,13 @@ function htmlDocument(template: string, input: {
   html = html.replace(
     "</head>",
     `  <style>
-    html.exshopi-prerender-loading [data-prerender-human-hidden="true"] { display: none !important; }
-    html.exshopi-prerender-loading [data-prerender-human-shell="true"] { display: block !important; }
-    [data-prerender-human-shell="true"] { display: none; }
+    [data-prerender-human-shell="true"] { display: none !important; }
   </style>
 </head>`
   );
   html = html.replace(
     /<body[^>]*>[\s\S]*<\/body>/i,
     `<body>
-  <script>document.documentElement.classList.add('exshopi-prerender-loading');</script>
   <script>console.log("SEO PAGE SERVED", ${JSON.stringify(input.canonicalUrl)});</script>
   <div id="root">${input.snapshotHtml}</div>
   <script>window.__EXSHOPI_ROUTE_DATA__=${JSON.stringify(input.routeData || null)};</script>
