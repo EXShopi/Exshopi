@@ -324,19 +324,17 @@ function htmlDocument(template: string, input: {
       justify-content: center;
       min-height: 100svh;
       padding: 20px;
-      color: #fff;
+      color: #0f172a;
       text-align: center;
-      background: radial-gradient(circle at 50% 0%, rgba(37,99,235,.2), transparent 34%), linear-gradient(145deg,#07111f 0%,#0f172a 46%,#0b1220 100%);
+      background: #f6f7f9;
     }
     #exshopi-initial-loader .initial-loader-card {
       width: min(88vw, 360px);
-      border: 1px solid rgba(255,255,255,.16);
+      border: 1px solid #e2e8f0;
       border-radius: 28px;
-      background: rgba(255,255,255,.08);
-      box-shadow: 0 24px 70px rgba(0,0,0,.28);
+      background: #fff;
+      box-shadow: 0 14px 34px rgba(15,23,42,.08);
       padding: 24px 20px;
-      -webkit-backdrop-filter: blur(16px);
-      backdrop-filter: blur(16px);
     }
     #exshopi-initial-loader .initial-loader-logo {
       width: 58px;
@@ -346,18 +344,18 @@ function htmlDocument(template: string, input: {
       background: #fff;
       object-fit: contain;
       padding: 8px;
-      box-shadow: 0 14px 30px rgba(15,23,42,.24);
+      border: 1px solid #e2e8f0;
     }
     #exshopi-initial-loader .initial-loader-title { margin: 0; font-size: 18px; font-weight: 900; }
-    #exshopi-initial-loader .initial-loader-text { margin: 6px 0 0; color: rgba(219,234,254,.88); font-size: 12px; font-weight: 700; }
-    #exshopi-initial-loader .initial-loader-bar { height: 6px; margin-top: 18px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.14); }
+    #exshopi-initial-loader .initial-loader-text { margin: 6px 0 0; color: #64748b; font-size: 12px; font-weight: 700; }
+    #exshopi-initial-loader .initial-loader-bar { height: 6px; margin-top: 18px; overflow: hidden; border-radius: 999px; background: #f1f5f9; }
     #exshopi-initial-loader .initial-loader-bar::after {
       content: "";
       display: block;
       width: 52%;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg,#67e8f9,#fff,#60a5fa);
+      background: #0f172a;
       animation: exshopi-initial-sweep 1.15s ease-in-out infinite;
     }
     @keyframes exshopi-initial-sweep {

@@ -90,21 +90,19 @@ function PageLoader() {
   }, []);
 
   return (
-    <div className="flex min-h-[38vh] items-start justify-center px-4 py-5 sm:py-8">
-      <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
-        <div className="bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-5 text-white">
-          <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-lg">
-              <img src="/logo.png" alt="ExShopi" className="h-8 w-8 object-contain" />
-            </div>
-            <div>
-              <p className="text-base font-black leading-tight">Loading ExShopi...</p>
-              <p className="text-xs font-semibold text-blue-100">Preparing your marketplace</p>
-            </div>
+    <div className="flex min-h-[30vh] items-start justify-center px-4 py-5 sm:py-8">
+      <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white">
+            <img src="/logo.png" alt="ExShopi" className="h-7 w-7 object-contain" />
           </div>
-          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/15">
-            <div className="exshopi-loader-bar-fill h-full w-1/2 rounded-full bg-gradient-to-r from-cyan-300 via-white to-blue-300" />
+          <div>
+            <p className="text-sm font-black leading-tight text-slate-900">Loading ExShopi...</p>
+            <p className="text-xs font-semibold text-slate-500">Preparing your marketplace</p>
           </div>
+        </div>
+        <div className="mt-4 h-1 overflow-hidden rounded-full bg-slate-100">
+          <div className="exshopi-loader-bar-fill h-full w-1/2 rounded-full bg-slate-900" />
         </div>
         <div className="space-y-3 bg-slate-50 p-4">
           {showShell ? (
@@ -117,7 +115,7 @@ function PageLoader() {
                 ))}
               </div>
               <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                <div className="h-4 w-24 rounded-full bg-blue-100" />
+                <div className="h-4 w-24 rounded-full bg-slate-100" />
                 <div className="mt-3 h-7 w-3/4 rounded-2xl bg-slate-200" />
                 <div className="mt-3 h-3 w-full rounded-full bg-slate-100" />
                 <div className="mt-2 h-3 w-2/3 rounded-full bg-slate-100" />

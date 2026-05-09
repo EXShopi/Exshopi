@@ -8,9 +8,8 @@ function CategoryImage({ src, name }: { src: string; name: string }) {
   const initial = name.trim().slice(0, 1).toUpperCase() || "E";
 
   return (
-    <div className="relative flex h-[92px] items-center justify-center overflow-hidden rounded-[20px] bg-gradient-to-br from-white via-blue-50 to-slate-100 md:h-[200px] md:rounded-[24px]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_25%,rgba(37,99,235,0.16),transparent_34%),radial-gradient(circle_at_70%_65%,rgba(14,165,233,0.12),transparent_36%)]" />
-      <div className="absolute grid h-12 w-12 place-items-center rounded-2xl bg-white/80 text-lg font-black text-blue-700 shadow-sm md:h-16 md:w-16 md:text-2xl">
+    <div className="relative flex h-[92px] items-center justify-center overflow-hidden rounded-[20px] bg-slate-100 md:h-[200px] md:rounded-[24px]">
+      <div className="absolute grid h-12 w-12 place-items-center rounded-2xl bg-white text-lg font-black text-slate-500 shadow-sm md:h-16 md:w-16 md:text-2xl">
         {initial}
       </div>
       {!imageFailed ? (
