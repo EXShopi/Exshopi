@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useMemo, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { MessageCircle, PackageSearch, ShieldCheck, Truck } from "lucide-react";
 import HeroSection from "../components/HeroSection";
@@ -68,6 +68,7 @@ class SectionBoundary extends Component<{ children: ReactNode; name?: string }, 
 export default function Home() {
   const { settings, fetchSettings, hasFetched } = useSettingsStore();
   const homeSeo = generateHomepageSeo();
+  const [wholesaleOpen, setWholesaleOpen] = useState(false);
 
   useEffect(() => {
     if (hasFetched || typeof window === "undefined") return;
@@ -171,65 +172,101 @@ export default function Home() {
       <SectionBoundary name="Hero">
         <HeroSection />
       </SectionBoundary>
-      <SectionBoundary name="Wholesale entry">
-        <section className="mx-auto -mt-2 max-w-7xl px-4 pb-4 md:px-6">
-          <div className="rounded-[32px] border border-blue-100 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] md:p-6">
-            <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white">
-                  <PackageSearch className="h-7 w-7" />
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
-                      Wholesale / Bulk Orders
-                    </span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                      UAE sourcing team
-                    </span>
-                  </div>
-                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
-                    Need 10, 50, or 500 devices? Request bulk pricing.
-                  </h2>
-                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                    Submit laptop, mobile, MacBook, iPhone, tablet, or mixed electronics models manually and ExShopi will contact you with the best available wholesale price.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {[
-                      [ShieldCheck, "Admin tracked"],
-                      [Truck, "Worldwide delivery"],
-                      [MessageCircle, "WhatsApp ready"],
-                    ].map(([Icon, label]: any) => (
-                      <span key={label} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">
-                        <Icon className="h-3.5 w-3.5" />
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+      <div className="fixed right-3 top-[46%] z-30 hidden -translate-y-1/2 lg:block">
+        {!wholesaleOpen ? (
+          <button
+            type="button"
+            onClick={() => setWholesaleOpen(true)}
+            className="group flex w-[74px] flex-col items-center gap-2 rounded-2xl border border-blue-100 bg-white px-2 py-3 text-center shadow-[0_18px_44px_rgba(15,23,42,0.16)] transition hover:-translate-x-1 hover:border-blue-200"
+            aria-label="Open wholesale contact"
+          >
+            <PackageSearch className="h-5 w-5 text-blue-600" />
+            <span className="text-[10px] font-black uppercase leading-3 tracking-[0.12em] text-slate-900">
+              Contact Wholesale
+            </span>
+          </button>
+        ) : (
+          <div className="w-[340px] rounded-[28px] border border-blue-100 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700">Bulk Orders</p>
+                <h2 className="mt-2 text-xl font-black leading-tight text-slate-950">Contact wholesale sourcing</h2>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[330px]">
-                <Link
-                  to="/wholesale"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
-                >
-                  <PackageSearch className="h-5 w-5" />
-                  Contact for Wholesale
-                </Link>
-                <a
-                  href="https://wa.me/971522608063?text=Hello%20ExShopi%2C%20I%20want%20a%20wholesale%2Fbulk%20order."
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
-                >
-                  <MessageCircle className="h-5 w-5" />
-                  WhatsApp Bulk
-                </a>
-              </div>
+              <button
+                type="button"
+                onClick={() => setWholesaleOpen(false)}
+                className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                aria-label="Close wholesale contact"
+              >
+                x
+              </button>
+            </div>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+              Need laptops, mobiles, MacBooks, iPhones, tablets, or mixed electronics in quantity? Send models and target price.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                [ShieldCheck, "Admin tracked"],
+                [Truck, "Worldwide delivery"],
+                [MessageCircle, "WhatsApp ready"],
+              ].map(([Icon, label]: any) => (
+                <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-700">
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </span>
+              ))}
+            </div>
+            <div className="mt-5 grid gap-2">
+              <Link
+                to="/wholesale"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
+              >
+                <PackageSearch className="h-5 w-5" />
+                Open Wholesale Form
+              </Link>
+              <a
+                href="https://wa.me/971522608063?text=Hello%20ExShopi%2C%20I%20want%20a%20wholesale%2Fbulk%20order."
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+              >
+                <MessageCircle className="h-5 w-5" />
+                WhatsApp Bulk
+              </a>
             </div>
           </div>
-        </section>
-      </SectionBoundary>
+        )}
+      </div>
+      <section className="mx-auto -mt-2 max-w-7xl px-4 pb-4 md:px-6 lg:hidden">
+        <button
+          type="button"
+          onClick={() => setWholesaleOpen((current) => !current)}
+          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-left shadow-sm"
+        >
+          <span className="inline-flex items-center gap-2 text-sm font-black text-slate-950">
+            <PackageSearch className="h-5 w-5 text-blue-600" />
+            Contact Wholesale
+          </span>
+          <span className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+            Open
+          </span>
+        </button>
+        {wholesaleOpen && (
+          <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-lg">
+            <p className="text-sm font-semibold leading-6 text-slate-600">
+              Request bulk prices for laptops, mobiles, MacBooks, iPhones, tablets, or mixed electronics.
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <Link to="/wholesale" className="rounded-2xl bg-blue-600 px-4 py-3 text-center text-sm font-black text-white">
+                Open Wholesale Form
+              </Link>
+              <a href="https://wa.me/971522608063?text=Hello%20ExShopi%2C%20I%20want%20a%20wholesale%2Fbulk%20order." target="_blank" rel="noreferrer" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-black text-emerald-700">
+                WhatsApp Bulk
+              </a>
+            </div>
+          </div>
+        )}
+      </section>
       {/* SEO-optimized headline */}
       <div className="sr-only">
         <h1>ExShopi UAE Online Shopping Marketplace</h1>
