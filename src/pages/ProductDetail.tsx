@@ -2186,6 +2186,14 @@ const productSchema = product
                 Contact Seller
               </button>
 
+              <Link
+                to="/wholesale"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3.5 font-semibold text-blue-700 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-[0_14px_28px_rgba(37,99,235,0.14)]"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Contact for Wholesale
+              </Link>
+
               <button
                 onClick={handleWhatsAppOrderHelp}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 font-semibold text-emerald-700 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-100 hover:shadow-[0_14px_28px_rgba(16,185,129,0.14)]"

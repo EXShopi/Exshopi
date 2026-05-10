@@ -19,6 +19,7 @@ const Checkout = lazyWithRetry(() => import("./pages/Checkout"), "route-checkout
 const OrderSuccess = lazyWithRetry(() => import("./pages/OrderSuccess"), "route-order-success");
 const Invoice = lazyWithRetry(() => import("./pages/Invoice"), "route-invoice");
 const OrderTracking = lazyWithRetry(() => import("./pages/OrderTracking"), "route-order-tracking");
+const Wholesale = lazyWithRetry(() => import("./pages/Wholesale"), "route-wholesale");
 const VendorStorefront = lazyWithRetry(() => import("./pages/VendorStorefront"), "route-vendor-storefront");
 const Support = lazyWithRetry(() => import("./pages/Support"), "route-support");
 const Wishlist = lazyWithRetry(() => import("./pages/Wishlist"), "route-wishlist");
@@ -72,6 +73,7 @@ const AdminBanners = lazyWithRetry(() => import("./pages/admin/Banners").then((m
 const AdminOffers = lazyWithRetry(() => import("./pages/admin/Offers").then((m) => ({ default: m.AdminOffers })), "route-admin-offers");
 const AdminPayoutProcessing = lazyWithRetry(() => import("./pages/admin/AdminPayoutProcessing"), "route-admin-payouts");
 const AdminOrderMonitoring = lazyWithRetry(() => import("./pages/admin/AdminOrderMonitoring"), "route-admin-orders");
+const AdminWholesaleRequests = lazyWithRetry(() => import("./pages/admin/WholesaleRequests"), "route-admin-wholesale");
 const AdminCustomers = lazyWithRetry(() => import("./pages/admin/Customers").then((m) => ({ default: m.AdminCustomers })), "route-admin-customers");
 const AdminReports = lazyWithRetry(() => import("./pages/admin/Reports").then((m) => ({ default: m.AdminReports })), "route-admin-reports");
 const AdminReturns = lazyWithRetry(() => import("./pages/admin/Returns").then((m) => ({ default: m.AdminReturns })), "route-admin-returns");
@@ -258,6 +260,8 @@ function AppContent() {
             <Route path="/electronics/:subcategory" element={<CategoryPage />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/wholesale" element={<Wholesale />} />
+            <Route path="/contact-wholesale" element={<Wholesale />} />
             <Route path="/order-success" element={<OrderSuccess />} />
             <Route path="/invoice/:orderId" element={<Invoice />} />
             <Route path="/order-tracking" element={<OrderTracking />} />
@@ -345,6 +349,7 @@ function AppContent() {
             <Route path="/admin/products/add" element={<AdminAddProduct />} />
             <Route path="/admin/inventory" element={<AdminInventory />} />
             <Route path="/admin/orders" element={<AdminOrderMonitoring />} />
+            <Route path="/admin/wholesale-requests" element={<AdminWholesaleRequests />} />
             <Route path="/admin/commissions" element={<AdminCommissions />} />
             <Route path="/admin/categories" element={<AdminCategories />} />
             <Route path="/admin/banners" element={<AdminBanners />} />

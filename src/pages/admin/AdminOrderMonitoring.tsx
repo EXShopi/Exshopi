@@ -8,7 +8,9 @@ import {
   Eye,
   Filter,
   Mail,
+  MessageCircle,
   Package2,
+  PackageSearch,
   Phone,
   Printer,
   Search,
@@ -27,7 +29,7 @@ import {
   formatOrderDateTime,
   printOrderDocuments,
 } from '../../lib/orderAdmin';
-import { orderAPI } from '../../services/api';
+import { orderAPI, wholesaleAPI } from '../../services/api';
 
 type CanonicalOrderStatus =
   | 'pending'
@@ -221,6 +223,7 @@ const quickFilters: Array<{ key: QuickFilterKey; label: string }> = [
 
 export default function AdminOrderMonitoring() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [wholesaleRequests, setWholesaleRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -244,6 +247,8 @@ export default function AdminOrderMonitoring() {
       try {
         const rawOrders = await orderAPI.getAllOrders();
         setOrders(Array.isArray(rawOrders) ? rawOrders.map(normalizeOrder) : []);
+        const rawWholesale = await wholesaleAPI.getAdminAll().catch(() => []);
+        setWholesaleRequests(Array.isArray(rawWholesale) ? rawWholesale : []);
       } catch (error) {
         console.error('Failed to fetch orders:', error);
       } finally {
@@ -278,6 +283,14 @@ export default function AdminOrderMonitoring() {
       es.addEventListener('order-updated', ((event: MessageEvent) => {
         const payload = JSON.parse(event.data || '{}');
         if (payload?.id) refreshOrder(payload.id, 'update').catch(() => undefined);
+      }) as EventListener);
+      es.addEventListener('wholesale-request-created', ((event: MessageEvent) => {
+        const payload = JSON.parse(event.data || '{}');
+        if (payload?.id) setWholesaleRequests((prev) => [payload, ...prev.filter((item) => item.id !== payload.id)]);
+      }) as EventListener);
+      es.addEventListener('wholesale-request-updated', ((event: MessageEvent) => {
+        const payload = JSON.parse(event.data || '{}');
+        if (payload?.id) setWholesaleRequests((prev) => prev.map((item) => (item.id === payload.id ? payload : item)));
       }) as EventListener);
     } catch {
       //
@@ -488,6 +501,12 @@ export default function AdminOrderMonitoring() {
     setSelectedIds([]);
   };
 
+  const updateWholesaleStatus = async (id: string, status: any) => {
+    const updated = await wholesaleAPI.updateStatus(id, status);
+    setWholesaleRequests((prev) => prev.map((item) => (item.id === id ? updated : item)));
+    setActionBanner('Wholesale request status updated.');
+  };
+
   const toggleSelectAll = () => {
     if (selectedIds.length === filteredOrders.length) {
       setSelectedIds([]);
@@ -693,6 +712,68 @@ export default function AdminOrderMonitoring() {
           {actionBanner}
         </div>
       ) : null}
+
+      <section className="rounded-[2rem] border border-blue-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-blue-700">
+              <PackageSearch className="h-4 w-4" />
+              Wholesale Request
+            </div>
+            <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">Bulk requests are tracked separately from checkout orders</h3>
+            <p className="mt-2 text-sm font-semibold text-slate-500">{wholesaleRequests.length} wholesale requests visible to admin operations.</p>
+          </div>
+          <a href="/admin/wholesale-requests" className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600">
+            Open Wholesale Center
+          </a>
+        </div>
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-[980px] w-full">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                {['Type', 'Customer', 'Product / Models', 'Qty', 'Expected', 'Status', 'Action'].map((label) => (
+                  <th key={label} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {wholesaleRequests.slice(0, 5).map((request) => (
+                <tr key={request.id} className="border-b border-slate-100">
+                  <td className="px-4 py-4">
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">Wholesale Request</span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <p className="font-black text-slate-900">{request.fullName}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{request.phone} - {request.email}</p>
+                  </td>
+                  <td className="px-4 py-4">
+                    <p className="font-bold text-slate-900">{request.productName}</p>
+                    <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-500">{request.modelsRequired}</p>
+                  </td>
+                  <td className="px-4 py-4 text-sm font-black text-slate-900">{request.quantity}</td>
+                  <td className="px-4 py-4 text-sm font-bold text-slate-700">{request.expectedPrice || 'Quote needed'}</td>
+                  <td className="px-4 py-4">
+                    <select value={request.status} onChange={(event) => updateWholesaleStatus(request.id, event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-slate-700">
+                      {['new', 'contacted', 'quoted', 'confirmed', 'cancelled'].map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-4 py-4">
+                    <a href={`https://wa.me/${String(request.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${request.fullName}, this is ExShopi regarding your wholesale request for ${request.productName}.`)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-100">
+                      <MessageCircle className="h-4 w-4" />
+                      WhatsApp
+                    </a>
+                  </td>
+                </tr>
+              ))}
+              {!wholesaleRequests.length && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm font-bold text-slate-500">No wholesale requests yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">

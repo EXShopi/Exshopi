@@ -607,6 +607,31 @@ export interface Translation {
   de?: string;
 }
 
+export type WholesaleRequestStatus = 'new' | 'contacted' | 'quoted' | 'confirmed' | 'cancelled';
+
+export interface WholesaleRequest {
+  id: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  country: string;
+  city: string;
+  productCategory: string;
+  productName: string;
+  modelsRequired: string;
+  quantity: number;
+  expectedPrice: string;
+  conditionRequired: 'new' | 'refurbished' | 'used' | 'any';
+  deliveryCountry: string;
+  deliveryAddress: string;
+  notes: string;
+  status: WholesaleRequestStatus;
+  adminNotes: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface DatabaseSchema {
   users: User[];
   sellers: Seller[];
@@ -615,6 +640,7 @@ interface DatabaseSchema {
   banners: Banner[];
   reviews: Review[];
   orders: Order[];
+  wholesaleRequests: WholesaleRequest[];
   payouts: Payout[];
   payoutRequests: PayoutRequest[];
   supportTickets: SupportTicket[];
@@ -639,6 +665,7 @@ function initializeDatabase(): DatabaseSchema {
     banners: [],
     reviews: [],
     orders: [],
+    wholesaleRequests: [],
     payouts: [],
     payoutRequests: [],
     supportTickets: [],
@@ -1016,6 +1043,15 @@ private data!: DatabaseSchema;
                 sellerAmount: Number(order.sellerAmount || 0),
               },
             ],
+      })),
+      wholesaleRequests: (raw.wholesaleRequests || []).map((request) => ({
+        ...request,
+        quantity: Number(request.quantity || 1),
+        status: request.status || 'new',
+        adminNotes: request.adminNotes || '',
+        source: request.source || 'website',
+        createdAt: request.createdAt || new Date().toISOString(),
+        updatedAt: request.updatedAt || request.createdAt || new Date().toISOString(),
       })),
       supportTickets: (raw.supportTickets || []).map((ticket) => ({
         ...ticket,
@@ -2133,6 +2169,42 @@ private data!: DatabaseSchema;
 
   getAllOrders(): Order[] {
     return this.data.orders;
+  }
+
+  createWholesaleRequest(
+    request: Omit<WholesaleRequest, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'adminNotes'>
+  ): WholesaleRequest {
+    const timestamp = new Date().toISOString();
+    const newRequest: WholesaleRequest = {
+      ...request,
+      id: `wholesale_${Date.now()}`,
+      status: 'new',
+      adminNotes: '',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    this.data.wholesaleRequests.unshift(newRequest);
+    this.save();
+    return newRequest;
+  }
+
+  getWholesaleRequest(id: string): WholesaleRequest | undefined {
+    return this.data.wholesaleRequests.find((request) => request.id === id);
+  }
+
+  getAllWholesaleRequests(): WholesaleRequest[] {
+    return this.data.wholesaleRequests;
+  }
+
+  updateWholesaleRequest(
+    id: string,
+    updates: Partial<Pick<WholesaleRequest, 'status' | 'adminNotes'>>
+  ): WholesaleRequest | undefined {
+    const request = this.getWholesaleRequest(id);
+    if (!request) return undefined;
+    Object.assign(request, updates, { updatedAt: new Date().toISOString() });
+    this.save();
+    return request;
   }
 
   // Tracking operations

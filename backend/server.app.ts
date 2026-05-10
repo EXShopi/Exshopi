@@ -333,6 +333,16 @@ const createGuestCustomerId = (guestSessionId: string, phone?: string, email?: s
 
 const isGuestCustomerId = (customerId?: string) => String(customerId || '').startsWith('guest_');
 
+const wholesaleRequestRateMap = new Map<string, number[]>();
+const isWholesaleRequestRateLimited = (key: string) => {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const recent = (wholesaleRequestRateMap.get(key) || []).filter((time) => now - time < windowMs);
+  recent.push(now);
+  wholesaleRequestRateMap.set(key, recent);
+  return recent.length > 5;
+};
+
 const normalizeOperationalStatus = (status?: string) => {
   const value = String(status || '').trim().toLowerCase();
   if (!value) return 'pending_confirmation';
@@ -1886,6 +1896,32 @@ const guestOrderSchema = createOrderSchema.extend({
   verificationToken: z.string().min(8).optional().or(z.literal('')).default(''),
   checkoutMode: z.literal('guest').optional().default('guest'),
   guestSessionId: z.string().min(8).max(120).optional().default(''),
+});
+
+const wholesaleRequestSchema = z.object({
+  fullName: z.string().min(2).max(120),
+  phone: z.string().min(7).max(40),
+  email: z.string().email(),
+  country: z.string().min(2).max(80),
+  city: z.string().min(2).max(100),
+  productCategory: z.string().min(2).max(120),
+  productName: z.string().min(2).max(180),
+  modelsRequired: z.string().min(2).max(1200),
+  quantity: z.coerce.number().int().positive().max(100000),
+  expectedPrice: z.string().max(120).optional().default(''),
+  conditionRequired: z.enum(['new', 'refurbished', 'used', 'any']).default('any'),
+  deliveryCountry: z.string().min(2).max(80),
+  deliveryAddress: z.string().min(3).max(1000),
+  notes: z.string().max(2000).optional().default(''),
+  source: z.string().max(80).optional().default('website'),
+});
+
+const wholesaleStatusSchema = z.object({
+  status: z.enum(['new', 'contacted', 'quoted', 'confirmed', 'cancelled']),
+});
+
+const wholesaleNotesSchema = z.object({
+  adminNotes: z.string().max(3000).optional().default(''),
 });
 
 const codOtpSendSchema = z.object({
@@ -6228,6 +6264,160 @@ app.post('/api/admin/blacklist', authMiddleware, async (req: Request, res: Respo
     res.json(entry);
   } catch (error) {
     res.status(400).json({ error: String(error instanceof Error ? error.message : error) });
+  }
+});
+
+app.post('/api/wholesale-requests', async (req: Request, res: Response) => {
+  try {
+    const clientIp = getClientIp(req);
+    if (isWholesaleRequestRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many wholesale requests. Please wait a few minutes before submitting again.' });
+    }
+
+    const payload = wholesaleRequestSchema.parse(req.body);
+    if (!isValidPhoneForCountry(payload.phone, payload.country || 'AE')) {
+      return res.status(400).json({ error: 'Please enter a valid phone number for your country.' });
+    }
+
+    const duplicateWindowMs = 10 * 60 * 1000;
+    const now = Date.now();
+    const duplicate = db.getAllWholesaleRequests().find((request) => {
+      const createdAt = request.createdAt ? new Date(request.createdAt).getTime() : 0;
+      return (
+        now - createdAt < duplicateWindowMs &&
+        normalizePhone(request.phone) === normalizePhone(payload.phone) &&
+        String(request.modelsRequired || '').trim().toLowerCase() === payload.modelsRequired.trim().toLowerCase()
+      );
+    });
+    if (duplicate) {
+      return res.status(409).json({ error: 'This wholesale request was already received. Our team will contact you soon.' });
+    }
+
+    const request = db.createWholesaleRequest({
+      ...payload,
+      phone: normalizePhone(payload.phone),
+    });
+
+    try {
+      pushNotification({
+        audience: 'admin',
+        title: 'New wholesale request',
+        message: `${request.fullName} requested ${request.quantity} units: ${request.modelsRequired.slice(0, 120)}`,
+        type: 'wholesale_request_created',
+        entityType: 'wholesale_request',
+        entityId: request.id,
+      });
+      recordMarketplaceActivity({
+        actorId: request.id,
+        actorRole: 'system',
+        entityType: 'wholesale_request',
+        entityId: request.id,
+        action: 'wholesale_request_created',
+        summary: `${request.fullName} submitted a wholesale request for ${request.productName}`,
+      });
+      await sendAdminAlert(
+        'New wholesale request received',
+        'Wholesale / Bulk Order Request',
+        `${request.fullName} submitted a wholesale request from ExShopi.`,
+        [
+          { label: 'Customer', value: request.fullName },
+          { label: 'Phone', value: request.phone },
+          { label: 'Email', value: request.email },
+          { label: 'Country', value: `${request.country} / ${request.city}` },
+          { label: 'Product', value: request.productName },
+          { label: 'Models', value: request.modelsRequired },
+          { label: 'Quantity', value: String(request.quantity) },
+          { label: 'Expected price', value: request.expectedPrice || 'Not specified' },
+          { label: 'Condition', value: request.conditionRequired },
+          { label: 'Delivery', value: `${request.deliveryCountry} - ${request.deliveryAddress}` },
+          { label: 'Notes', value: request.notes || 'None' },
+        ]
+      );
+      sendSseEvent('wholesale-request-created', request);
+    } catch (sideEffectError) {
+      console.error('[wholesale] side effects failed:', sideEffectError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Thank you! Your wholesale request has been received. Our ExShopi team will contact you soon with the best available price.',
+      request,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get('/api/admin/wholesale-requests', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!hasAdminPermission(req.user?.role, 'orders:view')) {
+      return res.status(403).json({ error: 'Orders access required' });
+    }
+    res.json(db.getAllWholesaleRequests());
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.patch('/api/admin/wholesale-requests/:id/status', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!hasAdminPermission(req.user?.role, 'orders:manage')) {
+      return res.status(403).json({ error: 'Orders management access required' });
+    }
+    const payload = wholesaleStatusSchema.parse(req.body);
+    const updated = db.updateWholesaleRequest(req.params.id, { status: payload.status });
+    if (!updated) return res.status(404).json({ error: 'Wholesale request not found' });
+    sendSseEvent('wholesale-request-updated', updated);
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.patch('/api/admin/wholesale-requests/:id/notes', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!hasAdminPermission(req.user?.role, 'orders:manage')) {
+      return res.status(403).json({ error: 'Orders management access required' });
+    }
+    const payload = wholesaleNotesSchema.parse(req.body);
+    const updated = db.updateWholesaleRequest(req.params.id, { adminNotes: payload.adminNotes });
+    if (!updated) return res.status(404).json({ error: 'Wholesale request not found' });
+    sendSseEvent('wholesale-request-updated', updated);
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/admin/wholesale-requests/:id/convert-order', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!hasAdminPermission(req.user?.role, 'orders:manage')) {
+      return res.status(403).json({ error: 'Orders management access required' });
+    }
+    const request = db.getWholesaleRequest(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Wholesale request not found' });
+    const updated = db.updateWholesaleRequest(req.params.id, {
+      status: 'confirmed',
+      adminNotes: `${request.adminNotes || ''}\nPrepared for manual wholesale order conversion on ${new Date().toISOString()}.`.trim(),
+    });
+    res.json({
+      success: true,
+      message: 'Wholesale request marked confirmed and prepared for manual order conversion.',
+      request: updated,
+      orderDraft: {
+        type: 'wholesale_request',
+        customerName: request.fullName,
+        customerPhone: request.phone,
+        customerEmail: request.email,
+        productName: request.productName,
+        modelsRequired: request.modelsRequired,
+        quantity: request.quantity,
+        expectedPrice: request.expectedPrice,
+        deliveryAddress: request.deliveryAddress,
+      },
+    });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 

@@ -71,6 +71,14 @@ enum TicketStatus {
   escalated
 }
 
+enum WholesaleRequestStatus {
+  New       @map("new")
+  Contacted @map("contacted")
+  Quoted    @map("quoted")
+  Confirmed @map("confirmed")
+  Cancelled @map("cancelled")
+}
+
 model User {
   id                        String              @id @default(cuid())
   email                     String              @unique
@@ -353,6 +361,31 @@ model OrderItem {
   reviews          Review[]
 
   @@map("order_items")
+}
+
+model WholesaleRequest {
+  id                String                 @id @default(cuid())
+  fullName          String                 @map("full_name")
+  phone             String
+  email             String
+  country           String
+  city              String
+  productCategory   String                 @map("product_category")
+  productName       String                 @map("product_name")
+  modelsRequired    String                 @map("models_required")
+  quantity          Int
+  expectedPrice     String?                @map("expected_price")
+  conditionRequired String                 @default("any") @map("condition_required")
+  deliveryCountry   String                 @map("delivery_country")
+  deliveryAddress   String                 @map("delivery_address")
+  notes             String?
+  status            WholesaleRequestStatus @default(New)
+  adminNotes        String?                @map("admin_notes")
+  source            String                 @default("website")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  @@map("wholesale_requests")
 }
 
 model Review {

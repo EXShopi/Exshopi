@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   Package,
+  PackageSearch,
   Percent,
   Search,
   Settings,
@@ -168,6 +169,12 @@ export function AdminLayout() {
       icon: ShoppingCart,
       label: 'Orders',
       path: '/admin/orders',
+      permission: 'orders:view' as const,
+    },
+    {
+      icon: PackageSearch,
+      label: 'Wholesale',
+      path: '/admin/wholesale-requests',
       permission: 'orders:view' as const,
     },
     {

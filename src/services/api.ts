@@ -1916,6 +1916,66 @@ export const trackingAPI = {
   },
 };
 
+// ==================== WHOLESALE REQUESTS ====================
+export type WholesaleRequestStatus = 'new' | 'contacted' | 'quoted' | 'confirmed' | 'cancelled';
+
+export const wholesaleAPI = {
+  async create(data: any) {
+    const res = await safeFetchApi('/wholesale-requests', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
+
+  async getAdminAll() {
+    const res = await fetchWithAuthRetry('/admin/wholesale-requests', {
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+    return parseApiResponse(res);
+  },
+
+  async updateStatus(id: string, status: WholesaleRequestStatus) {
+    const res = await fetchWithAuthRetry(`/admin/wholesale-requests/${id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ status }),
+    });
+    return parseApiResponse(res);
+  },
+
+  async updateNotes(id: string, adminNotes: string) {
+    const res = await fetchWithAuthRetry(`/admin/wholesale-requests/${id}/notes`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ adminNotes }),
+    });
+    return parseApiResponse(res);
+  },
+
+  async convertToOrder(id: string) {
+    const res = await fetchWithAuthRetry(`/admin/wholesale-requests/${id}/convert-order`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+    return parseApiResponse(res);
+  },
+};
+
 // ==================== REVIEWS ====================
 export const reviewAPI = {
   async getSellerReviews(sellerId: string) {
