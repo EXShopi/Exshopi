@@ -172,7 +172,7 @@ export default function Home() {
       <SectionBoundary name="Hero">
         <HeroSection />
       </SectionBoundary>
-      <div className="fixed left-0 top-[62%] z-40 hidden -translate-y-1/2 lg:block">
+      <div className="fixed left-0 top-[62%] z-[90] hidden -translate-y-1/2 lg:block">
         <button
           type="button"
           onClick={() => setWholesaleOpen((current) => !current)}
@@ -185,7 +185,7 @@ export default function Home() {
         </button>
       </div>
       {wholesaleOpen && (
-        <div className="fixed left-12 top-[56%] z-40 hidden w-[380px] -translate-y-1/2 rounded-[30px] border border-amber-200 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.24)] lg:block">
+        <div className="fixed left-12 top-[58%] z-[90] hidden max-h-[calc(100vh-150px)] w-[380px] -translate-y-1/2 overflow-y-auto rounded-[30px] border border-amber-200 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.24)] lg:block">
           <div className="absolute -left-2 top-10 h-4 w-4 rotate-45 border-b border-l border-amber-200 bg-white" />
           <div className="relative">
             <div className="flex items-start justify-between gap-3">
