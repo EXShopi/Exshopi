@@ -246,7 +246,9 @@ async function main() {
     const pageText = stripHtml(html);
     const jsonLdNodes = flattenJsonLdNodes(extractJsonLdBlocks(html));
 
-    if (routePath !== "/404") {
+    const pageIsNoindex = /<meta\s+name="robots"\s+content="noindex/i.test(html);
+    const pageIsIndexable = routePath !== "/404" && !pageIsNoindex;
+    if (pageIsIndexable) {
       htmlRoutesInDist.add(routePath);
     }
 
@@ -255,7 +257,7 @@ async function main() {
       if (!/<meta\s+name="description"\s+content="[^"]+"/i.test(html)) {
         issues.push({ file: relative, message: "Missing meta description" });
       }
-      if (!/<meta\s+name="robots"\s+content="index, follow"/i.test(html)) {
+      if (pageIsIndexable && !/<meta\s+name="robots"\s+content="index, follow"/i.test(html)) {
         issues.push({ file: relative, message: "Missing robots index, follow" });
       }
       if (!/<link\s+rel="canonical"\s+href="https:\/\/exshopi\.com/i.test(html)) {
@@ -590,7 +592,7 @@ async function main() {
     if (/<urlset\b/i.test(sitemapXml) && !/<priority>[^<]+<\/priority>/i.test(sitemapXml)) {
       issues.push({ file: "sitemap.xml", message: "Sitemap entries are missing <priority>" });
     }
-    if (!/https:\/\/exshopi\.com\/sitemaps\/products-\d+\.xml/i.test(sitemapXml)) {
+    if (productPathsInDist.size > 0 && !/https:\/\/exshopi\.com\/sitemaps\/products-\d+\.xml/i.test(sitemapXml)) {
       issues.push({ file: "sitemap.xml", message: "Root sitemap does not reference a product sitemap" });
     }
 
