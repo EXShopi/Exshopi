@@ -1601,6 +1601,18 @@ export const orderAPI = {
     return parseApiResponse(res);
   },
 
+  async createGuest(data: any) {
+    const res = await safeFetchApi('/orders/guest/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
+
   async get(id: string) {
     const res = await fetchWithAuthRetry(`/orders/${id}`, {
       headers: getAuthHeaders(),
@@ -1765,6 +1777,49 @@ export const paymentAPI = {
     });
     return parseApiResponse(res);
   },
+
+  async createGuestStripeCheckoutSession(data: {
+    items: Array<{
+      sellerId: string;
+      productId: string;
+      quantity: number;
+      unitPrice?: number;
+      variantId?: string;
+      sku?: string;
+      image?: string;
+    }>;
+    shippingAddress: {
+      emirate?: string;
+      area?: string;
+      building?: string;
+      flat?: string;
+      addressLine: string;
+      method?: string;
+      city?: string;
+      district?: string;
+      street?: string;
+      postalCode?: string;
+      country?: string;
+      countryCode?: string;
+      countryName?: string;
+    };
+    deliveryCountry?: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    checkoutMode: 'guest';
+    guestSessionId: string;
+  }) {
+    const res = await safeFetchApi('/payments/stripe/guest-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return parseApiResponse(res);
+  },
 };
 
 export const paypalAPI = {
@@ -1806,6 +1861,8 @@ export const paypalAPI = {
     customerName?: string;
     customerEmail?: string;
     customerPhone?: string;
+    checkoutMode?: 'guest' | 'account';
+    guestSessionId?: string;
   }) {
     const res = await fetchWithAuthRetry('/paypal/create-order', {
       method: 'POST',
@@ -1819,7 +1876,7 @@ export const paypalAPI = {
     return parseApiResponse(res);
   },
 
-  async captureOrder(data: { paypalOrderId: string }) {
+  async captureOrder(data: { paypalOrderId: string; guestSessionId?: string }) {
     const res = await fetchWithAuthRetry('/paypal/capture-order', {
       method: 'POST',
       headers: {

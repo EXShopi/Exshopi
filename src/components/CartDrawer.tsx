@@ -159,6 +159,16 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 </p>
               </div>
 
+              <div className="grid gap-3">
+                <Link
+                  to="/checkout?mode=guest"
+                  onClick={onClose}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3 font-bold text-white transition hover:from-blue-700 hover:to-blue-800"
+                >
+                  Guest Checkout
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
@@ -167,11 +177,11 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   Continue
                 </button>
                 <Link
-                  to="/checkout"
+                  to="/checkout?mode=account"
                   onClick={onClose}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-lg transition"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-blue-100 bg-blue-50 text-blue-700 font-bold rounded-lg transition hover:bg-blue-100"
                 >
-                  Checkout
+                  Login
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>

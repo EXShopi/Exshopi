@@ -33,6 +33,7 @@ export default function OrderSuccess() {
   const stripeSessionId = searchParams.get("session_id");
   const trackingCodeFromQuery = searchParams.get("tracking");
   const orderRefFromQuery = searchParams.get("order");
+  const isGuestReturn = searchParams.get("guest") === "1";
   const isStripeReturn = useMemo(() => Boolean(searchParams.get("session_id") || searchParams.get("provider") === "stripe"), [searchParams]);
   const stateOrder = (location.state as { order?: any } | null)?.order || null;
 
@@ -79,6 +80,36 @@ export default function OrderSuccess() {
       return () => {
         mounted = false;
       };
+    }
+
+    if (isStripeReturn && isGuestReturn) {
+      let guestProfile: any = {};
+      try {
+        guestProfile = JSON.parse(window.localStorage.getItem("exshopi_guest_checkout_profile") || "{}");
+      } catch {
+        guestProfile = {};
+      }
+      const [firstName = "Guest", ...lastParts] = String(guestProfile.name || "Guest Customer").split(/\s+/);
+      setRestoredOrder({
+        id: stripeSessionId ? `Stripe ${stripeSessionId.slice(-8)}` : "Guest order",
+        trackingCode: trackingCodeFromQuery || "Sent by email",
+        createdAt: new Date().toISOString(),
+        customer: {
+          firstName,
+          lastName: lastParts.join(" "),
+          email: guestProfile.email || "your email",
+        },
+        shipping: {
+          address: "Address saved with your guest checkout",
+          city: "Worldwide",
+          country: guestProfile.country || "AE",
+        },
+        summary: guestProfile.summary || { subtotal: 0, shipping: 0, total: 0 },
+        items: Array.isArray(guestProfile.items) ? guestProfile.items : [],
+        isGuestOrder: true,
+      });
+      clearCart();
+      return;
     }
 
     if (!isStripeReturn || !user?.id) {
@@ -136,9 +167,10 @@ export default function OrderSuccess() {
     return () => {
       mounted = false;
     };
-  }, [clearCart, currentOrder, hydrateOrderFromApi, isStripeReturn, navigate, stripeSessionId, trackingCodeFromQuery, orderRefFromQuery, user?.email, user?.fullName, user?.id]);
+  }, [clearCart, currentOrder, hydrateOrderFromApi, isGuestReturn, isStripeReturn, navigate, stripeSessionId, trackingCodeFromQuery, orderRefFromQuery, user?.email, user?.fullName, user?.id]);
 
   const activeOrder = currentOrder || restoredOrder;
+  const isGuestOrder = Boolean(activeOrder?.isGuestOrder || isGuestReturn);
   const activeCountryCode = isSupportedCountryCode(activeOrder?.shipping?.country) ? activeOrder.shipping.country : 'AE';
   const activeCountry = getCountryConfig(activeCountryCode);
 
@@ -231,10 +263,14 @@ export default function OrderSuccess() {
           
           <h1 className="text-4xl font-bold text-slate-900 mb-3">Thank You!</h1>
           <p className="text-lg text-slate-600 mb-2">
-            Your COD order has been placed
+            Your order has been placed successfully.
           </p>
           <p className="text-slate-500">
-            A confirmation email has been sent to <span className="font-semibold text-slate-900">{activeOrder.customer.email}</span>
+            {activeOrder.customer?.email && activeOrder.customer.email !== "your email" ? (
+              <>A confirmation email has been sent to <span className="font-semibold text-slate-900">{activeOrder.customer.email}</span></>
+            ) : (
+              "Keep your order number and tracking details for support."
+            )}
           </p>
         </div>
 
@@ -299,9 +335,9 @@ export default function OrderSuccess() {
                 Delivery Address
               </h3>
               <div className="space-y-2">
-                <p className="font-semibold text-slate-900">{activeOrder.customer.firstName} {activeOrder.customer.lastName}</p>
-                <p className="text-slate-600">{activeOrder.shipping.address}</p>
-                <p className="text-slate-600">{activeOrder.shipping.city}, {activeCountry.shortName}</p>
+                <p className="font-semibold text-slate-900">{activeOrder.customer?.firstName || "Customer"} {activeOrder.customer?.lastName || ""}</p>
+                <p className="text-slate-600">{activeOrder.shipping?.address || "Address saved with order"}</p>
+                <p className="text-slate-600">{activeOrder.shipping?.city || activeCountry.shortName}, {activeCountry.shortName}</p>
               </div>
             </div>
 
@@ -349,6 +385,22 @@ export default function OrderSuccess() {
               ))}
             </div>
           </div>
+
+          {/* Info Boxes */}
+          {isGuestOrder && (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+              <p className="text-lg font-black text-blue-950">Create your ExShopi account in 1 click</p>
+              <p className="mt-2 text-sm font-semibold text-blue-900">
+                Track orders, save wishlist, get faster checkout, and receive exclusive offers using the same phone or email from this guest order.
+              </p>
+              <Link
+                to={`/register${activeOrder.customer?.email && activeOrder.customer.email !== "your email" ? `?email=${encodeURIComponent(activeOrder.customer.email)}` : ""}`}
+                className="mt-4 inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+              >
+                Create Account
+              </Link>
+            </div>
+          )}
 
           {/* Info Boxes */}
           <div className="grid md:grid-cols-2 gap-4">

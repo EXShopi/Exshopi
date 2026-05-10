@@ -322,6 +322,17 @@ const getClientIp = (req: Request) =>
     .trim()
     .toLowerCase();
 
+const createGuestCustomerId = (guestSessionId: string, phone?: string, email?: string) => {
+  const seed = `${guestSessionId || 'guest'}:${phone || ''}:${email || ''}`;
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return `guest_${hash.toString(36)}_${String(guestSessionId || Date.now()).slice(-8)}`;
+};
+
+const isGuestCustomerId = (customerId?: string) => String(customerId || '').startsWith('guest_');
+
 const normalizeOperationalStatus = (status?: string) => {
   const value = String(status || '').trim().toLowerCase();
   if (!value) return 'pending_confirmation';
@@ -1870,6 +1881,13 @@ const createOrderSchema = z.object({
   deliveryType: z.string().optional().default('Standard UAE Delivery'),
 });
 
+const guestOrderSchema = createOrderSchema.extend({
+  customerEmail: z.string().email().optional().or(z.literal('')).default(''),
+  verificationToken: z.string().min(8).optional().or(z.literal('')).default(''),
+  checkoutMode: z.literal('guest').optional().default('guest'),
+  guestSessionId: z.string().min(8).max(120).optional().default(''),
+});
+
 const codOtpSendSchema = z.object({
   phone: z.string().min(7),
   email: z.string().email(),
@@ -1916,6 +1934,11 @@ const stripeCheckoutSchema = z.object({
     method: z.string().optional().default('standard'),
   }),
   deliveryCountry: z.string().min(2).max(10).default('AE'),
+  customerName: z.string().optional().default(''),
+  customerEmail: z.string().email().optional().or(z.literal('')).default(''),
+  customerPhone: z.string().optional().default(''),
+  checkoutMode: z.enum(['guest', 'account']).optional().default('account'),
+  guestSessionId: z.string().min(8).max(120).optional().default(''),
 });
 
 const productPayloadSchema = z.object({
@@ -2535,6 +2558,7 @@ const serializeMarketplaceOrder = (order: any) => {
   const operationalStatus = deriveOperationalStatus(order, trackingEvents);
   const shippingAddress = order.shippingAddress || order.address || {};
   const risk = shippingAddress?.risk || {};
+  const guest = shippingAddress?.guest || {};
   const orderProducts = Array.isArray(order.items) && order.items.length
     ? order.items.map((item: any) => ({
         id: item.productId,
@@ -2563,6 +2587,11 @@ const serializeMarketplaceOrder = (order: any) => {
     customerName: order.customerName || customer?.name || 'Customer',
     customerEmail: order.customerEmail || customer?.email || '',
     customerPhone: order.customerPhone || customer?.phone || '',
+    isGuestOrder: Boolean(order.isGuestOrder || guest.isGuestOrder || isGuestCustomerId(order.customerId)),
+    guestName: order.guestName || guest.guestName || '',
+    guestEmail: order.guestEmail || guest.guestEmail || '',
+    guestPhone: order.guestPhone || guest.guestPhone || '',
+    guestAddress: order.guestAddress || guest.guestAddress || null,
     productTitle: firstItem?.title || product?.title || `Product ${order.productId}`,
     productImage: firstItem?.image || product?.image || '',
     products: orderProducts,
@@ -2609,6 +2638,7 @@ const serializeMarketplaceOrderAsync = async (order: any) => {
   const operationalStatus = deriveOperationalStatus(order, trackingEvents);
   const shippingAddress = order.shippingAddress || {};
   const risk = shippingAddress?.risk || {};
+  const guest = shippingAddress?.guest || {};
   const firstItem = Array.isArray(order.items) && order.items.length ? order.items[0] : null;
 
   return {
@@ -2619,6 +2649,11 @@ const serializeMarketplaceOrderAsync = async (order: any) => {
     customerName: order.customerName || customer?.name || 'Customer',
     customerEmail: order.customerEmail || customer?.email || '',
     customerPhone: order.customerPhone || customer?.phone || '',
+    isGuestOrder: Boolean(order.isGuestOrder || guest.isGuestOrder || isGuestCustomerId(order.customerId)),
+    guestName: order.guestName || guest.guestName || '',
+    guestEmail: order.guestEmail || guest.guestEmail || '',
+    guestPhone: order.guestPhone || guest.guestPhone || '',
+    guestAddress: order.guestAddress || guest.guestAddress || null,
     productTitle: firstItem?.title || order.products?.[0]?.title || 'Marketplace item',
     productImage: firstItem?.image || order.products?.[0]?.image || '',
     products: order.products || [],
@@ -2881,9 +2916,11 @@ const buildOrderPayloadFromItems = async ({
 app.use(
   '/api/paypal',
   createPaypalRouter({
-    authMiddleware,
+    authenticateRequest: tryAuthenticateRequest,
     createPaidOrders: async ({
       customerId,
+      isGuestOrder,
+      guestSessionId,
       items,
       shippingAddress,
       deliveryCountry,
@@ -2923,6 +2960,16 @@ app.use(
           shippingAddress: {
             ...shippingAddress,
             source: 'paypal',
+            guest: isGuestOrder
+              ? {
+                  isGuestOrder: true,
+                  guestSessionId: guestSessionId || '',
+                  guestName: customerName,
+                  guestEmail: customerEmail || '',
+                  guestPhone: normalizePhone(customerPhone || ''),
+                  guestAddress: shippingAddress,
+                }
+              : undefined,
             paypal: {
               orderId: payment.paypalOrderId,
               captureId: payment.captureId,
@@ -2944,6 +2991,14 @@ app.use(
           paidAt: payment.capturedAt,
         });
         orderPayload.status = 'confirmed';
+        if (isGuestOrder) {
+          orderPayload.isGuestOrder = true;
+          orderPayload.guestSessionId = guestSessionId || '';
+          orderPayload.guestName = customerName;
+          orderPayload.guestEmail = customerEmail || '';
+          orderPayload.guestPhone = normalizePhone(customerPhone || '');
+          orderPayload.guestAddress = shippingAddress;
+        }
 
         const order = prismaRuntime.enabled
           ? await prismaRuntime.createOrder(orderPayload)
@@ -2976,8 +3031,8 @@ app.use(
             createdAt: enriched.createdAt,
           });
           pushNotification({
-            audience: 'customer',
-            audienceId: customerId,
+            audience: isGuestOrder ? 'admin' : 'customer',
+            audienceId: isGuestOrder ? undefined : customerId,
             title: 'Payment confirmed',
             message: `Your PayPal order ${enriched.orderId || orderPayload.orderId} is confirmed.`,
             type: 'order_created',
@@ -2995,7 +3050,7 @@ app.use(
           });
           recordMarketplaceActivity({
             actorId: customerId,
-            actorRole: 'customer',
+            actorRole: isGuestOrder ? 'guest' : 'customer',
             entityType: 'order',
             entityId: enriched.id || order.id,
             action: 'paypal_order_created',
@@ -6176,6 +6231,180 @@ app.post('/api/admin/blacklist', authMiddleware, async (req: Request, res: Respo
   }
 });
 
+app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
+  try {
+    const payload = guestOrderSchema.parse(req.body);
+    const normalizedItems =
+      payload.items && payload.items.length
+        ? payload.items
+        : payload.productId
+        ? [{ productId: payload.productId, quantity: payload.quantity || 1, unitPrice: payload.unitPrice || 0 }]
+        : [];
+
+    if (!normalizedItems.length) {
+      return res.status(400).json({ error: 'At least one order item is required' });
+    }
+    if (payload.paymentMethod !== 'cod') {
+      return res.status(400).json({ error: 'Guest prepaid orders must use the secure prepaid checkout flow.' });
+    }
+    if (String(payload.deliveryCountry || 'AE').toUpperCase() !== 'AE') {
+      return res.status(400).json({ error: 'International guest orders are prepaid only.' });
+    }
+    if (!isValidPhoneForCountry(payload.customerPhone, payload.deliveryCountry || 'AE')) {
+      return res.status(400).json({ error: 'Please enter a valid phone number for the selected country.' });
+    }
+
+    const clientIp = getClientIp(req);
+    const normalizedCustomerPhone = normalizePhone(payload.customerPhone);
+    const blacklistHit = isBlacklisted({
+      phone: normalizedCustomerPhone,
+      email: payload.customerEmail || '',
+      ip: clientIp,
+    });
+    if (blacklistHit) {
+      return res.status(403).json({ error: `This customer is blocked from COD ordering (${blacklistHit.type}).` });
+    }
+
+    const allOrders = prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders();
+    const now = Date.now();
+    const recentGuestMatches = allOrders.filter((order) => {
+      const createdAt = order.createdAt ? new Date(order.createdAt).getTime() : 0;
+      return (
+        now - createdAt < 10 * 60 * 1000 &&
+        normalizePhone(order.customerPhone || order.shippingAddress?.guest?.guestPhone || '') === normalizedCustomerPhone
+      );
+    });
+    if (recentGuestMatches.length >= 2) {
+      return res.status(429).json({ error: 'Too many recent guest order attempts. Please wait a few minutes and try again.' });
+    }
+
+    const risk = calculateCodRisk({
+      phone: normalizedCustomerPhone,
+      email: payload.customerEmail || '',
+      ip: clientIp,
+      orders: allOrders.map((order) => ({
+        customerPhone: order.customerPhone,
+        customerEmail: order.customerEmail,
+        customerId: order.customerId,
+        createdAt: order.createdAt,
+        status: order.status,
+      })),
+      customerId: '',
+    });
+
+    const estimatedTotal = normalizedItems.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 1), 0) + Number(payload.shippingCost || 0);
+    if ((risk.riskLevel === 'suspicious' || estimatedTotal >= 2000) && !payload.verificationToken) {
+      return res.status(428).json({
+        requiresOtp: true,
+        error: 'This guest COD order needs phone verification because of risk or order value. Please sign in or choose prepaid checkout.',
+      });
+    }
+
+    const guestSessionId = payload.guestSessionId || `guest_${Date.now()}`;
+    const guestCustomerId = createGuestCustomerId(guestSessionId, normalizedCustomerPhone, payload.customerEmail || '');
+    const orderPayload: any = await buildOrderPayloadFromItems({
+      customerId: guestCustomerId,
+      sellerId: payload.sellerId,
+      normalizedItems,
+      shippingCost: payload.shippingCost,
+      shippingAddress: {
+        ...payload.shippingAddress,
+        phone: normalizedCustomerPhone,
+        source: 'guest_checkout',
+        risk,
+        guest: {
+          isGuestOrder: true,
+          guestSessionId,
+          guestName: payload.customerName,
+          guestEmail: payload.customerEmail || '',
+          guestPhone: normalizedCustomerPhone,
+          guestAddress: payload.shippingAddress,
+        },
+      },
+      customerName: payload.customerName,
+      customerEmail: payload.customerEmail || '',
+      customerPhone: normalizedCustomerPhone,
+      paymentMethod: 'cod',
+      paymentProvider: 'cod',
+      paymentStatus: 'cod_pending',
+      deliveryCountry: payload.deliveryCountry,
+    });
+    orderPayload.isGuestOrder = true;
+    orderPayload.guestSessionId = guestSessionId;
+    orderPayload.guestName = payload.customerName;
+    orderPayload.guestEmail = payload.customerEmail || '';
+    orderPayload.guestPhone = normalizedCustomerPhone;
+    orderPayload.guestAddress = payload.shippingAddress;
+
+    const order = prismaRuntime.enabled
+      ? await prismaRuntime.createOrder(orderPayload)
+      : db.createOrder(orderPayload);
+    if (!order) {
+      return res.status(500).json({ success: false, message: 'We could not place your guest order right now.' });
+    }
+
+    const timestamp = new Date().toISOString();
+    const seller = prismaRuntime.enabled ? await prismaRuntime.getSeller(orderPayload.sellerId) : db.getSeller(orderPayload.sellerId);
+    if (prismaRuntime.enabled) {
+      await prismaRuntime.addTrackingEvent(order.id, 'pending_confirmation', timestamp, 'Guest COD order placed');
+    } else {
+      db.addTrackingEvent(order.id, 'pending_confirmation', timestamp, 'Guest COD order placed');
+    }
+
+    try {
+      pushNotification({
+        audience: 'admin',
+        title: risk.riskLevel === 'suspicious' ? 'Suspicious guest COD order' : 'New guest COD order',
+        message: `${payload.customerName} placed guest COD order ${orderPayload.orderId}.`,
+        type: risk.riskLevel === 'suspicious' ? 'cod_order_risk' : 'order_created',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      pushNotification({
+        audience: 'seller',
+        audienceId: seller?.userId || seller?.id,
+        title: 'Guest order received',
+        message: `${payload.customerName} placed ${orderPayload.orderId}. Prepare it for confirmation and packing.`,
+        type: 'order_created',
+        entityType: 'order',
+        entityId: order.id,
+      });
+      if (payload.customerEmail) {
+        await sendCustomerNotice(
+          payload.customerEmail,
+          'Your ExShopi guest order has been placed',
+          'Order placed successfully',
+          `Your guest Cash on Delivery order ${orderPayload.orderId} has been created and is waiting for seller confirmation.`,
+          buildOrderFacts(orderPayload, seller?.storeName)
+        );
+      }
+    } catch (sideEffectError) {
+      console.error('[guest-checkout] post-create side effects failed:', sideEffectError);
+    }
+
+    const enrichedOrder = prismaRuntime.enabled
+      ? await serializeMarketplaceOrderAsync(order)
+      : serializeMarketplaceOrder(order);
+    sendSseEvent('order-created', {
+      id: enrichedOrder.id,
+      orderId: enrichedOrder.orderId,
+      status: enrichedOrder.status,
+      subtotal: enrichedOrder.subtotal,
+      sellerId: enrichedOrder.sellerId,
+      createdAt: enrichedOrder.createdAt,
+    });
+
+    res.json({
+      success: true,
+      message: 'Guest order placed successfully.',
+      order: enrichedOrder,
+    });
+  } catch (error) {
+    console.error('[guest-checkout] Order placement failed:', error);
+    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post('/api/orders/create', authMiddleware, async (req: Request, res: Response) => {
   try {
     console.info('[CHECKOUT] Request received');
@@ -6599,6 +6828,134 @@ app.post('/api/payments/stripe/checkout-session', authMiddleware, async (req: Re
       sessionId: session.id,
       checkoutUrl: session.url,
       orderIds: createdOrders.map((order) => order.id),
+    });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.post('/api/payments/stripe/guest-checkout-session', async (req: Request, res: Response) => {
+  try {
+    const payload = stripeCheckoutSchema.parse({ ...req.body, checkoutMode: 'guest' });
+    if (!payload.customerName.trim() || !payload.customerPhone.trim()) {
+      return res.status(400).json({ error: 'Guest prepaid checkout needs a name and phone number.' });
+    }
+    if (!payload.customerEmail.trim()) {
+      return res.status(400).json({ error: 'Guest prepaid checkout needs an email for payment receipts.' });
+    }
+
+    const guestSessionId = payload.guestSessionId || `guest_${Date.now()}`;
+    const guestCustomerId = createGuestCustomerId(guestSessionId, payload.customerPhone, payload.customerEmail);
+    const groupedItems = new Map<string, Array<{ productId: string; quantity: number; unitPrice: number; variantId?: string; sku?: string; image?: string }>>();
+    payload.items.forEach((item) => {
+      if (!groupedItems.has(item.sellerId)) {
+        groupedItems.set(item.sellerId, []);
+      }
+      groupedItems.get(item.sellerId)!.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice || 0),
+        variantId: item.variantId,
+        sku: item.sku,
+        image: item.image,
+      });
+    });
+
+    const createdOrders: any[] = [];
+    for (const [sellerId, items] of groupedItems.entries()) {
+      const orderPayload: any = await buildOrderPayloadFromItems({
+        customerId: guestCustomerId,
+        sellerId,
+        normalizedItems: items,
+        shippingAddress: {
+          ...payload.shippingAddress,
+          source: 'guest_stripe',
+          guest: {
+            isGuestOrder: true,
+            guestSessionId,
+            guestName: payload.customerName,
+            guestEmail: payload.customerEmail,
+            guestPhone: normalizePhone(payload.customerPhone),
+            guestAddress: payload.shippingAddress,
+          },
+        },
+        customerName: payload.customerName,
+        customerEmail: payload.customerEmail,
+        customerPhone: normalizePhone(payload.customerPhone),
+        paymentMethod: 'card',
+        paymentProvider: 'stripe',
+        paymentStatus: 'awaiting_payment',
+        deliveryCountry: payload.deliveryCountry,
+      });
+      orderPayload.isGuestOrder = true;
+      orderPayload.guestSessionId = guestSessionId;
+      orderPayload.guestName = payload.customerName;
+      orderPayload.guestEmail = payload.customerEmail;
+      orderPayload.guestPhone = normalizePhone(payload.customerPhone);
+      orderPayload.guestAddress = payload.shippingAddress;
+
+      const order = prismaRuntime.enabled
+        ? await prismaRuntime.createOrder(orderPayload)
+        : db.createOrder(orderPayload);
+      if (!order) {
+        throw new Error('Failed to create guest payment-ready order');
+      }
+      createdOrders.push(order);
+      if (prismaRuntime.enabled) {
+        await prismaRuntime.addTrackingEvent(order.id, 'placed', new Date().toISOString(), 'Guest Stripe checkout initiated');
+      } else {
+        db.addTrackingEvent(order.id, 'placed', new Date().toISOString(), 'Guest Stripe checkout initiated');
+      }
+    }
+
+    const lineItems = createdOrders.flatMap((order) =>
+      (order.items || []).map((item: any) => ({
+        name: item.title,
+        amountAed: Number(item.unitPrice || 0) + Math.round((Number(item.vatAmount || 0) / Math.max(Number(item.quantity || 1), 1)) * 100) / 100,
+        quantity: Number(item.quantity || 1),
+      }))
+    );
+    const deliveryLineAmount = createdOrders.reduce((sum, order) => sum + Number(order.shippingCost || 0), 0);
+    if (deliveryLineAmount > 0) {
+      lineItems.push({ name: 'Delivery & handling', amountAed: deliveryLineAmount, quantity: 1 });
+    }
+
+    const session = await createStripeCheckoutSession({
+      customerEmail: payload.customerEmail,
+      successUrl: `${APP_URL}/order-success?guest=1&provider=stripe&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${APP_URL}/checkout?mode=guest&payment=cancelled`,
+      metadata: {
+        customerId: guestCustomerId,
+        guestSessionId,
+        isGuestOrder: 'true',
+        orderIds: createdOrders.map((order) => order.id).join(','),
+      },
+      lineItems,
+    });
+
+    for (const order of createdOrders) {
+      if (prismaRuntime.enabled) {
+        await prismaRuntime.updateOrder(order.id, {
+          paymentSessionId: session.id,
+          paymentReference: session.payment_intent || session.id,
+          paymentStatus: 'awaiting_payment',
+        } as any);
+        await prismaRuntime.addTrackingEvent(order.id, 'placed', new Date().toISOString(), `Guest Stripe session ${session.id} created`);
+      } else {
+        db.updateOrder(order.id, {
+          paymentSessionId: session.id,
+          paymentReference: session.payment_intent || session.id,
+          paymentStatus: 'awaiting_payment',
+        } as any);
+        db.addTrackingEvent(order.id, 'placed', new Date().toISOString(), `Guest Stripe session ${session.id} created`);
+      }
+    }
+
+    res.json({
+      sessionId: session.id,
+      checkoutUrl: session.url,
+      orderIds: createdOrders.map((order) => order.id),
+      isGuestOrder: true,
     });
   } catch (error) {
     res.status(500).json({ error: String(error) });

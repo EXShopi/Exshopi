@@ -447,6 +447,12 @@ export interface Order {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  isGuestOrder?: boolean;
+  guestSessionId?: string;
+  guestName?: string;
+  guestEmail?: string;
+  guestPhone?: string;
+  guestAddress?: any;
   quantity: number;
   unitPrice: number;
   subtotal: number;

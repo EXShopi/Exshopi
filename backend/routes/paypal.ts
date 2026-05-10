@@ -87,10 +87,13 @@ const createOrderSchema = z.object({
   customerName: z.string().optional().default(''),
   customerEmail: z.string().email().optional().or(z.literal('')).default(''),
   customerPhone: z.string().optional().default(''),
+  checkoutMode: z.enum(['guest', 'account']).optional().default('account'),
+  guestSessionId: z.string().min(8).max(120).optional().default(''),
 });
 
 const captureOrderSchema = z.object({
   paypalOrderId: z.string().min(6),
+  guestSessionId: z.string().min(8).max(120).optional().default(''),
 });
 
 type PaypalCheckoutItem = z.infer<typeof itemSchema>;
@@ -99,6 +102,8 @@ type PaypalShippingAddress = z.infer<typeof shippingAddressSchema>;
 type StoredQuote = {
   paypalOrderId: string;
   customerId: string;
+  customerRole: 'customer' | 'guest';
+  guestSessionId: string;
   items: PaypalCheckoutItem[];
   shippingAddress: PaypalShippingAddress;
   deliveryCountry: string;
@@ -116,6 +121,8 @@ type StoredQuote = {
 
 export type CreatePaypalPaidOrdersInput = {
   customerId: string;
+  isGuestOrder?: boolean;
+  guestSessionId?: string;
   items: PaypalCheckoutItem[];
   shippingAddress: PaypalShippingAddress;
   deliveryCountry: string;
@@ -135,7 +142,8 @@ export type CreatePaypalPaidOrdersInput = {
 };
 
 type CreatePaypalRouterOptions = {
-  authMiddleware: RequestHandler;
+  authMiddleware?: RequestHandler;
+  authenticateRequest?: (req: any) => { id: string; role: string } | null;
   createPaidOrders: (input: CreatePaypalPaidOrdersInput) => Promise<any[]>;
 };
 
@@ -224,17 +232,32 @@ function extractCapture(result: any) {
   };
 }
 
-export function createPaypalRouter({ authMiddleware, createPaidOrders }: CreatePaypalRouterOptions) {
+function createGuestCustomerId(guestSessionId: string, phone?: string, email?: string) {
+  const seed = `${guestSessionId}:${phone || ''}:${email || ''}`;
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return `guest_${hash.toString(36)}_${String(guestSessionId || '').slice(-8)}`;
+}
+
+export function createPaypalRouter({ authenticateRequest, createPaidOrders }: CreatePaypalRouterOptions) {
   const router = express.Router();
 
-  router.post('/create-order', authMiddleware, async (req, res) => {
+  router.post('/create-order', async (req, res) => {
     try {
-      if (req.user?.role !== 'customer') {
-        return res.status(403).json({ error: 'Customer only' });
-      }
-
       cleanupExpiredQuotes();
       const payload = createOrderSchema.parse(req.body);
+      const authUser = authenticateRequest?.(req) || null;
+      const isCustomer = authUser?.role === 'customer';
+      const isGuestOrder = payload.checkoutMode === 'guest' || !isCustomer;
+      if (!isCustomer && !isGuestOrder) {
+        return res.status(403).json({ error: 'Customer only' });
+      }
+      if (isGuestOrder && (!payload.customerName.trim() || !payload.customerPhone.trim())) {
+        return res.status(400).json({ error: 'Guest PayPal checkout needs a name and phone number.' });
+      }
+
       const displayCurrency = payload.currency.toUpperCase();
       const paypalCurrency = getPaypalCurrency(payload.deliveryCountry, displayCurrency);
       const itemTotal = payload.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
@@ -288,7 +311,11 @@ export function createPaypalRouter({ authMiddleware, createPaidOrders }: CreateP
 
       quoteStore.set(paypalOrderId, {
         paypalOrderId,
-        customerId: req.user.id,
+        customerId: isGuestOrder
+          ? createGuestCustomerId(payload.guestSessionId || paypalOrderId, payload.customerPhone, payload.customerEmail)
+          : authUser!.id,
+        customerRole: isGuestOrder ? 'guest' : 'customer',
+        guestSessionId: isGuestOrder ? payload.guestSessionId || paypalOrderId : '',
         items: payload.items,
         shippingAddress: payload.shippingAddress,
         deliveryCountry: payload.deliveryCountry.toUpperCase(),
@@ -306,7 +333,7 @@ export function createPaypalRouter({ authMiddleware, createPaidOrders }: CreateP
 
       console.info('[paypal] order created', {
         paypalOrderId: maskPayPalId(paypalOrderId),
-        customerId: req.user.id,
+        customerId: isGuestOrder ? 'guest' : authUser!.id,
         paypalCurrency,
         paypalTotal,
         deliveryCountry: payload.deliveryCountry,
@@ -323,21 +350,20 @@ export function createPaypalRouter({ authMiddleware, createPaidOrders }: CreateP
     }
   });
 
-  router.post('/capture-order', authMiddleware, async (req, res) => {
+  router.post('/capture-order', async (req, res) => {
     try {
-      if (req.user?.role !== 'customer') {
-        return res.status(403).json({ error: 'Customer only' });
-      }
-
       cleanupExpiredQuotes();
       const payload = captureOrderSchema.parse(req.body);
+      const authUser = authenticateRequest?.(req) || null;
       const existingCapture = capturedStore.get(payload.paypalOrderId);
       if (existingCapture) {
         return res.json(existingCapture);
       }
 
       const quote = quoteStore.get(payload.paypalOrderId);
-      if (!quote || quote.customerId !== req.user.id) {
+      const quoteBelongsToCustomer = quote?.customerRole === 'customer' && authUser?.role === 'customer' && quote.customerId === authUser.id;
+      const quoteBelongsToGuest = quote?.customerRole === 'guest' && payload.guestSessionId && payload.guestSessionId === quote.guestSessionId;
+      if (!quote || (!quoteBelongsToCustomer && !quoteBelongsToGuest)) {
         return res.status(400).json({ error: 'PayPal order expired or does not belong to this checkout.' });
       }
 
@@ -368,7 +394,9 @@ export function createPaypalRouter({ authMiddleware, createPaidOrders }: CreateP
       }
 
       const orders = await createPaidOrders({
-        customerId: req.user.id,
+        customerId: quote.customerId,
+        isGuestOrder: quote.customerRole === 'guest',
+        guestSessionId: quote.guestSessionId,
         items: quote.items,
         shippingAddress: quote.shippingAddress,
         deliveryCountry: quote.deliveryCountry,
@@ -409,7 +437,7 @@ export function createPaypalRouter({ authMiddleware, createPaidOrders }: CreateP
       console.info('[paypal] order captured', {
         paypalOrderId: maskPayPalId(quote.paypalOrderId),
         captureId: maskPayPalId(capture.id),
-        customerId: req.user.id,
+        customerId: quote.customerRole === 'guest' ? 'guest' : quote.customerId,
         orderCount: orders.length,
       });
 

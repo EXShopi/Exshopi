@@ -54,6 +54,16 @@ function getItemBasePriceAed(item: any) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function getGuestCheckoutSessionId() {
+  if (typeof window === "undefined") return `guest_${Date.now()}`;
+  const key = "exshopi_guest_checkout_session";
+  const existing = window.localStorage.getItem(key);
+  if (existing) return existing;
+  const created = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  window.localStorage.setItem(key, created);
+  return created;
+}
+
 export default function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,6 +78,10 @@ export default function Checkout() {
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
   const useFirebaseOtp = canAttemptFirebasePhoneVerification();
   const [authChecked, setAuthChecked] = useState(false);
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const [checkoutMode, setCheckoutMode] = useState<"guest" | "account">(
+    queryParams.get("mode") === "account" ? "account" : "guest"
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [otpSessionId, setOtpSessionId] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -128,6 +142,18 @@ export default function Checkout() {
   const vatAmount = Math.round(calculateVat(total, selectedCountry));
   const totalPayable = total + shippingFee + vatAmount;
   const normalizedPhone = normalizePhoneByCountry(form.phone, selectedCountry);
+  const hasCustomerSession = authChecked && Boolean(authUser?.id) && authRole === "customer";
+  const isGuestCheckout = checkoutMode === "guest" || !hasCustomerSession;
+  const guestSessionId = useMemo(() => getGuestCheckoutSessionId(), []);
+  const guestOtpRequired = isGuestCheckout && form.paymentMethod === "cod" && totalPayable >= 2000;
+  const codVerificationRequired = form.paymentMethod === "cod" && (!isGuestCheckout || guestOtpRequired);
+
+  useEffect(() => {
+    if (!authChecked || queryParams.get("mode")) return;
+    if (hasCustomerSession) {
+      setCheckoutMode("account");
+    }
+  }, [authChecked, hasCustomerSession, queryParams]);
 
   const resetOtpState = () => {
     setOtpVerified(false);
@@ -222,7 +248,7 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    if (form.paymentMethod !== "cod") return;
+    if (!codVerificationRequired) return;
     const persistedSession = getActiveFirebasePhoneOtpSession();
     if (!persistedSession?.phone || !normalizedPhone) return;
     if (persistedSession.phone !== normalizedPhone || otpVerified) return;
@@ -237,7 +263,7 @@ export default function Checkout() {
       current ||
       `Verification code already sent to ${persistedSession.phone}. Enter the 6-digit code to continue your COD order.`
     );
-  }, [form.paymentMethod, normalizedPhone, otpVerified]);
+  }, [codVerificationRequired, normalizedPhone, otpVerified]);
 
   useEffect(() => {
     let mounted = true;
@@ -277,17 +303,11 @@ export default function Checkout() {
           }
         }
 
-        navigate("/login", {
-          replace: true,
-          state: {
-            from: location,
-            reason: "checkout_requires_customer_login",
-          },
-        });
+        setAuthChecked(true);
       } catch (sessionError) {
         console.error("[checkout] session restore failed", sessionError);
         if (!mounted) return;
-        setPageError("We couldn't restore your checkout session. Please refresh and sign in again.");
+        setAuthChecked(true);
       }
     };
 
@@ -296,7 +316,7 @@ export default function Checkout() {
     return () => {
       mounted = false;
     };
-  }, [authRole, authUser?.id, authUser?.uid, location, navigate, setAccessToken, setRole, setUser]);
+  }, [authRole, authUser?.id, authUser?.uid, setAccessToken, setRole, setUser]);
 
   useEffect(() => {
     if (!authChecked || !authUser?.id) return;
@@ -511,7 +531,7 @@ export default function Checkout() {
       if (!form.firstName.trim() || !form.lastName.trim()) {
         return "Please enter your full name.";
       }
-      if (!form.email.trim()) {
+      if (!isGuestCheckout && !form.email.trim()) {
         return "Please enter your email address.";
       }
       if (!isValidPhoneForCountry(form.phone, selectedCountry)) {
@@ -552,7 +572,15 @@ export default function Checkout() {
       return "Cash on Delivery is available only in the UAE. Please select a prepaid method for international delivery.";
     }
 
-    if (step === 4 && form.paymentMethod === "cod" && !otpVerified) {
+    if (step === 4 && form.paymentMethod !== "cod" && !form.email.trim()) {
+      return "Please enter your email address for secure prepaid payment receipts.";
+    }
+
+    if (step === 4 && guestOtpRequired) {
+      return "High-value guest COD needs phone verification. Please sign in for OTP verification or choose a prepaid method.";
+    }
+
+    if (step === 4 && codVerificationRequired && !otpVerified) {
       return "Please complete the COD verification step.";
     }
 
@@ -580,6 +608,10 @@ export default function Checkout() {
     }
 
     try {
+      if (isGuestCheckout) {
+        setOtpError("This guest COD order needs extra verification. Please sign in for OTP verification or choose a prepaid method.");
+        return;
+      }
       if (!authChecked || !authUser?.id || authRole !== "customer") {
         setOtpError("Please sign in to your customer account before phone verification.");
         return;
@@ -755,6 +787,8 @@ export default function Checkout() {
       customerName: `${form.firstName} ${form.lastName}`.trim(),
       customerEmail: form.email,
       customerPhone: normalizedPhone,
+      checkoutMode: isGuestCheckout ? "guest" : "account",
+      guestSessionId: isGuestCheckout ? guestSessionId : undefined,
     });
 
     if (!response?.paypalOrderId) {
@@ -773,13 +807,35 @@ export default function Checkout() {
     setIsProcessing(true);
     setPaypalError("");
     setPaypalStatus("Verifying PayPal payment securely...");
-    const response = await paypalAPI.captureOrder({ paypalOrderId });
+    const response = await paypalAPI.captureOrder({
+      paypalOrderId,
+      guestSessionId: isGuestCheckout ? guestSessionId : undefined,
+    });
     const primaryOrder = response?.order || response?.orders?.[0];
     if (!response?.success || !primaryOrder) {
       throw new Error(response?.error || "PayPal payment was not verified.");
     }
 
     hydrateOrderFromApi(primaryOrder);
+    if (isGuestCheckout && typeof window !== "undefined") {
+      window.localStorage.setItem(
+        "exshopi_guest_checkout_profile",
+        JSON.stringify({
+          name: `${form.firstName} ${form.lastName}`.trim(),
+          email: form.email,
+          phone: normalizedPhone,
+          summary: { subtotal: total, shipping: shippingFee, total: totalPayable },
+          items: items.map((item) => ({
+            title: item.title,
+            quantity: item.quantity,
+            price: getProductCountryPrice(item, selectedCountry),
+            image: item.image,
+          })),
+          country: selectedCountry,
+          savedAt: new Date().toISOString(),
+        })
+      );
+    }
     clearCart();
     setPaypalStatus("Payment verified. Opening your order confirmation...");
     navigate(
@@ -787,6 +843,8 @@ export default function Checkout() {
         ? `/order-success?tracking=${encodeURIComponent(primaryOrder.trackingCode)}`
         : primaryOrder?.orderId || primaryOrder?.orderNumber || primaryOrder?.id
         ? `/order-success?order=${encodeURIComponent(String(primaryOrder.orderId || primaryOrder.orderNumber || primaryOrder.id))}`
+        : isGuestCheckout
+        ? "/order-success?guest=1"
         : "/order-success"
     );
   };
@@ -803,6 +861,11 @@ export default function Checkout() {
     try {
       setIsProcessing(true);
       setPageError("");
+      if (!isGuestCheckout && (!authChecked || !authUser?.id || authRole !== "customer")) {
+        setPageError("Please sign in or choose Continue as Guest before placing this order.");
+        setIsProcessing(false);
+        return;
+      }
       const ordersBySellerMap = await resolveCanonicalSellerGroups();
 
       if (form.paymentMethod === "paypal") {
@@ -819,14 +882,45 @@ export default function Checkout() {
           unitPrice: item.basePriceAed,
         }));
 
-        const session = await paymentAPI.createStripeCheckoutSession({
-          items: paymentItems,
-          shippingAddress: buildCheckoutShippingAddress(),
-          deliveryCountry: selectedCountry,
-        });
+        const session = isGuestCheckout
+          ? await paymentAPI.createGuestStripeCheckoutSession({
+              items: paymentItems,
+              shippingAddress: buildCheckoutShippingAddress(),
+              deliveryCountry: selectedCountry,
+              customerName: `${form.firstName} ${form.lastName}`.trim(),
+              customerEmail: form.email,
+              customerPhone: normalizedPhone,
+              checkoutMode: "guest",
+              guestSessionId,
+            })
+          : await paymentAPI.createStripeCheckoutSession({
+              items: paymentItems,
+              shippingAddress: buildCheckoutShippingAddress(),
+              deliveryCountry: selectedCountry,
+            });
 
         if (!session?.checkoutUrl) {
           throw new Error("Secure prepaid checkout could not be started.");
+        }
+
+        if (isGuestCheckout && typeof window !== "undefined") {
+          window.localStorage.setItem(
+            "exshopi_guest_checkout_profile",
+            JSON.stringify({
+              name: `${form.firstName} ${form.lastName}`.trim(),
+              email: form.email,
+              phone: normalizedPhone,
+              summary: { subtotal: total, shipping: shippingFee, total: totalPayable },
+              items: items.map((item) => ({
+                title: item.title,
+                quantity: item.quantity,
+                price: getProductCountryPrice(item, selectedCountry),
+                image: item.image,
+              })),
+              country: selectedCountry,
+              savedAt: new Date().toISOString(),
+            })
+          );
         }
 
         window.location.href = session.checkoutUrl;
@@ -838,7 +932,7 @@ export default function Checkout() {
       // Create an order for each seller
       for (const [sellerId, sellerItems] of ordersBySellerMap) {
         const sellerShippingCost = activeShipping.fee;
-        const created = await orderAPI.create({
+        const orderPayload = {
           sellerId,
           items: sellerItems.map((item: any) => {
             const parts = String(item.id).split('::');
@@ -865,7 +959,14 @@ export default function Checkout() {
           deliveryCountry: selectedCountry,
           countryCode: selectedCountry,
           countryName: country.name,
-        });
+        };
+        const created = isGuestCheckout
+          ? await orderAPI.createGuest({
+              ...orderPayload,
+              checkoutMode: "guest",
+              guestSessionId,
+            })
+          : await orderAPI.create(orderPayload);
         const createdOrder = created?.order ?? created;
         if (!createdOrder?.id && !createdOrder?.orderId && !createdOrder?.trackingCode) {
           throw new Error("Order was not created successfully.");
@@ -877,6 +978,25 @@ export default function Checkout() {
       if (primaryOrder) {
         hydrateOrderFromApi(primaryOrder);
       }
+      if (isGuestCheckout && typeof window !== "undefined") {
+        window.localStorage.setItem(
+          "exshopi_guest_checkout_profile",
+          JSON.stringify({
+            name: `${form.firstName} ${form.lastName}`.trim(),
+            email: form.email,
+            phone: normalizedPhone,
+            summary: { subtotal: total, shipping: shippingFee, total: totalPayable },
+            items: items.map((item) => ({
+              title: item.title,
+              quantity: item.quantity,
+              price: getProductCountryPrice(item, selectedCountry),
+              image: item.image,
+            })),
+            country: selectedCountry,
+            savedAt: new Date().toISOString(),
+          })
+        );
+      }
 
       // Clear cart and redirect to success
       clearCart();
@@ -885,6 +1005,8 @@ export default function Checkout() {
           ? `/order-success?tracking=${encodeURIComponent(primaryOrder.trackingCode)}`
           : primaryOrder?.orderId || primaryOrder?.orderNumber || primaryOrder?.id
           ? `/order-success?order=${encodeURIComponent(String(primaryOrder.orderId || primaryOrder.orderNumber || primaryOrder.id))}`
+          : isGuestCheckout
+          ? "/order-success?guest=1"
           : "/order-success"
       );
     } catch (error: any) {
@@ -979,6 +1101,45 @@ export default function Checkout() {
           {/* Main Content */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+              <div className="mb-8 grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheckoutMode("guest");
+                    setPageError("");
+                  }}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    isGuestCheckout
+                      ? "border-blue-500 bg-blue-50 shadow-[0_14px_34px_rgba(37,99,235,0.14)]"
+                      : "border-slate-200 bg-white hover:border-blue-300"
+                  }`}
+                >
+                  <p className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Fastest</p>
+                  <p className="mt-1 text-lg font-black text-slate-900">Continue as Guest</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">No account or password required. Track with your order number.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!hasCustomerSession) {
+                      navigate("/login", { state: { from: location, reason: "checkout_account_selected" } });
+                      return;
+                    }
+                    setCheckoutMode("account");
+                    setPageError("");
+                  }}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    !isGuestCheckout
+                      ? "border-slate-900 bg-slate-900 text-white shadow-[0_14px_34px_rgba(15,23,42,0.18)]"
+                      : "border-slate-200 bg-white hover:border-slate-400"
+                  }`}
+                >
+                  <p className={`text-sm font-black uppercase tracking-[0.16em] ${!isGuestCheckout ? "text-blue-200" : "text-slate-500"}`}>Account</p>
+                  <p className={`mt-1 text-lg font-black ${!isGuestCheckout ? "text-white" : "text-slate-900"}`}>Login / Create Account</p>
+                  <p className={`mt-1 text-sm font-semibold ${!isGuestCheckout ? "text-white/70" : "text-slate-600"}`}>Save addresses, wishlist, invoices, and faster future checkout.</p>
+                </button>
+              </div>
+
               {/* Step 1: Customer Info */}
               {currentStep === 1 && (
                 <div>
@@ -1017,7 +1178,7 @@ export default function Checkout() {
 
                     <div>
                       <label className="mb-2 block text-sm font-bold text-slate-900">
-                        Email Address *
+                        Email Address {isGuestCheckout && form.paymentMethod === "cod" ? "(optional for COD)" : "*"}
                       </label>
                       <input
                         type="email"
@@ -1060,7 +1221,9 @@ export default function Checkout() {
                       />
                       <p className="mt-2 text-xs font-semibold text-slate-500">
                         {canUseCod
-                          ? "UAE mobile verification is required before COD order confirmation."
+                          ? isGuestCheckout
+                            ? "Guest COD stays fast. OTP is requested only for high-value or suspicious orders."
+                            : "UAE mobile verification is required before COD order confirmation."
                           : `${country.shortName} phone number is used for courier delivery updates.`}
                       </p>
                     </div>
@@ -1285,9 +1448,14 @@ export default function Checkout() {
                         Restoring your checkout session...
                       </div>
                     )}
-                    {authChecked && (!authUser?.id || authRole !== "customer") && (
+                    {authChecked && isGuestCheckout && (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
+                        Guest checkout is active. Your order will still appear in admin and seller dashboards with invoice, tracking, and support access.
+                      </div>
+                    )}
+                    {authChecked && !isGuestCheckout && (!authUser?.id || authRole !== "customer") && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                        Sign in first. Secure checkout and order placement require a customer account.
+                        Sign in first, or choose Continue as Guest above to place this order without an account.
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-6">
@@ -1297,7 +1465,9 @@ export default function Checkout() {
                         </p>
                         <p className="mt-1 text-sm font-medium text-slate-600">
                           {form.paymentMethod === "cod"
-                            ? `Pay on delivery in ${country.currency}. ExShopi requires UAE phone verification before the order is sent to sellers.`
+                            ? isGuestCheckout
+                              ? `Pay on delivery in ${country.currency}. OTP is only requested for high-value or suspicious guest COD orders.`
+                              : `Pay on delivery in ${country.currency}. ExShopi requires UAE phone verification before the order is sent to sellers.`
                             : `International orders to ${country.name} are prepaid only. ExShopi prepares the order with customs-ready invoice, courier tracking, and secure payment confirmation.`}
                         </p>
                       </div>
@@ -1309,7 +1479,7 @@ export default function Checkout() {
                       </div>
                     </div>
 
-                    {form.paymentMethod === "cod" && (
+                    {codVerificationRequired && (
                     <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                       <div>
                         <label className="mb-2 block text-sm font-bold text-slate-900">Phone Verification</label>
@@ -1335,7 +1505,7 @@ export default function Checkout() {
                       <button
                         type="button"
                         onClick={handleSendOtp}
-                        disabled={sendingOtp || otpCooldownSeconds > 0 || !authChecked || !authUser?.id || authRole !== "customer"}
+                        disabled={sendingOtp || otpCooldownSeconds > 0 || !authChecked || (!isGuestCheckout && (!authUser?.id || authRole !== "customer"))}
                         className="h-12 rounded-xl bg-blue-600 px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-blue-300"
                       >
                         {sendingOtp ? "Sending..." : otpCooldownSeconds > 0 ? `Resend in ${otpCooldownSeconds}s` : "Send Code"}
@@ -1343,13 +1513,13 @@ export default function Checkout() {
                     </div>
                     )}
 
-                    {form.paymentMethod === "cod" && otpMessage && (
+                    {codVerificationRequired && otpMessage && (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                         {otpMessage}
                       </div>
                     )}
 
-                    {form.paymentMethod === "cod" && otpError && (
+                    {codVerificationRequired && otpError && (
                       <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
                         {otpError}
                       </div>
@@ -1366,8 +1536,8 @@ export default function Checkout() {
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Verification</p>
-                        <p className={`mt-2 text-xl font-black ${otpVerified || form.paymentMethod !== "cod" ? "text-emerald-600" : "text-slate-900"}`}>
-                          {form.paymentMethod !== "cod" ? "Prepaid" : otpVerified ? "Verified" : "Required"}
+                        <p className={`mt-2 text-xl font-black ${otpVerified || form.paymentMethod !== "cod" || !codVerificationRequired ? "text-emerald-600" : "text-slate-900"}`}>
+                          {form.paymentMethod !== "cod" ? "Prepaid" : codVerificationRequired ? (otpVerified ? "Verified" : "Required") : "Guest Fast"}
                         </p>
                         {!otpVerified && otpSessionId && (
                           <p className="mt-2 text-xs font-semibold text-slate-500">
@@ -1425,7 +1595,7 @@ export default function Checkout() {
                                 label: "paypal",
                                 height: 45,
                               }}
-                              disabled={isProcessing || !authChecked || !authUser?.id || authRole !== "customer"}
+                              disabled={isProcessing || (!isGuestCheckout && (!authChecked || !authUser?.id || authRole !== "customer"))}
                               createOrder={async () => handlePaypalCreateOrder()}
                               onApprove={async (data: any) => {
                                 try {

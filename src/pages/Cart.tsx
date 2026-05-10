@@ -365,12 +365,26 @@ export default function Cart() {
 
                 {/* Checkout Button */}
                 <button
-                  onClick={() => navigate("/checkout")}
+                  onClick={() => navigate("/checkout?mode=guest")}
                   className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-95"
                 >
-                  Proceed to Checkout
+                  Continue as Guest
                   <ArrowRight className="h-5 w-5" />
                 </button>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={() => navigate("/checkout?mode=account")}
+                    className="flex items-center justify-center gap-2 rounded-xl border-2 border-slate-200 px-4 py-3 text-sm font-black text-slate-900 transition hover:bg-slate-50"
+                  >
+                    Login Checkout
+                  </button>
+                  <button
+                    onClick={() => navigate("/login", { state: { from: { pathname: "/checkout", search: "?mode=account" } } })}
+                    className="flex items-center justify-center gap-2 rounded-xl border-2 border-blue-100 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+                  >
+                    Create Account
+                  </button>
+                </div>
               </div>
 
               {/* Trust Badges */}

@@ -1478,7 +1478,7 @@ const productSchema = product
     );
   }
 
-  const handleAddToCart = () => {
+  const addActiveProductToCart = (options?: { openDrawer?: boolean }) => {
     const compositeId = activeVariant && activeVariant.id ? `${product.id}::${activeVariant.id}` : String(product.id);
     const existingQuantity =
       useCartStore.getState().items.find((item) => item.id === compositeId)?.quantity || 0;
@@ -1503,12 +1503,23 @@ const productSchema = product
     if (quantity > 1) {
       updateQuantity(compositeId, existingQuantity + quantity);
     }
-    window.dispatchEvent(new CustomEvent("openCartDrawer"));
+    if (options?.openDrawer !== false) {
+      window.dispatchEvent(new CustomEvent("openCartDrawer"));
+    }
+  };
+
+  const handleAddToCart = () => {
+    addActiveProductToCart({ openDrawer: true });
   };
 
   const handleBuyNow = () => {
-    handleAddToCart();
+    addActiveProductToCart({ openDrawer: false });
     navigate("/checkout");
+  };
+
+  const handleGuestCheckout = () => {
+    addActiveProductToCart({ openDrawer: false });
+    navigate("/checkout?mode=guest");
   };
 
   const handleAddRelatedToCart = (item: ReturnType<typeof mapToCardProduct>) => {
@@ -2119,6 +2130,13 @@ const productSchema = product
                 >
                   <Zap className="h-5 w-5" />
                   Buy Now
+                </button>
+                <button
+                  onClick={handleGuestCheckout}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-6 py-3.5 font-semibold text-slate-950 shadow-[0_16px_32px_rgba(15,23,42,0.10)] transition duration-300 hover:-translate-y-0.5 hover:scale-[1.01] hover:border-blue-300 hover:bg-blue-50 active:scale-[0.99]"
+                >
+                  <Shield className="h-5 w-5 text-blue-600" />
+                  Checkout as Guest
                 </button>
               </div>
 
