@@ -184,23 +184,6 @@ export default function Home() {
           </span>
         </button>
       </div>
-      {!wholesaleOpen && (
-        <div className="fixed right-4 top-[48%] z-30 hidden -translate-y-1/2 lg:block">
-          <button
-            type="button"
-            onClick={() => setWholesaleOpen(true)}
-            className="group flex w-[86px] flex-col items-center gap-2 rounded-[22px] border border-blue-100 bg-white/95 px-3 py-4 text-center shadow-[0_20px_55px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-x-1 hover:border-blue-200 hover:shadow-[0_24px_65px_rgba(37,99,235,0.18)]"
-            aria-label="Open wholesale contact"
-          >
-            <span className="grid h-9 w-9 place-items-center rounded-2xl bg-blue-50 text-blue-600">
-              <PackageSearch className="h-5 w-5" />
-            </span>
-            <span className="text-[10px] font-black uppercase leading-3 tracking-[0.16em] text-slate-950">
-              Contact Wholesale
-            </span>
-          </button>
-        </div>
-      )}
       {wholesaleOpen && (
         <div className="fixed left-12 top-[56%] z-40 hidden w-[380px] -translate-y-1/2 rounded-[30px] border border-amber-200 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.24)] lg:block">
           <div className="absolute -left-2 top-10 h-4 w-4 rotate-45 border-b border-l border-amber-200 bg-white" />
