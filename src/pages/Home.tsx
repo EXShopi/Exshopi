@@ -172,46 +172,69 @@ export default function Home() {
       <SectionBoundary name="Hero">
         <HeroSection />
       </SectionBoundary>
-      <div className="fixed right-3 top-[46%] z-30 hidden -translate-y-1/2 lg:block">
-        {!wholesaleOpen ? (
+      <div className="fixed left-0 top-[62%] z-40 hidden -translate-y-1/2 lg:block">
+        <button
+          type="button"
+          onClick={() => setWholesaleOpen((current) => !current)}
+          className="group flex h-[240px] w-10 items-center justify-center rounded-r-2xl border border-l-0 border-amber-300 bg-gradient-to-b from-amber-300 via-yellow-400 to-amber-500 shadow-[0_20px_50px_rgba(245,158,11,0.38)] transition hover:w-12 hover:shadow-[0_24px_62px_rgba(245,158,11,0.45)]"
+          aria-label="Open wholesale contact"
+        >
+          <span className="rotate-180 text-lg font-black tracking-tight text-slate-950 [writing-mode:vertical-rl]">
+            Wholesale Contact
+          </span>
+        </button>
+      </div>
+      {!wholesaleOpen && (
+        <div className="fixed right-4 top-[48%] z-30 hidden -translate-y-1/2 lg:block">
           <button
             type="button"
             onClick={() => setWholesaleOpen(true)}
-            className="group flex w-[74px] flex-col items-center gap-2 rounded-2xl border border-blue-100 bg-white px-2 py-3 text-center shadow-[0_18px_44px_rgba(15,23,42,0.16)] transition hover:-translate-x-1 hover:border-blue-200"
+            className="group flex w-[86px] flex-col items-center gap-2 rounded-[22px] border border-blue-100 bg-white/95 px-3 py-4 text-center shadow-[0_20px_55px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-x-1 hover:border-blue-200 hover:shadow-[0_24px_65px_rgba(37,99,235,0.18)]"
             aria-label="Open wholesale contact"
           >
-            <PackageSearch className="h-5 w-5 text-blue-600" />
-            <span className="text-[10px] font-black uppercase leading-3 tracking-[0.12em] text-slate-900">
+            <span className="grid h-9 w-9 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+              <PackageSearch className="h-5 w-5" />
+            </span>
+            <span className="text-[10px] font-black uppercase leading-3 tracking-[0.16em] text-slate-950">
               Contact Wholesale
             </span>
           </button>
-        ) : (
-          <div className="w-[340px] rounded-[28px] border border-blue-100 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+        </div>
+      )}
+      {wholesaleOpen && (
+        <div className="fixed left-12 top-[56%] z-40 hidden w-[380px] -translate-y-1/2 rounded-[30px] border border-amber-200 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.24)] lg:block">
+          <div className="absolute -left-2 top-10 h-4 w-4 rotate-45 border-b border-l border-amber-200 bg-white" />
+          <div className="relative">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700">Bulk Orders</p>
-                <h2 className="mt-2 text-xl font-black leading-tight text-slate-950">Contact wholesale sourcing</h2>
+              <div className="flex items-start gap-3">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-[0_12px_28px_rgba(37,99,235,0.28)]">
+                  <PackageSearch className="h-6 w-6" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-600">Wholesale / Bulk Orders</p>
+                  <h2 className="mt-1 text-xl font-black leading-tight text-slate-950">Get bulk pricing from ExShopi</h2>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setWholesaleOpen(false)}
-                className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-black text-slate-600 transition hover:bg-slate-200"
                 aria-label="Close wholesale contact"
               >
                 x
               </button>
             </div>
-            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-              Need laptops, mobiles, MacBooks, iPhones, tablets, or mixed electronics in quantity? Send models and target price.
+            <p className="mt-4 text-sm font-semibold leading-6 text-slate-600">
+              Request laptops, mobiles, MacBooks, iPhones, tablets, and mixed electronics in quantity. Send models, target price, and delivery country.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 grid grid-cols-3 gap-2">
               {[
                 [ShieldCheck, "Admin tracked"],
-                [Truck, "Worldwide delivery"],
-                [MessageCircle, "WhatsApp ready"],
+                [Truck, "Worldwide"],
+                [MessageCircle, "WhatsApp"],
               ].map(([Icon, label]: any) => (
-                <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-700">
-                  <Icon className="h-3.5 w-3.5" />
+                <span key={label} className="flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl bg-slate-50 px-2 py-2 text-center text-[10px] font-black text-slate-700">
+                  <Icon className="h-4 w-4 text-blue-600" />
                   {label}
                 </span>
               ))}
@@ -219,7 +242,7 @@ export default function Home() {
             <div className="mt-5 grid gap-2">
               <Link
                 to="/wholesale"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(37,99,235,0.28)] transition hover:bg-blue-700"
               >
                 <PackageSearch className="h-5 w-5" />
                 Open Wholesale Form
@@ -235,19 +258,19 @@ export default function Home() {
               </a>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
       <section className="mx-auto -mt-2 max-w-7xl px-4 pb-4 md:px-6 lg:hidden">
         <button
           type="button"
           onClick={() => setWholesaleOpen((current) => !current)}
-          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-left shadow-sm"
+          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 px-4 py-3 text-left shadow-sm"
         >
           <span className="inline-flex items-center gap-2 text-sm font-black text-slate-950">
-            <PackageSearch className="h-5 w-5 text-blue-600" />
+            <PackageSearch className="h-5 w-5 text-slate-950" />
             Contact Wholesale
           </span>
-          <span className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+          <span className="text-xs font-black uppercase tracking-[0.16em] text-slate-950">
             Open
           </span>
         </button>
