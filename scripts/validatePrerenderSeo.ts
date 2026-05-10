@@ -164,6 +164,54 @@ function extractSitemapLocs(xml: string) {
   );
 }
 
+function sitemapLocToDistFile(loc: string) {
+  const normalized = String(loc || "").replace(/^https:\/\/exshopi\.com\/?/i, "");
+  return path.join(DIST_DIR, normalized);
+}
+
+async function collectSitemapLocs(filePath: string, visited = new Set<string>()): Promise<Set<string>> {
+  const normalizedPath = path.resolve(filePath);
+  if (visited.has(normalizedPath)) return new Set();
+  visited.add(normalizedPath);
+
+  const xml = await fs.readFile(normalizedPath, "utf8");
+  const locs = extractSitemapLocs(xml);
+
+  if (!/<sitemapindex\b/i.test(xml)) {
+    return locs;
+  }
+
+  const nestedLocs = new Set<string>();
+  for (const loc of locs) {
+    const nestedFile = sitemapLocToDistFile(loc);
+    try {
+      const nested = await collectSitemapLocs(nestedFile, visited);
+      for (const nestedLoc of nested) nestedLocs.add(nestedLoc);
+    } catch {
+      nestedLocs.add(loc);
+    }
+  }
+  return nestedLocs;
+}
+
+async function collectProductSitemapLocs() {
+  const productLocs = new Set<string>();
+  const sitemapDir = path.join(DIST_DIR, "sitemaps");
+  try {
+    const entries = await fs.readdir(sitemapDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/^products(?:-\d+)?\.xml$/i.test(entry.name)) continue;
+      const xml = await fs.readFile(path.join(sitemapDir, entry.name), "utf8");
+      for (const loc of extractSitemapLocs(xml)) {
+        productLocs.add(loc);
+      }
+    }
+  } catch {
+    // Reported later when product locs are missing.
+  }
+  return productLocs;
+}
+
 function relativeHtmlPathToRoute(relative: string) {
   if (relative === "index.html") return "/";
   if (relative === "404.html") return "/404";
@@ -527,16 +575,23 @@ async function main() {
 
   try {
     const sitemapXml = await fs.readFile(path.join(DIST_DIR, "sitemap.xml"), "utf8");
-    const sitemapLocs = extractSitemapLocs(sitemapXml);
+    const sitemapLocs = await collectSitemapLocs(path.join(DIST_DIR, "sitemap.xml"));
+    const productSitemapLocs = await collectProductSitemapLocs();
 
-    if (!/<lastmod>[^<]+<\/lastmod>/i.test(sitemapXml)) {
+    if (!/(<urlset\b|<sitemapindex\b)/i.test(sitemapXml)) {
+      issues.push({ file: "sitemap.xml", message: "Root sitemap is not a valid sitemap XML document" });
+    }
+    if (/<urlset\b/i.test(sitemapXml) && !/<lastmod>[^<]+<\/lastmod>/i.test(sitemapXml)) {
       issues.push({ file: "sitemap.xml", message: "Sitemap entries are missing <lastmod>" });
     }
-    if (!/<changefreq>[^<]+<\/changefreq>/i.test(sitemapXml)) {
+    if (/<urlset\b/i.test(sitemapXml) && !/<changefreq>[^<]+<\/changefreq>/i.test(sitemapXml)) {
       issues.push({ file: "sitemap.xml", message: "Sitemap entries are missing <changefreq>" });
     }
-    if (!/<priority>[^<]+<\/priority>/i.test(sitemapXml)) {
+    if (/<urlset\b/i.test(sitemapXml) && !/<priority>[^<]+<\/priority>/i.test(sitemapXml)) {
       issues.push({ file: "sitemap.xml", message: "Sitemap entries are missing <priority>" });
+    }
+    if (!/https:\/\/exshopi\.com\/sitemaps\/products-\d+\.xml/i.test(sitemapXml)) {
+      issues.push({ file: "sitemap.xml", message: "Root sitemap does not reference a product sitemap" });
     }
 
     for (const routePath of htmlRoutesInDist) {
@@ -545,6 +600,16 @@ async function main() {
         issues.push({
           file: "sitemap.xml",
           message: `Missing prerendered route in sitemap: ${expectedUrl}`,
+        });
+      }
+    }
+
+    for (const productPath of productPathsInDist) {
+      const expectedUrl = `https://exshopi.com${productPath}`;
+      if (!productSitemapLocs.has(expectedUrl)) {
+        issues.push({
+          file: "sitemaps/products-1.xml",
+          message: `Missing product URL in product sitemap: ${expectedUrl}`,
         });
       }
     }

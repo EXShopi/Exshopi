@@ -1081,7 +1081,8 @@ async function main() {
             </article>
             </section>
           </main>`,
-      })
+      }),
+      "product"
     );
 
     for (const redirect of productAliasRedirects(product)) {

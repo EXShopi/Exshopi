@@ -1016,11 +1016,8 @@ export default function ProductDetail() {
     ? String(product?.featuredImage || product?.primaryImage || product?.image || product?.images?.[0] || "").trim()
     : "";
 
-  // Ensure canonical uses category-aware path unless overridden.
-  const finalCanonical =
-    productSeo?.canonicalUrl && productSeo.canonicalUrl.startsWith("http")
-      ? productSeo.canonicalUrl
-      : buildAbsoluteUrl(canonicalProductPath);
+  // Product canonicals must always match the live route Google can crawl.
+  const finalCanonical = buildAbsoluteUrl(canonicalProductPath);
 
 const productSchema = product
   ? [
