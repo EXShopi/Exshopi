@@ -1,5 +1,6 @@
 import { Component, Suspense, useEffect, useMemo, type ErrorInfo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { MessageCircle, PackageSearch, ShieldCheck, Truck } from "lucide-react";
 import HeroSection from "../components/HeroSection";
 import CategorySection from "../components/CategorySection";
 import UAEPrideStrip from "../components/UAEPrideStrip";
@@ -169,6 +170,65 @@ export default function Home() {
       </SectionBoundary>
       <SectionBoundary name="Hero">
         <HeroSection />
+      </SectionBoundary>
+      <SectionBoundary name="Wholesale entry">
+        <section className="mx-auto -mt-2 max-w-7xl px-4 pb-4 md:px-6">
+          <div className="rounded-[32px] border border-blue-100 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] md:p-6">
+            <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white">
+                  <PackageSearch className="h-7 w-7" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+                      Wholesale / Bulk Orders
+                    </span>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                      UAE sourcing team
+                    </span>
+                  </div>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
+                    Need 10, 50, or 500 devices? Request bulk pricing.
+                  </h2>
+                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+                    Submit laptop, mobile, MacBook, iPhone, tablet, or mixed electronics models manually and ExShopi will contact you with the best available wholesale price.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                      [ShieldCheck, "Admin tracked"],
+                      [Truck, "Worldwide delivery"],
+                      [MessageCircle, "WhatsApp ready"],
+                    ].map(([Icon, label]: any) => (
+                      <span key={label} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[330px]">
+                <Link
+                  to="/wholesale"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+                >
+                  <PackageSearch className="h-5 w-5" />
+                  Contact for Wholesale
+                </Link>
+                <a
+                  href="https://wa.me/971522608063?text=Hello%20ExShopi%2C%20I%20want%20a%20wholesale%2Fbulk%20order."
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                >
+                  <MessageCircle className="h-5 w-5" />
+                  WhatsApp Bulk
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
       </SectionBoundary>
       {/* SEO-optimized headline */}
       <div className="sr-only">
