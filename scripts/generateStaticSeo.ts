@@ -1119,7 +1119,7 @@ async function main() {
         <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Use the blog alongside <a href="/">homepage</a>, <a href="/category/electronics/laptops">laptop categories</a>, and <a href="/refurbished-laptops-uae">landing pages</a> to navigate the marketplace.</p>
       </main>`,
   });
-  await writeRouteFile("/blog", blogIndexHtml);
+  await writeRouteFile("/blog", blogIndexHtml, "blog-index");
 
   for (const post of BLOG_POSTS) {
     await writeRouteFile(
@@ -1145,7 +1145,8 @@ async function main() {
               </ul>
             </article>
           </main>`,
-      })
+      }),
+      "blog-post"
     );
   }
 
@@ -1175,7 +1176,8 @@ async function main() {
             <ul style="margin-top:24px;padding-left:20px;line-height:1.9;color:#334155;">${renderTrustSignals()}</ul>
             <p style="margin-top:24px;font-size:16px;line-height:1.8;color:#475569;">Continue to <a href="/">homepage</a>, <a href="/products">all products</a>, <a href="/blog">buyer guides</a>, and <a href="${getCategoryPath(landingPage.primaryCategorySlug, landingPage.primarySubcategorySlug)}">matching category pages</a>.</p>
           </main>`,
-      })
+      }),
+      "landing"
     );
   }
 
