@@ -27,6 +27,8 @@ function logFirebaseRuntime(label: string, details: Record<string, unknown>) {
 const FIREBASE_DEBUG_ENABLED =
   import.meta.env.DEV || String(import.meta.env.VITE_ENABLE_AUTH_DEBUG || '').trim().toLowerCase() === 'true';
 
+const CUSTOMER_OTP_ENABLED = String(import.meta.env.VITE_ENABLE_CUSTOMER_OTP || '').trim().toLowerCase() === 'true';
+
 export function isLivePhoneVerificationRuntime() {
   const host = getRuntimeHostname();
   if (!host) return false;
@@ -85,6 +87,7 @@ export function getFirebaseConfigStatus() {
     projectId: firebaseConfig.projectId || '',
     authDomain: firebaseConfig.authDomain || '',
     hasFirebaseWebConfig,
+    customerOtpEnabled: CUSTOMER_OTP_ENABLED,
     missingFirebaseEnvVars: [...missingFirebaseEnvVars],
     authorizedDomainExpected: EXPECTED_FIREBASE_AUTHORIZED_DOMAINS.includes(hostname),
   };
@@ -132,7 +135,7 @@ if (firebaseAuth) {
 }
 
 export function isFirebasePhoneVerificationEnabled() {
-  return hasFirebasePhoneConfig;
+  return CUSTOMER_OTP_ENABLED && hasFirebasePhoneConfig;
 }
 
 export function isFirebaseWebAuthConfigured() {
@@ -155,7 +158,7 @@ export function isFirebasePhoneVerificationSupportedOnCurrentOrigin() {
 }
 
 export function canAttemptFirebasePhoneVerification() {
-  return Boolean(firebaseAuth) && hasFirebasePhoneConfig && isFirebasePhoneVerificationSupportedOnCurrentOrigin();
+  return CUSTOMER_OTP_ENABLED && Boolean(firebaseAuth) && hasFirebasePhoneConfig && isFirebasePhoneVerificationSupportedOnCurrentOrigin();
 }
 
 export function isDevelopmentPhoneOtpFallbackAllowed() {

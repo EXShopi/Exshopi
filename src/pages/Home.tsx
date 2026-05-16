@@ -23,7 +23,7 @@ const AllProductsSection = lazyWithRetry(() => import("../components/AllProducts
 
 function DeferredSection({
   children,
-  rootMargin = "120px",
+  rootMargin = "800px",
   delayMs = 0,
 }: {
   children: ReactNode;
@@ -31,7 +31,7 @@ function DeferredSection({
   delayMs?: number;
 }) {
   return (
-    <LazyComponent deferUntilVisible={true} rootMargin={rootMargin} delayMs={delayMs}>
+    <LazyComponent deferUntilVisible={true} rootMargin={rootMargin} delayMs={delayMs} fallbackDelayMs={2200}>
       <SectionBoundary>
         <Suspense fallback={null}>{children}</Suspense>
       </SectionBoundary>
@@ -123,31 +123,31 @@ export default function Home() {
     switch (sectionId) {
       case "featured-products":
         return (
-          <DeferredSection key={sectionId} rootMargin="0px" delayMs={550}>
+          <DeferredSection key={sectionId} delayMs={550}>
             <FeaturedProducts />
           </DeferredSection>
         );
       case "brands":
         return (
-          <DeferredSection key={sectionId} rootMargin="0px" delayMs={650}>
+          <DeferredSection key={sectionId} delayMs={650}>
             <ShopByBrandSection />
           </DeferredSection>
         );
       case "most-popular":
         return (
-          <DeferredSection key={sectionId} rootMargin="0px" delayMs={800}>
+          <DeferredSection key={sectionId} delayMs={800}>
             <MostPopularSection />
           </DeferredSection>
         );
       case "flash-deals":
         return (
-          <DeferredSection key={sectionId} rootMargin="0px" delayMs={950}>
+          <DeferredSection key={sectionId} delayMs={950}>
             <BlackFridaySection />
           </DeferredSection>
         );
       case "promo":
         return (
-          <DeferredSection key={sectionId} rootMargin="0px" delayMs={1050}>
+          <DeferredSection key={sectionId} delayMs={1050}>
             <PromoSection boxes={settings.homepage.promoBoxes} />
           </DeferredSection>
         );
@@ -283,14 +283,14 @@ export default function Home() {
       <DeferredSection rootMargin="20px" delayMs={250}>
         <MegaCategoryCarousel />
       </DeferredSection>
-      <DeferredSection rootMargin="0px" delayMs={450}>
+      <DeferredSection delayMs={450}>
         <AccessoriesSection />
       </DeferredSection>
       {orderedCmsSections.map((section) => renderHomepageSection(section.id))}
-      <DeferredSection rootMargin="0px" delayMs={900}>
+      <DeferredSection delayMs={900}>
         <AllProductsSection />
       </DeferredSection>
-      <DeferredSection rootMargin="0px" delayMs={1100}>
+      <DeferredSection delayMs={1100}>
         <section className="mx-auto mt-10 max-w-7xl px-4 pb-12 md:px-6">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">GCC Marketplace</p>
@@ -308,7 +308,7 @@ export default function Home() {
         </section>
       </DeferredSection>
 
-      <DeferredSection rootMargin="0px" delayMs={1250}>
+      <DeferredSection delayMs={1250}>
         <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Landing Pages</p>
@@ -334,7 +334,7 @@ export default function Home() {
         </section>
       </DeferredSection>
 
-      <DeferredSection rootMargin="0px" delayMs={1400}>
+      <DeferredSection delayMs={1400}>
         <section className="mx-auto max-w-7xl px-4 pb-12 md:px-6">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">From The Blog</p>

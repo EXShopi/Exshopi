@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   Mail, 
   Lock, 
   ArrowRight, 
@@ -34,6 +34,7 @@ import {
   verifyFirebasePhoneCode,
 } from '../../lib/firebasePhoneVerification';
 import { getInvalidPhoneMessage, getPhonePlaceholder, isValidPhoneForCountry, normalizePhoneByCountry } from '../../utils/phone';
+import { isCustomerOtpEnabled } from '../../lib/customerOtpConfig';
 
 const REGISTER_FLOW_STORAGE_KEY = 'exshopi:register-flow:v1';
 const REGISTER_RECAPTCHA_CONTAINER_ID = 'register-recaptcha-container';
@@ -64,11 +65,16 @@ const Register = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRequestInFlightRef = useRef(false);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
+  const customerOtpEnabled = isCustomerOtpEnabled();
   const useFirebaseOtp = canAttemptFirebasePhoneVerification();
-  const useDevOtpFallback = import.meta.env.DEV && !useFirebaseOtp;
+  const useDevOtpFallback = customerOtpEnabled && import.meta.env.DEV && !useFirebaseOtp;
 
   useEffect(() => {
-    console.info('[register] mounted', getFirebasePhoneVerificationRuntimeInfo());
+    console.info('[register] mounted', {
+      customerOtpEnabled,
+      ...getFirebasePhoneVerificationRuntimeInfo(),
+    });
+    if (!customerOtpEnabled) return;
     try {
       const raw = window.sessionStorage.getItem(REGISTER_FLOW_STORAGE_KEY);
       if (!raw) return;
@@ -98,7 +104,7 @@ const Register = () => {
     return () => {
       resetFirebasePhoneVerification({ resetRecaptcha: true });
     };
-  }, []);
+  }, [customerOtpEnabled]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -304,6 +310,37 @@ const Register = () => {
     }
 
     if (step === 2) {
+      if (!formData.phone || !isValidPhoneForCountry(formData.phone, selectedCountry)) {
+        setError(getInvalidPhoneMessage(selectedCountry));
+        return;
+      }
+
+      if (!customerOtpEnabled) {
+        setError(null);
+        setPhoneVerified(true);
+        setLoading(true);
+        try {
+          await userAPI.register({
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+            phone: normalizePhoneByCountry(formData.phone, selectedCountry),
+            role: formData.role,
+            country: selectedCountry,
+          });
+
+          const logged = await userAPI.login(formData.email, formData.password);
+          await handleAuthSuccess(logged, formData.role, formData.name);
+          window.sessionStorage.removeItem(REGISTER_FLOW_STORAGE_KEY);
+        } catch (signupError) {
+          console.error('[Register] account creation failed:', signupError);
+          setError(signupError instanceof Error && signupError.message ? signupError.message : 'Account creation failed. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       await handleSendOtp();
       return;
     }
@@ -693,7 +730,7 @@ const Register = () => {
                   {step === 1
                     ? 'Next Step'
                     : step === 2
-                    ? 'Send Code'
+                    ? customerOtpEnabled ? 'Send Code' : 'Create Account'
                     : 'Verify & Create Account'}{' '}
                   <ArrowRight size={18} />
                 </>

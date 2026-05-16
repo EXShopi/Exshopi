@@ -6656,15 +6656,16 @@ app.post('/api/orders/create', authMiddleware, async (req: Request, res: Respons
       return res.status(403).json({ error: `This customer is blocked from COD ordering (${blacklistHit.type}).` });
     }
 
+    const isOtpTemporarilyDisabled = verificationToken === 'otp-disabled-customer-flow';
     const isFirebaseVerification = verificationToken.startsWith('firebase:');
-    let verificationMethod = 'phone_otp';
+    let verificationMethod = isOtpTemporarilyDisabled ? 'temporarily_disabled' : 'phone_otp';
     if (isFirebaseVerification) {
       const [, verifiedPhone = ''] = verificationToken.split(':');
       if (normalizePhone(verifiedPhone) !== normalizePhone(customerPhone)) {
         return res.status(400).json({ error: 'Verified Firebase phone does not match the checkout phone.' });
       }
       verificationMethod = 'firebase_phone';
-    } else {
+    } else if (!isOtpTemporarilyDisabled) {
       consumeCodOtpVerification(verificationToken, req.user.id, customerPhone);
     }
 

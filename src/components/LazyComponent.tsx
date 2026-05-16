@@ -17,6 +17,8 @@ interface LazyComponentProps {
   placeholder?: React.ReactNode;
   /** Root margin for Intersection Observer */
   rootMargin?: string;
+  /** Safety render timeout if an observer never reports visibility */
+  fallbackDelayMs?: number;
 }
 
 /**
@@ -34,6 +36,7 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
   deferUntilVisible = true,
   placeholder = null,
   rootMargin = '50px',
+  fallbackDelayMs = 1800,
 }) => {
   const [shouldRender, setShouldRender] = useState(!deferUntilVisible);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,9 +46,16 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
 
     if (deferUntilVisible && typeof window !== 'undefined') {
       let timeoutId: number | null = null;
+      const fallbackTimeoutId =
+        fallbackDelayMs > 0
+          ? window.setTimeout(() => setShouldRender(true), fallbackDelayMs)
+          : null;
       const observer = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting) {
+            if (fallbackTimeoutId !== null) {
+              window.clearTimeout(fallbackTimeoutId);
+            }
             if (delayMs > 0) {
               timeoutId = window.setTimeout(() => setShouldRender(true), delayMs);
             } else {
@@ -63,6 +73,9 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
 
       return () => {
         observer.disconnect();
+        if (fallbackTimeoutId !== null) {
+          window.clearTimeout(fallbackTimeoutId);
+        }
         if (timeoutId !== null) {
           window.clearTimeout(timeoutId);
         }
@@ -72,7 +85,7 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
       const timeout = window.setTimeout(() => setShouldRender(true), delayMs);
       return () => window.clearTimeout(timeout);
     }
-  }, [delayMs, deferUntilVisible, shouldRender]);
+  }, [delayMs, deferUntilVisible, fallbackDelayMs, rootMargin, shouldRender]);
 
   return (
     <div
@@ -81,6 +94,7 @@ export const LazyComponent: React.FC<LazyComponentProps> = ({
       style={{
         contentVisibility: shouldRender ? 'visible' : 'auto',
         containIntrinsicSize: shouldRender ? undefined : '600px',
+        minHeight: shouldRender ? undefined : '320px',
       }}
     >
       {shouldRender ? children : placeholder}

@@ -48,6 +48,7 @@ import {
 } from "../lib/countryConfig";
 import { useCountryStore } from "../store/country";
 import { getInvalidPhoneMessage, getPhonePlaceholder, isValidPhoneForCountry, normalizePhoneByCountry } from "../utils/phone";
+import { CUSTOMER_OTP_DISABLED_VERIFICATION_TOKEN, isCustomerOtpEnabled } from "../lib/customerOtpConfig";
 
 function getItemBasePriceAed(item: any) {
   const amount = Number(item?.basePriceAED ?? item?.priceUae ?? item?.price ?? 0);
@@ -76,6 +77,7 @@ export default function Checkout() {
   const setRole = useAuthStore((state) => state.setRole);
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const phoneVerificationSupported = isFirebasePhoneVerificationSupportedOnCurrentOrigin();
+  const customerOtpEnabled = isCustomerOtpEnabled();
   const useFirebaseOtp = canAttemptFirebasePhoneVerification();
   const [authChecked, setAuthChecked] = useState(false);
   const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -145,8 +147,8 @@ export default function Checkout() {
   const hasCustomerSession = authChecked && Boolean(authUser?.id) && authRole === "customer";
   const isGuestCheckout = checkoutMode === "guest" || !hasCustomerSession;
   const guestSessionId = useMemo(() => getGuestCheckoutSessionId(), []);
-  const guestOtpRequired = isGuestCheckout && form.paymentMethod === "cod" && totalPayable >= 2000;
-  const codVerificationRequired = form.paymentMethod === "cod" && (!isGuestCheckout || guestOtpRequired);
+  const guestOtpRequired = customerOtpEnabled && isGuestCheckout && form.paymentMethod === "cod" && totalPayable >= 2000;
+  const codVerificationRequired = customerOtpEnabled && form.paymentMethod === "cod" && (!isGuestCheckout || guestOtpRequired);
 
   useEffect(() => {
     if (!authChecked || queryParams.get("mode")) return;
@@ -191,10 +193,11 @@ export default function Checkout() {
     console.info("[checkout] mounted", {
       itemCount: items.length,
       phoneVerificationSupported,
+      customerOtpEnabled,
       useFirebaseOtp,
       ...getFirebasePhoneVerificationRuntimeInfo(),
     });
-  }, [items.length, phoneVerificationSupported, useFirebaseOtp]);
+  }, [items.length, phoneVerificationSupported, customerOtpEnabled, useFirebaseOtp]);
 
   useEffect(() => {
     setForm((prev) => ({
@@ -602,6 +605,14 @@ export default function Checkout() {
   };
 
   const handleSendOtp = async () => {
+    if (!customerOtpEnabled) {
+      setOtpVerified(true);
+      setOtpSessionId(CUSTOMER_OTP_DISABLED_VERIFICATION_TOKEN);
+      setOtpError("");
+      setOtpMessage("Phone verification is temporarily disabled. You can continue checkout.");
+      return;
+    }
+
     if (sendOtpLockRef.current) {
       console.info("[checkout] send-code skipped because a request is already in flight");
       return;
@@ -668,6 +679,14 @@ export default function Checkout() {
   };
 
   const handleVerifyOtp = async () => {
+    if (!customerOtpEnabled) {
+      setOtpVerified(true);
+      setOtpSessionId(CUSTOMER_OTP_DISABLED_VERIFICATION_TOKEN);
+      setOtpError("");
+      setOtpMessage("Phone verification is temporarily disabled. Your COD order is ready.");
+      return;
+    }
+
     try {
       if (!otpSessionId || !otpCode) {
         setOtpError("Request and enter the verification code first.");
@@ -951,7 +970,11 @@ export default function Checkout() {
           customerName: `${form.firstName} ${form.lastName}`.trim(),
           customerEmail: form.email,
           customerPhone: normalizedPhone,
-          verificationToken: form.paymentMethod === "cod" ? otpSessionId : undefined,
+          verificationToken: form.paymentMethod === "cod"
+            ? customerOtpEnabled
+              ? otpSessionId
+              : CUSTOMER_OTP_DISABLED_VERIFICATION_TOKEN
+            : undefined,
           shippingCost: sellerShippingCost,
           deliveryType: activeShipping.label,
           shippingAddress: buildCheckoutShippingAddress(),
@@ -1465,9 +1488,11 @@ export default function Checkout() {
                         </p>
                         <p className="mt-1 text-sm font-medium text-slate-600">
                           {form.paymentMethod === "cod"
-                            ? isGuestCheckout
+                            ? !customerOtpEnabled
+                              ? `Pay on delivery in ${country.currency}. Phone number is required, but OTP verification is temporarily disabled.`
+                              : isGuestCheckout
                               ? `Pay on delivery in ${country.currency}. OTP is only requested for high-value or suspicious guest COD orders.`
-                              : `Pay on delivery in ${country.currency}. ExShopi requires UAE phone verification before the order is sent to sellers.`
+                              : `Pay on delivery in ${country.currency}. ExShopi requires phone verification before the order is sent to sellers.`
                             : `International orders to ${country.name} are prepaid only. ExShopi prepares the order with customs-ready invoice, courier tracking, and secure payment confirmation.`}
                         </p>
                       </div>
@@ -1537,7 +1562,7 @@ export default function Checkout() {
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Verification</p>
                         <p className={`mt-2 text-xl font-black ${otpVerified || form.paymentMethod !== "cod" || !codVerificationRequired ? "text-emerald-600" : "text-slate-900"}`}>
-                          {form.paymentMethod !== "cod" ? "Prepaid" : codVerificationRequired ? (otpVerified ? "Verified" : "Required") : "Guest Fast"}
+                          {form.paymentMethod !== "cod" ? "Prepaid" : !customerOtpEnabled ? "Not Required" : codVerificationRequired ? (otpVerified ? "Verified" : "Required") : "Guest Fast"}
                         </p>
                         {!otpVerified && otpSessionId && (
                           <p className="mt-2 text-xs font-semibold text-slate-500">
