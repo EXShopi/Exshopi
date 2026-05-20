@@ -951,6 +951,11 @@ export default function Checkout() {
       // Create an order for each seller
       for (const [sellerId, sellerItems] of ordersBySellerMap) {
         const sellerShippingCost = activeShipping.fee;
+        const sellerSubtotal = sellerItems.reduce(
+          (sum: number, item: any) => sum + getProductCountryPrice(item, selectedCountry) * Number(item.quantity || 1),
+          0
+        );
+        const sellerVatAmount = Math.round(calculateVat(sellerSubtotal, selectedCountry));
         const orderPayload = {
           sellerId,
           items: sellerItems.map((item: any) => {
@@ -982,7 +987,19 @@ export default function Checkout() {
           deliveryCountry: selectedCountry,
           countryCode: selectedCountry,
           countryName: country.name,
+          totalAmount: sellerSubtotal + sellerShippingCost + sellerVatAmount,
         };
+        console.info("Checkout COD order payload:", {
+          sellerId: orderPayload.sellerId,
+          customerName: orderPayload.customerName,
+          phone: orderPayload.customerPhone,
+          email: orderPayload.customerEmail,
+          address: orderPayload.shippingAddress,
+          cartItems: orderPayload.items,
+          totalAmount: orderPayload.totalAmount,
+          paymentMethod: orderPayload.paymentMethod,
+          guest: isGuestCheckout,
+        });
         const created = isGuestCheckout
           ? await orderAPI.createGuest({
               ...orderPayload,
@@ -990,6 +1007,7 @@ export default function Checkout() {
               guestSessionId,
             })
           : await orderAPI.create(orderPayload);
+        console.log("Order Success:", created);
         const createdOrder = created?.order ?? created;
         if (!createdOrder?.id && !createdOrder?.orderId && !createdOrder?.trackingCode) {
           throw new Error("Order was not created successfully.");
@@ -1033,8 +1051,13 @@ export default function Checkout() {
           : "/order-success"
       );
     } catch (error: any) {
-      console.error("Order creation failed:", error);
-      const message = "We could not place your order right now. Please try again.";
+      const backendError = error?.response?.data || error?.data || null;
+      console.error("Order Failed:", backendError || error);
+      const message =
+        backendError?.message ||
+        backendError?.error ||
+        error?.message ||
+        "Failed to place order";
       setPageError(message);
     } finally {
       setIsProcessing(false);

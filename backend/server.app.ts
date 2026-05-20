@@ -6423,6 +6423,8 @@ app.post('/api/admin/wholesale-requests/:id/convert-order', authMiddleware, asyn
 
 app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
   try {
+    const requestId = `guest_checkout_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    console.info('[guest-checkout] Request received', { requestId });
     const payload = guestOrderSchema.parse(req.body);
     const normalizedItems =
       payload.items && payload.items.length
@@ -6432,16 +6434,16 @@ app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
         : [];
 
     if (!normalizedItems.length) {
-      return res.status(400).json({ error: 'At least one order item is required' });
+      return res.status(400).json({ success: false, error: 'At least one order item is required', message: 'Your cart is empty. Add at least one item before placing the order.', requestId });
     }
     if (payload.paymentMethod !== 'cod') {
-      return res.status(400).json({ error: 'Guest prepaid orders must use the secure prepaid checkout flow.' });
+      return res.status(400).json({ success: false, error: 'Guest prepaid orders must use the secure prepaid checkout flow.', message: 'Guest prepaid orders must use the secure prepaid checkout flow.', requestId });
     }
     if (String(payload.deliveryCountry || 'AE').toUpperCase() !== 'AE') {
-      return res.status(400).json({ error: 'International guest orders are prepaid only.' });
+      return res.status(400).json({ success: false, error: 'International guest orders are prepaid only.', message: 'International guest orders are prepaid only.', requestId });
     }
     if (!isValidPhoneForCountry(payload.customerPhone, payload.deliveryCountry || 'AE')) {
-      return res.status(400).json({ error: 'Please enter a valid phone number for the selected country.' });
+      return res.status(400).json({ success: false, error: 'Please enter a valid phone number for the selected country.', message: 'Please enter a valid phone number for the selected country.', requestId });
     }
 
     const clientIp = getClientIp(req);
@@ -6452,7 +6454,7 @@ app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
       ip: clientIp,
     });
     if (blacklistHit) {
-      return res.status(403).json({ error: `This customer is blocked from COD ordering (${blacklistHit.type}).` });
+      return res.status(403).json({ success: false, error: `This customer is blocked from COD ordering (${blacklistHit.type}).`, message: `This customer is blocked from COD ordering (${blacklistHit.type}).`, requestId });
     }
 
     const allOrders = prismaRuntime.enabled ? await prismaRuntime.getAllOrders() : db.getAllOrders();
@@ -6465,7 +6467,7 @@ app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
       );
     });
     if (recentGuestMatches.length >= 2) {
-      return res.status(429).json({ error: 'Too many recent guest order attempts. Please wait a few minutes and try again.' });
+      return res.status(429).json({ success: false, error: 'Too many recent guest order attempts. Please wait a few minutes and try again.', message: 'Too many recent guest order attempts. Please wait a few minutes and try again.', requestId });
     }
 
     const risk = calculateCodRisk({
@@ -6485,13 +6487,36 @@ app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
     const estimatedTotal = normalizedItems.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 1), 0) + Number(payload.shippingCost || 0);
     if ((risk.riskLevel === 'suspicious' || estimatedTotal >= 2000) && !payload.verificationToken) {
       return res.status(428).json({
+        success: false,
         requiresOtp: true,
         error: 'This guest COD order needs phone verification because of risk or order value. Please sign in or choose prepaid checkout.',
+        message: 'This guest COD order needs phone verification because of risk or order value. Please sign in or choose prepaid checkout.',
+        requestId,
       });
     }
 
     const guestSessionId = payload.guestSessionId || `guest_${Date.now()}`;
-    const guestCustomerId = createGuestCustomerId(guestSessionId, normalizedCustomerPhone, payload.customerEmail || '');
+    const guestCustomer = prismaRuntime.enabled
+      ? await prismaRuntime.ensureGuestCustomer({
+          name: payload.customerName,
+          email: payload.customerEmail || '',
+          phone: normalizedCustomerPhone,
+          country: payload.deliveryCountry || payload.countryCode || 'AE',
+        })
+      : null;
+    const guestCustomerId = guestCustomer?.id || createGuestCustomerId(guestSessionId, normalizedCustomerPhone, payload.customerEmail || '');
+    console.info('[guest-checkout] Payload summary', {
+      requestId,
+      customerId: guestCustomerId,
+      guestCustomerCreated: Boolean(guestCustomer?.id),
+      customerName: payload.customerName,
+      customerEmail: payload.customerEmail || '',
+      customerPhone: normalizedCustomerPhone,
+      sellerId: payload.sellerId,
+      itemCount: normalizedItems.length,
+      estimatedTotal,
+      paymentMethod: payload.paymentMethod,
+    });
     const orderPayload: any = await buildOrderPayloadFromItems({
       customerId: guestCustomerId,
       sellerId: payload.sellerId,
@@ -6530,7 +6555,7 @@ app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
       ? await prismaRuntime.createOrder(orderPayload)
       : db.createOrder(orderPayload);
     if (!order) {
-      return res.status(500).json({ success: false, message: 'We could not place your guest order right now.' });
+      return res.status(500).json({ success: false, error: 'Order creation returned no order.', message: 'Order creation returned no order.', requestId });
     }
 
     const timestamp = new Date().toISOString();
@@ -6590,8 +6615,21 @@ app.post('/api/orders/guest/create', async (req: Request, res: Response) => {
       order: enrichedOrder,
     });
   } catch (error) {
-    console.error('[guest-checkout] Order placement failed:', error);
-    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    const isZodError = Boolean((error as any)?.issues?.length);
+    const issues = isZodError
+      ? (error as any).issues.map((issue: any) => ({
+          path: Array.isArray(issue.path) ? issue.path.join('.') : String(issue.path || ''),
+          message: issue.message,
+        }))
+      : undefined;
+    const reason = isZodError
+      ? `Invalid guest checkout payload: ${issues?.map((issue: any) => `${issue.path || 'field'} ${issue.message}`).join('; ')}`
+      : error instanceof Error
+      ? error.message
+      : String(error || 'Unknown guest checkout error');
+    console.error('[guest-checkout] Order placement failed:', { reason, issues });
+    console.error('[guest-checkout] Stack:', error instanceof Error ? error.stack : error);
+    res.status(isZodError ? 400 : 500).json({ success: false, error: reason, message: reason, issues });
   }
 });
 

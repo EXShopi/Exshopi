@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import bcrypt from 'bcryptjs';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type {
@@ -1054,6 +1055,47 @@ export const prismaRuntime = {
         sellerApplicationStatus: (input.sellerApplicationStatus || null) as any,
       },
     });
+    return mapUser(user);
+  },
+
+  async ensureGuestCustomer(input: {
+    name: string;
+    email?: string;
+    phone?: string;
+    country?: string;
+  }) {
+    if (!enabled) return null;
+
+    const seed = [input.phone, input.email, input.name]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+      .join('|') || String(Date.now());
+    const hash = createHash('sha256').update(seed).digest('hex').slice(0, 24);
+    const guestId = `guest_${hash}`;
+    const guestEmail = `guest+${hash}@exshopi.local`;
+
+    const user = await prisma.user.upsert({
+      where: { id: guestId },
+      update: {
+        name: input.name || 'Guest Customer',
+        phone: input.phone || '',
+        country: input.country || 'AE',
+        status: 'active' as any,
+        emailVerified: false,
+      },
+      create: {
+        id: guestId,
+        name: input.name || 'Guest Customer',
+        email: guestEmail,
+        passwordHash: '',
+        phone: input.phone || '',
+        role: 'customer' as any,
+        status: 'active' as any,
+        country: input.country || 'AE',
+        emailVerified: false,
+      },
+    });
+
     return mapUser(user);
   },
 

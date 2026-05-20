@@ -310,9 +310,13 @@ async function parseApiResponse(res: Response) {
   }
 
   if (!res.ok) {
-    throw new Error(
+    const apiError = new Error(
       data?.error || data?.message || `Request failed with status ${res.status}`
-    );
+    ) as Error & { status?: number; data?: any; response?: { status: number; data: any } };
+    apiError.status = res.status;
+    apiError.data = data;
+    apiError.response = { status: res.status, data };
+    throw apiError;
   }
 
   return data;
@@ -1589,6 +1593,18 @@ export const adminProductBulkUploadAPI = {
 // ==================== ORDERS ====================
 export const orderAPI = {
   async create(data: any) {
+    console.info('[checkout] Creating order payload:', {
+      sellerId: data?.sellerId,
+      itemCount: Array.isArray(data?.items) ? data.items.length : 0,
+      customerName: data?.customerName,
+      customerEmail: data?.customerEmail,
+      customerPhone: data?.customerPhone,
+      address: data?.shippingAddress,
+      cartItems: data?.items,
+      totalAmount: data?.totalAmount,
+      paymentMethod: data?.paymentMethod,
+      deliveryCountry: data?.deliveryCountry,
+    });
     const res = await fetchWithAuthRetry('/orders/create', {
       method: 'POST',
       headers: {
@@ -1598,10 +1614,30 @@ export const orderAPI = {
       credentials: 'include',
       body: JSON.stringify(data),
     });
-    return parseApiResponse(res);
+    try {
+      const payload = await parseApiResponse(res);
+      console.info('[checkout] Order API success:', payload);
+      return payload;
+    } catch (error: any) {
+      console.error('[checkout] Order API failed:', error?.response?.data || error?.data || error);
+      throw error;
+    }
   },
 
   async createGuest(data: any) {
+    console.info('[checkout] Creating guest order payload:', {
+      sellerId: data?.sellerId,
+      itemCount: Array.isArray(data?.items) ? data.items.length : 0,
+      customerName: data?.customerName,
+      customerEmail: data?.customerEmail,
+      customerPhone: data?.customerPhone,
+      address: data?.shippingAddress,
+      cartItems: data?.items,
+      totalAmount: data?.totalAmount,
+      paymentMethod: data?.paymentMethod,
+      deliveryCountry: data?.deliveryCountry,
+      guestSessionId: data?.guestSessionId,
+    });
     const res = await safeFetchApi('/orders/guest/create', {
       method: 'POST',
       headers: {
@@ -1610,7 +1646,14 @@ export const orderAPI = {
       credentials: 'include',
       body: JSON.stringify(data),
     });
-    return parseApiResponse(res);
+    try {
+      const payload = await parseApiResponse(res);
+      console.info('[checkout] Guest order API success:', payload);
+      return payload;
+    } catch (error: any) {
+      console.error('[checkout] Guest order API failed:', error?.response?.data || error?.data || error);
+      throw error;
+    }
   },
 
   async get(id: string) {
